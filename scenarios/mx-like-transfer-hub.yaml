@@ -1,11 +1,14 @@
 # GateFlow simulation scenario (schema version 5).
 #
 # SYNTHETIC LIBRARY SCENARIO. "MX-like" describes the kind of checkpoint, not a real airport: no
-# Mexican data is used, and every flight, time, passenger count, lane and behaviour is an
-# assumption. Results obtained with it are simulated and must never be presented as operational
-# evidence.
+# Mexican data is used. The parameters of the hub and of its transfer checkpoint are in
+# airports/mx-like-hub.yaml; this file gives only the day. Results obtained with it are simulated
+# and must never be presented as operational evidence.
 
 schemaVersion: 5
+extends:
+  airport: ../airports/mx-like-hub.yaml
+  checkpoint: transfer
 id: mx-like-transfer-hub
 title: MX-like hub, transfer security checkpoint (synthetic)
 description: >-
@@ -16,23 +19,14 @@ description: >-
   after their inbound flight and the border formalities, so many arrive with little time left.
   A quarter of the departures are delayed, gates change often, lanes and the flight feed fail now
   and then. Lanes follow an hourly plan made with the rule of the VCE-like days, within 4 lanes.
-dataClassification: SYNTHETIC
 dataSources:
-  - id: gateflow-synthetic
-    title: Synthetic assumptions of this scenario
-    kind: SYNTHETIC
-    provider: GateFlow
-    licence: Created for GateFlow; contains no third-party data.
   - id: library-flights
     title: Synthetic flight list of the scenario library
     kind: SYNTHETIC
     provider: GateFlow (scenarios/flights/make-library-flights.mjs)
     licence: Created for GateFlow; contains no third-party schedule data.
-timeZone: America/Mexico_City
 
 checkpoint:
-  id: CP-MX-HUB-TRANSFER
-  kind: TRANSFER_SECURITY
   laneSchedule:
     value:
       - { from: '00:00', lanes: 1 }
@@ -55,16 +49,8 @@ checkpoint:
       - { from: '22:00', lanes: 1 }
     source: SYNTHETIC
     note: >-
-      Planned from the expected arrivals of the day: in every hour, enough lanes to screen the
-      passengers arriving in it at 90% utilisation, at least 1 and at most 4 (the lanes the
-      checkpoint has). 55.0 lane-hours. Assumed planning rule, not the airport's.
-  serviceTimeMeanSeconds:
-    value: 30
-    source: SYNTHETIC
-    note: About 120 passengers per hour per lane (connecting passengers carry cabin bags and purchases).
-  serviceTimeCv:
-    value: 0.6
-    source: SYNTHETIC
+      Planned for this day with the lane plan rule of the checkpoint (airports/mx-like-hub.yaml):
+      55.0 lane-hours. gateflow-sim lanes --scenario <this file> prints the plan again.
 
 schedule:
   kind: flight-list
@@ -72,113 +58,9 @@ schedule:
   flights:
     source: library-flights
     file: flights/mx-like-transfer-hub.csv
-  seats:
-    value:
-      - { aircraft: B738, seats: 160 }
-      - { aircraft: B38M, seats: 166 }
-      - { aircraft: B39M, seats: 180 }
-      - { aircraft: E190, seats: 99 }
-    source: SYNTHETIC
-    note: >-
-      Assumed two-class configurations of a network carrier, not airline data. The flight list gives
-      the connecting passengers of each flight; seats only bound them.
-  gateZones:
-    value:
-      - { id: A, walkMinutes: 6, share: 0.4 }
-      - { id: B, walkMinutes: 11, share: 0.4 }
-      - { id: C, walkMinutes: 17, share: 0.2 }
-    source: SYNTHETIC
-    note: Nominal walk from the checkpoint exit to the domestic gates of a large terminal.
 
 passengers:
   loadFactor:
     value: { min: 0.6, mode: 0.82, max: 0.97 }
     source: SYNTHETIC
     note: Not used, the flight list gives the connecting passengers of every flight.
-  transferShare:
-    value: 1
-    source: SYNTHETIC
-    note: Every passenger of this checkpoint is connecting.
-  showUp:
-    departing:
-      value:
-        { minMinutesBeforeStd: 25, medianExtraMinutes: 35, sigma: 0.6, maxMinutesBeforeStd: 180 }
-      source: SYNTHETIC
-      note: Not used (no departing passengers); the same curve as for connecting passengers.
-    transfer:
-      value:
-        { minMinutesBeforeStd: 25, medianExtraMinutes: 35, sigma: 0.6, maxMinutesBeforeStd: 180 }
-      source: SYNTHETIC
-      note: >-
-        Arrival at the transfer checkpoint = STD minus (25 min + log-normal with median 35 min):
-        after the inbound flight, immigration, customs and the bag drop. A long tail of tight
-        connections (late inbound flights, border queues).
-  walkSpeedSigma:
-    value: 0.2
-    source: SYNTHETIC
-    note: Individual walking time = nominal zone time x log-normal(median 1, sigma).
-  callResponse:
-    value:
-      medianSeconds: 75
-      sigma: 0.5
-      absentProbability: 0.04
-      absentExtraMedianMinutes: 4
-      absentExtraSigma: 0.8
-    source: SYNTHETIC
-    note: Virtual queue only. As in the demo scenario; to be measured in a pilot.
-  groups:
-    value:
-      partySizes:
-        - { size: 1, share: 0.78 }
-        - { size: 2, share: 0.15 }
-        - { size: 3, share: 0.04 }
-        - { size: 4, share: 0.025 }
-        - { size: 5, share: 0.005 }
-    source: SYNTHETIC
-    note: As in the demo scenario; about 40% of passengers travel with others.
-  assistedShare:
-    value: 0.007
-    source: SYNTHETIC
-    note: Parties taking the assisted path (PRM and similar), as in the demo scenario.
-  strategicLateArrival:
-    value: { share: 0, minMinutesBeforeStd: 25, maxMinutesBeforeStd: 35 }
-    source: SYNTHETIC
-    note: Nobody arrives late on purpose in this scenario.
-
-operations:
-  boardingCloseMinutesBeforeStd:
-    value: 20
-    source: SYNTHETIC
-    note: Boarding closes 20 minutes before the scheduled departure, for every flight.
-  deadlineKnowledge:
-    value: RULE
-    source: SYNTHETIC
-    note: The system applies the closing rule to the schedule; without disruptions it matches the ground truth exactly.
-
-disruptions:
-  flightDelays:
-    value:
-      share: 0.25
-      medianMinutes: 20
-      sigma: 0.8
-      maxMinutes: 180
-      noticeMinMinutesBeforeStd: 10
-      noticeMaxMinutesBeforeStd: 120
-    source: SYNTHETIC
-    note: >-
-      A quarter of the departures are delayed (log-normal, median 20 minutes), announced between
-      120 and 10 minutes before the scheduled departure. Inbound delays are part of the arrival
-      curve above.
-  gateChanges:
-    value:
-      { share: 0.15, minMinutesBeforeStd: 30, maxMinutesBeforeStd: 70, noticeDelayMaxMinutes: 5 }
-    source: SYNTHETIC
-    note: More gate changes than at an origin-and-destination airport (assumed).
-  laneOutages:
-    value: { perDay: 1, medianMinutes: 20, sigma: 0.5, maxMinutes: 60 }
-    source: SYNTHETIC
-    note: About one unplanned outage of one lane per day (median 20 minutes).
-  feedOutages:
-    value: { perDay: 1, medianMinutes: 30, sigma: 0.6, maxMinutes: 120 }
-    source: SYNTHETIC
-    note: The flight feed goes down about once a day (median 30 minutes).

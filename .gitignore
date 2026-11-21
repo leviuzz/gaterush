@@ -8,3 +8,6 @@ out/
 
 # Airport-provided scenario data: never committed (docs/data-request).
 scenarios/private/
+
+# Airport configurations with airport-provided data: never committed (airports/README.md).
+airports/private/

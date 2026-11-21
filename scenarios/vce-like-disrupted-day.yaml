@@ -1,11 +1,15 @@
 # GateFlow simulation scenario (schema version 5).
 #
 # SYNTHETIC LIBRARY SCENARIO. "VCE-like" means sized like Venice Marco Polo from its public annual
-# traffic. It is not a model of the real airport, of its checkpoint or of its schedule: flights,
-# times, aircraft, lanes and passenger behaviour are assumptions. Results obtained with it are
-# simulated and must never be presented as operational evidence.
+# traffic. It is not a model of the real airport, of its checkpoint or of its schedule. The
+# parameters of the airport and of its checkpoint are in airports/vce-like.yaml; this file gives
+# only the day. Results obtained with it are simulated and must never be presented as operational
+# evidence.
 
 schemaVersion: 5
+extends:
+  airport: ../airports/vce-like.yaml
+  checkpoint: departures
 id: vce-like-disrupted-day
 title: VCE-like departures checkpoint, disrupted summer peak day (synthetic)
 description: >-
@@ -14,33 +18,14 @@ description: >-
   a tenth change gate, about two lanes per day fail for a while and the flight feed goes down
   about once a day, as in single-checkpoint-disrupted. The system decides on what the feed has told
   it; outcomes are judged on the ground truth.
-dataClassification: SYNTHETIC
 dataSources:
-  - id: gateflow-synthetic
-    title: Synthetic assumptions of this scenario
-    kind: SYNTHETIC
-    provider: GateFlow
-    licence: Created for GateFlow; contains no third-party data.
   - id: library-flights
     title: Synthetic flight list of the scenario library
     kind: SYNTHETIC
     provider: GateFlow (scenarios/flights/make-library-flights.mjs)
     licence: Created for GateFlow; contains no third-party schedule data.
-  - id: save-traffic-2025
-    title: Venice Marco Polo traffic in 2025 (11.85 million passengers)
-    kind: LITERATURE
-    provider: SAVE S.p.A., annual figure as reported in the business plan and in the press
-    licence: Published aggregate figure, cited with attribution. Used only to size the synthetic day.
-    retrieved: '2026-11-21'
-    note: >-
-      11,850,336 passengers in 2025 according to the business plan (marked verified there);
-      press coverage of SAVE's results gives 11.85 million. Not re-verified against SAVE's own
-      publication, whose website refused automated access.
-timeZone: Europe/Rome
 
 checkpoint:
-  id: CP-VCE-LIKE
-  kind: DEPARTURE_SECURITY
   laneSchedule:
     value:
       - { from: '00:00', lanes: 2 }
@@ -62,16 +47,8 @@ checkpoint:
       - { from: '21:00', lanes: 2 }
     source: SYNTHETIC
     note: >-
-      Planned from the expected arrivals of the day: in every hour, enough lanes to screen the
-      passengers arriving in it at 90% utilisation, at least 2 and at most 12 (the lanes the
-      checkpoint has). 177.0 lane-hours. Assumed planning rule, not the airport's.
-  serviceTimeMeanSeconds:
-    value: 24
-    source: SYNTHETIC
-    note: About 150 passengers per hour per lane (assumed modern lanes with several divesting positions).
-  serviceTimeCv:
-    value: 0.6
-    source: SYNTHETIC
+      Planned for this day with the lane plan rule of the checkpoint (airports/vce-like.yaml):
+      177.0 lane-hours. gateflow-sim lanes --scenario <this file> prints the plan again.
 
 schedule:
   kind: flight-list
@@ -79,36 +56,6 @@ schedule:
   flights:
     source: library-flights
     file: flights/vce-like-peak-day.csv
-  seats:
-    value:
-      - { aircraft: A319, seats: 156 }
-      - { aircraft: A320, seats: 180 }
-      - { aircraft: A20N, seats: 186 }
-      - { aircraft: A321, seats: 200 }
-      - { aircraft: A21N, seats: 232 }
-      - { aircraft: B738, seats: 189 }
-      - { aircraft: E190, seats: 100 }
-      - { aircraft: E195, seats: 120 }
-      - { aircraft: BCS3, seats: 145 }
-      - { aircraft: B763, seats: 216 }
-      - { aircraft: B788, seats: 240 }
-      - { aircraft: B789, seats: 290 }
-      - { aircraft: B77W, seats: 360 }
-      - { aircraft: A359, seats: 300 }
-    source: SYNTHETIC
-    note: >-
-      Assumed typical configurations by ICAO type designator (one class on short haul, two or three
-      on long haul), not airline data. Replace with the airport's seat data.
-  gateZones:
-    value:
-      - { id: A, walkMinutes: 5, share: 0.45 }
-      - { id: B, walkMinutes: 9, share: 0.35 }
-      - { id: C, walkMinutes: 15, share: 0.2 }
-    source: SYNTHETIC
-    note: >-
-      Nominal walk from the checkpoint exit: A and B are Schengen gates, C non-Schengen gates after
-      passport control (its queue is not modelled). Long-haul flights use zone C; the others draw a
-      zone with these shares.
 
 passengers:
   loadFactor:
@@ -119,34 +66,6 @@ passengers:
       Summer load factors, drawn per flight and day. With the flight list the day has about 22,000
       departing passengers, about 1.35 times the average day of 2025 (11.85 million passengers,
       half of them departing, over 365 days): assumed peak-day factor.
-  transferShare:
-    value: 0.02
-    source: SYNTHETIC
-    note: Few connecting passengers cross this checkpoint (an origin-and-destination airport).
-  showUp:
-    departing:
-      value:
-        { minMinutesBeforeStd: 25, medianExtraMinutes: 70, sigma: 0.55, maxMinutesBeforeStd: 240 }
-      source: SYNTHETIC
-      note: Arrival at the checkpoint = STD minus (25 min + log-normal with median 70 min), as in the demo scenario.
-    transfer:
-      value:
-        { minMinutesBeforeStd: 24, medianExtraMinutes: 25, sigma: 0.5, maxMinutesBeforeStd: 180 }
-      source: SYNTHETIC
-      note: Connecting passengers arrive later, after their inbound flight.
-  walkSpeedSigma:
-    value: 0.2
-    source: SYNTHETIC
-    note: Individual walking time = nominal zone time x log-normal(median 1, sigma).
-  callResponse:
-    value:
-      medianSeconds: 75
-      sigma: 0.5
-      absentProbability: 0.04
-      absentExtraMedianMinutes: 4
-      absentExtraSigma: 0.8
-    source: SYNTHETIC
-    note: Virtual queue only. As in the demo scenario; to be measured in a pilot.
   groups:
     value:
       partySizes:
@@ -157,24 +76,6 @@ passengers:
         - { size: 5, share: 0.01 }
     source: SYNTHETIC
     note: More couples and families than on a normal day (leisure season).
-  assistedShare:
-    value: 0.007
-    source: SYNTHETIC
-    note: Parties taking the assisted path (PRM and similar), as in the demo scenario.
-  strategicLateArrival:
-    value: { share: 0, minMinutesBeforeStd: 25, maxMinutesBeforeStd: 35 }
-    source: SYNTHETIC
-    note: Nobody arrives late on purpose in this scenario.
-
-operations:
-  boardingCloseMinutesBeforeStd:
-    value: 20
-    source: SYNTHETIC
-    note: Boarding closes 20 minutes before the scheduled departure, for every flight.
-  deadlineKnowledge:
-    value: RULE
-    source: SYNTHETIC
-    note: The system applies the closing rule to the schedule; without disruptions it matches the ground truth exactly.
 
 disruptions:
   flightDelays:

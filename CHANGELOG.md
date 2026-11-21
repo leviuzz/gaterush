@@ -6,6 +6,41 @@ must be listed, together with the component versions it bumps.
 
 ## [Unreleased]
 
+### Added
+
+- Airport configurations (ADR-038):
+  - `airports/<id>.yaml` holds every parameter of an airport and its checkpoints, with their
+    sources;
+  - a scenario with `extends: { airport, checkpoint }` gives only its day;
+  - `airports/vce-like.yaml`, `tsf-like.yaml` and `mx-like-hub.yaml` carry the S7 library;
+  - [airports/README.md](airports/README.md) says what goes where, item by item of the data
+    request.
+- Optional scenario fields:
+  - `checkpoint.lanesAvailable` and `checkpoint.lanePlanRule` (lanes planned from the expected
+    arrivals);
+  - `gateflow` (GateFlow settings of the checkpoint), `todayPractice` (baseline A') and
+    `fairnessTarget`.
+- `gateflow-sim lanes --scenario <file>` prints the lane plan of a day; `validate` shows the
+  airport and checkpoint.
+- Reports:
+  - the airport configuration and its SHA-256;
+  - the policy parameters set for the checkpoint, with the preset value;
+  - whether the fairness target of the checkpoint is met.
+- Tests:
+  - the library days composed from their airports give the populations and per-day results of
+    S7;
+  - the rule reproduces each day's lane plan;
+  - composition, merging, settings and their errors.
+
+### Changed
+
+- The library days (`scenarios/vce-like-*.yaml`, `tsf-like-peak-day.yaml`,
+  `mx-like-transfer-hub.yaml`) extend their airport configuration. Their results are unchanged.
+- `results.json` and `sweep.json` manifests carry `scenario.airport` (null for scenarios without
+  one).
+- Sweeps: adding lanes (`lanesDelta` > 0) also adds them to the lanes the checkpoint has.
+- `airports/private/` is ignored by git, like `scenarios/private/`.
+
 ## [0.7.0] - 2026-11-21: Slice S7
 
 Flight lists from files, data sources and licences in every report, and a scenario library.

@@ -1031,3 +1031,64 @@ founder on 2026-11-21 together with all of its recommendations.
   - Replacing a flight list and a lane plan with the airport's gives the real case without code
     changes.
   - Results are in [docs/reports/slice-7](docs/reports/slice-7/README.md).
+
+## ADR-038: Airport configurations: one file per airport, scenarios give only their day
+
+- **Status:** Accepted (2026-11-22). Asked by the founder ("una configurazione per ogni
+  aeroporto dove settare parametri"). Scenarios 0.6.0, metrics and CLI 0.8.0. The scenario schema
+  stays at version 5: every new field is optional.
+- **Context:**
+  - Each S7 library day repeated every parameter of its airport, so a change had to be made in
+    several files.
+  - The airport's data, requested on 2026-11-22, needs one place to go.
+  - The S7 open points showed that the fairness bound K and the fairness target belong to each
+    checkpoint.
+- **Decision:**
+  - `airports/<id>.yaml` (format `kind: airport`, schema version 1) holds:
+    - the airport's identity, time zone and data sources;
+    - `defaults` for every checkpoint and day;
+    - its `checkpoints`, each with a `scenario` part.
+  - A scenario with `extends: { airport, checkpoint }` is composed in this order: the
+    defaults, then the checkpoint part, then the day. Objects merge key by key; a labelled
+    parameter, a list or a value replaces the previous one as a whole. The data sources of the
+    airport come before those of the day. The scenario records the airport, the checkpoint and
+    the file's SHA-256, and every report prints them.
+  - New optional scenario fields:
+    - `checkpoint.lanesAvailable`: the lanes the checkpoint has. No plan may exceed them.
+    - `checkpoint.lanePlanRule`: plans the lanes of a day that gives no schedule. In every
+      interval it opens enough lanes for the expected arrivals at a utilisation, from a minimum
+      up to the lanes available, averaged over simulated days 1 to N. `gateflow-sim lanes` prints
+      the plan to fix it in the day file.
+    - `gateflow`: GateFlow settings of the checkpoint.
+      - K, k and N go to every priority policy.
+      - Hysteresis and maximum data age go only to versions that have these rules (v3), so
+        v0-v2 keep their definition.
+      - Call-ahead, response estimate and prepare window go to every virtual queue.
+    - `todayPractice`: when staff call closing flights in baseline A'.
+    - `fairnessTarget`: the share of the other passengers that may wait more than 5 minutes
+      longer than in FIFO order. Every report says whether it is met.
+  - Reports list every policy parameter and the differences from the preset.
+  - The library days now extend `airports/vce-like.yaml`, `tsf-like.yaml` and
+    `mx-like-hub.yaml`.
+- **Decisions on the open points of S7** (delegated by the founder):
+  - **K and fairness, per checkpoint.** The defaults stay K = 30 and the 0.1% target of ADR-025,
+    and the synthetic hub keeps them. Its reports therefore say "not met" (0.81% at K = 30), and
+    the `mx-like-hub` sweep shows the alternatives (K = 15: 0.28%, +2.9 flights per day). GateFlow
+    never relaxes a target silently: the airport approves its own K and target in its
+    configuration.
+  - **Transfer checkpoints first.** The value case leads with the transfer screening of hubs and
+    with departures checkpoints that run close to capacity. The data request now asks whether a
+    checkpoint re-screens connecting passengers.
+  - **OPDI.** Not pursued. The airport's own flight lists give the schedule, the seats, the gates
+    and the closing times, and OPDI gives none of them (ADR-035). Permission would be sought only
+    for a historical replay.
+- **Evidence:**
+  - Population fingerprints of the five library days (days 1-2) match those taken before the
+    change.
+  - The rule reproduces each day's lane plan exactly.
+  - Days 1-2 of the TSF-like and MX-like days give the per-day results of the S7 reports field
+    by field.
+  - Runs of all five days on days 1-3 matched the S7 reports.
+- **Consequences:**
+  - Airport data goes into `airports/private/` and `scenarios/private/`, which git ignores.
+  - The reports of S7 remain valid: the library's results do not change.

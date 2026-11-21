@@ -6,6 +6,7 @@ import type { Policy } from '@gateflow/queue-core';
 import {
   DEFAULT_BOOTSTRAP,
   SweepConfigError,
+  applyScenarioSettings,
   assembleExperiment,
   assembleSweep,
   buildResults,
@@ -39,6 +40,7 @@ import {
   formatFlightCsv,
   generateSchedule,
   parseScenarioText,
+  planLanes,
 } from '@gateflow/sim-scenarios';
 import type { Scenario } from '@gateflow/sim-scenarios';
 import {
@@ -67,6 +69,7 @@ Usage:
   ${CLI_NAME} validate --scenario <file>        Validate a scenario file
   ${CLI_NAME} flights --scenario <file> [--out <file>]
                                                 Write the design day as a flight list (CSV)
+  ${CLI_NAME} lanes --scenario <file>           Print the lane plan its checkpoint's rule gives
   ${CLI_NAME} policies                          List the available policy presets
   ${CLI_NAME} --help | --version
 
@@ -95,6 +98,8 @@ Risk classes on arrival use the parameters of the first priority policy listed.
 
 A scenario can take its flights from a CSV file (format gateflow.flights/1: columns flight, std,
 aircraft, seats, passengers, gate_zone, destination); "flights" writes one for any scenario.
+A scenario can extend an airport configuration (airports/<id>.yaml) and give only its day; the
+GateFlow settings and today's practice of the checkpoint then apply to the policies simulated.
 
 All results are SIMULATED on the assumptions of the scenario and are not operational evidence.
 `;
@@ -137,6 +142,17 @@ function sweepDays(plan: SweepPlan, results: readonly TaskResult[]): SweepDayRes
 
 function scenarioHash(io: CliIo, scenario: Scenario): string {
   return `sha256:${io.sha256(canonicalJson(scenario))}`;
+}
+
+/** The policies as configured for the scenario's checkpoint (its GateFlow settings and practice). */
+function configuredPolicies(policies: readonly Policy[], scenario: Scenario): Policy[] {
+  try {
+    return applyScenarioSettings(policies, scenario);
+  } catch (error) {
+    throw new UsageError(
+      `the settings of the scenario make a policy invalid: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 }
 
 /** Classification for on-arrival risk classes: the first priority policy's, else priority-v3's. */
@@ -246,7 +262,8 @@ async function commandRun(argv: string[], io: CliIo): Promise<number> {
   const seeds = parseSeeds(values.seeds);
   const workers =
     values.workers === undefined ? io.cpus() : parsePositiveInteger(values.workers, '--workers');
-  const policies = parsePolicies(values.policies);
+  const scenario = loadScenario(io, values.scenario);
+  const policies = configuredPolicies(parsePolicies(values.policies), scenario);
   const baselinePolicyId = values.baseline ?? (policies[0] as Policy).id;
   if (!policies.some((p) => p.id === baselinePolicyId)) {
     throw new UsageError(`baseline "${baselinePolicyId}" must be one of --policies`);
@@ -257,7 +274,6 @@ async function commandRun(argv: string[], io: CliIo): Promise<number> {
       : parseComparisons(values.compare, policies);
   const resamples = parsePositiveInteger(values['bootstrap-resamples'], '--bootstrap-resamples');
 
-  const scenario = loadScenario(io, values.scenario);
   const hash = scenarioHash(io, scenario);
   const commit = values.commit ?? io.commit();
   const outDir = values.out ?? join('out', scenario.id);
@@ -351,7 +367,7 @@ async function commandSweep(argv: string[], io: CliIo): Promise<number> {
   if (values.spec === undefined) throw new UsageError('--spec is required');
   const spec = parseSweepSpec(readText(io, values.spec, 'sweep'), values.spec);
   const scenario = loadScenario(io, sweepScenarioPath(spec, values.spec));
-  const policies = parsePolicies(spec.policies.join(','));
+  const policies = configuredPolicies(parsePolicies(spec.policies.join(',')), scenario);
   if (!policies.some((p) => p.id === spec.baseline)) {
     throw new UsageError(`baseline "${spec.baseline}" must be one of the policies`);
   }
@@ -440,6 +456,11 @@ function commandValidate(argv: string[], io: CliIo): number {
     [
       `valid scenario ${scenario.id}: ${scenario.title}`,
       `hash           ${scenarioHash(io, scenario)}`,
+      ...(scenario.airport === undefined
+        ? []
+        : [
+            `airport        ${scenario.airport.id} (${scenario.airport.name}), checkpoint ${scenario.airport.checkpoint}`,
+          ]),
       `data           ${scenario.dataClassification}`,
       `flights        ${generateSchedule(scenario).length} on the design day (${from})`,
       `assumptions    ${collectAssumptions(scenario).length} labelled parameters`,
@@ -447,6 +468,48 @@ function commandValidate(argv: string[], io: CliIo): number {
         (source, i) =>
           `${i === 0 ? 'data sources  ' : '              '} ${source.id} (${source.kind}): ${source.licence}`,
       ),
+      '',
+    ].join('\n'),
+  );
+  return EXIT_OK;
+}
+
+/**
+ * Prints the lane plan the checkpoint's rule gives for the scenario's day, as YAML to paste into
+ * the scenario (a fixed plan does not have to be planned again at every load).
+ */
+function commandLanes(argv: string[], io: CliIo): number {
+  const { values } = parseArgs({
+    args: argv,
+    options: { scenario: { type: 'string' } },
+    strict: true,
+    allowPositionals: false,
+  });
+  if (values.scenario === undefined) throw new UsageError('--scenario is required');
+  const scenario = loadScenario(io, values.scenario);
+  const { lanePlanRule, lanesAvailable } = scenario.checkpoint;
+  if (lanePlanRule === undefined || lanesAvailable === undefined) {
+    throw new UsageError(
+      'the scenario has no lane plan rule (checkpoint.lanePlanRule and checkpoint.lanesAvailable)',
+    );
+  }
+  const plan = planLanes(scenario, lanePlanRule.value, lanesAvailable.value);
+  const laneHours = plan.reduce((sum, entry, i) => {
+    const minutes = (clock: string) => Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3));
+    const next = plan[i + 1];
+    return (
+      sum +
+      (entry.lanes * ((next === undefined ? 1440 : minutes(next.from)) - minutes(entry.from))) / 60
+    );
+  }, 0);
+  io.stdout(
+    [
+      `# Lane plan of ${scenario.id}: ${laneHours.toFixed(1)} lane-hours`,
+      'checkpoint:',
+      '  laneSchedule:',
+      '    value:',
+      ...plan.map((e) => `      - { from: '${e.from}', lanes: ${String(e.lanes)} }`),
+      `    source: ${lanePlanRule.source}`,
       '',
     ].join('\n'),
   );
@@ -496,6 +559,8 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
         return commandValidate(rest, io);
       case 'flights':
         return commandFlights(rest, io);
+      case 'lanes':
+        return commandLanes(rest, io);
       case 'policies':
         return commandPolicies(io);
       case '--version':

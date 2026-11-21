@@ -167,7 +167,7 @@ describe('gateflow-sim validate, policies, help', () => {
 
   it('prints help and version', async () => {
     expect((await cli(['--help'])).stdout).toContain('Usage:');
-    expect((await cli(['--version'])).stdout.trim()).toBe('0.7.0');
+    expect((await cli(['--version'])).stdout.trim()).toBe('0.8.0');
   });
 });
 
@@ -276,6 +276,91 @@ describe('gateflow-sim flights and flight list scenarios', () => {
     expect(brokenResult.code).toBe(EXIT_FAILURE);
     expect(brokenResult.stderr).toContain(
       'flight list flights/broken.csv, line 2: std: expected a clock time HH:MM',
+    );
+  });
+});
+
+describe('airport configurations', () => {
+  const repo = fileURLToPath(new URL('../../../', import.meta.url));
+  const dir = join(workDir, 'airport');
+
+  it('validates a day of an airport and prints the lane plan of its checkpoint', async () => {
+    const day = join(repo, 'scenarios', 'tsf-like-peak-day.yaml');
+    const validated = await cli(['validate', '--scenario', day]);
+    expect(validated.code).toBe(EXIT_OK);
+    expect(validated.stdout).toContain(
+      'airport        tsf-like (TSF-like airport (synthetic)), checkpoint departures',
+    );
+    const lanes = await cli(['lanes', '--scenario', day]);
+    expect(lanes.code).toBe(EXIT_OK);
+    const planned = lanes.stdout
+      .split('\n')
+      .filter((l) => l.startsWith('      - { from:'))
+      .join('\n');
+    const given = readFileSync(day, 'utf8')
+      .split('\n')
+      .filter((l) => l.startsWith('      - { from:'))
+      .join('\n');
+    expect(planned).toBe(given);
+    expect(lanes.stdout).toMatch(/^# Lane plan of tsf-like-peak-day: \d+\.\d lane-hours/);
+    const noRule = await cli(['lanes', '--scenario', DEMO]);
+    expect(noRule.code).toBe(EXIT_USAGE);
+  });
+
+  it('simulates the policies with the settings of the checkpoint', async () => {
+    mkdirSync(join(dir, 'airports'), { recursive: true });
+    mkdirSync(join(dir, 'scenarios', 'flights'), { recursive: true });
+    writeFileSync(
+      join(dir, 'airports', 'tsf-like.yaml'),
+      readFileSync(join(repo, 'airports', 'tsf-like.yaml'), 'utf8').replace(
+        'maxOvertakes: 30',
+        'maxOvertakes: 15',
+      ),
+    );
+    writeFileSync(
+      join(dir, 'scenarios', 'flights', 'tsf-like-peak-day.csv'),
+      readFileSync(join(repo, 'scenarios', 'flights', 'tsf-like-peak-day.csv'), 'utf8'),
+    );
+    const day = join(dir, 'scenarios', 'tsf-like-peak-day.yaml');
+    writeFileSync(day, readFileSync(join(repo, 'scenarios', 'tsf-like-peak-day.yaml'), 'utf8'));
+    const out = join(dir, 'out');
+    const result = await cli([
+      'run',
+      '--scenario',
+      day,
+      '--seeds',
+      '1-2',
+      '--policies',
+      'fifo,virtual-fifo,priority-v3',
+      '--out',
+      out,
+      '--bootstrap-resamples',
+      '50',
+      '--quiet',
+    ]);
+    expect(result.code).toBe(EXIT_OK);
+    const doc = JSON.parse(readFileSync(join(out, 'results.json'), 'utf8')) as {
+      manifest: {
+        policies: { id: string; selection: { maxOvertakes?: number } }[];
+        scenario: { airport: { id: string; checkpoint: string } | null };
+      };
+    };
+    expect(doc.manifest.policies.find((p) => p.id === 'priority-v3')?.selection.maxOvertakes).toBe(
+      15,
+    );
+    expect(doc.manifest.scenario.airport).toMatchObject({
+      id: 'tsf-like',
+      checkpoint: 'departures',
+    });
+    const report = readFileSync(join(out, 'report.md'), 'utf8');
+    expect(report).toContain(
+      'Set for this checkpoint by the scenario (preset value in brackets): selection.maxOvertakes 15 (30).',
+    );
+    expect(report).toMatch(
+      /\| Fairness target of this checkpoint: at most 0\.10% delayed by more than 5 min \| (met|\*\*not met\*\*) \(\d+\.\d\d%\) \|/,
+    );
+    expect(report).toContain(
+      'Airport configuration: `tsf-like` (TSF-like airport (synthetic)), checkpoint `departures`',
     );
   });
 });

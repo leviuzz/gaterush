@@ -21,6 +21,7 @@
       "hash": "sha256:25ef984b088cdc721b971fbab531aff7beddbd636f43a9dee5c00297a8fadceb",
       "dataClassification": "SYNTHETIC",
       "timeZone": "Europe/Rome",
+      "airport": null,
       "dataSources": [
         {
           "id": "gateflow-synthetic",

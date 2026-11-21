@@ -200,6 +200,11 @@ export function applySetting(
           ...entry,
           lanes: Math.max(1, entry.lanes + delta),
         }));
+        // Added lanes are hypothetical lanes the checkpoint would have.
+        const available = copy.checkpoint.lanesAvailable;
+        if (available !== undefined && delta > 0) {
+          copy.checkpoint.lanesAvailable = { ...available, value: available.value + delta };
+        }
       });
     }
     case 'serviceTimeMeanSeconds': {

@@ -28,7 +28,7 @@ function param<T extends z.ZodType>(value: T) {
  * at least one source, so that every report can say what its numbers rest on and under which
  * terms they may be used.
  */
-const DataSourceSchema = z.strictObject({
+export const DataSourceSchema = z.strictObject({
   id: z.string().regex(ID, ID_MESSAGE),
   title: z.string().min(1),
   /** Nature of the data, with the same labels as parameters. */
@@ -145,6 +145,67 @@ const LaneScheduleSchema = z
       }
     }
   });
+
+/**
+ * How lanes are planned when the scenario gives no explicit schedule: in every interval of the
+ * day, enough lanes to screen the expected arrivals of that interval at the given utilisation,
+ * between `minLanes` and the lanes the checkpoint has. The expected arrivals are the average of
+ * simulated days 1 to `planningDays`.
+ */
+const LanePlanRuleSchema = z.strictObject({
+  utilisation: z.number().min(0.3).max(1.5),
+  intervalMinutes: z.union([z.literal(15), z.literal(30), z.literal(60), z.literal(120)]),
+  minLanes: z.number().int().min(1).max(64),
+  planningDays: z.number().int().min(10).max(1000),
+});
+export type LanePlanRule = z.infer<typeof LanePlanRuleSchema>;
+
+/**
+ * GateFlow settings approved for this checkpoint. They replace the parameters of the policy
+ * presets when this scenario is simulated: the fairness bounds, hysteresis and maximum data age of
+ * every priority policy, and the call-ahead, response estimate and prepare window of every
+ * virtual queue. Absent settings keep the preset values.
+ */
+const GateflowSettingsSchema = z
+  .strictObject({
+    maxOvertakes: z.number().int().min(0).max(1000).optional(),
+    capMaxPriorityCalls: z.number().int().min(0).max(1000).optional(),
+    capWindowCalls: z.number().int().min(1).max(1000).optional(),
+    hysteresisMinutes: z.number().min(0).max(60).optional(),
+    /** `null`: no maximum data age. */
+    maxDeadlineAgeMinutes: z.number().min(0).max(1440).nullable().optional(),
+    prepareWindowSize: z.number().int().min(0).max(1000).optional(),
+    callAheadSeconds: z.number().min(0).max(3600).optional(),
+    responseEstimateSeconds: z.number().min(0).max(3600).optional(),
+  })
+  .refine(
+    (s) =>
+      s.capMaxPriorityCalls === undefined ||
+      s.capWindowCalls === undefined ||
+      s.capMaxPriorityCalls <= s.capWindowCalls,
+    { message: 'capMaxPriorityCalls must not exceed capWindowCalls' },
+  );
+export type GateflowSettings = z.infer<typeof GateflowSettingsSchema>;
+
+/**
+ * Today's practice at this checkpoint, as modelled by baseline A' (`fifo-manual`): staff
+ * announce, every `announcementIntervalMinutes`, the flights whose boarding closes within
+ * `callWindowMinutes`.
+ */
+const TodayPracticeSchema = z.strictObject({
+  callWindowMinutes: z.number().positive().max(180),
+  announcementIntervalMinutes: z.number().positive().max(60),
+});
+export type TodayPractice = z.infer<typeof TodayPracticeSchema>;
+
+/**
+ * Fairness target of the checkpoint: at most this share of the passengers not prioritised may
+ * wait more than 5 minutes longer than with the same queue in FIFO order (ADR-025: 0.1%).
+ */
+const FairnessTargetSchema = z.strictObject({
+  maxShareDelayedOver5Min: z.number().min(0).max(1),
+});
+export type FairnessTarget = z.infer<typeof FairnessTargetSchema>;
 
 const CallResponseSchema = z.strictObject({
   /** Median time from a call to presenting at the access point, for an attentive passenger. */
@@ -397,6 +458,53 @@ function checkFlightList(schedule: z.infer<typeof FlightListScheduleSchema>, ctx
   });
 }
 
+/**
+ * A checkpoint needs a lane schedule or a rule to plan one (with the lanes it has), and never
+ * plans more lanes than it has.
+ */
+function checkLanes(
+  checkpoint: {
+    readonly lanesAvailable?: { readonly value: number } | undefined;
+    readonly laneSchedule?: { readonly value: readonly { readonly lanes: number }[] } | undefined;
+    readonly lanePlanRule?: { readonly value: { readonly minLanes: number } } | undefined;
+  },
+  ctx: IssueSink,
+): void {
+  const available = checkpoint.lanesAvailable?.value;
+  if (checkpoint.laneSchedule === undefined && checkpoint.lanePlanRule === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['checkpoint', 'laneSchedule'],
+      message: 'give checkpoint.laneSchedule, or checkpoint.lanePlanRule to plan it',
+    });
+  }
+  if (checkpoint.lanePlanRule !== undefined && available === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['checkpoint', 'lanesAvailable'],
+      message:
+        'checkpoint.lanePlanRule needs checkpoint.lanesAvailable (the lanes the checkpoint has)',
+    });
+  }
+  if (available === undefined) return;
+  if (checkpoint.lanePlanRule !== undefined && checkpoint.lanePlanRule.value.minLanes > available) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['checkpoint', 'lanePlanRule', 'value', 'minLanes'],
+      message: `minLanes exceeds the ${available} lanes the checkpoint has`,
+    });
+  }
+  checkpoint.laneSchedule?.value.forEach((entry, i) => {
+    if (entry.lanes > available) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['checkpoint', 'laneSchedule', 'value', i, 'lanes'],
+        message: `${entry.lanes} lanes planned, but the checkpoint has ${available}`,
+      });
+    }
+  });
+}
+
 export const ScenarioSchema = z
   .strictObject({
     schemaVersion: z.literal(5),
@@ -409,11 +517,28 @@ export const ScenarioSchema = z
     dataSources: z.array(DataSourceSchema).min(1),
     /** IANA time zone of the service day (informative in this version). */
     timeZone: z.string().min(1),
+    /** The airport configuration this scenario was composed from (set by the loader). */
+    airport: z
+      .strictObject({
+        id: z.string().regex(ID, ID_MESSAGE),
+        name: z.string().min(1),
+        checkpoint: z.string().regex(ID, ID_MESSAGE),
+        file: z.string().min(1).optional(),
+        sha256: z
+          .string()
+          .regex(/^[0-9a-f]{64}$/, 'expected a hexadecimal SHA-256')
+          .optional(),
+      })
+      .optional(),
     checkpoint: z.strictObject({
       id: z.string().min(1),
       kind: z.enum(['DEPARTURE_SECURITY', 'TRANSFER_SECURITY']),
+      /** Lanes the checkpoint physically has: no plan or decision may open more. */
+      lanesAvailable: param(z.number().int().min(1).max(64)).optional(),
       /** Planned open lanes over the day (lanes close from the highest number down). */
-      laneSchedule: param(LaneScheduleSchema),
+      laneSchedule: param(LaneScheduleSchema).optional(),
+      /** How the lanes are planned when `laneSchedule` is not given. */
+      lanePlanRule: param(LanePlanRuleSchema).optional(),
       serviceTimeMeanSeconds: param(z.number().positive().max(3600)),
       serviceTimeCv: param(z.number().min(0).max(3)),
     }),
@@ -465,9 +590,16 @@ export const ScenarioSchema = z
       /** Outages of the flight feed: the system's knowledge freezes until it recovers. */
       feedOutages: param(OutagesSchema),
     }),
+    /** GateFlow settings of this checkpoint (default: the policy presets). */
+    gateflow: param(GateflowSettingsSchema).optional(),
+    /** Today's practice of this checkpoint, for baseline A' (default: the preset). */
+    todayPractice: param(TodayPracticeSchema).optional(),
+    /** Fairness target of this checkpoint, checked in the reports. */
+    fairnessTarget: param(FairnessTargetSchema).optional(),
   })
   .superRefine((scenario, ctx) => {
     checkDataSources(scenario, ctx);
+    checkLanes(scenario.checkpoint, ctx);
     if (scenario.schedule.kind === 'flight-list') checkFlightList(scenario.schedule, ctx);
     const close = scenario.operations.boardingCloseMinutesBeforeStd.value;
     if (scenario.passengers.strategicLateArrival.value.minMinutesBeforeStd < close) {
@@ -488,4 +620,12 @@ export const ScenarioSchema = z
     }
   });
 
-export type Scenario = z.infer<typeof ScenarioSchema>;
+/** A scenario as written: the lane schedule may still have to be planned from its rule. */
+export type ScenarioInput = z.infer<typeof ScenarioSchema>;
+
+/** A validated scenario, with its lane schedule (given, or planned from the rule). */
+export type Scenario = Omit<ScenarioInput, 'checkpoint'> & {
+  readonly checkpoint: ScenarioInput['checkpoint'] & {
+    readonly laneSchedule: NonNullable<ScenarioInput['checkpoint']['laneSchedule']>;
+  };
+};

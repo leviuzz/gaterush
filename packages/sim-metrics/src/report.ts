@@ -1,4 +1,5 @@
 import type { Policy } from '@gateflow/queue-core';
+import { differencesFromPreset } from './policy-settings';
 import { renderDataSources, sourceLabel } from './provenance';
 import type { ComparisonMetricSummary, ComparisonSummary, ResultsDocument } from './results';
 import type { AcrossDays } from './stats';
@@ -145,6 +146,8 @@ export function renderReport(doc: ResultsDocument): string {
   }
   push('');
 
+  const fairnessTarget = doc.assumptions.find((a) => a.path === 'fairnessTarget')?.value as
+    { readonly maxShareDelayedOver5Min: number } | undefined;
   let section = 3;
   for (const c of comparisons) {
     const candidate = policyById(c.candidateId);
@@ -171,6 +174,19 @@ export function renderReport(doc: ResultsDocument): string {
       `| Share of non-prioritised passengers delayed by more than 5 min | ${pct(c.metrics.nonPriorityDelayedOver5MinShare.mean, 2)} |`,
       `| Most people who overtook one ticket, worst day (${bound}) | ${num(m.maxOvertakes.max, 0)} |`,
     );
+    const reference = policyById(c.referenceId);
+    if (
+      fairnessTarget !== undefined &&
+      selection.kind === 'constrained-edf' &&
+      reference.selection.kind === 'fifo' &&
+      reference.queue.kind === candidate.queue.kind
+    ) {
+      const share = c.metrics.nonPriorityDelayedOver5MinShare.mean;
+      const met = share <= fairnessTarget.maxShareDelayedOver5Min;
+      push(
+        `| Fairness target of this checkpoint: at most ${pct(fairnessTarget.maxShareDelayedOver5Min, 2)} delayed by more than 5 min | ${met ? 'met' : '**not met**'} (${pct(share, 2)}) |`,
+      );
+    }
     if (selection.kind === 'constrained-edf') {
       push(
         `| Calls where the cap blocked a priority call, per day | ${num(m.capReachedCalls.mean)} |`,
@@ -333,6 +349,18 @@ export function renderReport(doc: ResultsDocument): string {
       push(
         '',
         'All parameter values are initial hypotheses to be calibrated and approved, not measured optima.',
+        '',
+      );
+    }
+    const differences = differencesFromPreset(policy);
+    if (differences.length > 0) {
+      push(
+        `Set for this checkpoint by the scenario (preset value in brackets): ${differences
+          .map((d) => {
+            const key = d.parameter.slice(d.parameter.indexOf('.') + 1);
+            return `${d.parameter} ${formatPolicyParam(key, d.value)} (${formatPolicyParam(key, d.preset)})`;
+          })
+          .join('; ')}.`,
         '',
       );
     }

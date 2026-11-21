@@ -32,6 +32,8 @@ packages/
   sim-model/        checkpoint simulation: physical queue or GateFlow virtual queue (pure)
   sim-scenarios/    scenario schema, validation, assumptions, synthetic population (pure)
   sim-metrics/      experiments, sweeps, paired metrics, statistics, results, Markdown and HTML (pure)
+airports/           airport configurations: parameters of each airport and checkpoint (YAML)
+airports/private/   airport-provided configurations, ignored by git
 scenarios/          scenario files (YAML), including the S7 library
 scenarios/flights/  flight lists (CSV, gateflow.flights/1) and the generator of the synthetic ones
 scenarios/private/  airport-provided files, ignored by git (docs/data-request)
@@ -337,6 +339,15 @@ Validation:
   assisted share, strategic late arrivals (for stress tests), the boarding-close rule, how the
   system learns deadlines (`RULE`, `FEED` or `NONE`) and the disruptions (flight delays with their
   notice, gate changes, lane outages, feed outages).
+- A scenario may extend an airport configuration (`airports/<id>.yaml`, ADR-038):
+  `extends: { airport, checkpoint }`. The loader composes the airport's `defaults`, then the
+  checkpoint's part, then the day (objects merge key by key; labelled parameters, lists and values
+  replace), and records the airport and the file's SHA-256 in `scenario.airport`.
+- A checkpoint may give `lanesAvailable` and a `lanePlanRule` instead of a lane schedule. The plan
+  is then made at load time (`planLanes`) from the expected arrivals of simulated days 1 to N.
+- The scenario's `gateflow`, `todayPractice` and `fairnessTarget` configure the checkpoint.
+  `applyScenarioSettings` (sim-metrics) applies the first two to the policies before a run or
+  sweep, and the reports check the third.
 - The package does no I/O: `parseScenarioText(text, format, files)` receives functions that read
   the flight list named by the scenario (relative to the scenario file) and hash it. The CLI
   passes file system access. The rows are then part of the scenario, so its hash, the worker

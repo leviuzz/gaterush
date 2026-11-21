@@ -1,6 +1,8 @@
 import { parse as parseYaml } from 'yaml';
+import { composeScenario, parseAirport, scenarioExtends } from './airport';
 import { ScenarioValidationError } from './errors';
 import { parseFlightCsv } from './flights-csv';
+import { withLaneSchedule } from './lane-plan';
 import { ScenarioSchema } from './schema';
 import type { Scenario } from './schema';
 
@@ -42,12 +44,22 @@ function unreadFlightFile(data: object): string | undefined {
 
 /** Validates already-parsed data against the scenario schema. */
 export function parseScenario(data: unknown): Scenario {
+  if (typeof data === 'object' && data !== null && 'kind' in data && data.kind === 'airport') {
+    throw new ScenarioValidationError([
+      'kind: this is an airport configuration, not a scenario; simulate one of the scenarios that extend it',
+    ]);
+  }
   if (typeof data === 'object' && data !== null && 'schemaVersion' in data) {
     const version = data.schemaVersion;
     const migration = typeof version === 'number' ? MIGRATIONS[version] : undefined;
     if (migration !== undefined) throw new ScenarioValidationError([migration]);
   }
   if (typeof data === 'object' && data !== null) {
+    if ('extends' in data) {
+      throw new ScenarioValidationError([
+        'extends: the scenario extends an airport configuration; load it from its file',
+      ]);
+    }
     const file = unreadFlightFile(data);
     if (file !== undefined) {
       throw new ScenarioValidationError([
@@ -64,7 +76,7 @@ export function parseScenario(data: unknown): Scenario {
       }),
     );
   }
-  return result.data;
+  return withLaneSchedule(result.data);
 }
 
 /**
@@ -100,22 +112,60 @@ function readFlightFile(data: unknown, files: ScenarioFiles): void {
   flights.sha256 = files.sha256(text);
 }
 
+function parseText(text: string, format: 'yaml' | 'json'): unknown {
+  try {
+    return format === 'json' ? JSON.parse(text) : parseYaml(text, { uniqueKeys: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new ScenarioValidationError([`(syntax): ${message}`]);
+  }
+}
+
 /**
- * Parses and validates a scenario written in YAML (a superset of JSON) or JSON. With `files`,
- * the flight list file a scenario names is read and included in the scenario.
+ * Composes a scenario that extends an airport configuration (read through `files`, relative to
+ * the scenario file) with that configuration. Problems of the airport file name it.
+ */
+function composeWithAirport(data: unknown, files: ScenarioFiles): unknown {
+  const ext = scenarioExtends(data);
+  if (ext === undefined) return data;
+  let text: string;
+  try {
+    text = files.read(ext.airport);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new ScenarioValidationError([`extends.airport: cannot read ${ext.airport}: ${message}`]);
+  }
+  let airport;
+  try {
+    airport = parseAirport(
+      parseText(text, ext.airport.toLowerCase().endsWith('.json') ? 'json' : 'yaml'),
+    );
+  } catch (error) {
+    if (error instanceof ScenarioValidationError) {
+      throw new ScenarioValidationError(error.issues.map((i) => `airport ${ext.airport}, ${i}`));
+    }
+    throw error;
+  }
+  return composeScenario(airport, data as Record<string, unknown>, {
+    file: ext.airport,
+    sha256: files.sha256(text),
+  });
+}
+
+/**
+ * Parses and validates a scenario written in YAML (a superset of JSON) or JSON. With `files`, the
+ * airport configuration a scenario extends and the flight list file it names are read and
+ * included in the scenario.
  */
 export function parseScenarioText(
   text: string,
   format: 'yaml' | 'json' = 'yaml',
   files?: ScenarioFiles,
 ): Scenario {
-  let data: unknown;
-  try {
-    data = format === 'json' ? JSON.parse(text) : parseYaml(text, { uniqueKeys: true });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new ScenarioValidationError([`(syntax): ${message}`]);
+  let data = parseText(text, format);
+  if (files !== undefined) {
+    data = composeWithAirport(data, files);
+    readFlightFile(data, files);
   }
-  if (files !== undefined) readFlightFile(data, files);
   return parseScenario(data);
 }

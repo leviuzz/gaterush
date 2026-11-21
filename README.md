@@ -88,6 +88,11 @@ The last command writes the design day of a scenario as a flight list
 [docs/data-request](docs/data-request/README.md) for what the simulator needs, and
 [scenarios/flights](scenarios/flights/README.md) for the format.
 
+Each airport has a configuration file in `airports/` with all its parameters: lanes, throughput,
+walking times, passenger behaviour, GateFlow settings and fairness target per checkpoint. A
+scenario names the airport and the checkpoint and gives only its day. See
+[airports/README.md](airports/README.md).
+
 ```bash
 pnpm sim policies
 ```
@@ -167,6 +172,7 @@ How to read these numbers:
 | `packages/sim-scenarios` | Scenario schema, assumptions registry, synthetic population (pure) |
 | `packages/sim-metrics` | Experiments, paired metrics, statistics, results and report (pure) |
 | `apps/sim-cli` | `gateflow-sim` command-line interface |
+| `airports/` | Airport configurations: the parameters of each airport and checkpoint ([guide](airports/README.md)) |
 | `scenarios/` | Scenario files, including the S7 library |
 | `scenarios/flights/` | Flight lists (CSV) and the generator of the synthetic ones |
 | `sweeps/` | Sensitivity sweep specifications |

@@ -1,5 +1,18 @@
 export { FlightRowSchema, ScenarioSchema, SOURCE_LABELS, clockMinutes } from './schema';
-export type { DataSource, FlightRow, Scenario, SourceLabel } from './schema';
+export type {
+  DataSource,
+  FairnessTarget,
+  FlightRow,
+  GateflowSettings,
+  LanePlanRule,
+  Scenario,
+  ScenarioInput,
+  SourceLabel,
+  TodayPractice,
+} from './schema';
+export { AirportSchema, composeScenario, mergeScenarioParts, parseAirport } from './airport';
+export type { Airport } from './airport';
+export { expectedWorkByInterval, planLanes, withLaneSchedule } from './lane-plan';
 export { ScenarioValidationError } from './errors';
 export { parseScenario, parseScenarioText } from './parse';
 export type { ScenarioFiles } from './parse';

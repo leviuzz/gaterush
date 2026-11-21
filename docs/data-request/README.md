@@ -9,6 +9,9 @@ GateFlow does not need boarding passes, names, booking references or images for 
 The data stays the airport's: it is used under a data agreement, kept outside the public parts of
 the repository (see below), and every report names the source and its terms of use.
 
+Each item below fills a field of the airport's configuration file
+([airports/README.md](../../airports/README.md) lists where each one goes).
+
 ## 1. Flights of two or three design days
 
 A normal day, a peak day and, if possible, a disrupted day, as a CSV file in the
@@ -35,6 +38,8 @@ A spreadsheet export is fine. Semicolons and quoted fields are accepted. The CSV
   normal and peak times.
 - How lanes are opened or closed during the day, and how quickly.
 - Fast-track lanes and assisted-passenger (PRM) paths: how many, which rights, which rules.
+- Whether a checkpoint screens connecting passengers again (transfer security), and how many of
+  them cross it per day. In simulation this is where GateFlow helps most.
 
 ## 3. Walking times and boarding
 

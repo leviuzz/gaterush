@@ -29,6 +29,7 @@ Status legend: **Done**, **Next**, **Planned**, **Gated** (needs a business deci
 | **S5** | Disruptions and data quality: delays with notification time, gate changes, lane outages, stale or missing feeds, ground truth vs knowledge, hysteresis, stability metrics (ADR-029, ADR-030) | **Done** |
 | **S6** | Parallel batches (worker threads), sensitivity sweeps (k/N, K, lanes, load factor, show-up, maximum data age, feed reliability), HTML report with charts (ADR-031 to ADR-034) | **Done** |
 | **S7** | Data licences checked (OPDI is non-commercial, not imported: ADR-035); airport flight lists from CSV files, seats by aircraft type, data sources and licences in every report (ADR-036); scenario library: VCE-like normal, peak and disrupted days, TSF-like peak day, MX-like transfer hub (ADR-037) | **Done** |
+| *after S7* | Airport configurations: one file per airport and checkpoint with every parameter, GateFlow settings, today's practice and fairness target per checkpoint, lane plans from a rule (ADR-038) | **Done** |
 | S8 | Experiment C: lane-opening recommendations with an operator model | **Next** |
 
 The slices after S3 were renumbered when S4 was proposed: S4 to S7 of the kickoff proposal (and of

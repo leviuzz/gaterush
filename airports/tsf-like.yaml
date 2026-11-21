@@ -1,0 +1,181 @@
+# GateFlow airport configuration (schema version 1).
+#
+# SYNTHETIC. "TSF-like" means sized like Treviso Canova from its public annual traffic. It is not a
+# model of the real airport: every parameter below is an assumption, to be replaced with the
+# airport's own values when they arrive (see airports/README.md and docs/data-request).
+
+schemaVersion: 1
+kind: airport
+id: tsf-like
+name: TSF-like airport (synthetic)
+description: >-
+  A low-cost base the size of Treviso Canova (3.2 million passengers in 2025): single-class 737s
+  and A320-family aircraft, no connecting passengers, one departures security checkpoint and a
+  morning bank of based aircraft. Synthetic.
+dataClassification: SYNTHETIC
+timeZone: Europe/Rome
+dataSources:
+  - id: gateflow-synthetic
+    title: Synthetic assumptions of this airport configuration
+    kind: SYNTHETIC
+    provider: GateFlow
+    licence: Created for GateFlow; contains no third-party data.
+  - id: save-traffic-2025
+    title: Treviso Canova traffic in 2025 (3.2 million passengers)
+    kind: LITERATURE
+    provider: SAVE S.p.A., annual figure as reported in the business plan and in the press
+    licence: Published aggregate figure, cited with attribution. Used only to size the synthetic day.
+    retrieved: '2026-11-21'
+    note: >-
+      3,200,130 passengers in 2025 according to the business plan (marked verified there); press
+      coverage of SAVE's results gives over 3.2 million. Not re-verified against SAVE's own
+      publication, whose website refused automated access.
+
+# Parameters shared by every checkpoint and every day of the airport.
+defaults:
+  schedule:
+    seats:
+      value:
+        - { aircraft: A320, seats: 180 }
+        - { aircraft: A21N, seats: 239 }
+        - { aircraft: B738, seats: 189 }
+        - { aircraft: B38M, seats: 197 }
+      source: SYNTHETIC
+      note: >-
+        Assumed single-class high-density configurations by ICAO type designator, not airline data.
+        Replace with the airport's seat data.
+  passengers:
+    transferShare:
+      value: 0
+      source: SYNTHETIC
+      note: A point-to-point low-cost airport; no connecting passengers.
+    showUp:
+      departing:
+        value:
+          { minMinutesBeforeStd: 25, medianExtraMinutes: 70, sigma: 0.55, maxMinutesBeforeStd: 240 }
+        source: SYNTHETIC
+        note: Arrival at the checkpoint = STD minus (25 min + log-normal with median 70 min), as in the demo scenario.
+      transfer:
+        value:
+          { minMinutesBeforeStd: 24, medianExtraMinutes: 25, sigma: 0.5, maxMinutesBeforeStd: 180 }
+        source: SYNTHETIC
+        note: Connecting passengers arrive later, after their inbound flight.
+    walkSpeedSigma:
+      value: 0.2
+      source: SYNTHETIC
+      note: Individual walking time = nominal zone time x log-normal(median 1, sigma).
+    callResponse:
+      value:
+        medianSeconds: 75
+        sigma: 0.5
+        absentProbability: 0.04
+        absentExtraMedianMinutes: 4
+        absentExtraSigma: 0.8
+      source: SYNTHETIC
+      note: Virtual queue only. As in the demo scenario; to be measured in a pilot.
+    groups:
+      value:
+        partySizes:
+          - { size: 1, share: 0.7 }
+          - { size: 2, share: 0.2 }
+          - { size: 3, share: 0.05 }
+          - { size: 4, share: 0.04 }
+          - { size: 5, share: 0.01 }
+      source: SYNTHETIC
+      note: More couples and families than on a normal day (leisure season).
+    assistedShare:
+      value: 0.007
+      source: SYNTHETIC
+      note: Parties taking the assisted path (PRM and similar), as in the demo scenario.
+    strategicLateArrival:
+      value: { share: 0, minMinutesBeforeStd: 25, maxMinutesBeforeStd: 35 }
+      source: SYNTHETIC
+      note: Nobody arrives late on purpose in this scenario.
+  operations:
+    boardingCloseMinutesBeforeStd:
+      value: 20
+      source: SYNTHETIC
+      note: Boarding closes 20 minutes before the scheduled departure, for every flight.
+    deadlineKnowledge:
+      value: RULE
+      source: SYNTHETIC
+      note: The system applies the closing rule to the schedule; without disruptions it matches the ground truth exactly.
+  disruptions:
+    flightDelays:
+      value:
+        share: 0
+        medianMinutes: 20
+        sigma: 0.8
+        maxMinutes: 180
+        noticeMinMinutesBeforeStd: 10
+        noticeMaxMinutesBeforeStd: 120
+      source: SYNTHETIC
+      note: No delays in this scenario.
+    gateChanges:
+      value:
+        { share: 0, minMinutesBeforeStd: 30, maxMinutesBeforeStd: 70, noticeDelayMaxMinutes: 5 }
+      source: SYNTHETIC
+      note: No gate changes in this scenario.
+    laneOutages:
+      value: { perDay: 0, medianMinutes: 20, sigma: 0.5, maxMinutes: 60 }
+      source: SYNTHETIC
+      note: No unplanned lane outages in this scenario.
+    feedOutages:
+      value: { perDay: 0, medianMinutes: 30, sigma: 0.6, maxMinutes: 120 }
+      source: SYNTHETIC
+      note: The flight feed never goes down in this scenario.
+  gateflow:
+    value:
+      maxOvertakes: 30
+      capMaxPriorityCalls: 10
+      capWindowCalls: 20
+      hysteresisMinutes: 3
+      maxDeadlineAgeMinutes: 60
+      prepareWindowSize: 10
+      callAheadSeconds: 180
+      responseEstimateSeconds: 90
+    source: SYNTHETIC
+    note: >-
+      GateFlow defaults (priority v3 0.2.0 and the virtual queue of ADR-017), to be approved by the
+      airport for this checkpoint.
+  todayPractice:
+    value: { callWindowMinutes: 20, announcementIntervalMinutes: 5 }
+    source: SYNTHETIC
+    note: >-
+      Baseline A' as in ADR-022: every 5 minutes staff call the flights closing within 20 minutes.
+      To replace with how staff handle urgent passengers at this airport.
+  fairnessTarget:
+    value: { maxShareDelayedOver5Min: 0.001 }
+    source: SYNTHETIC
+    note: The criterion of ADR-025, to be approved by the airport.
+
+checkpoints:
+  - id: departures
+    title: Departures security checkpoint
+    kind: DEPARTURE_SECURITY
+    scenario:
+      checkpoint:
+        lanesAvailable:
+          value: 5
+          source: SYNTHETIC
+          note: Lanes the checkpoint has (assumed).
+        lanePlanRule:
+          value: { utilisation: 0.9, intervalMinutes: 60, minLanes: 1, planningDays: 100 }
+          source: SYNTHETIC
+          note: >-
+            Assumed planning rule, not the airport's: every hour, enough lanes to screen the
+            expected arrivals at 90% utilisation, at least 1 and at most the 5 lanes.
+        serviceTimeMeanSeconds:
+          value: 30
+          source: SYNTHETIC
+          note: About 120 passengers per hour per lane (assumed conventional lanes of a smaller airport).
+        serviceTimeCv:
+          value: 0.6
+          source: SYNTHETIC
+      schedule:
+        gateZones:
+          value:
+            - { id: A, walkMinutes: 4, share: 0.85 }
+            - { id: B, walkMinutes: 8, share: 0.15 }
+          source: SYNTHETIC
+          note: Nominal walk from the checkpoint exit; B are non-Schengen gates after passport control (its queue is not modelled).

@@ -1,0 +1,972 @@
+{
+  "schema": "gateflow.sim.results/1",
+  "disclaimer": "SIMULATED RESULTS ON SYNTHETIC OR HYPOTHETICAL DATA. These numbers are model outputs, not measurements, and must not be presented as evidence of operational performance.",
+  "manifest": {
+    "generator": {
+      "name": "test",
+      "version": "0.0.0"
+    },
+    "commit": "test",
+    "versions": {
+      "engine": "0.1.0",
+      "model": "0.1.0",
+      "kernel": "0.1.0",
+      "populationGenerator": "0.1.0",
+      "scenarioSchema": 1
+    },
+    "scenario": {
+      "id": "single-checkpoint-demo",
+      "title": "Single departure checkpoint, synthetic day with a congested morning peak",
+      "hash": "sha256:482237d7d0d354dfac212a321a4edf766e8ee9c2ca9bebf8740a737fba15839b",
+      "dataClassification": "SYNTHETIC",
+      "timeZone": "Europe/Rome"
+    },
+    "seeds": {
+      "count": 3,
+      "ranges": "1-3"
+    },
+    "baselinePolicyId": "fifo",
+    "policies": [
+      {
+        "id": "fifo",
+        "version": "1.0.0",
+        "title": "FIFO baseline (policy A)",
+        "params": {
+          "kind": "fifo"
+        }
+      },
+      {
+        "id": "priority-v0",
+        "version": "0.1.0",
+        "title": "Constrained EDF priority v0 (policy B)",
+        "params": {
+          "kind": "constrained-edf",
+          "capWindowCalls": 10,
+          "capMaxPriorityCalls": 3,
+          "maxOvertakes": 15,
+          "attentionThresholdMs": 900000,
+          "safetyBufferMs": 300000,
+          "allowRuleBasedDeadline": true,
+          "eligibleSegments": [
+            "DEPARTING",
+            "TRANSFER"
+          ]
+        }
+      }
+    ],
+    "classification": {
+      "attentionThresholdMs": 900000,
+      "safetyBufferMs": 300000,
+      "allowRuleBasedDeadline": true,
+      "eligibleSegments": [
+        "DEPARTING",
+        "TRANSFER"
+      ]
+    },
+    "statistics": {
+      "bootstrapResamples": 200,
+      "confidenceLevel": 0.95,
+      "bootstrapSeed": 20261121,
+      "quantileMethod": "linear interpolation between order statistics (Hyndman-Fan type 7)"
+    },
+    "reproduce": "gateflow-sim run --scenario scenarios/single-checkpoint-demo.yaml --seeds 1-3 --policies fifo,priority-v0 --baseline fifo --bootstrap-resamples 200"
+  },
+  "assumptions": [
+    {
+      "path": "checkpoint.lanes",
+      "value": 6,
+      "source": "SYNTHETIC",
+      "note": "All lanes open all day; planned lane schedules arrive in a later slice."
+    },
+    {
+      "path": "checkpoint.serviceTimeMeanSeconds",
+      "value": 40,
+      "source": "SYNTHETIC",
+      "note": "About 90 passengers per hour per lane."
+    },
+    {
+      "path": "checkpoint.serviceTimeCv",
+      "value": 0.6,
+      "source": "SYNTHETIC",
+      "note": null
+    },
+    {
+      "path": "schedule.departuresPerHour",
+      "value": [
+        {
+          "hour": 6,
+          "departures": 5
+        },
+        {
+          "hour": 7,
+          "departures": 5
+        },
+        {
+          "hour": 8,
+          "departures": 3
+        },
+        {
+          "hour": 9,
+          "departures": 2
+        },
+        {
+          "hour": 10,
+          "departures": 2
+        },
+        {
+          "hour": 11,
+          "departures": 2
+        },
+        {
+          "hour": 12,
+          "departures": 2
+        },
+        {
+          "hour": 13,
+          "departures": 2
+        },
+        {
+          "hour": 14,
+          "departures": 2
+        },
+        {
+          "hour": 15,
+          "departures": 2
+        },
+        {
+          "hour": 16,
+          "departures": 2
+        },
+        {
+          "hour": 17,
+          "departures": 3
+        },
+        {
+          "hour": 18,
+          "departures": 3
+        },
+        {
+          "hour": 19,
+          "departures": 2
+        },
+        {
+          "hour": 20,
+          "departures": 2
+        },
+        {
+          "hour": 21,
+          "departures": 1
+        }
+      ],
+      "source": "SYNTHETIC",
+      "note": "Design day with a morning bank of departures, typical of low-cost bases."
+    },
+    {
+      "path": "schedule.aircraftMix",
+      "value": [
+        {
+          "category": "regional-jet",
+          "seats": 100,
+          "share": 0.15
+        },
+        {
+          "category": "narrow-body",
+          "seats": 180,
+          "share": 0.6
+        },
+        {
+          "category": "narrow-body-large",
+          "seats": 220,
+          "share": 0.2
+        },
+        {
+          "category": "wide-body",
+          "seats": 300,
+          "share": 0.05
+        }
+      ],
+      "source": "SYNTHETIC",
+      "note": null
+    },
+    {
+      "path": "schedule.gateZones",
+      "value": [
+        {
+          "id": "A",
+          "walkMinutes": 4,
+          "share": 0.4
+        },
+        {
+          "id": "B",
+          "walkMinutes": 8,
+          "share": 0.4
+        },
+        {
+          "id": "C",
+          "walkMinutes": 14,
+          "share": 0.2
+        }
+      ],
+      "source": "SYNTHETIC",
+      "note": "Nominal walking time from the checkpoint exit to the gate zone."
+    },
+    {
+      "path": "passengers.loadFactor",
+      "value": {
+        "min": 0.6,
+        "mode": 0.85,
+        "max": 0.98
+      },
+      "source": "SYNTHETIC",
+      "note": "Triangular distribution, drawn per flight and replication."
+    },
+    {
+      "path": "passengers.transferShare",
+      "value": 0.05,
+      "source": "SYNTHETIC",
+      "note": "Connecting passengers who cross this checkpoint. Not an official statistic."
+    },
+    {
+      "path": "passengers.showUp.departing",
+      "value": {
+        "minMinutesBeforeStd": 25,
+        "medianExtraMinutes": 70,
+        "sigma": 0.55,
+        "maxMinutesBeforeStd": 240
+      },
+      "source": "SYNTHETIC",
+      "note": "Arrival at the checkpoint = STD minus (25 min + log-normal with median 70 min)."
+    },
+    {
+      "path": "passengers.showUp.transfer",
+      "value": {
+        "minMinutesBeforeStd": 24,
+        "medianExtraMinutes": 25,
+        "sigma": 0.5,
+        "maxMinutesBeforeStd": 180
+      },
+      "source": "SYNTHETIC",
+      "note": "Connecting passengers arrive later, after their inbound flight."
+    },
+    {
+      "path": "passengers.walkSpeedSigma",
+      "value": 0.2,
+      "source": "SYNTHETIC",
+      "note": "Individual walking time = nominal zone time x log-normal(median 1, sigma)."
+    },
+    {
+      "path": "operations.boardingCloseMinutesBeforeStd",
+      "value": 20,
+      "source": "SYNTHETIC",
+      "note": "Boarding closes 20 minutes before the scheduled departure, for every flight."
+    },
+    {
+      "path": "operations.deadlineKnowledge",
+      "value": "RULE",
+      "source": "SYNTHETIC",
+      "note": "The system applies the closing rule to the schedule; in this slice it matches the ground truth exactly."
+    }
+  ],
+  "modelLimitations": [
+    "Single checkpoint with all lanes open all day: no lane schedules, outages or extra lanes.",
+    "Calls are answered instantly: no call latency, no no-shows and no recalls.",
+    "The system's deadline equals the ground truth (boarding close from a fixed rule): no flight delays, gate changes or stale data.",
+    "Passengers never abandon the queue, even after their flight has closed.",
+    "No groups, families or assisted passengers: everyone is served individually.",
+    "The baseline is pure FIFO. Today's manual handling of urgent passengers is not modelled, so the benefit of prioritisation is likely overstated.",
+    "Tickets are issued on arrival with no kiosk or scanning delay.",
+    "The engine estimates processing time as the mean screening time and walking time as the nominal time of the gate zone."
+  ],
+  "summary": {
+    "days": 3,
+    "passengersPerDay": {
+      "mean": 6353.3333,
+      "p05": 6327.3,
+      "p50": 6348,
+      "p95": 6383.1,
+      "min": 6325,
+      "max": 6387
+    },
+    "policies": {
+      "fifo": {
+        "passengers": {
+          "mean": 6353.3333,
+          "p05": 6327.3,
+          "p50": 6348,
+          "p95": 6383.1,
+          "min": 6325,
+          "max": 6387
+        },
+        "missed": {
+          "mean": 68,
+          "p05": 43.1,
+          "p50": 62,
+          "p95": 97.1,
+          "min": 41,
+          "max": 101
+        },
+        "missedDeparting": {
+          "mean": 38,
+          "p05": 19.5,
+          "p50": 33,
+          "p95": 60,
+          "min": 18,
+          "max": 63
+        },
+        "missedTransfer": {
+          "mean": 30,
+          "p05": 23.6,
+          "p50": 29,
+          "p95": 37.1,
+          "min": 23,
+          "max": 38
+        },
+        "missedPer1000": {
+          "mean": 10.7107,
+          "p05": 6.7576,
+          "p50": 9.8024,
+          "p95": 15.2997,
+          "min": 6.4193,
+          "max": 15.9105
+        },
+        "waitMeanMin": {
+          "mean": 3.5282,
+          "p05": 3.0275,
+          "p50": 3.2868,
+          "p95": 4.198,
+          "min": 2.9987,
+          "max": 4.2992
+        },
+        "waitP50Min": {
+          "mean": 0.0538,
+          "p05": 0.0226,
+          "p50": 0.0274,
+          "p95": 0.1034,
+          "min": 0.0221,
+          "max": 0.1118
+        },
+        "waitP90Min": {
+          "mean": 16.8812,
+          "p05": 13.8845,
+          "p50": 15.4246,
+          "p95": 20.8976,
+          "min": 13.7133,
+          "max": 21.5057
+        },
+        "waitP99Min": {
+          "mean": 21.3171,
+          "p05": 19.2668,
+          "p50": 19.4024,
+          "p95": 24.7075,
+          "min": 19.2517,
+          "max": 25.297
+        },
+        "waitMaxMin": {
+          "mean": 22.1659,
+          "p05": 19.8572,
+          "p50": 19.9394,
+          "p95": 26.0332,
+          "min": 19.8481,
+          "max": 26.7103
+        },
+        "prioritized": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "priorityCallShare": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "capReachedCalls": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "overtakeGuardCalls": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "passengersOvertaken": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "maxOvertakes": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "laneUtilization": {
+          "mean": 0.6268,
+          "p05": 0.6237,
+          "p50": 0.6277,
+          "p95": 0.6292,
+          "min": 0.6233,
+          "max": 0.6294
+        },
+        "meanQueueLength": {
+          "mean": 19.9256,
+          "p05": 17.1249,
+          "p50": 18.5415,
+          "p95": 23.6953,
+          "min": 16.9675,
+          "max": 24.268
+        },
+        "maxQueueLength": {
+          "mean": 203,
+          "p05": 179.2,
+          "p50": 190,
+          "p95": 235.9,
+          "min": 178,
+          "max": 241
+        },
+        "urgentOnArrival": {
+          "mean": 104,
+          "p05": 76.6,
+          "p50": 100,
+          "p95": 134.2,
+          "min": 74,
+          "max": 138
+        },
+        "criticalOnArrival": {
+          "mean": 13.3333,
+          "p05": 10.2,
+          "p50": 12,
+          "p95": 17.4,
+          "min": 10,
+          "max": 18
+        }
+      },
+      "priority-v0": {
+        "passengers": {
+          "mean": 6353.3333,
+          "p05": 6327.3,
+          "p50": 6348,
+          "p95": 6383.1,
+          "min": 6325,
+          "max": 6387
+        },
+        "missed": {
+          "mean": 31.3333,
+          "p05": 20.1,
+          "p50": 21,
+          "p95": 49.8,
+          "min": 20,
+          "max": 53
+        },
+        "missedDeparting": {
+          "mean": 18,
+          "p05": 10.3,
+          "p50": 13,
+          "p95": 29.2,
+          "min": 10,
+          "max": 31
+        },
+        "missedTransfer": {
+          "mean": 13.3333,
+          "p05": 8.2,
+          "p50": 10,
+          "p95": 20.8,
+          "min": 8,
+          "max": 22
+        },
+        "missedPer1000": {
+          "mean": 4.9335,
+          "p05": 3.1502,
+          "p50": 3.3202,
+          "p95": 7.8462,
+          "min": 3.1314,
+          "max": 8.3491
+        },
+        "waitMeanMin": {
+          "mean": 3.5271,
+          "p05": 3.0236,
+          "p50": 3.2996,
+          "p95": 4.1899,
+          "min": 2.9929,
+          "max": 4.2888
+        },
+        "waitP50Min": {
+          "mean": 0.0489,
+          "p05": 0.0207,
+          "p50": 0.0232,
+          "p95": 0.095,
+          "min": 0.0205,
+          "max": 0.103
+        },
+        "waitP90Min": {
+          "mean": 16.7193,
+          "p05": 13.4881,
+          "p50": 15.5073,
+          "p95": 20.7989,
+          "min": 13.2638,
+          "max": 21.3869
+        },
+        "waitP99Min": {
+          "mean": 22.8216,
+          "p05": 20.7574,
+          "p50": 20.8707,
+          "p95": 26.2513,
+          "min": 20.7448,
+          "max": 26.8491
+        },
+        "waitMaxMin": {
+          "mean": 23.7286,
+          "p05": 21.3401,
+          "p50": 21.6512,
+          "p95": 27.5713,
+          "min": 21.3056,
+          "max": 28.2291
+        },
+        "prioritized": {
+          "mean": 91.3333,
+          "p05": 72.3,
+          "p50": 102,
+          "p95": 102.9,
+          "min": 69,
+          "max": 103
+        },
+        "priorityCallShare": {
+          "mean": 0.0144,
+          "p05": 0.0113,
+          "p50": 0.0161,
+          "p95": 0.0163,
+          "min": 0.0108,
+          "max": 0.0163
+        },
+        "capReachedCalls": {
+          "mean": 22.6667,
+          "p05": 6,
+          "p50": 15,
+          "p95": 44.7,
+          "min": 5,
+          "max": 48
+        },
+        "overtakeGuardCalls": {
+          "mean": 421,
+          "p05": 255.8,
+          "p50": 335,
+          "p95": 646.4,
+          "min": 247,
+          "max": 681
+        },
+        "passengersOvertaken": {
+          "mean": 1093,
+          "p05": 1032,
+          "p50": 1077,
+          "p95": 1165.2,
+          "min": 1027,
+          "max": 1175
+        },
+        "maxOvertakes": {
+          "mean": 15,
+          "p05": 15,
+          "p50": 15,
+          "p95": 15,
+          "min": 15,
+          "max": 15
+        },
+        "laneUtilization": {
+          "mean": 0.6268,
+          "p05": 0.6237,
+          "p50": 0.6277,
+          "p95": 0.6292,
+          "min": 0.6233,
+          "max": 0.6294
+        },
+        "meanQueueLength": {
+          "mean": 19.9193,
+          "p05": 17.1024,
+          "p50": 18.614,
+          "p95": 23.6498,
+          "min": 16.9345,
+          "max": 24.2094
+        },
+        "maxQueueLength": {
+          "mean": 203.6667,
+          "p05": 180.9,
+          "p50": 189,
+          "p95": 236.7,
+          "min": 180,
+          "max": 242
+        },
+        "urgentOnArrival": {
+          "mean": 103.6667,
+          "p05": 76.6,
+          "p50": 100,
+          "p95": 133.3,
+          "min": 74,
+          "max": 137
+        },
+        "criticalOnArrival": {
+          "mean": 13.3333,
+          "p05": 10.2,
+          "p50": 12,
+          "p95": 17.4,
+          "min": 10,
+          "max": 18
+        }
+      }
+    },
+    "comparisons": {
+      "priority-v0": {
+        "metrics": {
+          "saved": {
+            "mean": 37.3333,
+            "p05": 23.2,
+            "p50": 43,
+            "p95": 47.5,
+            "min": 21,
+            "max": 48,
+            "ciLower": 21,
+            "ciUpper": 46.3333
+          },
+          "harmed": {
+            "mean": 0.6667,
+            "p05": 0,
+            "p50": 0,
+            "p95": 1.8,
+            "min": 0,
+            "max": 2,
+            "ciLower": 0,
+            "ciUpper": 2
+          },
+          "net": {
+            "mean": 36.6667,
+            "p05": 23,
+            "p50": 41,
+            "p95": 47.3,
+            "min": 21,
+            "max": 48,
+            "ciLower": 21,
+            "ciUpper": 48
+          },
+          "atRiskCohort": {
+            "mean": 104,
+            "p05": 76.6,
+            "p50": 100,
+            "p95": 134.2,
+            "min": 74,
+            "max": 138,
+            "ciLower": 74,
+            "ciUpper": 138
+          },
+          "atRiskReachedBaseline": {
+            "mean": 42,
+            "p05": 40.3,
+            "p50": 43,
+            "p95": 43,
+            "min": 40,
+            "max": 43,
+            "ciLower": 40,
+            "ciUpper": 43
+          },
+          "atRiskReachedCandidate": {
+            "mean": 79,
+            "p05": 65.8,
+            "p50": 82,
+            "p95": 90.1,
+            "min": 64,
+            "max": 91,
+            "ciLower": 70,
+            "ciUpper": 91
+          },
+          "nonPrioritized": {
+            "mean": 6262,
+            "p05": 6224.4,
+            "p50": 6246,
+            "p95": 6310.8,
+            "min": 6222,
+            "max": 6318,
+            "ciLower": 6222,
+            "ciUpper": 6294.6
+          },
+          "nonPriorityExtraWaitMeanMin": {
+            "mean": 0.1875,
+            "p05": 0.141,
+            "p50": 0.2066,
+            "p95": 0.2205,
+            "min": 0.1338,
+            "max": 0.2221,
+            "ciLower": 0.1338,
+            "ciUpper": 0.217
+          },
+          "nonPriorityExtraWaitP90Min": {
+            "mean": 1.0616,
+            "p05": 0.5593,
+            "p50": 1.2968,
+            "p95": 1.3992,
+            "min": 0.4774,
+            "max": 1.4106,
+            "ciLower": 0.4774,
+            "ciUpper": 1.4106
+          },
+          "nonPriorityExtraWaitMaxMin": {
+            "mean": 2.0322,
+            "p05": 1.8143,
+            "p50": 2.0553,
+            "p95": 2.2338,
+            "min": 1.7875,
+            "max": 2.2537,
+            "ciLower": 1.7875,
+            "ciUpper": 2.2537
+          },
+          "nonPriorityDelayedOver5MinShare": {
+            "mean": 0,
+            "p05": 0,
+            "p50": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0,
+            "ciLower": 0,
+            "ciUpper": 0
+          },
+          "waitMeanDeltaMin": {
+            "mean": -0.0011,
+            "p05": -0.0099,
+            "p50": -0.0058,
+            "p95": 0.011,
+            "min": -0.0104,
+            "max": 0.0129,
+            "ciLower": -0.0104,
+            "ciUpper": 0.0068
+          }
+        },
+        "shareDaysNetPositive": 1,
+        "shareDaysNetNegative": 0,
+        "atRiskReachedShareBaseline": 0.4038,
+        "atRiskReachedShareCandidate": 0.7596
+      }
+    }
+  },
+  "perSeed": [
+    {
+      "seed": 1,
+      "passengers": 6325,
+      "flights": 40,
+      "policies": {
+        "fifo": {
+          "passengers": 6325,
+          "missed": 62,
+          "missedDeparting": 33,
+          "missedTransfer": 29,
+          "missedPer1000": 9.8024,
+          "waitMeanMin": 3.2868,
+          "waitP50Min": 0.0274,
+          "waitP90Min": 15.4246,
+          "waitP99Min": 19.2517,
+          "waitMaxMin": 19.8481,
+          "prioritized": 0,
+          "priorityCallShare": 0,
+          "capReachedCalls": 0,
+          "overtakeGuardCalls": 0,
+          "passengersOvertaken": 0,
+          "maxOvertakes": 0,
+          "laneUtilization": 0.6233,
+          "meanQueueLength": 18.5415,
+          "maxQueueLength": 178,
+          "urgentOnArrival": 100,
+          "criticalOnArrival": 10
+        },
+        "priority-v0": {
+          "passengers": 6325,
+          "missed": 21,
+          "missedDeparting": 13,
+          "missedTransfer": 8,
+          "missedPer1000": 3.3202,
+          "waitMeanMin": 3.2996,
+          "waitP50Min": 0.0232,
+          "waitP90Min": 15.5073,
+          "waitP99Min": 20.8707,
+          "waitMaxMin": 21.6512,
+          "prioritized": 103,
+          "priorityCallShare": 0.0163,
+          "capReachedCalls": 48,
+          "overtakeGuardCalls": 335,
+          "passengersOvertaken": 1077,
+          "maxOvertakes": 15,
+          "laneUtilization": 0.6233,
+          "meanQueueLength": 18.614,
+          "maxQueueLength": 180,
+          "urgentOnArrival": 100,
+          "criticalOnArrival": 10
+        }
+      },
+      "comparisons": {
+        "priority-v0": {
+          "saved": 43,
+          "harmed": 2,
+          "net": 41,
+          "atRiskCohort": 100,
+          "atRiskReachedBaseline": 40,
+          "atRiskReachedCandidate": 82,
+          "nonPrioritized": 6222,
+          "nonPriorityExtraWaitMeanMin": 0.2066,
+          "nonPriorityExtraWaitP90Min": 1.2968,
+          "nonPriorityExtraWaitMaxMin": 2.2537,
+          "nonPriorityDelayedOver5MinShare": 0,
+          "waitMeanDeltaMin": 0.0129
+        }
+      }
+    },
+    {
+      "seed": 2,
+      "passengers": 6387,
+      "flights": 40,
+      "policies": {
+        "fifo": {
+          "passengers": 6387,
+          "missed": 41,
+          "missedDeparting": 18,
+          "missedTransfer": 23,
+          "missedPer1000": 6.4193,
+          "waitMeanMin": 2.9987,
+          "waitP50Min": 0.1118,
+          "waitP90Min": 13.7133,
+          "waitP99Min": 19.4024,
+          "waitMaxMin": 19.9394,
+          "prioritized": 0,
+          "priorityCallShare": 0,
+          "capReachedCalls": 0,
+          "overtakeGuardCalls": 0,
+          "passengersOvertaken": 0,
+          "maxOvertakes": 0,
+          "laneUtilization": 0.6294,
+          "meanQueueLength": 16.9675,
+          "maxQueueLength": 190,
+          "urgentOnArrival": 74,
+          "criticalOnArrival": 18
+        },
+        "priority-v0": {
+          "passengers": 6387,
+          "missed": 20,
+          "missedDeparting": 10,
+          "missedTransfer": 10,
+          "missedPer1000": 3.1314,
+          "waitMeanMin": 2.9929,
+          "waitP50Min": 0.103,
+          "waitP90Min": 13.2638,
+          "waitP99Min": 20.7448,
+          "waitMaxMin": 21.3056,
+          "prioritized": 69,
+          "priorityCallShare": 0.0108,
+          "capReachedCalls": 5,
+          "overtakeGuardCalls": 247,
+          "passengersOvertaken": 1027,
+          "maxOvertakes": 15,
+          "laneUtilization": 0.6294,
+          "meanQueueLength": 16.9345,
+          "maxQueueLength": 189,
+          "urgentOnArrival": 74,
+          "criticalOnArrival": 18
+        }
+      },
+      "comparisons": {
+        "priority-v0": {
+          "saved": 21,
+          "harmed": 0,
+          "net": 21,
+          "atRiskCohort": 74,
+          "atRiskReachedBaseline": 43,
+          "atRiskReachedCandidate": 64,
+          "nonPrioritized": 6318,
+          "nonPriorityExtraWaitMeanMin": 0.1338,
+          "nonPriorityExtraWaitP90Min": 0.4774,
+          "nonPriorityExtraWaitMaxMin": 1.7875,
+          "nonPriorityDelayedOver5MinShare": 0,
+          "waitMeanDeltaMin": -0.0058
+        }
+      }
+    },
+    {
+      "seed": 3,
+      "passengers": 6348,
+      "flights": 40,
+      "policies": {
+        "fifo": {
+          "passengers": 6348,
+          "missed": 101,
+          "missedDeparting": 63,
+          "missedTransfer": 38,
+          "missedPer1000": 15.9105,
+          "waitMeanMin": 4.2992,
+          "waitP50Min": 0.0221,
+          "waitP90Min": 21.5057,
+          "waitP99Min": 25.297,
+          "waitMaxMin": 26.7103,
+          "prioritized": 0,
+          "priorityCallShare": 0,
+          "capReachedCalls": 0,
+          "overtakeGuardCalls": 0,
+          "passengersOvertaken": 0,
+          "maxOvertakes": 0,
+          "laneUtilization": 0.6277,
+          "meanQueueLength": 24.268,
+          "maxQueueLength": 241,
+          "urgentOnArrival": 138,
+          "criticalOnArrival": 12
+        },
+        "priority-v0": {
+          "passengers": 6348,
+          "missed": 53,
+          "missedDeparting": 31,
+          "missedTransfer": 22,
+          "missedPer1000": 8.3491,
+          "waitMeanMin": 4.2888,
+          "waitP50Min": 0.0205,
+          "waitP90Min": 21.3869,
+          "waitP99Min": 26.8491,
+          "waitMaxMin": 28.2291,
+          "prioritized": 102,
+          "priorityCallShare": 0.0161,
+          "capReachedCalls": 15,
+          "overtakeGuardCalls": 681,
+          "passengersOvertaken": 1175,
+          "maxOvertakes": 15,
+          "laneUtilization": 0.6277,
+          "meanQueueLength": 24.2094,
+          "maxQueueLength": 242,
+          "urgentOnArrival": 137,
+          "criticalOnArrival": 12
+        }
+      },
+      "comparisons": {
+        "priority-v0": {
+          "saved": 48,
+          "harmed": 0,
+          "net": 48,
+          "atRiskCohort": 138,
+          "atRiskReachedBaseline": 43,
+          "atRiskReachedCandidate": 91,
+          "nonPrioritized": 6246,
+          "nonPriorityExtraWaitMeanMin": 0.2221,
+          "nonPriorityExtraWaitP90Min": 1.4106,
+          "nonPriorityExtraWaitMaxMin": 2.0553,
+          "nonPriorityDelayedOver5MinShare": 0,
+          "waitMeanDeltaMin": -0.0104
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TURBO_TELEMETRY_DISABLED: '1'
+
+jobs:
+  check:
+    name: Check (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Running the golden tests on two Node.js (V8) versions proves that simulation results do
+        # not depend on the JavaScript engine version.
+        node: ['22', '24']
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Format, boundaries, typecheck, lint, tests
+        run: pnpm check
+      - run: pnpm build
+      - name: End-to-end determinism of the CLI
+        run: |
+          node apps/sim-cli/dist/gateflow-sim.mjs run --scenario scenarios/single-checkpoint-demo.yaml --seeds 1-20 --out out/a --quiet
+          node apps/sim-cli/dist/gateflow-sim.mjs run --scenario scenarios/single-checkpoint-demo.yaml --seeds 1-20 --out out/b --quiet
+          cmp out/a/results.json out/b/results.json
+          cmp out/a/report.md out/b/report.md
+
+  demo-reports:
+    name: Demo reports (200 simulated days)
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Simulate both demo scenarios
+        run: |
+          node apps/sim-cli/dist/gateflow-sim.mjs run --scenario scenarios/single-checkpoint-demo.yaml --seeds 1-200 --out out/single-checkpoint-demo
+          node apps/sim-cli/dist/gateflow-sim.mjs run --scenario scenarios/single-checkpoint-moderate.yaml --seeds 1-200 --out out/single-checkpoint-moderate
+      - uses: actions/upload-artifact@v4
+        with:
+          name: simulation-reports
+          path: out/

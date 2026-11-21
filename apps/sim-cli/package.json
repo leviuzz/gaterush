@@ -1,0 +1,27 @@
+{
+  "name": "@gateflow/sim-cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Command-line interface for GateFlow simulation experiments (gateflow-sim).",
+  "type": "module",
+  "bin": {
+    "gateflow-sim": "./dist/gateflow-sim.mjs"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@gateflow/domain": "workspace:*",
+    "@gateflow/priority-engine": "workspace:*",
+    "@gateflow/sim-kernel": "workspace:*",
+    "@gateflow/sim-metrics": "workspace:*",
+    "@gateflow/sim-model": "workspace:*",
+    "@gateflow/sim-scenarios": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

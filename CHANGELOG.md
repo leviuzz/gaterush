@@ -54,6 +54,8 @@ Public flight data (OPDI) is not used: its terms are non-commercial.
   tables always counted people.
 - HTML pages: long inline code (the SHA-256 of a flight list) wraps instead of making the page
   scroll sideways on a phone.
+- Tests: set-up hooks get the same 60-second timeout as tests. The 10-second default made the CLI
+  tests fail once on a loaded CI runner.
 
 ### Changed
 

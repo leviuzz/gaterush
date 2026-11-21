@@ -6,6 +6,84 @@ must be listed, together with the component versions it bumps.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-21: Slice S5
+
+Disruptions and data quality: flight delays with their notice, gate changes, lane outages, flight
+feed outages, the ground truth kept separate from what the system knows, a stale-data rule and
+hysteresis (policy `priority-v3`).
+
+### Simulated numbers change
+
+- New policy `priority-v3` (v2 plus the stale-data rule and hysteresis, ADR-029). On the slice-5
+  reports (200 days) it misses 11.5, 5.6 and 16.6 flights per day on the demo, moderate and
+  staffed scenarios, like v2 (11.5, 5.6 and 16.5) and 3.2, 1.5 and 1.2 fewer than A'. On the
+  disrupted day it misses 11.1 (v2 10.8, A' 12.4); with an unreliable feed, 14.2 (v2 11.1,
+  A' 12.4).
+- The flapping of risk classes disappears: 25 to 190 class reversals per day with v2, none with
+  v3 on the main scenarios.
+- New scenarios `single-checkpoint-disrupted` and `single-checkpoint-feed-stress`.
+- `fifo`, `fifo-manual`, `virtual-fifo`, `priority-v0`, `priority-v1`, `priority-v1-strict` and
+  `priority-v2` are unchanged on the S3 scenarios. Without disruptions and with the S5 rules off,
+  every S4 metric is reproduced exactly (new regression test against a fixture saved from the S4
+  commit, seeds 1-3); S1, S2 and S3 still are.
+- Golden files regenerated: five policies (`priority-v3` replaces `priority-v1`), nine
+  comparisons, the new metrics, and a new golden report of the disrupted scenario.
+
+### Added
+
+- Disruptions as ground truth and knowledge (ADR-030):
+  - scenario schema 4 with a `disruptions` section: flight delays (share, length, notice), gate
+    changes (share, time, notice delay), lane outages and feed outages (per day, length);
+  - `operations.deadlineKnowledge` accepts `NONE`;
+  - population generator 0.4.0, every disruption on streams of its own;
+  - the simulator applies feed messages at the time they are sent, holds them during feed outages,
+    takes lanes out of service and sends passengers to the new gate after a gate change.
+- Stale-data rule and hysteresis in the engine (ADR-029):
+  - `KnownDeadline.observedAtMs`, `ClassificationParams.maxDeadlineAgeMs` (reason
+    `DEADLINE_STALE`);
+  - `ClassificationParams.hysteresisMs` and `WaitingTicket.lastRiskClass` (reason
+    `HYSTERESIS_HOLD`);
+  - `isDeadlineStale()` and `classifyMargins()`.
+- Preset `priority-v3` 0.1.0: v2 with a maximum data age of 30 minutes and h = 3 minutes.
+- Metrics: class changes, reversals and people whose class flapped; people boosted on wrong
+  information; misses among passengers of delayed or re-gated flights; the disruptions of each day.
+  Report section "Disruptions, data quality and stability".
+- Tests:
+  - engine: stale and hysteresis boundaries, an independent oracle of the hysteresis, flapping
+    bounded by the hysteresis (property P20);
+  - queue: flight updates, class tracking, reversals against an independent record of the
+    observed classes;
+  - simulator: hand-computed lane outages, gate changes, delay notices, held messages, the order of
+    feed events and the stale-data rule; properties with random disruptions;
+  - acceptance of S5: with the flight feed absent, B gives exactly the outcomes of the same queue in
+    FIFO order (demo and disrupted scenarios, random populations), and with calls answered at
+    once those of the physical FIFO queue A;
+  - the S4 regression;
+  - 30 mutation checks.
+- ADR-029 and ADR-030, slice-5 reports.
+
+### Changed
+
+- `@gateflow/domain` 0.2.0: `KnownDeadline.observedAtMs`.
+- `@gateflow/priority-engine` 0.5.0 (engine version 0.5.0): stale-data rule and hysteresis, both
+  off by default.
+- `@gateflow/queue-core` 0.4.0:
+  - `TicketInput.flightId` and `updateFlight()`;
+  - every waiting ticket is assessed whenever a ticket is issued or called; its class feeds the
+    hysteresis and its changes are counted;
+  - `TicketView`: `deadline`, `walkEstimateMs`, `riskClass`, `classChanges`, `classReversals`;
+    `QueueStats`: `classChanges`, `classReversals`.
+- `@gateflow/sim-scenarios` 0.4.0 (scenario schema 4, population generator 0.4.0): versions 1 to 3
+  are rejected with a migration message.
+- `@gateflow/sim-model` 0.5.0 (model version 0.5.0): disruptions, `openLanesAt()`, `trueWalkMs()`,
+  an optional event listener, new outcome fields and run statistics.
+- `@gateflow/sim-metrics` 0.5.0 (results schema `gateflow.sim.results/5`): new metrics, the
+  disruptions summary, a report section and updated model limitations.
+- `@gateflow/sim-cli` 0.5.0: default policies `fifo,fifo-manual,virtual-fifo,priority-v3`; risk
+  classes fall back to `priority-v3`.
+- CI publishes six 200-day reports with `fifo,fifo-manual,virtual-fifo,priority-v2,priority-v3`.
+- Implementation plan: S5 done, S6 next.
+
 ## [0.4.0] - 2026-11-21: Slice S4
 
 The fast track for priority calls (policy `priority-v2`). On the S3 scenarios GateFlow now catches

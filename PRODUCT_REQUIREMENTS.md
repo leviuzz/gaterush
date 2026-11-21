@@ -146,9 +146,10 @@ These must be checked with counsel; nothing below is legal advice.
    over the lane order?
 2. Which flight, gate and boarding-close feeds exist, with what latency, and how often are they
    down? Policy v3 stops prioritising on a deadline the feed has not confirmed for 30 minutes
-   (ADR-029). In simulation that costs nothing with one short outage a day, but with a feed down
-   for hours a day GateFlow falls back to FIFO and loses its advantage over today's practice. The
-   freshness target of each source is the operator's decision (FR-15).
+   (ADR-029). In simulation, with about one outage a day, that costs 0.3 flights per day, almost
+   all on the days when the feed is down for more than an hour. With a feed down for hours a day
+   GateFlow falls back to FIFO and loses its advantage over today's practice. The freshness
+   target of each source is the operator's decision (FR-15).
 3. Which Fast Track and PRM rights exist, and how are they respected?
 4. Which fairness bounds (k/N, K) and late-arrival eligibility rule does the operator accept?
    Policy v1 uses K = 30 people and at most 10 priority people among any 20 called, with no

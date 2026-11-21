@@ -613,11 +613,11 @@ founder on 2026-11-21 together with all of its recommendations.
   - A product principle of the kickoff: when data is missing or old, GateFlow does not invent. No
     automatic priority, service in arrival order, recovery when the data is fresh again (FR-15,
     flow F6, risk RT-04).
-  - Classes flapped. With v2, the calibration days had 134 to 204 class reversals per day on the
+  - Classes flapped. With v2, the calibration days had 23 to 204 class reversals per day on the
     main scenarios (a reversal is a change back in the opposite direction). Most were NORMAL to
     ATTENTION and back, and ATTENTION to URGENT and back. The cause is the FIFO estimate: each
-    call shortens the queue ahead by one party, while time passing lengthens it, so a ticket close
-    to a threshold crosses it every few seconds.
+    call shortens the queue ahead by one party and raises the FIFO margin by a few seconds, while
+    the time passing lowers it, so a ticket close to a threshold crosses it again and again.
 - **Decision:**
   - **Stale data** (`maxDeadlineAgeMs`):
     - a known deadline carries `observedAtMs`, the time its source last confirmed it (absent:
@@ -676,6 +676,10 @@ founder on 2026-11-21 together with all of its recommendations.
       days had no such day and suggested no cost at all; 200 days show the real average.
     - In the stress test, people boosted on wrong information fall from 14.2 per day (no maximum
       age) to 9.4 (15 min), 10.2 (30 min) and 11.8 (60 min).
+    - The report days (seeds 1-200) confirm the pattern with a higher average: with 30 minutes,
+      v3 misses 0.3 flights per day more than v2 on the disrupted scenario [0.0, 0.6]. Of the 59
+      flights lost over 200 days, 53 are lost on the days when the feed is down for more than an
+      hour. In the stress test the cost is 3.1 per day [2.0, 4.3].
   - The criterion of ADR-025 holds for v3 on all scenarios: on the calibration days at most 0.08%
     of non-prioritised passengers are delayed by more than 5 minutes against `virtual-fifo`. The
     largest delays are those of v2 (13.3 min moderate, 10.6 min strategic, both missed calls).
@@ -694,8 +698,9 @@ founder on 2026-11-21 together with all of its recommendations.
       value is a hypothesis for the airport, which sets the freshness target of each source
       (FR-15).
 - **Consequences:**
-  - Classes shown to staff and passengers are stable: at most 0.2 reversals per day remain on the
-    calibration days.
+  - Classes shown to staff and passengers are stable: no reversal is left on the main scenarios.
+    The few left on disrupted days come from lane outages, whose jumps can exceed h, and from the
+    stale-data rule (UNVERIFIED during an outage, then back).
   - Stale periods are visible: tickets are `UNVERIFIED` with reason `DEADLINE_STALE`. The console
     must show a banner while the feed is down (flow F6).
   - A reliable feed is part of the value. In the stress test, the feed is down for about five

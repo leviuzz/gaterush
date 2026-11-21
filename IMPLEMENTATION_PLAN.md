@@ -10,7 +10,7 @@ Status legend: **Done**, **Next**, **Planned**, **Gated** (needs a business deci
 
 | Milestone | Business plan stage | Status |
 |---|---|---|
-| M1: Simulator core and priority engine | R1 | In progress (S1 to S4 done) |
+| M1: Simulator core and priority engine | R1 | In progress (S1 to S5 done) |
 | M2: Simulator Studio (web, runs in the browser) | R1-R2 | Planned |
 | M3: Priority end-to-end in the browser, digital twin | R2 | Planned |
 | M4: Operations console and Predict preview (pitch-ready) | R2 | Planned |
@@ -26,8 +26,8 @@ Status legend: **Done**, **Next**, **Planned**, **Gated** (needs a business deci
 | **S2** | Realistic calls: access buffer target, call latency, no-shows, recalls, recovery, committed "prepare" window, planned lane schedules | **Done** |
 | **S3** | Baseline A' (FIFO + manual handling of urgent passengers), groups and families, assisted path, eligibility and anti-abuse rules | **Done** |
 | **S4** | Priority fast track: priority calls go to the next free lane; staff escalation evaluated and not adopted (ADR-027, ADR-028) | **Done** |
-| S5 | Disruptions and data quality: delays with notification time, gate changes, lane outages, stale or missing feeds, ground truth vs knowledge, hysteresis, stability metrics | **Next** |
-| S6 | Parallel batches (worker threads), sensitivity sweeps (k/N, K, lanes, load factor, show-up), HTML report with charts | Planned |
+| **S5** | Disruptions and data quality: delays with notification time, gate changes, lane outages, stale or missing feeds, ground truth vs knowledge, hysteresis, stability metrics (ADR-029, ADR-030) | **Done** |
+| S6 | Parallel batches (worker threads), sensitivity sweeps (k/N, K, lanes, load factor, show-up, maximum data age, feed reliability), HTML report with charts | **Next** |
 | S7 | Real schedules (OPDI import for VCE/TSF, seats mapping) and scenario library: normal, peak, disrupted, Mexico-like transfer hub | Planned (check data licences first) |
 | S8 | Experiment C: lane-opening recommendations with an operator model | Planned |
 
@@ -253,6 +253,76 @@ Findings that changed the design during the slice:
 On these assumptions GateFlow v2 catches more flights than idealised manual handling on every
 main scenario, with 60-80% less standing time. It needs a fast-track entry to the lanes. Full
 reports: [docs/reports/slice-4](docs/reports/slice-4/README.md).
+
+## S5: acceptance criteria and evidence
+
+Scope delivered (approved as "disruptions and data quality"):
+- **Ground truth and knowledge** (ADR-030):
+  - flight delays with the time the feed announces them, gate changes with a notice delay;
+  - unplanned lane outages, which the system sees at once;
+  - flight feed outages: messages sent meanwhile arrive when the feed recovers;
+  - the system decides on what it knows, and outcomes are judged on the ground truth.
+- **Stale-data rule** (ADR-029): a deadline the feed has not confirmed for more than 30 minutes is
+  not trusted. The ticket is served in FIFO order until the feed recovers.
+- **Hysteresis** (ADR-029): a ticket escalates at once and returns to a less urgent class only
+  when its margin passes the threshold by 3 minutes.
+- **Stability and data-quality metrics:** class changes and reversals (flapping), people boosted
+  on wrong information, misses among passengers of disrupted flights, the disruptions of each day.
+- Policy `priority-v3` (v2 plus both rules), scenario schema 4, results schema 5, engine 0.5.0,
+  queue core 0.4.0, model 0.5.0, CLI 0.5.0 (default policies with `priority-v3`). New scenarios
+  `single-checkpoint-disrupted` and `single-checkpoint-feed-stress`.
+
+| # | Criterion (as proposed) | Evidence |
+|---|---|---|
+| 1 | With the flight feed absent, B produces exactly the outcomes of A (degradation to FIFO) | Since ADR-015, A is the physical queue, whose call mechanics differ from a virtual queue's, so the criterion is proved in two forms (ADR-030). `packages/sim-metrics/test/s5-acceptance.test.ts`: on the demo and disrupted scenarios (seeds 1-3), with no deadline knowledge, `priority-v2` and `priority-v3` give exactly the outcomes of `virtual-fifo`, passenger by passenger; so does `priority-v3` with the feed down all day. Properties in `packages/sim-model/test/properties.test.ts` (300 random populations with random disruptions each): the same equality, and, with calls answered at once, the equality with the physical FIFO queue A. |
+| 2 | Flapping of the classes limited by the hysteresis (test) | Engine property P20: for a margin oscillating around a threshold, the class changes at most once with hysteresis and at every crossing without it. Queue tests: reversals counted against an independent record of the observed classes, and suppressed by h. In the simulator (200 days): v2 had 25 to 190 class reversals per day on the four main scenarios (7 to 40 people a day whose class flapped); v3 has none, and 1.2 and 6.3 on the disrupted and feed-stress scenarios, where lane outages and the stale-data rule cause them. The hysteresis costs no flights (v3 vs v2 within 0.1 per day on the main scenarios, intervals including zero). |
+| 3 | With the disruptions disabled, S4 is reproduced exactly | `packages/sim-metrics/test/s4-regression.test.ts`: without disruptions and with the S5 rules off, every metric of the five S4 policies and seven S4 comparisons is reproduced on seeds 1-3, against a fixture saved from a clean checkout of the S4 commit. The S1, S2 and S3 regressions still hold. |
+
+Verification beyond the criteria:
+- **Engine.** Boundaries of the stale-data rule and of the hysteresis; an independent oracle of
+  the margins with both rules; a stale ticket is never boosted; the hysteresis only holds a class
+  between the raw class and the previous one, and has no effect with h = 0.
+- **Queue.** Flight updates reach every live ticket of the flight and only those; class changes
+  and reversals match an independent record of the observed classes on random operation
+  sequences.
+- **Simulator.** Hand-computed lane outages, gate changes, delay notices, messages held during a
+  feed outage, the order of feed events at the same instant, the stale-data rule and a boost
+  made before a gate change is announced. On random populations with random disruptions: every
+  invariant of S1 to S4, no boost on stale data, the walk after a gate change, and boosts on wrong
+  information only when the knowledge is wrong. Coverage tests require held messages, stale
+  periods, lane outages, gate changes and reversals to occur.
+- **Metrics.** The disruptions of a day, the stability metrics and the cohort of delayed or
+  re-gated flights against hand-computed values; a golden report of the disrupted scenario.
+- **Mutation checks:** 30 deliberate defects in the new mechanisms are caught, 8 in the engine,
+  6 in the queue, 13 in the simulator and 3 in the metrics.
+
+Findings that changed the design during the slice:
+- **Flapping came from the estimate, not from the data.** The class reversals of v2 were the
+  seconds-long oscillations of the FIFO wait estimate around a threshold. One minute of
+  hysteresis removes almost all of them; 3 minutes (the kickoff value) also absorbs the jumps
+  caused by lane changes and costs nothing.
+- **Twenty calibration days hid the price of the stale-data rule.** On 20 days no feed outage
+  fell in the morning peak, and every maximum age from 30 minutes looked free. On 200 days the
+  price shows: rare, but heavy on the days when the feed fails during the peak (ADR-029).
+- **The feed's reliability is a condition of the result.** With the feed down for hours a day,
+  GateFlow serves in FIFO order for long periods and falls behind A'.
+
+### S5 results at a glance (SIMULATED, synthetic data: not operational evidence)
+
+| Scenario (200 simulated days) | Missed flights per day: A `fifo` | A' `fifo-manual` | `priority-v2` | `priority-v3` | Net saved by v3 vs A' [95% CI] | Class reversals per day: v2 / v3 |
+|---|---:|---:|---:|---:|---:|---:|
+| `single-checkpoint-demo` | 55.1 | 14.7 | 11.5 | 11.5 | 3.2 [2.4, 4.0] | 162 / 0 |
+| `single-checkpoint-moderate` | 14.3 | 7.2 | 5.6 | 5.6 | 1.5 [1.2, 1.9] | 25 / 0 |
+| `single-checkpoint-staffed` | 65.9 | 17.8 | 16.5 | 16.6 | 1.2 [0.1, 2.2] | 190 / 0 |
+| `single-checkpoint-strategic` (stress test) | 204.5 | 132.0 | 141.6 | 141.6 | -9.6 [-10.9, -8.4] | 139 / 0 |
+| `single-checkpoint-disrupted` | 47.8 | 12.4 | 10.8 | 11.1 | 1.3 [0.4, 2.0] | 162 / 1.2 |
+| `single-checkpoint-feed-stress` (stress test) | 47.8 | 12.4 | 11.1 | 14.2 | -1.8 [-3.3, -0.5] | 164 / 6.3 |
+
+With realistic disruptions GateFlow v3 still catches more flights than idealised manual handling,
+with stable classes. The stale-data rule costs 0.3 flights per day on the disrupted day, almost all
+on the few days when the feed fails for more than an hour; with a feed down for hours a day it
+costs 3.1 and GateFlow falls behind A'. Full reports:
+[docs/reports/slice-5](docs/reports/slice-5/README.md).
 
 ## Later milestones (summary)
 

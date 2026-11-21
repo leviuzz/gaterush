@@ -1,7 +1,12 @@
 import { dirname, isAbsolute, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import type { ClassificationParams } from '@gateflow/priority-engine';
-import { POLICY_PRESETS, PRIORITY_V3_POLICY, classificationOf } from '@gateflow/queue-core';
+import {
+  LANE_MODES,
+  POLICY_PRESETS,
+  PRIORITY_V3_POLICY,
+  classificationOf,
+} from '@gateflow/queue-core';
 import type { Policy } from '@gateflow/queue-core';
 import {
   DEFAULT_BOOTSTRAP,
@@ -70,7 +75,7 @@ Usage:
   ${CLI_NAME} flights --scenario <file> [--out <file>]
                                                 Write the design day as a flight list (CSV)
   ${CLI_NAME} lanes --scenario <file>           Print the lane plan its checkpoint's rule gives
-  ${CLI_NAME} policies                          List the available policy presets
+  ${CLI_NAME} policies                          List the available policy presets and lane modes
   ${CLI_NAME} --help | --version
 
 Options for "run":
@@ -91,9 +96,15 @@ Options for "sweep" (a sensitivity sweep is described in a file, see sweeps/):
   --out <dir>                    Output directory                        (default out/sweeps/<id>)
   --bootstrap-resamples, --workers, --commit, --quiet: as for "run"
 
+A policy id may end with a lane mode: <policy>@reactive (a supervisor opens extra lanes when the
+queue is long, today's practice) or <policy>@predict (GateFlow recommends extra lanes from a
+forecast of arrivals). Extra lanes need staff on call in the scenario (checkpoint.laneStaffing).
+
 By default every policy is compared with the baseline. Each priority policy is also compared with
 the FIFO policy that runs the same virtual queue (this isolates the prioritisation), with today's
-practice with manual handling (fifo-manual) and with the priority policies listed before it.
+practice with manual handling (fifo-manual) and with the priority policies listed before it, each
+with the same lane mode. A policy with a lane mode is compared with the same policy without it and,
+for @predict, with @reactive; a priority policy with @predict also with fifo-manual@reactive.
 Risk classes on arrival use the parameters of the first priority policy listed.
 
 A scenario can take its flights from a CSV file (format gateflow.flights/1: columns flight, std,
@@ -171,7 +182,13 @@ function classificationFor(policies: readonly Policy[]): ClassificationParams {
  * against the FIFO policy operating exactly the same queue (the difference is the reordering
  * alone); and each priority (constrained EDF) policy against today's practice with manual
  * handling (a physical queue with staff calls, baseline A') and against the priority policies
- * listed before it on the same queue (version against version).
+ * listed before it on the same queue (version against version). These references manage lanes
+ * as the candidate does, so that one comparison changes one thing.
+ *
+ * Lane management (S8): a policy with a lane mode is compared with the same policy without it
+ * (what the extra lanes buy) and, for GateFlow's recommendations, with the supervisor's
+ * (`@predict` against `@reactive`); a priority policy with `@predict` is also compared with
+ * today's practice as a whole (manual handling with a supervisor, `fifo-manual@reactive`).
  */
 export function defaultCompare(
   policies: readonly Policy[],
@@ -186,9 +203,27 @@ export function defaultCompare(
     pairs.push(pair);
   };
   const sameQueue = (a: Policy, b: Policy) => canonicalJson(a.queue) === canonicalJson(b.queue);
+  const sameCalls = (a: Policy, b: Policy) =>
+    sameQueue(a, b) && canonicalJson(a.selection) === canonicalJson(b.selection);
+  const lanesOf = (p: Policy): string => p.lanes?.kind ?? 'plan';
+  const todaysPractice = (p: Policy) => p.queue.kind === 'physical' && p.selection.kind !== 'fifo';
   policies.forEach((candidate, index) => {
-    if (candidate.selection.kind === 'fifo' || candidate.id === baselineId) return;
-    const references = policies.filter((p) => p.id !== baselineId && p.id !== candidate.id);
+    if (candidate.id === baselineId) return;
+    const others = policies.filter((p) => p.id !== baselineId && p.id !== candidate.id);
+    const lanes = candidate.lanes;
+    if (lanes !== undefined) {
+      for (const reference of others) {
+        if (!sameCalls(reference, candidate)) continue;
+        if (
+          reference.lanes === undefined ||
+          (lanes.kind === 'predict' && reference.lanes.kind === 'reactive')
+        ) {
+          add(candidate.id, reference.id);
+        }
+      }
+    }
+    if (candidate.selection.kind === 'fifo') return;
+    const references = others.filter((p) => lanesOf(p) === lanesOf(candidate));
     for (const reference of references) {
       if (reference.selection.kind === 'fifo' && sameQueue(reference, candidate)) {
         add(candidate.id, reference.id);
@@ -196,15 +231,21 @@ export function defaultCompare(
     }
     if (candidate.selection.kind !== 'constrained-edf') return;
     for (const reference of references) {
-      if (reference.queue.kind === 'physical' && reference.selection.kind !== 'fifo') {
-        add(candidate.id, reference.id);
+      if (todaysPractice(reference)) add(candidate.id, reference.id);
+    }
+    if (lanes?.kind === 'predict') {
+      for (const reference of others) {
+        if (todaysPractice(reference) && reference.lanes?.kind === 'reactive') {
+          add(candidate.id, reference.id);
+        }
       }
     }
     for (const reference of policies.slice(0, index)) {
       if (
         reference.id !== baselineId &&
         reference.selection.kind === 'constrained-edf' &&
-        sameQueue(reference, candidate)
+        sameQueue(reference, candidate) &&
+        lanesOf(reference) === lanesOf(candidate)
       ) {
         add(candidate.id, reference.id);
       }
@@ -216,17 +257,23 @@ export function defaultCompare(
 function summaryLines(doc: ResultsDocument): string[] {
   const lines: string[] = [];
   const pad = (text: string, width: number) => text.padEnd(width);
+  const policies = doc.manifest.policies;
+  const width = Math.max(16, ...policies.map((p) => p.id.length + 2));
+  const lanes = policies.some((p) => p.lanes !== undefined);
   lines.push(
     `scenario   ${doc.manifest.scenario.id} (${doc.manifest.scenario.hash.slice(0, 19)}...)`,
     `seeds      ${doc.manifest.seeds.ranges} (${doc.manifest.seeds.count} simulated days)`,
     '',
-    `${pad('policy', 16)}${pad('missed/day', 14)}${pad('P90 wait (min)', 16)}longest wait (min)`,
+    `${pad('policy', width)}${pad('missed/day', 14)}${pad('P90 wait (min)', 16)}` +
+      (lanes ? `${pad('longest wait (min)', 20)}extra lane-hours/day` : 'longest wait (min)'),
   );
-  for (const policy of doc.manifest.policies) {
+  for (const policy of policies) {
     const m = doc.summary.policies[policy.id];
     if (m === undefined) continue;
+    const longest = m.waitMaxMin.max.toFixed(1);
     lines.push(
-      `${pad(policy.id, 16)}${pad(m.missed.mean.toFixed(1), 14)}${pad(m.waitP90Min.mean.toFixed(1), 16)}${m.waitMaxMin.max.toFixed(1)}`,
+      `${pad(policy.id, width)}${pad(m.missed.mean.toFixed(1), 14)}${pad(m.waitP90Min.mean.toFixed(1), 16)}` +
+        (lanes ? `${pad(longest, 20)}${m.extraLaneHours.mean.toFixed(1)}` : longest),
     );
   }
   lines.push('');
@@ -447,11 +494,21 @@ function commandValidate(argv: string[], io: CliIo): number {
   });
   if (values.scenario === undefined) throw new UsageError('--scenario is required');
   const scenario = loadScenario(io, values.scenario);
-  const { schedule } = scenario;
+  const { schedule, checkpoint } = scenario;
   const from =
     schedule.kind === 'flight-list'
       ? `flight list ${schedule.flights.file ?? '(inline)'}, source ${schedule.flights.source}`
       : 'hourly profile';
+  const planned = Math.max(...checkpoint.laneSchedule.value.map((entry) => entry.lanes));
+  const staff = checkpoint.laneStaffing?.value;
+  const lanes =
+    `${planned} planned at most` +
+    (checkpoint.lanesAvailable === undefined
+      ? ''
+      : `, ${checkpoint.lanesAvailable.value} at the checkpoint`) +
+    (staff === undefined
+      ? '; no staff on call for extra lanes'
+      : `; staff on call for ${staff.maxExtraLanes} extra lane${staff.maxExtraLanes === 1 ? '' : 's'} (about ${staff.openDelayMinutes.median} min to open)`);
   io.stdout(
     [
       `valid scenario ${scenario.id}: ${scenario.title}`,
@@ -462,6 +519,7 @@ function commandValidate(argv: string[], io: CliIo): number {
             `airport        ${scenario.airport.id} (${scenario.airport.name}), checkpoint ${scenario.airport.checkpoint}`,
           ]),
       `data           ${scenario.dataClassification}`,
+      `lanes          ${lanes}`,
       `flights        ${generateSchedule(scenario).length} on the design day (${from})`,
       `assumptions    ${collectAssumptions(scenario).length} labelled parameters`,
       ...scenario.dataSources.map(
@@ -542,7 +600,7 @@ function commandFlights(argv: string[], io: CliIo): number {
 }
 
 function commandPolicies(io: CliIo): number {
-  io.stdout(`${JSON.stringify(POLICY_PRESETS, null, 2)}\n`);
+  io.stdout(`${JSON.stringify({ presets: POLICY_PRESETS, laneModes: LANE_MODES }, null, 2)}\n`);
   return EXIT_OK;
 }
 

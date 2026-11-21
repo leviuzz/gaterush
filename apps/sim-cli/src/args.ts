@@ -1,4 +1,4 @@
-import { findPolicyPreset } from '@gateflow/queue-core';
+import { LANE_MODES, findPolicyPreset } from '@gateflow/queue-core';
 import type { Policy } from '@gateflow/queue-core';
 import type { PolicyComparison } from '@gateflow/sim-metrics';
 
@@ -59,7 +59,15 @@ export function parsePolicies(list: string): Policy[] {
   return ids.map((id) => {
     const policy = findPolicyPreset(id);
     if (policy === undefined) {
-      throw new UsageError(`unknown policy "${id}" (run "gateflow-sim policies" to list them)`);
+      const at = id.indexOf('@');
+      const mode = at < 0 ? undefined : id.slice(at + 1);
+      throw new UsageError(
+        mode !== undefined && LANE_MODES[mode] === undefined
+          ? `unknown lane mode "${mode}" in "${id}" (known: ${Object.keys(LANE_MODES)
+              .map((m) => `@${m}`)
+              .join(', ')})`
+          : `unknown policy "${id}" (run "gateflow-sim policies" to list them)`,
+      );
     }
     return policy;
   });

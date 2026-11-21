@@ -25,6 +25,10 @@ export const SWEEP_PARAMETER_LABELS: Readonly<Record<SweepParameter, string>> = 
   laneOutagesPerDay: 'Lane outages per day',
   feedOutagesPerDay: 'Feed outages per day',
   feedOutageMedianMinutes: 'Median length of a feed outage (min)',
+  laneTargetWaitMinutes: "GateFlow's target wait for extra lanes (min)",
+  maxExtraLanes: 'Extra lanes the staff on call can open',
+  laneOpenDelayMinutes: 'Median time to open an extra lane (min)',
+  laneFollowShare: "Share of GateFlow's lane recommendations followed",
 };
 
 function num(value: number, digits = 1): string {
@@ -66,12 +70,24 @@ function dimensionTable(doc: SweepDocument, dimension: SweepDimensionSummary): s
   const { policies, comparisons, candidateId } = doc.manifest;
   const own = comparisons.filter((c) => c.candidateId === candidateId);
   const harm = harmComparisonKey(doc);
+  // Lane management (S8): the extra lane-hours of each policy that opens lanes, and what the
+  // candidate changes in the time to screening.
+  const lanePolicies = policies.filter((p) => p.lanes !== undefined);
+  const lanes = lanePolicies.length > 0;
+  const prioritises =
+    policies.find((p) => p.id === candidateId)?.selection.kind === 'constrained-edf';
   const header = [
     SWEEP_PARAMETER_LABELS[dimension.parameter],
     ...policies.map((p) => `Missed: \`${p.id}\``),
     ...own.map((c) => `Net saved vs \`${c.referenceId}\``),
+    ...(lanes
+      ? [
+          ...lanePolicies.map((p) => `Extra lane-hours: \`${p.id}\``),
+          ...own.map((c) => `Wait change vs \`${c.referenceId}\` (min)`),
+        ]
+      : []),
     ...(harm === undefined ? [] : ['Others delayed > 5 min']),
-    'Most overtakes',
+    ...(prioritises ? ['Most overtakes'] : []),
   ];
   const lines = [
     `| ${header.join(' | ')} |`,
@@ -87,10 +103,19 @@ function dimensionTable(doc: SweepDocument, dimension: SweepDimensionSummary): s
         const summary = point.comparisons[`${c.candidateId} vs ${c.referenceId}`];
         return summary === undefined ? '-' : withCi(summary.metrics.net);
       }),
+      ...(lanes
+        ? [
+            ...lanePolicies.map((p) => num(point.policies[p.id]?.extraLaneHours.mean ?? 0)),
+            ...own.map((c) => {
+              const summary = point.comparisons[`${c.candidateId} vs ${c.referenceId}`];
+              return summary === undefined ? '-' : withCi(summary.metrics.waitMeanDeltaMin, 2);
+            }),
+          ]
+        : []),
       ...(harm === undefined
         ? []
         : [pct(point.comparisons[harm]?.metrics.nonPriorityDelayedOver5MinShare.mean ?? 0)]),
-      num(candidate?.maxOvertakes.max ?? 0, 0),
+      ...(prioritises ? [num(candidate?.maxOvertakes.max ?? 0, 0)] : []),
     ];
     lines.push(`| ${row.map(cell).join(' | ')} |`);
   }

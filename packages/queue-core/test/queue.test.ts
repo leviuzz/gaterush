@@ -4,7 +4,9 @@ import { describe, expect, it } from 'vitest';
 import {
   CheckpointQueue,
   DEFAULT_VIRTUAL_QUEUE,
+  FIFO_MANUAL_POLICY,
   FIFO_POLICY,
+  LANE_MODES,
   POLICY_PRESETS,
   PRIORITY_V0_POLICY,
   PRIORITY_V0_SELECTION,
@@ -16,6 +18,7 @@ import {
   findPolicyPreset,
   responseEstimateMs,
   validatePolicy,
+  withLaneMode,
 } from '../src';
 import type { Policy, QueueEvent, TicketInput, VirtualQueue } from '../src';
 
@@ -561,6 +564,52 @@ describe('flight knowledge and risk classes (S5)', () => {
       reversals: 0,
       total: [1, 0],
     });
+  });
+});
+
+describe('lane modes (S8)', () => {
+  it('adds a lane mode to a policy without changing its calls', () => {
+    const reactive = withLaneMode(FIFO_MANUAL_POLICY, 'reactive');
+    expect(reactive).toEqual({
+      ...FIFO_MANUAL_POLICY,
+      id: 'fifo-manual@reactive',
+      title: `${FIFO_MANUAL_POLICY.title}, with extra lanes opened by a supervisor when the queue is long (today)`,
+      lanes: LANE_MODES.reactive?.lanes,
+    });
+    expect(findPolicyPreset('fifo-manual@reactive')).toEqual(reactive);
+    expect(findPolicyPreset('priority-v3@predict')).toMatchObject({
+      id: 'priority-v3@predict',
+      selection: findPolicyPreset('priority-v3')?.selection,
+      lanes: { kind: 'predict', horizonMs: 45 * MIN, targetWaitMs: 10 * MIN },
+    });
+    expect(findPolicyPreset('fifo@nowhere')).toBeUndefined();
+    expect(findPolicyPreset('nobody@reactive')).toBeUndefined();
+    expect(() => withLaneMode(FIFO_POLICY, 'nowhere')).toThrow(/unknown lane mode "nowhere"/);
+    expect(() => withLaneMode(reactive, 'predict')).toThrow(/already manages lanes/);
+  });
+
+  it('validates lane management', () => {
+    const reactive = LANE_MODES.reactive?.lanes;
+    const predict = LANE_MODES.predict?.lanes;
+    if (reactive?.kind !== 'reactive' || predict?.kind !== 'predict') {
+      throw new Error('expected both lane modes');
+    }
+    const invalid: [Policy['lanes'], RegExp][] = [
+      [{ ...reactive, reviewIntervalMs: 30_000 }, /reviewIntervalMs/],
+      [{ ...reactive, closeWhenWaitMs: reactive.openWhenWaitMs }, /below lanes.openWhenWaitMs/],
+      [{ ...reactive, cooldownMs: -1 }, /cooldownMs/],
+      [{ ...predict, horizonMs: 0 }, /horizonMs/],
+      [{ ...predict, targetWaitMs: predict.closeWhenWaitMs }, /below lanes.targetWaitMs/],
+      [{ ...predict, kind: 'hunch' } as unknown as Policy['lanes'], /unknown lane management/],
+    ];
+    for (const [lanes, message] of invalid) {
+      expect(() => {
+        validatePolicy({ ...FIFO_POLICY, lanes });
+      }).toThrow(message);
+    }
+    expect(() => {
+      validatePolicy({ ...FIFO_POLICY, lanes: predict });
+    }).not.toThrow();
   });
 });
 

@@ -1,5 +1,5 @@
 /** Version of the queue state machine. Bump on any change that can alter behaviour. */
-export const QUEUE_CORE_VERSION = '0.5.0';
+export const QUEUE_CORE_VERSION = '0.6.0';
 
 export { CheckpointQueue } from './queue';
 export {
@@ -7,6 +7,7 @@ export {
   FIFO_MANUAL_POLICY,
   FIFO_POLICY,
   FLIGHT_CALL_SELECTION,
+  LANE_MODES,
   POLICY_PRESETS,
   PRIORITY_V0_POLICY,
   PRIORITY_V0_SELECTION,
@@ -26,19 +27,24 @@ export {
   findPolicyPreset,
   prepareWindowSizeOf,
   responseEstimateMs,
+  validateLaneManagement,
   validatePolicy,
   validateQueueOperation,
+  withLaneMode,
 } from './policy';
 export { TICKET_STATES } from './types';
 export type {
   FlightKnowledge,
+  LaneManagement,
   PhysicalQueue,
+  PredictiveLanes,
   Policy,
   PresentOutcome,
   QueueEvent,
   QueueListener,
   QueueOperation,
   QueueStats,
+  ReactiveLanes,
   TicketInput,
   TicketState,
   TicketView,

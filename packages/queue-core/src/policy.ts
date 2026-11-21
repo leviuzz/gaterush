@@ -6,7 +6,7 @@ import type {
   ConstrainedEdfSelection,
   FlightCallSelection,
 } from '@gateflow/priority-engine';
-import type { Policy, QueueOperation, VirtualQueue } from './types';
+import type { LaneManagement, Policy, QueueOperation, VirtualQueue } from './types';
 
 /** Thrown when the queue is misconfigured or misused. */
 export class QueueError extends Error {
@@ -48,6 +48,29 @@ export function validateQueueOperation(input: QueueOperation): void {
   }
 }
 
+/** Validates the lane management of a policy (S8). */
+export function validateLaneManagement(lanes: LaneManagement): void {
+  const kind: string = lanes.kind;
+  if (kind !== 'reactive' && kind !== 'predict') {
+    throw new QueueError(`unknown lane management: ${kind}`);
+  }
+  requireInteger(lanes.reviewIntervalMs, 'lanes.reviewIntervalMs', 60_000);
+  requireInteger(lanes.cooldownMs, 'lanes.cooldownMs', 0);
+  requireInteger(lanes.closeWhenWaitMs, 'lanes.closeWhenWaitMs', 0);
+  if (lanes.kind === 'reactive') {
+    requireInteger(lanes.openWhenWaitMs, 'lanes.openWhenWaitMs', 1);
+    if (lanes.closeWhenWaitMs >= lanes.openWhenWaitMs) {
+      throw new QueueError('lanes.closeWhenWaitMs must be below lanes.openWhenWaitMs');
+    }
+    return;
+  }
+  requireInteger(lanes.horizonMs, 'lanes.horizonMs', 60_000);
+  requireInteger(lanes.targetWaitMs, 'lanes.targetWaitMs', 1);
+  if (lanes.closeWhenWaitMs >= lanes.targetWaitMs) {
+    throw new QueueError('lanes.closeWhenWaitMs must be below lanes.targetWaitMs');
+  }
+}
+
 export function validatePolicy(policy: Policy): void {
   for (const [field, value] of [
     ['id', policy.id],
@@ -66,6 +89,7 @@ export function validatePolicy(policy: Policy): void {
     );
   }
   validateQueueOperation(policy.queue);
+  if (policy.lanes !== undefined) validateLaneManagement(policy.lanes);
 }
 
 /** Size of the committed "prepare" window (always 0 for the physical queue). */
@@ -297,8 +321,67 @@ export const POLICY_PRESETS: readonly Policy[] = [
   PRIORITY_V3_POLICY,
 ];
 
+/**
+ * Lane management presets (S8), to combine with any policy as `<policy>@<mode>`:
+ * - `reactive`: today's supervisor, who has a lane opened when the queue they see means more
+ *   than 10 minutes of wait, and sent back when it means less than 2 (ADR-039);
+ * - `predict`: GateFlow's recommendation from a 45-minute projection, aiming at 10 minutes of
+ *   wait at most and closing below 3 (ADR-039).
+ * Both look every 5 minutes and wait 10 minutes after a decision before the next one.
+ */
+export const LANE_MODES: Readonly<
+  Record<string, { readonly title: string; readonly lanes: LaneManagement }>
+> = {
+  reactive: {
+    title: 'extra lanes opened by a supervisor when the queue is long (today)',
+    lanes: {
+      kind: 'reactive',
+      reviewIntervalMs: 5 * MS_PER_MINUTE,
+      openWhenWaitMs: 10 * MS_PER_MINUTE,
+      closeWhenWaitMs: 2 * MS_PER_MINUTE,
+      cooldownMs: 10 * MS_PER_MINUTE,
+    },
+  },
+  predict: {
+    title: "extra lanes recommended by GateFlow's forecast",
+    lanes: {
+      kind: 'predict',
+      reviewIntervalMs: 5 * MS_PER_MINUTE,
+      horizonMs: 45 * MS_PER_MINUTE,
+      targetWaitMs: 10 * MS_PER_MINUTE,
+      closeWhenWaitMs: 3 * MS_PER_MINUTE,
+      cooldownMs: 10 * MS_PER_MINUTE,
+    },
+  },
+};
+
+/** The policy with a lane management mode: id `<policy>@<mode>`, same queue and selection. */
+export function withLaneMode(policy: Policy, mode: string): Policy {
+  const preset = LANE_MODES[mode];
+  if (preset === undefined) {
+    throw new QueueError(
+      `unknown lane mode "${mode}" (known: ${Object.keys(LANE_MODES).join(', ')})`,
+    );
+  }
+  if (policy.lanes !== undefined) throw new QueueError(`policy ${policy.id} already manages lanes`);
+  const combined: Policy = {
+    ...policy,
+    id: `${policy.id}@${mode}`,
+    title: `${policy.title}, with ${preset.title}`,
+    lanes: preset.lanes,
+  };
+  validatePolicy(combined);
+  return combined;
+}
+
+/** A preset by id, or a preset with a lane mode (`fifo-manual@reactive`). */
 export function findPolicyPreset(id: string): Policy | undefined {
-  return POLICY_PRESETS.find((policy) => policy.id === id);
+  const at = id.indexOf('@');
+  if (at < 0) return POLICY_PRESETS.find((policy) => policy.id === id);
+  const base = POLICY_PRESETS.find((policy) => policy.id === id.slice(0, at));
+  const mode = id.slice(at + 1);
+  if (base === undefined || LANE_MODES[mode] === undefined) return undefined;
+  return withLaneMode(base, mode);
 }
 
 /** Classification parameters of a policy, or `null` when it does not classify tickets. */

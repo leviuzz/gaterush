@@ -1,5 +1,5 @@
 {
-  "schema": "gateflow.sim.results/6",
+  "schema": "gateflow.sim.results/7",
   "disclaimer": "SIMULATED RESULTS ON SYNTHETIC OR HYPOTHETICAL DATA. These numbers are model outputs, not measurements, and must not be presented as evidence of operational performance.",
   "manifest": {
     "generator": {
@@ -9,10 +9,10 @@
     "commit": "test",
     "versions": {
       "engine": "0.5.0",
-      "queueCore": "0.5.0",
-      "model": "0.5.0",
+      "queueCore": "0.6.0",
+      "model": "0.6.0",
       "kernel": "0.1.0",
-      "populationGenerator": "0.5.0",
+      "populationGenerator": "0.6.0",
       "scenarioSchema": 5
     },
     "scenario": {
@@ -543,7 +543,8 @@
     }
   ],
   "modelLimitations": [
-    "Single checkpoint. Lanes follow a planned schedule, minus unplanned outages when the scenario has them: a lane going out of service finishes its passenger first, at least one lane always stays open, and the system knows at once. No lanes are opened in reaction to the queue.",
+    "Single checkpoint. Lanes follow a planned schedule, minus unplanned outages when the scenario has them: a lane going out of service finishes its passenger first, at least one lane always stays open, and the system knows at once.",
+    "Extra lanes (policies with lane management, S8) open beyond the plan only up to the lanes the checkpoint has and the staff on call. A decision to open takes the day's delay to put a lane into service, an extra lane stays open for a minimum time, and staff go back when the plan itself needs the lane. Staff on call have no other duties in the model, and their cost is counted as extra lane-hours only. The supervisor of today's practice decides on the wait the queue shows; GateFlow recommends on a forecast of arrivals (the average of 50 other simulated days with the same flights, scaled by the arrivals of the last hour), and the duty manager follows each recommendation with the scenario's probability.",
     "Every passenger uses the virtual queue when one is simulated: no opt-outs, no passengers without a phone or a view of the displays.",
     "Response times and absences are drawn per party from assumed distributions. A second call does not make an absent passenger come sooner, the prepare window does not shorten response times, and a passenger who has been at the access point once answers later calls at once.",
     "The access point never becomes a bottleneck, and the walk from the access point to the lanes is part of the response time.",
@@ -883,6 +884,54 @@
           "p95": 112.8339,
           "min": 111.7929,
           "max": 112.8793
+        },
+        "extraLaneHours": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "laneDecisions": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "laneDecisionsFollowed": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "lanesOpened": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "lanesClosed": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "maxOpenLanes": {
+          "mean": 6,
+          "p05": 6,
+          "p50": 6,
+          "p95": 6,
+          "min": 6,
+          "max": 6
         },
         "laneUtilization": {
           "mean": 0.6274,
@@ -1318,6 +1367,54 @@
           "min": 111.7929,
           "max": 112.8793
         },
+        "extraLaneHours": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "laneDecisions": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "laneDecisionsFollowed": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "lanesOpened": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "lanesClosed": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "maxOpenLanes": {
+          "mean": 6,
+          "p05": 6,
+          "p50": 6,
+          "p95": 6,
+          "min": 6,
+          "max": 6
+        },
         "laneUtilization": {
           "mean": 0.6274,
           "p05": 0.6254,
@@ -1751,6 +1848,54 @@
           "p95": 112.8339,
           "min": 111.7929,
           "max": 112.8793
+        },
+        "extraLaneHours": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "laneDecisions": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "laneDecisionsFollowed": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "lanesOpened": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "lanesClosed": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "maxOpenLanes": {
+          "mean": 6,
+          "p05": 6,
+          "p50": 6,
+          "p95": 6,
+          "min": 6,
+          "max": 6
         },
         "laneUtilization": {
           "mean": 0.6274,
@@ -2186,6 +2331,54 @@
           "min": 111.7929,
           "max": 112.8793
         },
+        "extraLaneHours": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "laneDecisions": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "laneDecisionsFollowed": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "lanesOpened": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "lanesClosed": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "maxOpenLanes": {
+          "mean": 6,
+          "p05": 6,
+          "p50": 6,
+          "p95": 6,
+          "min": 6,
+          "max": 6
+        },
         "laneUtilization": {
           "mean": 0.6274,
           "p05": 0.6254,
@@ -2620,6 +2813,54 @@
           "min": 111.7929,
           "max": 112.8793
         },
+        "extraLaneHours": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "laneDecisions": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "laneDecisionsFollowed": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "lanesOpened": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "lanesClosed": {
+          "mean": 0,
+          "p05": 0,
+          "p50": 0,
+          "p95": 0,
+          "min": 0,
+          "max": 0
+        },
+        "maxOpenLanes": {
+          "mean": 6,
+          "p05": 6,
+          "p50": 6,
+          "p95": 6,
+          "min": 6,
+          "max": 6
+        },
         "laneUtilization": {
           "mean": 0.6274,
           "p05": 0.6254,
@@ -2956,6 +3197,26 @@
             "max": 0.0041,
             "ciLower": 0.0016,
             "ciUpper": 0.004
+          },
+          "waitDeltaPersonHours": {
+            "mean": 0.2929,
+            "p05": 0.0851,
+            "p50": 0.3904,
+            "p95": 0.4325,
+            "min": 0.0512,
+            "max": 0.4372,
+            "ciLower": 0.1643,
+            "ciUpper": 0.4372
+          },
+          "extraLaneHoursDelta": {
+            "mean": 0,
+            "p05": 0,
+            "p50": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0,
+            "ciLower": 0,
+            "ciUpper": 0
           }
         },
         "shareDaysNetPositive": 1,
@@ -3096,6 +3357,26 @@
             "max": -2.3485,
             "ciLower": -3.5132,
             "ciUpper": -2.4412
+          },
+          "waitDeltaPersonHours": {
+            "mean": 0.7116,
+            "p05": 0.4968,
+            "p50": 0.514,
+            "p95": 1.0648,
+            "min": 0.4949,
+            "max": 1.126,
+            "ciLower": 0.4949,
+            "ciUpper": 0.9271
+          },
+          "extraLaneHoursDelta": {
+            "mean": 0,
+            "p05": 0,
+            "p50": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0,
+            "ciLower": 0,
+            "ciUpper": 0
           }
         },
         "shareDaysNetPositive": 0.3333,
@@ -3236,6 +3517,26 @@
             "max": -2.3328,
             "ciLower": -3.4963,
             "ciUpper": -2.4245
+          },
+          "waitDeltaPersonHours": {
+            "mean": 0.0775,
+            "p05": -0.5952,
+            "p50": 0.024,
+            "p95": 0.7877,
+            "min": -0.6641,
+            "max": 0.8725,
+            "ciLower": -0.6641,
+            "ciUpper": 0.5897
+          },
+          "extraLaneHoursDelta": {
+            "mean": 0,
+            "p05": 0,
+            "p50": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0,
+            "ciLower": 0,
+            "ciUpper": 0
           }
         },
         "shareDaysNetPositive": 1,
@@ -3376,6 +3677,26 @@
             "max": -2.3329,
             "ciLower": -3.4958,
             "ciUpper": -2.3329
+          },
+          "waitDeltaPersonHours": {
+            "mean": 0.2866,
+            "p05": -0.1061,
+            "p50": 0.1096,
+            "p95": 0.8034,
+            "min": -0.1301,
+            "max": 0.8804,
+            "ciLower": -0.0522,
+            "ciUpper": 0.8804
+          },
+          "extraLaneHoursDelta": {
+            "mean": 0,
+            "p05": 0,
+            "p50": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0,
+            "ciLower": 0,
+            "ciUpper": 0
           }
         },
         "shareDaysNetPositive": 1,
@@ -3516,6 +3837,26 @@
             "max": 0.0169,
             "ciLower": 0.0131,
             "ciUpper": 0.0165
+          },
+          "waitDeltaPersonHours": {
+            "mean": -0.6341,
+            "p05": -1.1074,
+            "p50": -0.4708,
+            "p95": -0.2752,
+            "min": -1.1781,
+            "max": -0.2535,
+            "ciLower": -1.1781,
+            "ciUpper": -0.2535
+          },
+          "extraLaneHoursDelta": {
+            "mean": 0,
+            "p05": 0,
+            "p50": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0,
+            "ciLower": 0,
+            "ciUpper": 0
           }
         },
         "shareDaysNetPositive": 1,
@@ -3656,6 +3997,26 @@
             "max": -2.3333,
             "ciLower": -3.5,
             "ciUpper": -2.3333
+          },
+          "waitDeltaPersonHours": {
+            "mean": -0.2154,
+            "p05": -1.0277,
+            "p50": -0.3663,
+            "p95": 0.7026,
+            "min": -1.1012,
+            "max": 0.8213,
+            "ciLower": -0.8624,
+            "ciUpper": 0.8213
+          },
+          "extraLaneHoursDelta": {
+            "mean": 0,
+            "p05": 0,
+            "p50": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0,
+            "ciLower": 0,
+            "ciUpper": 0
           }
         },
         "shareDaysNetPositive": 0.6667,
@@ -3796,6 +4157,26 @@
             "max": 0.0174,
             "ciLower": 0.0115,
             "ciUpper": 0.0174
+          },
+          "waitDeltaPersonHours": {
+            "mean": -0.425,
+            "p05": -0.6182,
+            "p50": -0.3853,
+            "p95": -0.2595,
+            "min": -0.6441,
+            "max": -0.2456,
+            "ciLower": -0.5578,
+            "ciUpper": -0.2456
+          },
+          "extraLaneHoursDelta": {
+            "mean": 0,
+            "p05": 0,
+            "p50": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0,
+            "ciLower": 0,
+            "ciUpper": 0
           }
         },
         "shareDaysNetPositive": 1,
@@ -3936,6 +4317,26 @@
             "max": -2.3334,
             "ciLower": -3.2061,
             "ciUpper": -2.3334
+          },
+          "waitDeltaPersonHours": {
+            "mean": -0.0063,
+            "p05": -0.5386,
+            "p50": -0.2808,
+            "p95": 0.7182,
+            "min": -0.5672,
+            "max": 0.8292,
+            "ciLower": -0.5672,
+            "ciUpper": 0.8292
+          },
+          "extraLaneHoursDelta": {
+            "mean": 0,
+            "p05": 0,
+            "p50": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0,
+            "ciLower": 0,
+            "ciUpper": 0
           }
         },
         "shareDaysNetPositive": 0.6667,
@@ -4076,6 +4477,26 @@
             "max": 0.0005,
             "ciLower": -0.0002,
             "ciUpper": 0.0005
+          },
+          "waitDeltaPersonHours": {
+            "mean": 0.2091,
+            "p05": 0.0157,
+            "p50": 0.0855,
+            "p95": 0.4891,
+            "min": 0.0079,
+            "max": 0.534,
+            "ciLower": 0.0338,
+            "ciUpper": 0.3845
+          },
+          "extraLaneHoursDelta": {
+            "mean": 0,
+            "p05": 0,
+            "p50": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0,
+            "ciLower": 0,
+            "ciUpper": 0
           }
         },
         "shareDaysNetPositive": 0.3333,
@@ -4132,6 +4553,12 @@
           "reactivations": 0,
           "reissuedTickets": 0,
           "staffedLaneHours": 111.7929,
+          "extraLaneHours": 0,
+          "laneDecisions": 0,
+          "laneDecisionsFollowed": 0,
+          "lanesOpened": 0,
+          "lanesClosed": 0,
+          "maxOpenLanes": 6,
           "laneUtilization": 0.6251,
           "idleLaneWithDemandMin": 0,
           "idleLaneWithDemandShare": 0,
@@ -4188,6 +4615,12 @@
           "reactivations": 0,
           "reissuedTickets": 0,
           "staffedLaneHours": 111.7929,
+          "extraLaneHours": 0,
+          "laneDecisions": 0,
+          "laneDecisionsFollowed": 0,
+          "lanesOpened": 0,
+          "lanesClosed": 0,
+          "maxOpenLanes": 6,
           "laneUtilization": 0.6251,
           "idleLaneWithDemandMin": 0,
           "idleLaneWithDemandShare": 0,
@@ -4244,6 +4677,12 @@
           "reactivations": 19,
           "reissuedTickets": 1,
           "staffedLaneHours": 111.7929,
+          "extraLaneHours": 0,
+          "laneDecisions": 0,
+          "laneDecisionsFollowed": 0,
+          "lanesOpened": 0,
+          "lanesClosed": 0,
+          "maxOpenLanes": 6,
           "laneUtilization": 0.6251,
           "idleLaneWithDemandMin": 0,
           "idleLaneWithDemandShare": 0,
@@ -4300,6 +4739,12 @@
           "reactivations": 19,
           "reissuedTickets": 1,
           "staffedLaneHours": 111.7929,
+          "extraLaneHours": 0,
+          "laneDecisions": 0,
+          "laneDecisionsFollowed": 0,
+          "lanesOpened": 0,
+          "lanesClosed": 0,
+          "maxOpenLanes": 6,
           "laneUtilization": 0.6251,
           "idleLaneWithDemandMin": 0,
           "idleLaneWithDemandShare": 0,
@@ -4356,6 +4801,12 @@
           "reactivations": 19,
           "reissuedTickets": 1,
           "staffedLaneHours": 111.7929,
+          "extraLaneHours": 0,
+          "laneDecisions": 0,
+          "laneDecisionsFollowed": 0,
+          "lanesOpened": 0,
+          "lanesClosed": 0,
+          "maxOpenLanes": 6,
           "laneUtilization": 0.6251,
           "idleLaneWithDemandMin": 0,
           "idleLaneWithDemandShare": 0,
@@ -4397,7 +4848,9 @@
           "nonPriorityExtraWaitMaxMin": 3.6612,
           "nonPriorityDelayedOver5MinShare": 0,
           "waitMeanDeltaMin": 0.0005,
-          "standingMeanDeltaMin": 0.0005
+          "standingMeanDeltaMin": 0.0005,
+          "waitDeltaPersonHours": 0.0512,
+          "extraLaneHoursDelta": 0
         },
         "virtual-fifo vs fifo": {
           "saved": 0,
@@ -4412,7 +4865,9 @@
           "nonPriorityExtraWaitMaxMin": 41.0283,
           "nonPriorityDelayedOver5MinShare": 0.0035,
           "waitMeanDeltaMin": 0.0107,
-          "standingMeanDeltaMin": -2.3485
+          "standingMeanDeltaMin": -2.3485,
+          "waitDeltaPersonHours": 1.126,
+          "extraLaneHoursDelta": 0
         },
         "priority-v2 vs fifo": {
           "saved": 53,
@@ -4427,7 +4882,9 @@
           "nonPriorityExtraWaitMaxMin": 43.4381,
           "nonPriorityDelayedOver5MinShare": 0.0042,
           "waitMeanDeltaMin": 0.0083,
-          "standingMeanDeltaMin": -2.3328
+          "standingMeanDeltaMin": -2.3328,
+          "waitDeltaPersonHours": 0.8725,
+          "extraLaneHoursDelta": 0
         },
         "priority-v3 vs fifo": {
           "saved": 53,
@@ -4442,7 +4899,9 @@
           "nonPriorityExtraWaitMaxMin": 43.5622,
           "nonPriorityDelayedOver5MinShare": 0.0042,
           "waitMeanDeltaMin": 0.0084,
-          "standingMeanDeltaMin": -2.3329
+          "standingMeanDeltaMin": -2.3329,
+          "waitDeltaPersonHours": 0.8804,
+          "extraLaneHoursDelta": 0
         },
         "priority-v2 vs virtual-fifo": {
           "saved": 58,
@@ -4457,7 +4916,9 @@
           "nonPriorityExtraWaitMaxMin": 4.5452,
           "nonPriorityDelayedOver5MinShare": 0,
           "waitMeanDeltaMin": -0.0024,
-          "standingMeanDeltaMin": 0.0157
+          "standingMeanDeltaMin": 0.0157,
+          "waitDeltaPersonHours": -0.2535,
+          "extraLaneHoursDelta": 0
         },
         "priority-v2 vs fifo-manual": {
           "saved": 14,
@@ -4472,7 +4933,9 @@
           "nonPriorityExtraWaitMaxMin": 42.6257,
           "nonPriorityDelayedOver5MinShare": 0.0053,
           "waitMeanDeltaMin": 0.0078,
-          "standingMeanDeltaMin": -2.3333
+          "standingMeanDeltaMin": -2.3333,
+          "waitDeltaPersonHours": 0.8213,
+          "extraLaneHoursDelta": 0
         },
         "priority-v3 vs virtual-fifo": {
           "saved": 58,
@@ -4487,7 +4950,9 @@
           "nonPriorityExtraWaitMaxMin": 4.524,
           "nonPriorityDelayedOver5MinShare": 0,
           "waitMeanDeltaMin": -0.0023,
-          "standingMeanDeltaMin": 0.0156
+          "standingMeanDeltaMin": 0.0156,
+          "waitDeltaPersonHours": -0.2456,
+          "extraLaneHoursDelta": 0
         },
         "priority-v3 vs fifo-manual": {
           "saved": 14,
@@ -4502,7 +4967,9 @@
           "nonPriorityExtraWaitMaxMin": 42.7498,
           "nonPriorityDelayedOver5MinShare": 0.005,
           "waitMeanDeltaMin": 0.0079,
-          "standingMeanDeltaMin": -2.3334
+          "standingMeanDeltaMin": -2.3334,
+          "waitDeltaPersonHours": 0.8292,
+          "extraLaneHoursDelta": 0
         },
         "priority-v3 vs priority-v2": {
           "saved": 0,
@@ -4517,7 +4984,9 @@
           "nonPriorityExtraWaitMaxMin": 1.3944,
           "nonPriorityDelayedOver5MinShare": 0,
           "waitMeanDeltaMin": 0.0001,
-          "standingMeanDeltaMin": -0.0001
+          "standingMeanDeltaMin": -0.0001,
+          "waitDeltaPersonHours": 0.0079,
+          "extraLaneHoursDelta": 0
         }
       }
     },
@@ -4567,6 +5036,12 @@
           "reactivations": 0,
           "reissuedTickets": 0,
           "staffedLaneHours": 112.8793,
+          "extraLaneHours": 0,
+          "laneDecisions": 0,
+          "laneDecisionsFollowed": 0,
+          "lanesOpened": 0,
+          "lanesClosed": 0,
+          "maxOpenLanes": 6,
           "laneUtilization": 0.6294,
           "idleLaneWithDemandMin": 0,
           "idleLaneWithDemandShare": 0,
@@ -4623,6 +5098,12 @@
           "reactivations": 0,
           "reissuedTickets": 0,
           "staffedLaneHours": 112.8793,
+          "extraLaneHours": 0,
+          "laneDecisions": 0,
+          "laneDecisionsFollowed": 0,
+          "lanesOpened": 0,
+          "lanesClosed": 0,
+          "maxOpenLanes": 6,
           "laneUtilization": 0.6294,
           "idleLaneWithDemandMin": 0,
           "idleLaneWithDemandShare": 0,
@@ -4679,6 +5160,12 @@
           "reactivations": 19,
           "reissuedTickets": 2,
           "staffedLaneHours": 112.8793,
+          "extraLaneHours": 0,
+          "laneDecisions": 0,
+          "laneDecisionsFollowed": 0,
+          "lanesOpened": 0,
+          "lanesClosed": 0,
+          "maxOpenLanes": 6,
           "laneUtilization": 0.6294,
           "idleLaneWithDemandMin": 0,
           "idleLaneWithDemandShare": 0,
@@ -4735,6 +5222,12 @@
           "reactivations": 19,
           "reissuedTickets": 1,
           "staffedLaneHours": 112.8793,
+          "extraLaneHours": 0,
+          "laneDecisions": 0,
+          "laneDecisionsFollowed": 0,
+          "lanesOpened": 0,
+          "lanesClosed": 0,
+          "maxOpenLanes": 6,
           "laneUtilization": 0.6294,
           "idleLaneWithDemandMin": 0,
           "idleLaneWithDemandShare": 0,
@@ -4791,6 +5284,12 @@
           "reactivations": 19,
           "reissuedTickets": 1,
           "staffedLaneHours": 112.8793,
+          "extraLaneHours": 0,
+          "laneDecisions": 0,
+          "laneDecisionsFollowed": 0,
+          "lanesOpened": 0,
+          "lanesClosed": 0,
+          "maxOpenLanes": 6,
           "laneUtilization": 0.6294,
           "idleLaneWithDemandMin": 0,
           "idleLaneWithDemandShare": 0,
@@ -4832,7 +5331,9 @@
           "nonPriorityExtraWaitMaxMin": 3.5217,
           "nonPriorityDelayedOver5MinShare": 0,
           "waitMeanDeltaMin": 0.0041,
-          "standingMeanDeltaMin": 0.0041
+          "standingMeanDeltaMin": 0.0041,
+          "waitDeltaPersonHours": 0.4372,
+          "extraLaneHoursDelta": 0
         },
         "virtual-fifo vs fifo": {
           "saved": 0,
@@ -4847,7 +5348,9 @@
           "nonPriorityExtraWaitMaxMin": 35.1327,
           "nonPriorityDelayedOver5MinShare": 0.0036,
           "waitMeanDeltaMin": 0.0048,
-          "standingMeanDeltaMin": -2.6267
+          "standingMeanDeltaMin": -2.6267,
+          "waitDeltaPersonHours": 0.514,
+          "extraLaneHoursDelta": 0
         },
         "priority-v2 vs fifo": {
           "saved": 49,
@@ -4862,7 +5365,9 @@
           "nonPriorityExtraWaitMaxMin": 30.9271,
           "nonPriorityDelayedOver5MinShare": 0.0059,
           "waitMeanDeltaMin": -0.0062,
-          "standingMeanDeltaMin": -2.6149
+          "standingMeanDeltaMin": -2.6149,
+          "waitDeltaPersonHours": -0.6641,
+          "extraLaneHoursDelta": 0
         },
         "priority-v3 vs fifo": {
           "saved": 49,
@@ -4877,7 +5382,9 @@
           "nonPriorityExtraWaitMaxMin": 31.0037,
           "nonPriorityDelayedOver5MinShare": 0.0061,
           "waitMeanDeltaMin": -0.0012,
-          "standingMeanDeltaMin": -2.6152
+          "standingMeanDeltaMin": -2.6152,
+          "waitDeltaPersonHours": -0.1301,
+          "extraLaneHoursDelta": 0
         },
         "priority-v2 vs virtual-fifo": {
           "saved": 53,
@@ -4892,7 +5399,9 @@
           "nonPriorityExtraWaitMaxMin": 4.8038,
           "nonPriorityDelayedOver5MinShare": 0,
           "waitMeanDeltaMin": -0.0111,
-          "standingMeanDeltaMin": 0.0118
+          "standingMeanDeltaMin": 0.0118,
+          "waitDeltaPersonHours": -1.1781,
+          "extraLaneHoursDelta": 0
         },
         "priority-v2 vs fifo-manual": {
           "saved": 4,
@@ -4907,7 +5416,9 @@
           "nonPriorityExtraWaitMaxMin": 29.0113,
           "nonPriorityDelayedOver5MinShare": 0.0051,
           "waitMeanDeltaMin": -0.0103,
-          "standingMeanDeltaMin": -2.619
+          "standingMeanDeltaMin": -2.619,
+          "waitDeltaPersonHours": -1.1012,
+          "extraLaneHoursDelta": 0
         },
         "priority-v3 vs virtual-fifo": {
           "saved": 53,
@@ -4922,7 +5433,9 @@
           "nonPriorityExtraWaitMaxMin": 4.3667,
           "nonPriorityDelayedOver5MinShare": 0,
           "waitMeanDeltaMin": -0.0061,
-          "standingMeanDeltaMin": 0.0115
+          "standingMeanDeltaMin": 0.0115,
+          "waitDeltaPersonHours": -0.6441,
+          "extraLaneHoursDelta": 0
         },
         "priority-v3 vs fifo-manual": {
           "saved": 4,
@@ -4937,7 +5450,9 @@
           "nonPriorityExtraWaitMaxMin": 29.0878,
           "nonPriorityDelayedOver5MinShare": 0.0048,
           "waitMeanDeltaMin": -0.0053,
-          "standingMeanDeltaMin": -2.6193
+          "standingMeanDeltaMin": -2.6193,
+          "waitDeltaPersonHours": -0.5672,
+          "extraLaneHoursDelta": 0
         },
         "priority-v3 vs priority-v2": {
           "saved": 0,
@@ -4952,7 +5467,9 @@
           "nonPriorityExtraWaitMaxMin": 1.1464,
           "nonPriorityDelayedOver5MinShare": 0,
           "waitMeanDeltaMin": 0.005,
-          "standingMeanDeltaMin": -0.0003
+          "standingMeanDeltaMin": -0.0003,
+          "waitDeltaPersonHours": 0.534,
+          "extraLaneHoursDelta": 0
         }
       }
     },
@@ -5002,6 +5519,12 @@
           "reactivations": 0,
           "reissuedTickets": 0,
           "staffedLaneHours": 112.4253,
+          "extraLaneHours": 0,
+          "laneDecisions": 0,
+          "laneDecisionsFollowed": 0,
+          "lanesOpened": 0,
+          "lanesClosed": 0,
+          "maxOpenLanes": 6,
           "laneUtilization": 0.6279,
           "idleLaneWithDemandMin": 0,
           "idleLaneWithDemandShare": 0,
@@ -5058,6 +5581,12 @@
           "reactivations": 0,
           "reissuedTickets": 0,
           "staffedLaneHours": 112.4253,
+          "extraLaneHours": 0,
+          "laneDecisions": 0,
+          "laneDecisionsFollowed": 0,
+          "lanesOpened": 0,
+          "lanesClosed": 0,
+          "maxOpenLanes": 6,
           "laneUtilization": 0.6279,
           "idleLaneWithDemandMin": 0,
           "idleLaneWithDemandShare": 0,
@@ -5114,6 +5643,12 @@
           "reactivations": 27,
           "reissuedTickets": 6,
           "staffedLaneHours": 112.4253,
+          "extraLaneHours": 0,
+          "laneDecisions": 0,
+          "laneDecisionsFollowed": 0,
+          "lanesOpened": 0,
+          "lanesClosed": 0,
+          "maxOpenLanes": 6,
           "laneUtilization": 0.6279,
           "idleLaneWithDemandMin": 0,
           "idleLaneWithDemandShare": 0,
@@ -5170,6 +5705,12 @@
           "reactivations": 25,
           "reissuedTickets": 6,
           "staffedLaneHours": 112.4253,
+          "extraLaneHours": 0,
+          "laneDecisions": 0,
+          "laneDecisionsFollowed": 0,
+          "lanesOpened": 0,
+          "lanesClosed": 0,
+          "maxOpenLanes": 6,
           "laneUtilization": 0.6279,
           "idleLaneWithDemandMin": 0,
           "idleLaneWithDemandShare": 0,
@@ -5226,6 +5767,12 @@
           "reactivations": 25,
           "reissuedTickets": 6,
           "staffedLaneHours": 112.4253,
+          "extraLaneHours": 0,
+          "laneDecisions": 0,
+          "laneDecisionsFollowed": 0,
+          "lanesOpened": 0,
+          "lanesClosed": 0,
+          "maxOpenLanes": 6,
           "laneUtilization": 0.6279,
           "idleLaneWithDemandMin": 0,
           "idleLaneWithDemandShare": 0,
@@ -5267,7 +5814,9 @@
           "nonPriorityExtraWaitMaxMin": 6.8538,
           "nonPriorityDelayedOver5MinShare": 0.0041,
           "waitMeanDeltaMin": 0.0037,
-          "standingMeanDeltaMin": 0.0037
+          "standingMeanDeltaMin": 0.0037,
+          "waitDeltaPersonHours": 0.3904,
+          "extraLaneHoursDelta": 0
         },
         "virtual-fifo vs fifo": {
           "saved": 13,
@@ -5282,7 +5831,9 @@
           "nonPriorityExtraWaitMaxMin": 59.7295,
           "nonPriorityDelayedOver5MinShare": 0.0052,
           "waitMeanDeltaMin": 0.0047,
-          "standingMeanDeltaMin": -3.5132
+          "standingMeanDeltaMin": -3.5132,
+          "waitDeltaPersonHours": 0.4949,
+          "extraLaneHoursDelta": 0
         },
         "priority-v2 vs fifo": {
           "saved": 78,
@@ -5297,7 +5848,9 @@
           "nonPriorityExtraWaitMaxMin": 62.7713,
           "nonPriorityDelayedOver5MinShare": 0.0073,
           "waitMeanDeltaMin": 0.0002,
-          "standingMeanDeltaMin": -3.4963
+          "standingMeanDeltaMin": -3.4963,
+          "waitDeltaPersonHours": 0.024,
+          "extraLaneHoursDelta": 0
         },
         "priority-v3 vs fifo": {
           "saved": 79,
@@ -5312,7 +5865,9 @@
           "nonPriorityExtraWaitMaxMin": 63.2762,
           "nonPriorityDelayedOver5MinShare": 0.0074,
           "waitMeanDeltaMin": 0.001,
-          "standingMeanDeltaMin": -3.4958
+          "standingMeanDeltaMin": -3.4958,
+          "waitDeltaPersonHours": 0.1096,
+          "extraLaneHoursDelta": 0
         },
         "priority-v2 vs virtual-fifo": {
           "saved": 68,
@@ -5327,7 +5882,9 @@
           "nonPriorityExtraWaitMaxMin": 4.687,
           "nonPriorityDelayedOver5MinShare": 0,
           "waitMeanDeltaMin": -0.0045,
-          "standingMeanDeltaMin": 0.0169
+          "standingMeanDeltaMin": 0.0169,
+          "waitDeltaPersonHours": -0.4708,
+          "extraLaneHoursDelta": 0
         },
         "priority-v2 vs fifo-manual": {
           "saved": 3,
@@ -5342,7 +5899,9 @@
           "nonPriorityExtraWaitMaxMin": 60.8727,
           "nonPriorityDelayedOver5MinShare": 0.0092,
           "waitMeanDeltaMin": -0.0035,
-          "standingMeanDeltaMin": -3.5
+          "standingMeanDeltaMin": -3.5,
+          "waitDeltaPersonHours": -0.3663,
+          "extraLaneHoursDelta": 0
         },
         "priority-v3 vs virtual-fifo": {
           "saved": 69,
@@ -5357,7 +5916,9 @@
           "nonPriorityExtraWaitMaxMin": 4.38,
           "nonPriorityDelayedOver5MinShare": 0,
           "waitMeanDeltaMin": -0.0036,
-          "standingMeanDeltaMin": 0.0174
+          "standingMeanDeltaMin": 0.0174,
+          "waitDeltaPersonHours": -0.3853,
+          "extraLaneHoursDelta": 0
         },
         "priority-v3 vs fifo-manual": {
           "saved": 3,
@@ -5372,7 +5933,9 @@
           "nonPriorityExtraWaitMaxMin": 61.3776,
           "nonPriorityDelayedOver5MinShare": 0.0091,
           "waitMeanDeltaMin": -0.0027,
-          "standingMeanDeltaMin": -3.4995
+          "standingMeanDeltaMin": -3.4995,
+          "waitDeltaPersonHours": -0.2808,
+          "extraLaneHoursDelta": 0
         },
         "priority-v3 vs priority-v2": {
           "saved": 1,
@@ -5387,7 +5950,9 @@
           "nonPriorityExtraWaitMaxMin": 1.4501,
           "nonPriorityDelayedOver5MinShare": 0,
           "waitMeanDeltaMin": 0.0008,
-          "standingMeanDeltaMin": 0.0005
+          "standingMeanDeltaMin": 0.0005,
+          "waitDeltaPersonHours": 0.0855,
+          "extraLaneHoursDelta": 0
         }
       }
     }

@@ -5,6 +5,7 @@ export type {
   FlightRow,
   GateflowSettings,
   LanePlanRule,
+  LaneStaffingSpec,
   Scenario,
   ScenarioInput,
   SourceLabel,
@@ -12,14 +13,20 @@ export type {
 } from './schema';
 export { AirportSchema, composeScenario, mergeScenarioParts, parseAirport } from './airport';
 export type { Airport } from './airport';
-export { expectedWorkByInterval, planLanes, withLaneSchedule } from './lane-plan';
+export { expectedWorkByInterval, maxPlannedLanes, planLanes, withLaneSchedule } from './lane-plan';
+export { FORECAST_DAYS, FORECAST_FIRST_SEED, arrivalForecast } from './forecast';
 export { ScenarioValidationError } from './errors';
 export { parseScenario, parseScenarioText } from './parse';
 export type { ScenarioFiles } from './parse';
 export { canonicalJson } from './canonical';
 export { collectAssumptions } from './assumptions';
 export type { Assumption } from './assumptions';
-export { GENERATOR_VERSION, generatePopulation, generateSchedule } from './generate';
+export {
+  GENERATOR_VERSION,
+  LANE_DECISIONS_PER_DAY,
+  generatePopulation,
+  generateSchedule,
+} from './generate';
 export type { ScheduledFlight } from './generate';
 export {
   FLIGHTS_FORMAT,

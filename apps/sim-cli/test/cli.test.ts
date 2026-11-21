@@ -133,10 +133,14 @@ describe('gateflow-sim validate, policies, help', () => {
     expect(result.stderr).toContain('migrated to version 5');
   });
 
-  it('lists the policy presets as JSON', async () => {
+  it('lists the policy presets and the lane modes as JSON', async () => {
     const result = await cli(['policies']);
     expect(result.code).toBe(EXIT_OK);
-    expect((JSON.parse(result.stdout) as { id: string }[]).map((p) => p.id)).toEqual([
+    const listed = JSON.parse(result.stdout) as {
+      presets: { id: string }[];
+      laneModes: Record<string, { lanes: { kind: string } }>;
+    };
+    expect(listed.presets.map((p) => p.id)).toEqual([
       'fifo',
       'fifo-manual',
       'virtual-fifo',
@@ -146,6 +150,7 @@ describe('gateflow-sim validate, policies, help', () => {
       'priority-v2',
       'priority-v3',
     ]);
+    expect(Object.keys(listed.laneModes)).toEqual(['reactive', 'predict']);
   });
 
   it.each([
@@ -291,6 +296,9 @@ describe('airport configurations', () => {
     expect(validated.stdout).toContain(
       'airport        tsf-like (TSF-like airport (synthetic)), checkpoint departures',
     );
+    expect(validated.stdout).toContain(
+      'lanes          5 planned at most, 6 at the checkpoint; staff on call for 1 extra lane (about 10 min to open)',
+    );
     const lanes = await cli(['lanes', '--scenario', day]);
     expect(lanes.code).toBe(EXIT_OK);
     const planned = lanes.stdout
@@ -363,6 +371,46 @@ describe('airport configurations', () => {
       'Airport configuration: `tsf-like` (TSF-like airport (synthetic)), checkpoint `departures`',
     );
   });
+
+  it('opens extra lanes with a lane mode, within the lanes and staff of the checkpoint (S8)', async () => {
+    const out = join(dir, 'out-lanes');
+    const result = await cli([
+      'run',
+      '--scenario',
+      join(repo, 'scenarios', 'tsf-like-peak-day.yaml'),
+      '--seeds',
+      '1-3',
+      '--policies',
+      'fifo-manual,fifo-manual@reactive,fifo-manual@predict',
+      '--out',
+      out,
+      '--bootstrap-resamples',
+      '50',
+      '--workers',
+      '2',
+      '--quiet',
+    ]);
+    expect(result.code).toBe(EXIT_OK);
+    expect(result.stdout).toMatch(/fifo-manual@predict\s+\d+\.\d\s+\d+\.\d\s+\d+\.\d\s+\d+\.\d/);
+    expect(result.stdout).toContain('fifo-manual@predict vs fifo-manual@reactive');
+    const doc = JSON.parse(readFileSync(join(out, 'results.json'), 'utf8')) as {
+      summary: {
+        policies: Record<
+          string,
+          { maxOpenLanes: { max: number }; extraLaneHours: { mean: number } }
+        >;
+      };
+    };
+    for (const id of ['fifo-manual@reactive', 'fifo-manual@predict']) {
+      expect(doc.summary.policies[id]?.maxOpenLanes.max).toBeLessThanOrEqual(6);
+    }
+    expect(doc.summary.policies['fifo-manual']?.extraLaneHours.mean).toBe(0);
+    const report = readFileSync(join(out, 'report.md'), 'utf8');
+    expect(report).toMatch(/## \d+\. Lane management/);
+    expect(report).toContain(
+      'never more than the 6 lanes the checkpoint has, and at most 1 at the same time',
+    );
+  });
 });
 
 const SWEEP = `schemaVersion: 1
@@ -418,7 +466,7 @@ describe('gateflow-sim sweep', () => {
       manifest: { commit: string; reproduce: string; simulatedDays: number };
       dimensions: { points: { label: string }[] }[];
     };
-    expect(doc.schema).toBe('gateflow.sim.sweep/2');
+    expect(doc.schema).toBe('gateflow.sim.sweep/3');
     expect(doc.manifest.commit).toBe('test-commit');
     expect(doc.manifest.reproduce).toBe(
       'gateflow-sim sweep --spec sweeps/test-sweep.yaml --seeds 1-2 --bootstrap-resamples 50',

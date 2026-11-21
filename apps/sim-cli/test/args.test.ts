@@ -38,6 +38,23 @@ describe('parsePolicies', () => {
     expect(() => parsePolicies('fifo,fifo')).toThrow(UsageError);
     expect(() => parsePolicies(' , ')).toThrow(UsageError);
   });
+
+  it('resolves lane modes (S8) and names the known ones on a mistake', () => {
+    expect(
+      parsePolicies('fifo-manual,fifo-manual@reactive,priority-v3@predict').map((p) => [
+        p.id,
+        p.lanes?.kind ?? null,
+      ]),
+    ).toEqual([
+      ['fifo-manual', null],
+      ['fifo-manual@reactive', 'reactive'],
+      ['priority-v3@predict', 'predict'],
+    ]);
+    expect(() => parsePolicies('fifo@later')).toThrow(
+      'unknown lane mode "later" in "fifo@later" (known: @reactive, @predict)',
+    );
+    expect(() => parsePolicies('nope@reactive')).toThrow(/unknown policy "nope@reactive"/);
+  });
 });
 
 describe('comparisons', () => {
@@ -126,6 +143,39 @@ describe('comparisons', () => {
         .slice(4)
         .map((c) => `${c.candidateId}:${c.referenceId}`),
     ).toEqual([
+      'priority-v2:virtual-fifo',
+      'priority-v2:fifo-manual',
+      'priority-v3:virtual-fifo',
+      'priority-v3:fifo-manual',
+      'priority-v3:priority-v2',
+    ]);
+  });
+
+  it('compares lane modes with the same calls, and GateFlow as a whole with today (S8)', () => {
+    const lanes = parsePolicies(
+      'fifo,fifo-manual,fifo-manual@reactive,fifo-manual@predict,virtual-fifo,priority-v3,priority-v3@predict',
+    );
+    expect(
+      defaultCompare(lanes, 'fifo')
+        .slice(6)
+        .map((c) => `${c.candidateId}:${c.referenceId}`),
+    ).toEqual([
+      'fifo-manual@reactive:fifo-manual',
+      'fifo-manual@predict:fifo-manual',
+      'fifo-manual@predict:fifo-manual@reactive',
+      'priority-v3:virtual-fifo',
+      'priority-v3:fifo-manual',
+      'priority-v3@predict:priority-v3',
+      'priority-v3@predict:fifo-manual@predict',
+      'priority-v3@predict:fifo-manual@reactive',
+    ]);
+    // Without lane modes, the comparisons of S7.
+    const plain = parsePolicies('fifo,fifo-manual,virtual-fifo,priority-v2,priority-v3');
+    expect(defaultCompare(plain, 'fifo').map((c) => `${c.candidateId}:${c.referenceId}`)).toEqual([
+      'fifo-manual:fifo',
+      'virtual-fifo:fifo',
+      'priority-v2:fifo',
+      'priority-v3:fifo',
       'priority-v2:virtual-fifo',
       'priority-v2:fifo-manual',
       'priority-v3:virtual-fifo',

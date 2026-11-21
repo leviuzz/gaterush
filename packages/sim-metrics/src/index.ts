@@ -3,7 +3,10 @@ export {
   ExperimentConfigError,
   assembleExperiment,
   comparisonKey,
+  dayPopulation,
   defaultComparisons,
+  forecastFor,
+  needsForecast,
   normaliseSeeds,
   planExperiment,
   runDay,
@@ -32,7 +35,9 @@ export {
 export type {
   ComparisonMetricSummary,
   ComparisonSummary,
+  ExtraLaneHourBenefit,
   ManifestInput,
+  RatioSummary,
   ResultsDocument,
 } from './results';
 export { renderReport } from './report';
@@ -89,7 +94,14 @@ export {
 } from './html';
 export type { IntervalRow, LineChartOptions, LineSeries, RangeBar } from './html';
 export { renderHtmlReport, renderSweepHtml } from './report-html';
-export { acrossDays, bootstrapMeanInterval, mean, quantileSorted, sortedAscending } from './stats';
+export {
+  acrossDays,
+  bootstrapMeanInterval,
+  bootstrapRatioInterval,
+  mean,
+  quantileSorted,
+  sortedAscending,
+} from './stats';
 export type { AcrossDays, BootstrapOptions } from './stats';
 export { renderDataSources, scenarioProvenance, sourceLabel } from './provenance';
 export type { AirportSummary, ScenarioProvenance, ScheduleSummary } from './provenance';

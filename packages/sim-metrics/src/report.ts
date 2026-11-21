@@ -48,6 +48,35 @@ function policyLabel(policy: Policy): string {
   return `${policy.title}: \`${policy.id}\` ${policy.version}`;
 }
 
+/** True when two policies differ only in how they manage lanes (same selection and queue). */
+function differOnlyInLanes(a: Policy, b: Policy): boolean {
+  return (
+    JSON.stringify(a.selection) === JSON.stringify(b.selection) &&
+    JSON.stringify(a.queue) === JSON.stringify(b.queue)
+  );
+}
+
+function minutesOf(ms: number): string {
+  return num(ms / 60_000, 0);
+}
+
+/** How a policy manages lanes, in a few words. */
+function laneRule(policy: Policy): string {
+  const lanes = policy.lanes;
+  if (lanes === undefined) return 'plan only';
+  if (lanes.kind === 'reactive') {
+    return `supervisor: opens when the queue shows more than ${minutesOf(lanes.openWhenWaitMs)} min, closes below ${minutesOf(lanes.closeWhenWaitMs)} min`;
+  }
+  return `GateFlow: keeps the projected wait below ${minutesOf(lanes.targetWaitMs)} min over the next ${minutesOf(lanes.horizonMs)} min, closes below ${minutesOf(lanes.closeWhenWaitMs)} min`;
+}
+
+interface LaneStaffingAssumption {
+  readonly maxExtraLanes: number;
+  readonly openDelayMinutes: { readonly median: number; readonly sigma: number };
+  readonly minOpenMinutes: number;
+  readonly followShare: number;
+}
+
 const QUEUE_DESCRIPTIONS: Readonly<Record<Policy['queue']['kind'], string>> = {
   physical: 'physical queue: passengers stand in line and step forward when a lane is free',
   virtual:
@@ -153,6 +182,8 @@ export function renderReport(doc: ResultsDocument): string {
     const candidate = policyById(c.candidateId);
     const selection = candidate.selection;
     if (selection.kind === 'fifo') continue;
+    // Same calls, different lanes: nobody is prioritised by the change (see lane management).
+    if (differOnlyInLanes(candidate, policyById(c.referenceId))) continue;
     const m = policyMetrics(candidate.id);
     const bound =
       selection.kind === 'constrained-edf'
@@ -313,6 +344,64 @@ export function renderReport(doc: ResultsDocument): string {
   }
   push('');
 
+  const managed = manifest.policies.filter((p) => p.lanes !== undefined);
+  if (managed.length > 0) {
+    const assumption = (path: string) => doc.assumptions.find((a) => a.path === path)?.value;
+    const staffing = assumption('checkpoint.laneStaffing') as LaneStaffingAssumption | undefined;
+    const lanesAvailable = assumption('checkpoint.lanesAvailable') as number | undefined;
+    push(`## ${section}. Lane management`, '');
+    section++;
+    push(
+      staffing === undefined
+        ? 'The scenario has no staff on call (`checkpoint.laneStaffing`): no lane opens beyond the plan, whatever the policy.'
+        : `Extra lanes open beyond the plan, never more than the ${lanesAvailable ?? 'planned'} lanes the checkpoint has, ` +
+            `and at most ${staffing.maxExtraLanes} at the same time (the staff on call). A decision takes a median of ` +
+            `${num(staffing.openDelayMinutes.median, 0)} min to put a lane into service (varying from day to day), and an extra lane ` +
+            `stays open at least ${num(staffing.minOpenMinutes, 0)} min. The supervisor of today's practice (\`@reactive\`) ` +
+            'decides on the wait the queue shows; GateFlow (`@predict`) projects the queue from the forecast of arrivals ' +
+            `and recommends lanes, and the duty manager follows ${pct(staffing.followShare, 0)} of its recommendations. ` +
+            'Means per day; "most" is the largest value over all simulated days.',
+      '',
+      '| Policy | Rule | Staffed lane-hours | of which extra | Extra lanes opened (closed) | Decisions (followed) | Most lanes open |',
+      '|---|---|---:|---:|---:|---:|---:|',
+    );
+    for (const policy of manifest.policies) {
+      const m = policyMetrics(policy.id);
+      const decisions =
+        policy.lanes === undefined
+          ? '-'
+          : `${num(m.laneDecisions.mean)} (${num(m.laneDecisionsFollowed.mean)})`;
+      const opened =
+        policy.lanes === undefined
+          ? '-'
+          : `${num(m.lanesOpened.mean)} (${num(m.lanesClosed.mean)})`;
+      push(
+        `| \`${policy.id}\` | ${cell(laneRule(policy))} | ${num(m.staffedLaneHours.mean)} | ${num(m.extraLaneHours.mean)} | ${opened} | ${decisions} | ${num(m.maxOpenLanes.max, 0)} |`,
+      );
+    }
+    push('');
+    const laneComparisons = comparisons.filter((c) =>
+      differOnlyInLanes(policyById(c.candidateId), policyById(c.referenceId)),
+    );
+    if (laneComparisons.length > 0) {
+      push(
+        `What the extra lanes buy: each policy compared with the same calls under another lane rule, passenger by passenger. Means per day [${confidence} CI]; the last two columns divide totals over all days by the extra lane-hours (shown when the candidate only adds lane-hours).`,
+        '',
+        '| Comparison | Extra lane-hours | Net flights saved | Change in mean time to screening (min) | Waiting saved per extra lane-hour (person-hours) | Net flights saved per extra lane-hour |',
+        '|---|---:|---:|---:|---:|---:|',
+      );
+      for (const c of laneComparisons) {
+        const per = c.perExtraLaneHour;
+        const ratio = (r: { estimate: number; ciLower: number; ciUpper: number }, digits: number) =>
+          `${num(r.estimate, digits)} [${num(r.ciLower, digits)}, ${num(r.ciUpper, digits)}]`;
+        push(
+          `| \`${c.candidateId}\` vs \`${c.referenceId}\` | ${withCi(c.metrics.extraLaneHoursDelta)} | ${withCi(c.metrics.net)} | ${withCi(c.metrics.waitMeanDeltaMin, 2)} | ${per === undefined ? '-' : ratio(per.waitSavedPersonHours, 1)} | ${per === undefined ? '-' : ratio(per.netMadeFlight, 2)} |`,
+        );
+      }
+      push('');
+    }
+  }
+
   push(
     `## ${section}. Method`,
     '',
@@ -334,17 +423,24 @@ export function renderReport(doc: ResultsDocument): string {
     push(`### ${policyLabel(policy)}`, '');
     const selection = Object.entries(policy.selection).filter(([key]) => key !== 'kind');
     const queue = Object.entries(policy.queue).filter(([key]) => key !== 'kind');
+    const lanes = Object.entries(policy.lanes ?? {}).filter(([key]) => key !== 'kind');
     push(
-      `Selection: \`${policy.selection.kind}\`. Queue: \`${policy.queue.kind}\` (${QUEUE_DESCRIPTIONS[policy.queue.kind]}).`,
+      `Selection: \`${policy.selection.kind}\`. Queue: \`${policy.queue.kind}\` (${QUEUE_DESCRIPTIONS[policy.queue.kind]}).` +
+        (policy.lanes === undefined
+          ? ''
+          : ` Lanes: \`${policy.lanes.kind}\` (${laneRule(policy)}).`),
       '',
     );
-    if (selection.length + queue.length > 0) {
+    if (selection.length + queue.length + lanes.length > 0) {
       push('| Parameter | Value |', '|---|---|');
       for (const [key, value] of selection) {
         push(`| selection.${key} | ${cell(formatPolicyParam(key, value))} |`);
       }
       for (const [key, value] of queue) {
         push(`| queue.${key} | ${cell(formatPolicyParam(key, value))} |`);
+      }
+      for (const [key, value] of lanes) {
+        push(`| lanes.${key} | ${cell(formatPolicyParam(key, value))} |`);
       }
       push(
         '',

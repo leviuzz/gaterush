@@ -17,15 +17,16 @@ import type {
   FlightUpdate,
   GateChange,
   LaneOutage,
+  LaneStaffing,
   Population,
   SimFlight,
   SimPassenger,
 } from '@gateflow/sim-model';
 import { clockMinutes } from './schema';
-import type { Scenario } from './schema';
+import type { LaneStaffingSpec, Scenario } from './schema';
 
 /** Version of the population generator. Bump on any change that can alter generated data. */
-export const GENERATOR_VERSION = '0.5.0';
+export const GENERATOR_VERSION = '0.6.0';
 
 const DOMAIN = labelCode('gateflow.population');
 const KEY = {
@@ -58,7 +59,16 @@ const KEY = {
   laneOutageLength: labelCode('day.laneOutageLength'),
   feedOutageGap: labelCode('day.feedOutageGap'),
   feedOutageLength: labelCode('day.feedOutageLength'),
+  // Added in generator 0.6.0 (extra lanes): the day's lane openings and the duty manager's answers.
+  laneOpenDelay: labelCode('day.laneOpenDelay'),
+  laneFollow: labelCode('day.laneFollow'),
 } as const;
+
+/**
+ * Decisions about extra lanes drawn per day. A policy that decides more often uses them again
+ * from the first (a busy day sees a few dozen at most).
+ */
+export const LANE_DECISIONS_PER_DAY = 64;
 
 /** A flight of the design day, with the descriptive attributes used to generate passengers. */
 export interface ScheduledFlight extends SimFlight {
@@ -337,12 +347,26 @@ export function generatePopulation(scenario: Scenario, seed: number): Population
     ),
   );
 
+  const laneSchedule = checkpoint.laneSchedule.value.map(({ from, lanes }) => ({
+    fromMs: minutesToMs(clockMinutes(from)),
+    lanes,
+  }));
+  const staffingSpec = checkpoint.laneStaffing?.value;
+  const staffing =
+    staffingSpec === undefined
+      ? undefined
+      : laneStaffingOf(
+          seed,
+          staffingSpec,
+          Math.max(
+            checkpoint.lanesAvailable?.value ?? 0,
+            ...laneSchedule.map((entry) => entry.lanes),
+          ),
+        );
+
   return {
     checkpoint: {
-      laneSchedule: checkpoint.laneSchedule.value.map(({ from, lanes }) => ({
-        fromMs: minutesToMs(clockMinutes(from)),
-        lanes,
-      })),
+      laneSchedule,
       serviceRatePerLanePerHour: 3600 / checkpoint.serviceTimeMeanSeconds.value,
       processEstimateMs: serviceMeanMs,
     },
@@ -350,6 +374,42 @@ export function generatePopulation(scenario: Scenario, seed: number): Population
     passengers,
     ...(laneOutages.length > 0 ? { laneOutages } : {}),
     ...(feedOutages.length > 0 ? { feedOutages } : {}),
+    ...(staffing === undefined ? {} : { staffing }),
+  };
+}
+
+/**
+ * The staff who can open extra lanes on one day: the time each decision to open takes to put a
+ * lane into service (log-normal around the median, which is also the system's estimate), and
+ * whether the duty manager follows each of GateFlow's recommendations. The n-th decision draws
+ * from streams of its own, so every policy meets the same delays and answers in the same order.
+ */
+function laneStaffingOf(
+  seed: number,
+  spec: LaneStaffingSpec,
+  lanesAvailable: number,
+): LaneStaffing {
+  const openDelaysMs: number[] = [];
+  const follows: boolean[] = [];
+  for (let i = 0; i < LANE_DECISIONS_PER_DAY; i++) {
+    openDelaysMs.push(
+      minutesToMs(
+        lognormalFromMedian(
+          streamFor(seed, [DOMAIN, KEY.laneOpenDelay, i]),
+          spec.openDelayMinutes.median,
+          spec.openDelayMinutes.sigma,
+        ),
+      ),
+    );
+    follows.push(bernoulli(streamFor(seed, [DOMAIN, KEY.laneFollow, i]), spec.followShare));
+  }
+  return {
+    lanesAvailable,
+    maxExtraLanes: spec.maxExtraLanes,
+    openDelayEstimateMs: minutesToMs(spec.openDelayMinutes.median),
+    minOpenMs: minutesToMs(spec.minOpenMinutes),
+    openDelaysMs,
+    follows,
   };
 }
 

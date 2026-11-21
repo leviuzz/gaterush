@@ -15,10 +15,10 @@ import { comparisonKey } from './experiment';
 import type { ExperimentResult, PolicyComparison, SeedResult } from './experiment';
 import { scenarioProvenance } from './provenance';
 import type { ScenarioProvenance } from './provenance';
-import { acrossDays, bootstrapMeanInterval } from './stats';
+import { acrossDays, bootstrapMeanInterval, bootstrapRatioInterval } from './stats';
 import type { AcrossDays } from './stats';
 
-export const RESULTS_SCHEMA = 'gateflow.sim.results/6';
+export const RESULTS_SCHEMA = 'gateflow.sim.results/7';
 
 export const DISCLAIMER =
   'SIMULATED RESULTS ON SYNTHETIC OR HYPOTHETICAL DATA. These numbers are model outputs, not ' +
@@ -26,7 +26,8 @@ export const DISCLAIMER =
 
 /** Simplifications of the current model version, reported with every result. */
 export const MODEL_LIMITATIONS: readonly string[] = [
-  'Single checkpoint. Lanes follow a planned schedule, minus unplanned outages when the scenario has them: a lane going out of service finishes its passenger first, at least one lane always stays open, and the system knows at once. No lanes are opened in reaction to the queue.',
+  'Single checkpoint. Lanes follow a planned schedule, minus unplanned outages when the scenario has them: a lane going out of service finishes its passenger first, at least one lane always stays open, and the system knows at once.',
+  "Extra lanes (policies with lane management, S8) open beyond the plan only up to the lanes the checkpoint has and the staff on call. A decision to open takes the day's delay to put a lane into service, an extra lane stays open for a minimum time, and staff go back when the plan itself needs the lane. Staff on call have no other duties in the model, and their cost is counted as extra lane-hours only. The supervisor of today's practice decides on the wait the queue shows; GateFlow recommends on a forecast of arrivals (the average of 50 other simulated days with the same flights, scaled by the arrivals of the last hour), and the duty manager follows each recommendation with the scenario's probability.",
   'Every passenger uses the virtual queue when one is simulated: no opt-outs, no passengers without a phone or a view of the displays.',
   'Response times and absences are drawn per party from assumed distributions. A second call does not make an absent passenger come sooner, the prepare window does not shorten response times, and a passenger who has been at the access point once answers later calls at once.',
   'The access point never becomes a bottleneck, and the walk from the access point to the lanes is part of the response time.',
@@ -66,6 +67,25 @@ export interface ComparisonSummary {
   /** Pooled over days: at-risk passengers who reached the gate in time / at-risk passengers. */
   readonly atRiskReachedShareReference: number;
   readonly atRiskReachedShareCandidate: number;
+  /**
+   * What each extra lane-hour of the candidate buys (S8), as ratios of totals over days with a
+   * bootstrap interval. Absent unless the candidate only adds lane-hours, enough to estimate it.
+   */
+  readonly perExtraLaneHour?: ExtraLaneHourBenefit;
+}
+
+/** A ratio of totals over days, with its bootstrap confidence interval. */
+export interface RatioSummary {
+  readonly estimate: number;
+  readonly ciLower: number;
+  readonly ciUpper: number;
+}
+
+export interface ExtraLaneHourBenefit {
+  /** Person-hours of waiting saved per extra lane-hour. */
+  readonly waitSavedPersonHours: RatioSummary;
+  /** People who made their flight (net) per extra lane-hour. */
+  readonly netMadeFlight: RatioSummary;
 }
 
 export interface ResultsDocument {
@@ -199,6 +219,24 @@ export function buildResults(experiment: ExperimentResult, input: ManifestInput)
       metrics[metric] = { ...acrossDays(values), ciLower: interval.lower, ciUpper: interval.upper };
     }
     const cohort = rows.reduce((a, r) => a + r.atRiskCohort, 0);
+    const lanesAdded = rows.map((r) => r.extraLaneHoursDelta);
+    const ratio = (numerators: readonly number[], name: string): RatioSummary | null => {
+      const interval = bootstrapRatioInterval(numerators, lanesAdded, {
+        ...bootstrap,
+        key: `${key}:per-extra-lane-hour:${name}`,
+      });
+      return interval === null
+        ? null
+        : { estimate: interval.estimate, ciLower: interval.lower, ciUpper: interval.upper };
+    };
+    const waitSaved = ratio(
+      rows.map((r) => -r.waitDeltaPersonHours),
+      'waitSavedPersonHours',
+    );
+    const netMade = ratio(
+      rows.map((r) => r.net),
+      'netMadeFlight',
+    );
     comparisons[key] = {
       candidateId: comparison.candidateId,
       referenceId: comparison.referenceId,
@@ -209,6 +247,10 @@ export function buildResults(experiment: ExperimentResult, input: ManifestInput)
         cohort === 0 ? 0 : rows.reduce((a, r) => a + r.atRiskReachedReference, 0) / cohort,
       atRiskReachedShareCandidate:
         cohort === 0 ? 0 : rows.reduce((a, r) => a + r.atRiskReachedCandidate, 0) / cohort,
+      // Only when the candidate adds lane-hours and never takes any away.
+      ...(waitSaved === null || netMade === null || lanesAdded.some((h) => h < 0)
+        ? {}
+        : { perExtraLaneHour: { waitSavedPersonHours: waitSaved, netMadeFlight: netMade } }),
     };
   }
 

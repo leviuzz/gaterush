@@ -147,16 +147,24 @@ defaults:
       prepareWindowSize: 10
       callAheadSeconds: 180
       responseEstimateSeconds: 90
+      laneTargetWaitMinutes: 10
+      laneHorizonMinutes: 45
     source: SYNTHETIC
     note: >-
-      GateFlow defaults (priority v3 0.2.0 and the virtual queue of ADR-017), to be approved by the
-      airport for this checkpoint.
+      GateFlow defaults (priority v3 0.2.0, the virtual queue of ADR-017 and the lane
+      recommendations of ADR-039), to be approved by the airport for this checkpoint.
   todayPractice:
-    value: { callWindowMinutes: 20, announcementIntervalMinutes: 5 }
+    value:
+      callWindowMinutes: 20
+      announcementIntervalMinutes: 5
+      laneOpenWaitMinutes: 10
+      laneCloseWaitMinutes: 2
     source: SYNTHETIC
     note: >-
       Baseline A' as in ADR-022: every 5 minutes staff call the flights closing within 20 minutes.
-      To replace with how staff handle urgent passengers at this airport.
+      With a supervisor (@reactive, ADR-039), an extra lane opens when the queue shows more than
+      10 minutes and closes below 2. To replace with how this airport handles urgent passengers
+      and long queues.
   fairnessTarget:
     value: { maxShareDelayedOver5Min: 0.001 }
     source: SYNTHETIC
@@ -169,15 +177,29 @@ checkpoints:
     scenario:
       checkpoint:
         lanesAvailable:
-          value: 12
+          value: 14
           source: SYNTHETIC
-          note: Lanes the checkpoint has (assumed).
+          note: >-
+            Lanes the checkpoint has (assumed): the roster plans at most 12, the others open only as
+            extra lanes.
         lanePlanRule:
-          value: { utilisation: 0.9, intervalMinutes: 60, minLanes: 2, planningDays: 100 }
+          value:
+            { utilisation: 0.9, intervalMinutes: 60, minLanes: 2, maxLanes: 12, planningDays: 100 }
           source: SYNTHETIC
           note: >-
             Assumed planning rule, not the airport's: every hour, enough lanes to screen the
-            expected arrivals at 90% utilisation, at least 2 and at most the 12 lanes.
+            expected arrivals at 90% utilisation, at least 2 and at most 12 lanes.
+        laneStaffing:
+          value:
+            maxExtraLanes: 2
+            openDelayMinutes: { median: 10, sigma: 0.4 }
+            minOpenMinutes: 30
+            followShare: 0.8
+          source: SYNTHETIC
+          note: >-
+            Assumed: staff on call can open 2 extra lanes beyond the plan, about 10 minutes
+            after the decision (5 to 20 on most days); an extra lane stays open at least 30
+            minutes; the duty manager follows 4 recommendations of GateFlow out of 5.
         serviceTimeMeanSeconds:
           value: 24
           source: SYNTHETIC

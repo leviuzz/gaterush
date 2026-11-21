@@ -156,9 +156,31 @@ const LanePlanRuleSchema = z.strictObject({
   utilisation: z.number().min(0.3).max(1.5),
   intervalMinutes: z.union([z.literal(15), z.literal(30), z.literal(60), z.literal(120)]),
   minLanes: z.number().int().min(1).max(64),
+  /**
+   * Most lanes the roster plans (default: every lane the checkpoint has). Lanes above it can only
+   * be opened as extra lanes during the day (`laneStaffing`).
+   */
+  maxLanes: z.number().int().min(1).max(64).optional(),
   planningDays: z.number().int().min(10).max(1000),
 });
 export type LanePlanRule = z.infer<typeof LanePlanRuleSchema>;
+
+/**
+ * Extra lanes beyond the plan (S8) and the people who decide them: how many extra lanes the staff
+ * on call can open at the same time, how long a lane takes to screen after the decision
+ * (log-normal), how long it then stays open at least, and the share of GateFlow's recommendations
+ * the duty manager follows. Without it no lane opens beyond the plan.
+ */
+const LaneStaffingSchema = z.strictObject({
+  maxExtraLanes: z.number().int().min(0).max(16),
+  openDelayMinutes: z.strictObject({
+    median: z.number().positive().max(120),
+    sigma: z.number().min(0).max(2),
+  }),
+  minOpenMinutes: z.number().min(0).max(480),
+  followShare: z.number().min(0).max(1),
+});
+export type LaneStaffingSpec = z.infer<typeof LaneStaffingSchema>;
 
 /**
  * GateFlow settings approved for this checkpoint. They replace the parameters of the policy
@@ -177,6 +199,9 @@ const GateflowSettingsSchema = z
     prepareWindowSize: z.number().int().min(0).max(1000).optional(),
     callAheadSeconds: z.number().min(0).max(3600).optional(),
     responseEstimateSeconds: z.number().min(0).max(3600).optional(),
+    /** Lane recommendations (S8): the wait GateFlow keeps below, over how far ahead it looks. */
+    laneTargetWaitMinutes: z.number().positive().max(120).optional(),
+    laneHorizonMinutes: z.number().min(1).max(240).optional(),
   })
   .refine(
     (s) =>
@@ -190,12 +215,24 @@ export type GateflowSettings = z.infer<typeof GateflowSettingsSchema>;
 /**
  * Today's practice at this checkpoint, as modelled by baseline A' (`fifo-manual`): staff
  * announce, every `announcementIntervalMinutes`, the flights whose boarding closes within
- * `callWindowMinutes`.
+ * `callWindowMinutes`. With lane management (S8, `@reactive`), the supervisor opens an extra lane
+ * when the queue shows a wait above `laneOpenWaitMinutes` and closes one below
+ * `laneCloseWaitMinutes`.
  */
-const TodayPracticeSchema = z.strictObject({
-  callWindowMinutes: z.number().positive().max(180),
-  announcementIntervalMinutes: z.number().positive().max(60),
-});
+const TodayPracticeSchema = z
+  .strictObject({
+    callWindowMinutes: z.number().positive().max(180),
+    announcementIntervalMinutes: z.number().positive().max(60),
+    laneOpenWaitMinutes: z.number().positive().max(120).optional(),
+    laneCloseWaitMinutes: z.number().min(0).max(120).optional(),
+  })
+  .refine(
+    (p) =>
+      p.laneOpenWaitMinutes === undefined ||
+      p.laneCloseWaitMinutes === undefined ||
+      p.laneCloseWaitMinutes < p.laneOpenWaitMinutes,
+    { message: 'laneCloseWaitMinutes must be below laneOpenWaitMinutes' },
+  );
 export type TodayPractice = z.infer<typeof TodayPracticeSchema>;
 
 /**
@@ -466,7 +503,10 @@ function checkLanes(
   checkpoint: {
     readonly lanesAvailable?: { readonly value: number } | undefined;
     readonly laneSchedule?: { readonly value: readonly { readonly lanes: number }[] } | undefined;
-    readonly lanePlanRule?: { readonly value: { readonly minLanes: number } } | undefined;
+    readonly lanePlanRule?:
+      | { readonly value: { readonly minLanes: number; readonly maxLanes?: number | undefined } }
+      | undefined;
+    readonly laneStaffing?: unknown;
   },
   ctx: IssueSink,
 ): void {
@@ -478,20 +518,32 @@ function checkLanes(
       message: 'give checkpoint.laneSchedule, or checkpoint.lanePlanRule to plan it',
     });
   }
-  if (checkpoint.lanePlanRule !== undefined && available === undefined) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['checkpoint', 'lanesAvailable'],
-      message:
-        'checkpoint.lanePlanRule needs checkpoint.lanesAvailable (the lanes the checkpoint has)',
-    });
+  for (const field of ['lanePlanRule', 'laneStaffing'] as const) {
+    if (checkpoint[field] !== undefined && available === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['checkpoint', 'lanesAvailable'],
+        message: `checkpoint.${field} needs checkpoint.lanesAvailable (the lanes the checkpoint has)`,
+      });
+    }
   }
   if (available === undefined) return;
-  if (checkpoint.lanePlanRule !== undefined && checkpoint.lanePlanRule.value.minLanes > available) {
+  const rule = checkpoint.lanePlanRule?.value;
+  if (rule !== undefined && rule.minLanes > Math.min(available, rule.maxLanes ?? available)) {
     ctx.addIssue({
       code: 'custom',
       path: ['checkpoint', 'lanePlanRule', 'value', 'minLanes'],
-      message: `minLanes exceeds the ${available} lanes the checkpoint has`,
+      message:
+        rule.minLanes > available
+          ? `minLanes exceeds the ${available} lanes the checkpoint has`
+          : 'minLanes exceeds maxLanes',
+    });
+  }
+  if (rule?.maxLanes !== undefined && rule.maxLanes > available) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['checkpoint', 'lanePlanRule', 'value', 'maxLanes'],
+      message: `maxLanes exceeds the ${available} lanes the checkpoint has`,
     });
   }
   checkpoint.laneSchedule?.value.forEach((entry, i) => {
@@ -539,6 +591,8 @@ export const ScenarioSchema = z
       laneSchedule: param(LaneScheduleSchema).optional(),
       /** How the lanes are planned when `laneSchedule` is not given. */
       lanePlanRule: param(LanePlanRuleSchema).optional(),
+      /** Extra lanes beyond the plan and who decides them (S8; none when absent). */
+      laneStaffing: param(LaneStaffingSchema).optional(),
       serviceTimeMeanSeconds: param(z.number().positive().max(3600)),
       serviceTimeCv: param(z.number().min(0).max(3)),
     }),

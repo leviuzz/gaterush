@@ -68,6 +68,12 @@ function run(outcomes: PassengerOutcome[], extra: Partial<RunResult['stats']> = 
       maxWaiting: 7,
       standingAreaMs: 46 * MIN,
       maxStanding: 3,
+      extraLaneMs: 0,
+      laneDecisions: 0,
+      laneDecisionsFollowed: 0,
+      lanesOpened: 0,
+      lanesClosed: 0,
+      maxOpenLanes: 1,
       ...extra,
     },
   };

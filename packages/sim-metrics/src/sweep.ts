@@ -2,12 +2,18 @@ import { MS_PER_MINUTE } from '@gateflow/domain';
 import type { ClassificationParams, ConstrainedEdfSelection } from '@gateflow/priority-engine';
 import type { Policy } from '@gateflow/queue-core';
 import { simulateCheckpoint } from '@gateflow/sim-model';
-import type { RunResult } from '@gateflow/sim-model';
-import { canonicalJson, generatePopulation, parseScenario } from '@gateflow/sim-scenarios';
+import type { ArrivalForecast, RunResult } from '@gateflow/sim-model';
+import { canonicalJson, parseScenario } from '@gateflow/sim-scenarios';
 import type { Scenario } from '@gateflow/sim-scenarios';
 import { comparisonDayMetrics, policyDayMetrics } from './day-metrics';
 import type { ComparisonDayMetrics, PolicyDayMetrics } from './day-metrics';
-import { ExperimentConfigError, comparisonKey, normaliseSeeds } from './experiment';
+import {
+  ExperimentConfigError,
+  comparisonKey,
+  dayPopulation,
+  forecastFor,
+  normaliseSeeds,
+} from './experiment';
 import type { BootstrapSettings, PolicyComparison } from './experiment';
 
 /**
@@ -34,6 +40,11 @@ export const SWEEP_PARAMETERS = [
   'laneOutagesPerDay',
   'feedOutagesPerDay',
   'feedOutageMedianMinutes',
+  // S8: GateFlow's target wait for extra lanes (candidate), and the staff on call (scenario).
+  'laneTargetWaitMinutes',
+  'maxExtraLanes',
+  'laneOpenDelayMinutes',
+  'laneFollowShare',
 ] as const;
 export type SweepParameter = (typeof SWEEP_PARAMETERS)[number];
 
@@ -289,6 +300,47 @@ export function applySetting(
           medianMinutes: requireNumber(parameter, value),
         };
       });
+    case 'laneTargetWaitMinutes': {
+      const target = minutes(parameter, value);
+      return {
+        scenario,
+        policies: policies.map((p) => {
+          if (p.id !== candidateId) return p;
+          if (p.lanes?.kind !== 'predict') {
+            throw new SweepConfigError(
+              `candidate ${candidateId} does not recommend lanes from a forecast (@predict)`,
+            );
+          }
+          if (target <= p.lanes.closeWhenWaitMs) {
+            throw new SweepConfigError(
+              `laneTargetWaitMinutes must exceed the wait below which a lane closes`,
+            );
+          }
+          return { ...p, lanes: { ...p.lanes, targetWaitMs: target } };
+        }),
+      };
+    }
+    case 'maxExtraLanes':
+    case 'laneOpenDelayMinutes':
+    case 'laneFollowShare': {
+      const n =
+        parameter === 'maxExtraLanes'
+          ? requireInteger(parameter, value, 0)
+          : requireNumber(parameter, value);
+      return days((copy) => {
+        const staffing = copy.checkpoint.laneStaffing;
+        if (staffing === undefined) {
+          throw new SweepConfigError(`${parameter} needs checkpoint.laneStaffing in the scenario`);
+        }
+        const spec = staffing.value;
+        staffing.value =
+          parameter === 'maxExtraLanes'
+            ? { ...spec, maxExtraLanes: n }
+            : parameter === 'laneFollowShare'
+              ? { ...spec, followShare: n }
+              : { ...spec, openDelayMinutes: { ...spec.openDelayMinutes, median: n } };
+      });
+    }
   }
 }
 
@@ -320,6 +372,8 @@ export interface SweepDayJob {
   readonly runs: readonly (readonly Policy[])[];
   readonly comparisons: readonly PolicyComparison[];
   readonly classification: ClassificationParams;
+  /** Arrival forecast of the variant's scenario, when a policy manages lanes from one (S8). */
+  readonly forecast?: ArrivalForecast;
 }
 
 export interface SweepRunDay {
@@ -415,13 +469,14 @@ export function planSweep(config: SweepConfig): SweepPlan {
   };
 }
 
-/** The job of one variant, for {@link runSweepDay}. */
+/** The job of one variant, for {@link runSweepDay} (with its forecast when a policy needs one). */
 export function sweepDayJob(config: SweepConfig, variant: SweepVariant): SweepDayJob {
   return {
     scenario: variant.scenario,
     runs: variant.runs,
     comparisons: config.comparisons,
     classification: config.classification,
+    ...forecastFor(variant.scenario, variant.runs.flat()),
   };
 }
 
@@ -430,7 +485,7 @@ export function sweepDayJob(config: SweepConfig, variant: SweepVariant): SweepDa
  * that appears in several sets (e.g. the baselines) is simulated once. Pure and deterministic.
  */
 export function runSweepDay(job: SweepDayJob, seed: number): SweepDayResult {
-  const population = generatePopulation(job.scenario, seed);
+  const population = dayPopulation(job.scenario, job.forecast, seed);
   const cache = new Map<string, { run: RunResult; metrics: PolicyDayMetrics }>();
   const simulated = (policy: Policy) => {
     const key = canonicalJson(policy);

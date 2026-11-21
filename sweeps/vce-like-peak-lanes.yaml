@@ -1,0 +1,61 @@
+# GateFlow sensitivity sweep (schema version 1).
+#
+# SYNTHETIC: every number comes from the synthetic library scenario vce-like-peak-day and its
+# airport configuration. Results are simulated and must never be presented as operational evidence.
+
+schemaVersion: 1
+id: vce-like-peak-lanes
+title: Extra lanes on the VCE-like peak day, recommended by GateFlow or opened by a supervisor
+description: >-
+  What do lanes opened during the day buy, and on what does it depend? Today's practice with staff
+  calls (fifo-manual) runs with the plan only, with a supervisor who opens a lane when the queue
+  is long (@reactive), and with GateFlow's recommendations from the forecast of arrivals
+  (@predict). The plan of the day is made for a screening time of 24 seconds per person; the first
+  two curves make the day harder than planned (slower screening, a roster one lane short). The
+  other curves start from a day when screening takes 26 seconds (8% slower than planned) and vary
+  one assumption at a time: lane outages, the staff on call (base 2 extra lanes), the time to open
+  a lane (base about 10 minutes), the share of recommendations followed (base 4 out of 5) and
+  GateFlow's target wait (base 10 minutes).
+scenario: ../scenarios/vce-like-peak-day.yaml
+seeds: 1-200
+policies: [fifo-manual, fifo-manual@reactive, fifo-manual@predict]
+baseline: fifo-manual
+candidate: fifo-manual@predict
+compare:
+  - fifo-manual@predict:fifo-manual
+  - fifo-manual@predict:fifo-manual@reactive
+  - fifo-manual@reactive:fifo-manual
+dimensions:
+  - id: screening-time
+    title: Screening slower than planned
+    parameter: serviceTimeMeanSeconds
+    values: [24, 25, 26, 27]
+  - id: roster
+    title: A roster one lane short
+    parameter: lanesDelta
+    values: [-1, 0]
+  - id: outages
+    title: Lane outages on a day of slower screening
+    parameter: laneOutagesPerDay
+    base: [{ parameter: serviceTimeMeanSeconds, value: 26 }]
+    values: [0, 1, 2, 4]
+  - id: staff
+    title: Staff on call on a day of slower screening
+    parameter: maxExtraLanes
+    base: [{ parameter: serviceTimeMeanSeconds, value: 26 }]
+    values: [0, 1, 2, 3]
+  - id: open-delay
+    title: Time to open a lane on a day of slower screening
+    parameter: laneOpenDelayMinutes
+    base: [{ parameter: serviceTimeMeanSeconds, value: 26 }]
+    values: [5, 10, 15, 20]
+  - id: follow
+    title: Recommendations followed on a day of slower screening
+    parameter: laneFollowShare
+    base: [{ parameter: serviceTimeMeanSeconds, value: 26 }]
+    values: [0.4, 0.6, 0.8, 1]
+  - id: target
+    title: GateFlow's target wait on a day of slower screening
+    parameter: laneTargetWaitMinutes
+    base: [{ parameter: serviceTimeMeanSeconds, value: 26 }]
+    values: [5, 8, 10, 15]

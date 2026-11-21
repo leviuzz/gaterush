@@ -1092,3 +1092,101 @@ founder on 2026-11-21 together with all of its recommendations.
 - **Consequences:**
   - Airport data goes into `airports/private/` and `scenarios/private/`, which git ignores.
   - The reports of S7 remain valid: the library's results do not change.
+
+## ADR-039: Extra lanes during the day: today's supervisor and GateFlow's recommendations, with an operator model
+
+- **Status:** Accepted (2026-11-22). Slice S8. Queue core 0.6.0, model 0.6.0, population
+  generator 0.6.0, results schema 7, sweep schema 3, metrics and CLI 0.8.0. The scenario schema
+  stays at version 5: every new field is optional.
+- **Context:**
+  - Until S7 lanes only followed the plan. Just beyond the planned capacity the S7 plans
+    collapsed, where a real airport would open lanes (S7 findings).
+  - The product promises lane-opening recommendations with logged decisions (FR-19, GateFlow
+    Predict).
+  - People decide physical actions and the system proposes (principle 5 of the product
+    requirements). The model therefore needs staff who take time to open a lane and a duty
+    manager who may not follow a recommendation.
+- **Decision:**
+  - **Lane management is a mode of a policy** (`Policy.lanes`), available for every preset as
+    `<policy>@reactive` and `<policy>@predict`. The calls (selection and queue) do not change, so
+    `X@mode vs X` measures what the extra lanes alone buy.
+  - **Physical lanes, roster and staff on call** (scenario, all optional):
+    - `checkpoint.lanesAvailable`: the lanes the checkpoint has; no lane opens beyond them;
+    - `checkpoint.lanePlanRule.maxLanes`: the most lanes the roster plans; the lanes between it
+      and `lanesAvailable` open only as extra lanes;
+    - `checkpoint.laneStaffing`: `maxExtraLanes` (extra lanes open at the same time),
+      `openDelayMinutes` (median and sigma of a log-normal time from the decision to the first
+      passenger screened), `minOpenMinutes` (an extra lane stays open at least this long) and
+      `followShare` (the share of GateFlow's recommendations the duty manager follows).
+    - The day's open delays and the duty manager's answers are drawn per decision (64 per day)
+      on streams of their own. Every policy meets the same delays and answers in the same order,
+      and the rest of the population is unchanged.
+  - **Today's supervisor** (`@reactive`): every 5 minutes, looks at the wait the queue shows (the
+    people waiting divided by the throughput of the open lanes). Opens one lane above 10 minutes
+    and closes one below 2 minutes once its minimum time is over. Waits 10 minutes after a
+    decision. Lanes already decided count against the staff on call. The supervisor's decisions
+    are always carried out. The thresholds come from `todayPractice.laneOpenWaitMinutes` and
+    `laneCloseWaitMinutes`.
+  - **GateFlow's recommendations** (`@predict`):
+    - Every 5 minutes it projects the queue minute by minute over the next 45 minutes, from the
+      people waiting and a forecast of arrivals.
+    - It recommends the fewest extra lanes that keep the projected wait below 10 minutes. The
+      lanes count as ready after the estimated delay (the median).
+    - It recommends closing a lane when the projection without it stays below 3 minutes.
+    - The duty manager follows each recommendation with the scenario's probability. A
+      recommendation not followed is made again after the 10-minute wait if still needed.
+    - The target and the horizon come from `gateflow.laneTargetWaitMinutes` and
+      `laneHorizonMinutes`.
+  - **The forecast** is the average arrival profile per minute of 50 simulated days that are not
+    in the reports (seeds from 1,000,001), as an airport forecasts from past days with the same
+    flights. It knows neither the day's load factors nor its disruptions. It is scaled by the
+    arrivals of the last hour, between 0.5 and 2 times.
+  - When the plan itself needs a lane (the roster grows), the staff of an extra lane go back.
+  - **Metrics.**
+    - Per policy: extra lane-hours, decisions and those followed, lanes opened and closed, most
+      lanes open.
+    - Per comparison: the change in extra lane-hours and in waiting (person-hours).
+    - Per extra lane-hour, as ratios of totals over days with a bootstrap interval: the waiting
+      saved and the net flights made. They are given only when the candidate adds lane-hours and
+      never removes any.
+  - **Reports and sweeps.**
+    - Reports have a "Lane management" section.
+    - Sweeps vary `laneTargetWaitMinutes` (the candidate), `maxExtraLanes`,
+      `laneOpenDelayMinutes` and `laneFollowShare` (the scenario), and show the extra lane-hours.
+  - **Default comparisons.**
+    - `X@mode` with `X`.
+    - `X@predict` with `X@reactive`.
+    - A priority policy with `@predict` with `fifo-manual@reactive`: GateFlow as a whole against
+      today's practice as a whole.
+    - The other default references manage lanes as the candidate does.
+  - **Library airports** (synthetic):
+    - VCE-like: 14 lanes, a roster of at most 12, 2 extra lanes;
+    - TSF-like: 6 lanes, roster 5, 1 extra lane;
+    - MX-like hub: 5 lanes, roster 4, 1 extra lane;
+    - all three: about 10 minutes to open a lane (sigma 0.4), at least 30 minutes open, 4
+      recommendations out of 5 followed.
+- **Alternatives considered:**
+  - **Lanes as a property of the day** (a day with a supervisor). Rejected: a comparison would
+    then mix days instead of policies.
+  - **A forecast from the day itself, or from days 1 to 50.** Rejected: the first leaks the
+    future, the second puts the simulated days 1-50 into their own forecast.
+  - **A Monte Carlo forecast from the live state** (the design of GateFlow Predict, M4). Heavier.
+    The projection is enough for a decision every 5 minutes, and it explains itself ("the queue
+    would reach 14 minutes by 07:40").
+  - **Counting the last passenger of a closing lane as extra time.** Not done: it is counted in
+    the staffed lane-hours, not in the extra lane-hours (at most one screening time per closing).
+- **Evidence** (tests):
+  - a hand-computed case of the supervisor;
+  - GateFlow opens before the wave of arrivals, and an ignored recommendation leaves the plan;
+  - waiting and pending lanes, minimum time, staff going back;
+  - 200 random cases: never more lanes than the checkpoint and the staff allow, everybody
+    screened, and without staff on call exactly the run of the plan;
+  - the library days give the S7 results without lane management;
+  - the golden files differ only by the added fields and the versions.
+- **Consequences:**
+  - The supervisor sees the exact wait the queue implies, and every 5 minutes. As baseline A',
+    it is an idealised practice, so the margin of GateFlow over it is, in this respect, a lower
+    bound.
+  - Staff on call have no other duties, and an extra lane costs only its lane-hours, which the
+    airport prices.
+  - Results: [docs/reports/slice-8](docs/reports/slice-8/README.md).

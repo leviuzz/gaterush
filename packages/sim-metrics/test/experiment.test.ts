@@ -194,14 +194,14 @@ describe('results document', () => {
       comparisons: COMPARISONS,
       versions: {
         engine: '0.5.0',
-        queueCore: '0.5.0',
-        model: '0.5.0',
+        queueCore: '0.6.0',
+        model: '0.6.0',
         kernel: '0.1.0',
-        populationGenerator: '0.5.0',
+        populationGenerator: '0.6.0',
         scenarioSchema: 5,
       },
     });
-    expect(doc.schema).toBe('gateflow.sim.results/6');
+    expect(doc.schema).toBe('gateflow.sim.results/7');
     expect(doc.manifest.reproduce).toContain(`--policies ${POLICY_IDS.join(',')}`);
     expect(doc.manifest.reproduce).toContain(
       `--compare ${COMPARISONS.map((c) => `${c.candidateId}:${c.referenceId}`).join(',')}`,

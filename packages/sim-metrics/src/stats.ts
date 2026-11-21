@@ -88,3 +88,53 @@ export function bootstrapMeanInterval(
     upper: quantileSorted(means, 1 - alpha / 2),
   };
 }
+
+/**
+ * Percentile bootstrap confidence interval for a ratio of totals over days, such as the waiting
+ * saved per extra lane-hour: days are resampled in pairs, and each resample gives
+ * sum(numerators) / sum(denominators). `null` when some resample has no positive denominator (the
+ * ratio is not defined), so it is only reported when every resample has one.
+ */
+export function bootstrapRatioInterval(
+  numerators: readonly number[],
+  denominators: readonly number[],
+  options: BootstrapOptions,
+): { estimate: number; lower: number; upper: number } | null {
+  const n = numerators.length;
+  if (n === 0 || denominators.length !== n) {
+    throw new RangeError('a ratio needs as many denominators as numerators, at least one');
+  }
+  if (!Number.isInteger(options.resamples) || options.resamples < 1) {
+    throw new RangeError('resamples must be a positive integer');
+  }
+  if (!(options.confidence > 0 && options.confidence < 1)) {
+    throw new RangeError('confidence must be in (0, 1)');
+  }
+  let totalNumerator = 0;
+  let totalDenominator = 0;
+  for (let i = 0; i < n; i++) {
+    totalNumerator += numerators[i] ?? 0;
+    totalDenominator += denominators[i] ?? 0;
+  }
+  if (!(totalDenominator > 0)) return null;
+  const rng = streamFor(options.seed, [labelCode('gateflow.bootstrap'), labelCode(options.key)]);
+  const ratios = new Float64Array(options.resamples);
+  for (let b = 0; b < options.resamples; b++) {
+    let num = 0;
+    let den = 0;
+    for (let i = 0; i < n; i++) {
+      const j = Math.floor(rng.nextFloat() * n);
+      num += numerators[j] ?? 0;
+      den += denominators[j] ?? 0;
+    }
+    if (!(den > 0)) return null;
+    ratios[b] = num / den;
+  }
+  ratios.sort();
+  const alpha = 1 - options.confidence;
+  return {
+    estimate: totalNumerator / totalDenominator,
+    lower: quantileSorted(ratios, alpha / 2),
+    upper: quantileSorted(ratios, 1 - alpha / 2),
+  };
+}

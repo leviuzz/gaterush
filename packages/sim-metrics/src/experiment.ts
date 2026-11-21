@@ -1,8 +1,8 @@
 import type { ClassificationParams } from '@gateflow/priority-engine';
 import type { Policy } from '@gateflow/queue-core';
 import { simulateCheckpoint } from '@gateflow/sim-model';
-import type { RunResult } from '@gateflow/sim-model';
-import { generatePopulation } from '@gateflow/sim-scenarios';
+import type { ArrivalForecast, Population, RunResult } from '@gateflow/sim-model';
+import { arrivalForecast, generatePopulation } from '@gateflow/sim-scenarios';
 import type { Scenario } from '@gateflow/sim-scenarios';
 import { comparisonDayMetrics, dayDisruptions, policyDayMetrics } from './day-metrics';
 import type { ComparisonDayMetrics, DayDisruptions, PolicyDayMetrics } from './day-metrics';
@@ -131,6 +131,31 @@ export interface DayJob {
   readonly policies: readonly Policy[];
   readonly comparisons: readonly PolicyComparison[];
   readonly classification: ClassificationParams;
+  /** Arrival forecast of the scenario, when a policy manages lanes from one (S8). */
+  readonly forecast?: ArrivalForecast;
+}
+
+/** True when a policy recommends lanes from a forecast of arrivals (S8). */
+export function needsForecast(policies: readonly Policy[]): boolean {
+  return policies.some((policy) => policy.lanes?.kind === 'predict');
+}
+
+/** The forecast for `policies` on `scenario`, or nothing when no policy uses one. */
+export function forecastFor(
+  scenario: Scenario,
+  policies: readonly Policy[],
+): { forecast?: ArrivalForecast } {
+  return needsForecast(policies) ? { forecast: arrivalForecast(scenario) } : {};
+}
+
+/** The population of one day, with the forecast of the job when it has one. */
+export function dayPopulation(
+  scenario: Scenario,
+  forecast: ArrivalForecast | undefined,
+  seed: number,
+): Population {
+  const population = generatePopulation(scenario, seed);
+  return forecast === undefined ? population : { ...population, forecast };
 }
 
 /** A validated experiment: the work of one day and the seeds to run it on. */
@@ -139,7 +164,10 @@ export interface ExperimentPlan {
   readonly seeds: readonly number[];
 }
 
-/** Validates an experiment and splits it into independent days (for parallel execution). */
+/**
+ * Validates an experiment and splits it into independent days (for parallel execution). The
+ * arrival forecast, when a policy needs one, is computed here once for every day.
+ */
 export function planExperiment(config: ExperimentConfig): ExperimentPlan {
   const comparisons = resolveComparisons(config);
   return {
@@ -148,6 +176,7 @@ export function planExperiment(config: ExperimentConfig): ExperimentPlan {
       policies: config.policies,
       comparisons,
       classification: config.classification,
+      ...forecastFor(config.scenario, config.policies),
     },
     seeds: normaliseSeeds(config.seeds),
   };
@@ -159,7 +188,7 @@ export function planExperiment(config: ExperimentConfig): ExperimentPlan {
  * job and the seed only, wherever and in whatever order the days are computed.
  */
 export function runDay(job: DayJob, seed: number): SeedResult {
-  const population = generatePopulation(job.scenario, seed);
+  const population = dayPopulation(job.scenario, job.forecast, seed);
   const runs = new Map<string, RunResult>();
   const policies: Record<string, PolicyDayMetrics> = {};
   for (const policy of job.policies) {
@@ -195,7 +224,8 @@ export function assembleExperiment(
   config: ExperimentConfig,
   days: readonly SeedResult[],
 ): ExperimentResult {
-  const { job, seeds } = planExperiment(config);
+  const comparisons = resolveComparisons(config);
+  const seeds = normaliseSeeds(config.seeds);
   const bySeed = new Map<number, SeedResult>();
   for (const day of days) {
     if (bySeed.has(day.seed)) throw new ExperimentConfigError(`seed ${day.seed} computed twice`);
@@ -209,7 +239,7 @@ export function assembleExperiment(
   if (bySeed.size !== seeds.length) {
     throw new ExperimentConfigError('days were computed for seeds that are not in the experiment');
   }
-  return { config, seeds, comparisons: job.comparisons, perSeed };
+  return { config, seeds, comparisons, perSeed };
 }
 
 /** Runs every policy on every seed, one day after the other. */

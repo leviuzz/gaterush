@@ -31,10 +31,16 @@ export function expectedWorkByInterval(
   return work;
 }
 
+/** Most lanes a rule plans: its `maxLanes`, never more than the checkpoint has. */
+export function maxPlannedLanes(rule: LanePlanRule, lanesAvailable: number): number {
+  return Math.min(lanesAvailable, rule.maxLanes ?? lanesAvailable);
+}
+
 /**
  * Plans the lanes of a day with a rule: in every interval, enough lanes to screen the expected
- * arrivals of that interval at the rule's utilisation, at least `minLanes` and at most the lanes
- * the checkpoint has. Consecutive intervals with the same number of lanes are merged.
+ * arrivals of that interval at the rule's utilisation, at least `minLanes` and at most `maxLanes`
+ * (by default the lanes the checkpoint has). Consecutive intervals with the same number of lanes
+ * are merged.
  */
 export function planLanes(
   scenario: Scenario,
@@ -43,10 +49,11 @@ export function planLanes(
 ): { from: string; lanes: number }[] {
   const intervalMs = rule.intervalMinutes * MS_PER_MINUTE;
   const work = expectedWorkByInterval(scenario, rule.intervalMinutes, rule.planningDays);
+  const most = maxPlannedLanes(rule, lanesAvailable);
   const plan: { from: string; lanes: number }[] = [];
   work.forEach((w, i) => {
     const lanes = Math.min(
-      lanesAvailable,
+      most,
       Math.max(rule.minLanes, Math.ceil(w / intervalMs / rule.utilisation)),
     );
     if (plan[plan.length - 1]?.lanes !== lanes) {
@@ -87,7 +94,7 @@ export function withLaneSchedule(input: ScenarioInput): Scenario {
         note:
           `Planned by checkpoint.lanePlanRule: every ${String(rule.intervalMinutes)} minutes, lanes for ` +
           `the expected arrivals at ${String(Math.round(rule.utilisation * 100))}% utilisation, ` +
-          `${String(rule.minLanes)} to ${String(lanesAvailable.value)} lanes (average of ` +
+          `${String(rule.minLanes)} to ${String(maxPlannedLanes(rule, lanesAvailable.value))} lanes (average of ` +
           `simulated days 1-${String(rule.planningDays)}).`,
       },
     },

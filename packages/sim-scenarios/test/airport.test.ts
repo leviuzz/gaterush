@@ -63,9 +63,14 @@ describe('airport configurations', () => {
         expect.arrayContaining(['gateflow-synthetic', 'library-flights']),
       );
       // Same passengers as the self-contained S7 files (fingerprints taken before the change).
-      expect([1, 2].map((seed) => sha(canonicalJson(generatePopulation(scenario, seed))))).toEqual(
-        fixture[id],
-      );
+      // The staff on call (S8) come on top, drawn from streams of their own.
+      const populations = [1, 2].map((seed) => generatePopulation(scenario, seed));
+      expect(
+        populations.map(({ staffing, ...s7 }) => {
+          expect(staffing?.lanesAvailable).toBe(scenario.checkpoint.lanesAvailable?.value);
+          return sha(canonicalJson(s7));
+        }),
+      ).toEqual(fixture[id]);
     },
   );
 
@@ -149,11 +154,31 @@ describe('airport configurations', () => {
       ...scenario,
       checkpoint: {
         ...scenario.checkpoint,
-        laneSchedule: { value: [{ from: '00:00', lanes: 6 }], source: 'SYNTHETIC' },
+        laneSchedule: { value: [{ from: '00:00', lanes: 7 }], source: 'SYNTHETIC' },
       },
     } satisfies Scenario;
     expect(issuesOf(() => parseScenario(tooMany))).toEqual([
-      'checkpoint.laneSchedule.value.0.lanes: 6 lanes planned, but the checkpoint has 5',
+      'checkpoint.laneSchedule.value.0.lanes: 7 lanes planned, but the checkpoint has 6',
+    ]);
+    const rule = scenario.checkpoint.lanePlanRule;
+    if (rule === undefined) throw new Error('expected a lane plan rule');
+    const withRule = (value: typeof rule.value) => ({
+      ...scenario,
+      checkpoint: { ...scenario.checkpoint, lanePlanRule: { ...rule, value } },
+    });
+    expect(issuesOf(() => parseScenario(withRule({ ...rule.value, maxLanes: 7 })))).toEqual([
+      'checkpoint.lanePlanRule.value.maxLanes: maxLanes exceeds the 6 lanes the checkpoint has',
+    ]);
+    expect(
+      issuesOf(() => parseScenario(withRule({ ...rule.value, minLanes: 3, maxLanes: 2 }))),
+    ).toEqual(['checkpoint.lanePlanRule.value.minLanes: minLanes exceeds maxLanes']);
+    const noLanes = Object.fromEntries(
+      Object.entries(scenario.checkpoint).filter(
+        ([key]) => key !== 'lanesAvailable' && key !== 'lanePlanRule',
+      ),
+    );
+    expect(issuesOf(() => parseScenario({ ...scenario, checkpoint: noLanes }))).toEqual([
+      'checkpoint.lanesAvailable: checkpoint.laneStaffing needs checkpoint.lanesAvailable (the lanes the checkpoint has)',
     ]);
     const neither = Object.fromEntries(
       Object.entries(scenario.checkpoint).filter(

@@ -136,6 +136,38 @@ export interface CheckpointSpec {
   readonly processEstimateMs: Millis;
 }
 
+/**
+ * The lanes and staff a checkpoint has beyond its plan (S8), and how staff respond during one
+ * day. Policies that manage lanes use it; the others ignore it.
+ */
+export interface LaneStaffing {
+  /** Lanes the checkpoint physically has: open lanes never exceed them. */
+  readonly lanesAvailable: number;
+  /** Extra lanes beyond the plan that can be staffed at the same time (staff on call). */
+  readonly maxExtraLanes: number;
+  /** The system's estimate of the time from a decision to the extra lane screening. */
+  readonly openDelayEstimateMs: Millis;
+  /** An extra lane stays open at least this long once it opened. */
+  readonly minOpenMs: Millis;
+  /**
+   * Ground truth of the day: time to staff and open a lane after the n-th decision to open
+   * (used in turn; a policy that decides more often starts again from the first).
+   */
+  readonly openDelaysMs: readonly Millis[];
+  /**
+   * Ground truth of the day: whether the duty manager follows GateFlow's n-th recommendation
+   * (used in turn). A supervisor's own decisions are always carried out.
+   */
+  readonly follows: readonly boolean[];
+}
+
+/** People the system expects to arrive in each minute of the day (S8 forecast). */
+export interface ArrivalForecast {
+  /** Start of the first minute of `peoplePerMinute` (may be before midnight). */
+  readonly startMs: Millis;
+  readonly peoplePerMinute: readonly number[];
+}
+
 /** Everything a simulation run needs: the checkpoint, the flights and the passengers. */
 export interface Population {
   readonly checkpoint: CheckpointSpec;
@@ -145,6 +177,10 @@ export interface Population {
   readonly laneOutages?: readonly LaneOutage[];
   /** Outages of the flight feed (none when absent), sorted and not overlapping. */
   readonly feedOutages?: readonly FeedOutage[];
+  /** Lanes and staff beyond the plan (S8). Without it no extra lane can be opened. */
+  readonly staffing?: LaneStaffing;
+  /** Arrival forecast for GateFlow's lane recommendations (S8). */
+  readonly forecast?: ArrivalForecast;
 }
 
 /** What happened to one passenger in one run. */
@@ -240,6 +276,19 @@ export interface RunStats {
   /** Integral of the number of people standing in a queue over time (person-milliseconds). */
   readonly standingAreaMs: number;
   readonly maxStanding: number;
+  /**
+   * Extra lane time beyond the plan (S8), between the first arrival and the last service end:
+   * the integral of the lanes open above what the plan and the outages give.
+   */
+  readonly extraLaneMs: number;
+  /** Decisions to open or close an extra lane: the supervisor's, or GateFlow's recommendations. */
+  readonly laneDecisions: number;
+  /** Recommendations the duty manager followed (every decision of a supervisor counts). */
+  readonly laneDecisionsFollowed: number;
+  readonly lanesOpened: number;
+  readonly lanesClosed: number;
+  /** Most lanes open at the same time. */
+  readonly maxOpenLanes: number;
 }
 
 export interface RunResult {

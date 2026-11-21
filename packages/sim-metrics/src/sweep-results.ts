@@ -29,7 +29,7 @@ import type {
 import { scenarioProvenance } from './provenance';
 import type { ScenarioProvenance } from './provenance';
 
-export const SWEEP_SCHEMA = 'gateflow.sim.sweep/2';
+export const SWEEP_SCHEMA = 'gateflow.sim.sweep/3';
 
 /** Policy metrics reported at every point of a sweep. */
 export const SWEEP_POLICY_METRICS = [
@@ -43,6 +43,7 @@ export const SWEEP_POLICY_METRICS = [
   'classReversals',
   'misinformedPriorityPeople',
   'staffedLaneHours',
+  'extraLaneHours',
 ] as const satisfies readonly (keyof PolicyDayMetrics)[];
 export type SweepPolicyMetric = (typeof SWEEP_POLICY_METRICS)[number];
 
@@ -53,6 +54,8 @@ export const SWEEP_COMPARISON_METRICS = [
   'harmed',
   'nonPriorityExtraWaitMeanMin',
   'nonPriorityDelayedOver5MinShare',
+  'waitMeanDeltaMin',
+  'extraLaneHoursDelta',
 ] as const satisfies readonly (keyof ComparisonDayMetrics)[];
 export type SweepComparisonMetric = (typeof SWEEP_COMPARISON_METRICS)[number];
 
@@ -185,6 +188,16 @@ function currentValue(
       return scenario.disruptions.feedOutages.value.perDay;
     case 'feedOutageMedianMinutes':
       return scenario.disruptions.feedOutages.value.medianMinutes;
+    case 'laneTargetWaitMinutes':
+      return candidate?.lanes?.kind === 'predict'
+        ? minutes(candidate.lanes.targetWaitMs)
+        : undefined;
+    case 'maxExtraLanes':
+      return scenario.checkpoint.laneStaffing?.value.maxExtraLanes;
+    case 'laneOpenDelayMinutes':
+      return scenario.checkpoint.laneStaffing?.value.openDelayMinutes.median;
+    case 'laneFollowShare':
+      return scenario.checkpoint.laneStaffing?.value.followShare;
   }
 }
 

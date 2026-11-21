@@ -1,5 +1,5 @@
 {
-  "schema": "gateflow.sim.sweep/2",
+  "schema": "gateflow.sim.sweep/3",
   "disclaimer": "SIMULATED RESULTS ON SYNTHETIC OR HYPOTHETICAL DATA. These numbers are model outputs, not measurements, and must not be presented as evidence of operational performance.",
   "manifest": {
     "generator": {
@@ -9,10 +9,10 @@
     "commit": "test",
     "versions": {
       "engine": "0.5.0",
-      "queueCore": "0.5.0",
-      "model": "0.5.0",
+      "queueCore": "0.6.0",
+      "model": "0.6.0",
       "kernel": "0.1.0",
-      "populationGenerator": "0.5.0",
+      "populationGenerator": "0.6.0",
       "scenarioSchema": 5
     },
     "sweep": {
@@ -489,7 +489,8 @@
     }
   ],
   "modelLimitations": [
-    "Single checkpoint. Lanes follow a planned schedule, minus unplanned outages when the scenario has them: a lane going out of service finishes its passenger first, at least one lane always stays open, and the system knows at once. No lanes are opened in reaction to the queue.",
+    "Single checkpoint. Lanes follow a planned schedule, minus unplanned outages when the scenario has them: a lane going out of service finishes its passenger first, at least one lane always stays open, and the system knows at once.",
+    "Extra lanes (policies with lane management, S8) open beyond the plan only up to the lanes the checkpoint has and the staff on call. A decision to open takes the day's delay to put a lane into service, an extra lane stays open for a minimum time, and staff go back when the plan itself needs the lane. Staff on call have no other duties in the model, and their cost is counted as extra lane-hours only. The supervisor of today's practice decides on the wait the queue shows; GateFlow recommends on a forecast of arrivals (the average of 50 other simulated days with the same flights, scaled by the arrivals of the last hour), and the duty manager follows each recommendation with the scenario's probability.",
     "Every passenger uses the virtual queue when one is simulated: no opt-outs, no passengers without a phone or a view of the displays.",
     "Response times and absences are drawn per party from assumed distributions. A second call does not make an absent passenger come sooner, the prepare window does not shorten response times, and a passenger who has been at the access point once answers later calls at once.",
     "The access point never becomes a bottleneck, and the walk from the access point to the lanes is part of the response time.",
@@ -596,6 +597,14 @@
                 "p95": 112.825,
                 "min": 111.7929,
                 "max": 112.8793
+              },
+              "extraLaneHours": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
               }
             },
             "fifo-manual": {
@@ -678,6 +687,14 @@
                 "p95": 112.825,
                 "min": 111.7929,
                 "max": 112.8793
+              },
+              "extraLaneHours": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
               }
             },
             "virtual-fifo": {
@@ -760,6 +777,14 @@
                 "p95": 112.825,
                 "min": 111.7929,
                 "max": 112.8793
+              },
+              "extraLaneHours": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
               }
             },
             "priority-v3": {
@@ -842,6 +867,14 @@
                 "p95": 112.825,
                 "min": 111.7929,
                 "max": 112.8793
+              },
+              "extraLaneHours": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
               }
             }
           },
@@ -897,6 +930,26 @@
                   "max": 0.0061,
                   "ciLower": 0.0057,
                   "ciUpper": 0.0061
+                },
+                "waitMeanDeltaMin": {
+                  "mean": 0.0002,
+                  "p05": -0.0031,
+                  "p50": 0.0002,
+                  "p95": 0.0034,
+                  "min": -0.0035,
+                  "max": 0.0038,
+                  "ciLower": -0.0035,
+                  "ciUpper": 0.0038
+                },
+                "extraLaneHoursDelta": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
                 }
               },
               "nonPriorityExtraWaitMaxMin": {
@@ -953,6 +1006,26 @@
                   "ciUpper": 0.1647
                 },
                 "nonPriorityDelayedOver5MinShare": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "waitMeanDeltaMin": {
+                  "mean": -0.0053,
+                  "p05": -0.0063,
+                  "p50": -0.0053,
+                  "p95": -0.0043,
+                  "min": -0.0064,
+                  "max": -0.0042,
+                  "ciLower": -0.0064,
+                  "ciUpper": -0.0042
+                },
+                "extraLaneHoursDelta": {
                   "mean": 0,
                   "p05": 0,
                   "p50": 0,
@@ -1061,6 +1134,14 @@
                 "p95": 112.825,
                 "min": 111.7929,
                 "max": 112.8793
+              },
+              "extraLaneHours": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
               }
             },
             "fifo-manual": {
@@ -1143,6 +1224,14 @@
                 "p95": 112.825,
                 "min": 111.7929,
                 "max": 112.8793
+              },
+              "extraLaneHours": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
               }
             },
             "virtual-fifo": {
@@ -1225,6 +1314,14 @@
                 "p95": 112.825,
                 "min": 111.7929,
                 "max": 112.8793
+              },
+              "extraLaneHours": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
               }
             },
             "priority-v3": {
@@ -1307,6 +1404,14 @@
                 "p95": 112.825,
                 "min": 111.7929,
                 "max": 112.8793
+              },
+              "extraLaneHours": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
               }
             }
           },
@@ -1362,6 +1467,26 @@
                   "max": 0.005,
                   "ciLower": 0.0048,
                   "ciUpper": 0.005
+                },
+                "waitMeanDeltaMin": {
+                  "mean": 0.0013,
+                  "p05": -0.0047,
+                  "p50": 0.0013,
+                  "p95": 0.0072,
+                  "min": -0.0053,
+                  "max": 0.0079,
+                  "ciLower": -0.0053,
+                  "ciUpper": 0.0079
+                },
+                "extraLaneHoursDelta": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
                 }
               },
               "nonPriorityExtraWaitMaxMin": {
@@ -1418,6 +1543,26 @@
                   "ciUpper": 0.2339
                 },
                 "nonPriorityDelayedOver5MinShare": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "waitMeanDeltaMin": {
+                  "mean": -0.0042,
+                  "p05": -0.0059,
+                  "p50": -0.0042,
+                  "p95": -0.0025,
+                  "min": -0.0061,
+                  "max": -0.0023,
+                  "ciLower": -0.0061,
+                  "ciUpper": -0.0023
+                },
+                "extraLaneHoursDelta": {
                   "mean": 0,
                   "p05": 0,
                   "p50": 0,
@@ -1534,6 +1679,14 @@
                 "p95": 112.825,
                 "min": 111.7929,
                 "max": 112.8793
+              },
+              "extraLaneHours": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
               }
             },
             "fifo-manual": {
@@ -1616,6 +1769,14 @@
                 "p95": 112.825,
                 "min": 111.7929,
                 "max": 112.8793
+              },
+              "extraLaneHours": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
               }
             },
             "virtual-fifo": {
@@ -1698,6 +1859,14 @@
                 "p95": 112.825,
                 "min": 111.7929,
                 "max": 112.8793
+              },
+              "extraLaneHours": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
               }
             },
             "priority-v3": {
@@ -1780,6 +1949,14 @@
                 "p95": 112.825,
                 "min": 111.7929,
                 "max": 112.8793
+              },
+              "extraLaneHours": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
               }
             }
           },
@@ -1835,6 +2012,26 @@
                   "max": 0.005,
                   "ciLower": 0.0048,
                   "ciUpper": 0.005
+                },
+                "waitMeanDeltaMin": {
+                  "mean": 0.0013,
+                  "p05": -0.0047,
+                  "p50": 0.0013,
+                  "p95": 0.0072,
+                  "min": -0.0053,
+                  "max": 0.0079,
+                  "ciLower": -0.0053,
+                  "ciUpper": 0.0079
+                },
+                "extraLaneHoursDelta": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
                 }
               },
               "nonPriorityExtraWaitMaxMin": {
@@ -1891,6 +2088,26 @@
                   "ciUpper": 0.2339
                 },
                 "nonPriorityDelayedOver5MinShare": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "waitMeanDeltaMin": {
+                  "mean": -0.0042,
+                  "p05": -0.0059,
+                  "p50": -0.0042,
+                  "p95": -0.0025,
+                  "min": -0.0061,
+                  "max": -0.0023,
+                  "ciLower": -0.0061,
+                  "ciUpper": -0.0023
+                },
+                "extraLaneHoursDelta": {
                   "mean": 0,
                   "p05": 0,
                   "p50": 0,
@@ -1999,6 +2216,14 @@
                 "p95": 131.6292,
                 "min": 130.4251,
                 "max": 131.6925
+              },
+              "extraLaneHours": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
               }
             },
             "fifo-manual": {
@@ -2081,6 +2306,14 @@
                 "p95": 131.6292,
                 "min": 130.4251,
                 "max": 131.6925
+              },
+              "extraLaneHours": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
               }
             },
             "virtual-fifo": {
@@ -2163,6 +2396,14 @@
                 "p95": 131.6292,
                 "min": 130.4251,
                 "max": 131.6925
+              },
+              "extraLaneHours": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
               }
             },
             "priority-v3": {
@@ -2245,6 +2486,14 @@
                 "p95": 131.6292,
                 "min": 130.4251,
                 "max": 131.6925
+              },
+              "extraLaneHours": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
               }
             }
           },
@@ -2300,6 +2549,26 @@
                   "max": 0.0011,
                   "ciLower": 0.0008,
                   "ciUpper": 0.0011
+                },
+                "waitMeanDeltaMin": {
+                  "mean": 0.0006,
+                  "p05": -0.0036,
+                  "p50": 0.0006,
+                  "p95": 0.0049,
+                  "min": -0.0041,
+                  "max": 0.0053,
+                  "ciLower": -0.0041,
+                  "ciUpper": 0.0053
+                },
+                "extraLaneHoursDelta": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
                 }
               },
               "nonPriorityExtraWaitMaxMin": {
@@ -2364,6 +2633,26 @@
                   "max": 0.0003,
                   "ciLower": 0,
                   "ciUpper": 0.0003
+                },
+                "waitMeanDeltaMin": {
+                  "mean": 0.0016,
+                  "p05": 0.0002,
+                  "p50": 0.0016,
+                  "p95": 0.003,
+                  "min": 0,
+                  "max": 0.0031,
+                  "ciLower": 0,
+                  "ciUpper": 0.0031
+                },
+                "extraLaneHoursDelta": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
                 }
               },
               "nonPriorityExtraWaitMaxMin": {

@@ -47,6 +47,14 @@ export interface PolicyDayMetrics {
   /** Tickets issued again because the previous one expired. */
   readonly reissuedTickets: number;
   readonly staffedLaneHours: number;
+  /** Lane-hours open beyond the plan (S8 lane management). */
+  readonly extraLaneHours: number;
+  /** Decisions to open or close an extra lane, and how many were followed (S8). */
+  readonly laneDecisions: number;
+  readonly laneDecisionsFollowed: number;
+  readonly lanesOpened: number;
+  readonly lanesClosed: number;
+  readonly maxOpenLanes: number;
   /** Busy share of the staffed lane time. */
   readonly laneUtilization: number;
   /** Lane-minutes open and idle while passengers were waiting for or answering a call. */
@@ -124,6 +132,10 @@ export interface ComparisonDayMetrics {
   readonly nonPriorityDelayedOver5MinShare: number;
   readonly waitMeanDeltaMin: number;
   readonly standingMeanDeltaMin: number;
+  /** Waiting of all people under the candidate minus under the reference (person-hours). */
+  readonly waitDeltaPersonHours: number;
+  /** Extra lane-hours (beyond the plan) of the candidate minus those of the reference (S8). */
+  readonly extraLaneHoursDelta: number;
 }
 
 function toMinutes(ms: number): number {
@@ -248,6 +260,12 @@ export function policyDayMetrics(population: Population, run: RunResult): Policy
     reactivations: stats.reactivations,
     reissuedTickets: stats.reissuedTickets,
     staffedLaneHours: stats.staffedLaneMs / MS_PER_HOUR,
+    extraLaneHours: stats.extraLaneMs / MS_PER_HOUR,
+    laneDecisions: stats.laneDecisions,
+    laneDecisionsFollowed: stats.laneDecisionsFollowed,
+    lanesOpened: stats.lanesOpened,
+    lanesClosed: stats.lanesClosed,
+    maxOpenLanes: stats.maxOpenLanes,
     laneUtilization: share(stats.busyMs, stats.staffedLaneMs),
     idleLaneWithDemandMin: toMinutes(stats.idleLaneWithDemandMs),
     idleLaneWithDemandShare: share(stats.idleLaneWithDemandMs, stats.staffedLaneMs),
@@ -370,5 +388,7 @@ export function comparisonDayMetrics(
     nonPriorityDelayedOver5MinShare: share(delayedOver5, extraWaits.length),
     waitMeanDeltaMin: people === 0 ? 0 : toMinutes(deltaSum / people),
     standingMeanDeltaMin: people === 0 ? 0 : toMinutes(standingDeltaSum / people),
+    waitDeltaPersonHours: deltaSum / MS_PER_HOUR,
+    extraLaneHoursDelta: (candidate.stats.extraLaneMs - reference.stats.extraLaneMs) / MS_PER_HOUR,
   };
 }

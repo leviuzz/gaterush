@@ -48,8 +48,43 @@ describe('regression: the library days in airport configurations reproduce S7', 
         classification: classificationOf(PRIORITY_V2_POLICY)!,
         bootstrap: { resamples: 10, confidence: 0.95, seed: 1 },
       });
-      expect(roundNumbers(result.perSeed)).toEqual(expected);
+      // Lane management (S8) adds metrics; without it they are zero and the rest is unchanged.
+      const s7 = roundNumbers(result.perSeed).map((day) => ({
+        ...day,
+        policies: Object.fromEntries(
+          Object.entries(day.policies).map(([policyId, metrics]) => {
+            const { extraLaneHours, laneDecisions, lanesOpened, lanesClosed, maxOpenLanes } =
+              metrics;
+            expect([extraLaneHours, laneDecisions, lanesOpened, lanesClosed]).toEqual([0, 0, 0, 0]);
+            expect(maxOpenLanes).toBe(
+              Math.max(...scenario.checkpoint.laneSchedule.value.map((e) => e.lanes)),
+            );
+            return [policyId, withoutKeys(metrics, S8_POLICY_METRICS)];
+          }),
+        ),
+        comparisons: Object.fromEntries(
+          Object.entries(day.comparisons).map(([key, metrics]) => {
+            expect(metrics.extraLaneHoursDelta).toBe(0);
+            return [key, withoutKeys(metrics, S8_COMPARISON_METRICS)];
+          }),
+        ),
+      }));
+      expect(s7).toEqual(expected);
     },
     120_000,
   );
 });
+
+const S8_POLICY_METRICS = [
+  'extraLaneHours',
+  'laneDecisions',
+  'laneDecisionsFollowed',
+  'lanesOpened',
+  'lanesClosed',
+  'maxOpenLanes',
+];
+const S8_COMPARISON_METRICS = ['waitDeltaPersonHours', 'extraLaneHoursDelta'];
+
+function withoutKeys(record: object, keys: readonly string[]): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(record).filter(([key]) => !keys.includes(key)));
+}

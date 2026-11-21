@@ -51,6 +51,13 @@ jobs:
           node apps/sim-cli/dist/gateflow-sim.mjs run --scenario scenarios/vce-like-peak-day.yaml --seeds 1-10 --out out/fb --quiet --workers 4
           cmp out/fa/results.json out/fb/results.json
           cmp out/fa/report.html out/fb/report.html
+          # Extra lanes (S8): the staff on call and the forecast are the same in every worker.
+          node apps/sim-cli/dist/gateflow-sim.mjs run --scenario scenarios/tsf-like-peak-day.yaml --seeds 1-10 --out out/la --quiet --workers 1 \
+            --policies fifo-manual,fifo-manual@reactive,fifo-manual@predict,priority-v3@predict
+          node apps/sim-cli/dist/gateflow-sim.mjs run --scenario scenarios/tsf-like-peak-day.yaml --seeds 1-10 --out out/lb --quiet --workers 4 \
+            --policies fifo-manual,fifo-manual@reactive,fifo-manual@predict,priority-v3@predict
+          cmp out/la/results.json out/lb/results.json
+          cmp out/la/report.html out/lb/report.html
       - name: The library flight lists are up to date
         run: node scenarios/flights/make-library-flights.mjs --check
 
@@ -74,6 +81,13 @@ jobs:
             vce-like-normal-day vce-like-peak-day vce-like-disrupted-day tsf-like-peak-day mx-like-transfer-hub; do
             node apps/sim-cli/dist/gateflow-sim.mjs run --scenario "scenarios/$scenario.yaml" --seeds 1-200 \
               --policies fifo,fifo-manual,virtual-fifo,priority-v2,priority-v3 --out "out/$scenario"
+          done
+      - name: Extra lanes on the scenario library (S8)
+        run: |
+          for scenario in vce-like-normal-day vce-like-peak-day vce-like-disrupted-day tsf-like-peak-day mx-like-transfer-hub; do
+            node apps/sim-cli/dist/gateflow-sim.mjs run --scenario "scenarios/$scenario.yaml" --seeds 1-200 \
+              --policies fifo,fifo-manual,fifo-manual@reactive,fifo-manual@predict,priority-v3,priority-v3@predict \
+              --out "out/lanes/$scenario"
           done
       - name: Sensitivity sweeps (20 days per point; the published sweeps use 200)
         run: |

@@ -1,4 +1,4 @@
-import { DEADLINE_SOURCES, SEGMENTS } from '@gateflow/domain';
+import { DEADLINE_SOURCES, MS_PER_HOUR, MS_PER_MINUTE, SEGMENTS } from '@gateflow/domain';
 import type { KnownDeadline, RiskClass } from '@gateflow/domain';
 import type { CheckpointEstimates } from '@gateflow/priority-engine';
 import {
@@ -7,7 +7,7 @@ import {
   fastTrackResponseEstimateMs,
   responseEstimateMs,
 } from '@gateflow/queue-core';
-import type { Policy, QueueEvent } from '@gateflow/queue-core';
+import type { Policy, PredictiveLanes, QueueEvent, ReactiveLanes } from '@gateflow/queue-core';
 import { DiscreteEventSimulation } from '@gateflow/sim-kernel';
 import type {
   CheckpointSpec,
@@ -37,6 +37,10 @@ const SERVICE_END = 1;
 const PRESENT = 2;
 const TIMEOUT = 3;
 const ARRIVAL = 4;
+/** An extra lane decided earlier is staffed (scheduled with the priority of LANE_CHANGE). */
+const LANE_READY = 5;
+/** Lane management looks at the queue after everything else that happens at the same instant. */
+const LANE_REVIEW = 6;
 
 /**
  * A passenger answers every call after the first one at once, so they need at most two tickets.
@@ -49,7 +53,9 @@ type ModelEvent =
   | { readonly kind: typeof FEED_DOWN; readonly fromMs: number }
   | { readonly kind: typeof FLIGHT_UPDATE; readonly flight: number; readonly update: number }
   | { readonly kind: typeof SERVICE_END; readonly lane: number; readonly passenger: number }
-  | { readonly kind: typeof LANE_CHANGE; readonly lanes: number }
+  | { readonly kind: typeof LANE_CHANGE }
+  | { readonly kind: typeof LANE_READY }
+  | { readonly kind: typeof LANE_REVIEW }
   | { readonly kind: typeof PRESENT; readonly passenger: number }
   | { readonly kind: typeof TIMEOUT }
   | { readonly kind: typeof ARRIVAL; readonly passenger: number };
@@ -188,9 +194,46 @@ function validateOutages(population: Population): void {
   });
 }
 
+/** Lanes and staff beyond the plan, and the arrival forecast (S8). */
+function validateLaneData(population: Population): void {
+  const { staffing, forecast } = population;
+  if (staffing !== undefined) {
+    requireInteger(staffing.lanesAvailable, 'staffing.lanesAvailable', 1);
+    const planned = population.checkpoint.laneSchedule.reduce((m, e) => Math.max(m, e.lanes), 0);
+    if (planned > staffing.lanesAvailable) {
+      throw new PopulationError(
+        `the plan opens ${planned} lanes but the checkpoint has ${staffing.lanesAvailable}`,
+      );
+    }
+    requireInteger(staffing.maxExtraLanes, 'staffing.maxExtraLanes', 0);
+    requireInteger(staffing.openDelayEstimateMs, 'staffing.openDelayEstimateMs', 0);
+    requireInteger(staffing.minOpenMs, 'staffing.minOpenMs', 0);
+    if (staffing.openDelaysMs.length === 0 || staffing.follows.length === 0) {
+      throw new PopulationError('staffing needs at least one open delay and one follow decision');
+    }
+    staffing.openDelaysMs.forEach((d, i) => {
+      requireInteger(d, `staffing.openDelaysMs[${i}]`, 0);
+    });
+    staffing.follows.forEach((f, i) => {
+      if (typeof (f as unknown) !== 'boolean') {
+        throw new PopulationError(`staffing.follows[${i}] must be a boolean`);
+      }
+    });
+  }
+  if (forecast !== undefined) {
+    requireInteger(forecast.startMs, 'forecast.startMs');
+    forecast.peoplePerMinute.forEach((n, i) => {
+      if (!Number.isFinite(n) || n < 0) {
+        throw new PopulationError(`forecast.peoplePerMinute[${i}] must be a number >= 0`);
+      }
+    });
+  }
+}
+
 export function validatePopulation(population: Population): void {
   const { checkpoint, flights, passengers } = population;
   validateCheckpointSpec(checkpoint);
+  validateLaneData(population);
   flights.forEach((flight, i) => {
     if (flight.index !== i)
       throw new PopulationError(`flight ${flight.id} has index ${flight.index}, expected ${i}`);
@@ -320,6 +363,13 @@ export function simulateCheckpoint(
   /** The overtake bound, which also limits the passes of fast-tracked parties at the lanes. */
   const maxOvertakes =
     policy.selection.kind === 'constrained-edf' ? policy.selection.maxOvertakes : Infinity;
+  /** Lane management (S8): only for a policy that manages lanes, with staff to do it. */
+  const management = policy.lanes;
+  const staffing = management === undefined ? undefined : population.staffing;
+  if (management?.kind === 'predict' && population.forecast === undefined) {
+    throw new PopulationError('predictive lane management needs an arrival forecast');
+  }
+  const lanesAvailable = Math.max(laneCount, staffing?.lanesAvailable ?? 0);
 
   const state: PassengerState[] = passengers.map((p) => ({
     ticketId: p.id,
@@ -420,10 +470,14 @@ export function simulateCheckpoint(
   const laneChanges = new Set(schedule.slice(1).map((entry) => entry.fromMs));
   for (const o of laneOutages) laneChanges.add(o.fromMs).add(o.toMs);
   for (const t of [...laneChanges].sort((a, b) => a - b)) {
-    sim.scheduleAt(t, LANE_CHANGE, {
-      kind: LANE_CHANGE,
-      lanes: openLanesAt(checkpoint, laneOutages, t),
-    });
+    sim.scheduleAt(t, LANE_CHANGE, { kind: LANE_CHANGE });
+  }
+  // Lane management looks at the queue at every multiple of its interval from the start of the
+  // day, as long as passengers are still to come or to be screened (see LANE_REVIEW).
+  const lastArrivalMs = passengers.reduce((max, p) => Math.max(max, p.arrivalMs), -Infinity);
+  if (management !== undefined) {
+    const interval = management.reviewIntervalMs;
+    sim.scheduleAt(Math.ceil(startMs / interval) * interval, LANE_REVIEW, { kind: LANE_REVIEW });
   }
   for (const o of feedOutages) {
     sim.scheduleAt(o.fromMs, FEED_DOWN, { kind: FEED_DOWN, fromMs: o.fromMs });
@@ -437,7 +491,7 @@ export function simulateCheckpoint(
 
   let open = at(schedule, 0, 'lane schedule entry').lanes;
   let estimates = estimatesFor(open);
-  const busy: boolean[] = new Array<boolean>(laneCount).fill(false);
+  const busy: boolean[] = new Array<boolean>(lanesAvailable).fill(false);
   /** Open lanes that are idle. */
   let freeOpen = open;
   /** Busy lanes that are closing (index >= open): they finish their passenger, then close. */
@@ -475,6 +529,47 @@ export function simulateCheckpoint(
   let maxWaiting = 0;
   let maxStanding = 0;
 
+  // Lane management (S8).
+  /** Extra lanes staffed beyond the plan. */
+  let extraOpen = 0;
+  /** When the lanes decided but not yet staffed will be ready. */
+  const pendingReady: number[] = [];
+  let lastOpenedAtMs = -Infinity;
+  let lastDecisionMs = -Infinity;
+  /** Decisions to open so far (index of the day's open delays). */
+  let openDecisionIndex = 0;
+  /** GateFlow recommendations so far (index of the duty manager's answers). */
+  let recommendationIndex = 0;
+  let laneDecisions = 0;
+  let laneDecisionsFollowed = 0;
+  let lanesOpened = 0;
+  let lanesClosed = 0;
+  let maxOpenLanes = open;
+  /** Lanes open above what the plan and the outages give. */
+  let extraEffective = 0;
+  let extraLaneMs = 0;
+  let extraAtLastServiceEnd = 0;
+  /** People arriving in the last hour, for the forecast's scale: [time, people]. */
+  const recentArrivals: [number, number][] = [];
+
+  const plannedAt = (t: number): number => {
+    let planned = 0;
+    for (const entry of schedule) if (entry.fromMs <= t || planned === 0) planned = entry.lanes;
+    return planned;
+  };
+  const outAt = (t: number): number => {
+    let out = 0;
+    for (const outage of laneOutages)
+      if (outage.fromMs <= t && t < outage.toMs) out += outage.lanes;
+    return out;
+  };
+  /**
+   * Lanes open at `t`: the plan plus the extra lanes, never more than the checkpoint has, minus
+   * the lanes out of service, never fewer than one. Without extra lanes this is `openLanesAt`.
+   */
+  const lanesAt = (t: number, extra: number): number =>
+    Math.max(1, Math.min(plannedAt(t) + extra, lanesAvailable) - outAt(t));
+
   const uncalled = (): number => queue.waitingCount + queue.windowCount;
   /** People waiting for their call. */
   const uncalledPeople = (): number => queue.waitingPeople + queue.windowPeople;
@@ -490,6 +585,7 @@ export function simulateCheckpoint(
       waitingAreaMs += waiting * dt;
       standingAreaMs += standing() * dt;
       staffedMs += (open + busyClosing) * dt;
+      extraLaneMs += extraEffective * dt;
       // Idle lanes that the people waiting for or answering a call could have used.
       idleWithDemandMs += Math.min(freeOpen, waiting + queue.outstandingPeople) * dt;
     }
@@ -698,6 +794,7 @@ export function simulateCheckpoint(
 
   const arrive = (passengerIndex: number, now: number): void => {
     const passenger = at(passengers, passengerIndex, 'passenger');
+    if (management?.kind === 'predict') recentArrivals.push([now, passenger.partySize]);
     if (passenger.path === 'QUEUE') {
       issueTicket(passengerIndex, now);
       return;
@@ -720,6 +817,147 @@ export function simulateCheckpoint(
     }
     open = lanes;
     estimates = estimatesFor(open);
+  };
+
+  /** Opens or closes lanes to match the plan, the outages and the extra lanes at `now`. */
+  const updateLanes = (now: number): void => {
+    const lanes = lanesAt(now, extraOpen);
+    if (lanes > lanesAvailable) throw new Error('more lanes open than the checkpoint has');
+    if (lanes !== open) changeLanes(lanes);
+    extraEffective = open - lanesAt(now, 0);
+    maxOpenLanes = Math.max(maxOpenLanes, open);
+  };
+
+  /** People waiting for a lane: not yet called, on their way after a call, or at the lanes. */
+  const waitingPeople = (): number =>
+    uncalledPeople() + queue.outstandingPeople + bufferPeople + assistedPeople;
+
+  /** Extra lanes that could still be decided: physical lanes free and staff on call. */
+  const room = (now: number): number =>
+    staffing === undefined
+      ? 0
+      : Math.min(
+          lanesAvailable - plannedAt(now) - extraOpen - pendingReady.length,
+          staffing.maxExtraLanes - extraOpen - pendingReady.length,
+        );
+
+  /** Lanes decided at `now`: staffed after the delay of this decision to open. */
+  const decideOpen = (now: number, lanes: number): void => {
+    if (staffing === undefined) return;
+    const delays = staffing.openDelaysMs;
+    const delay = at(delays, openDecisionIndex++ % delays.length, 'open delay');
+    for (let i = 0; i < lanes; i++) {
+      pendingReady.push(now + delay);
+      sim.scheduleAt(now + delay, LANE_CHANGE, { kind: LANE_READY });
+    }
+  };
+
+  const closeExtraLane = (now: number): void => {
+    extraOpen--;
+    lanesClosed++;
+    updateLanes(now);
+  };
+
+  /** A lane decided earlier is staffed: it opens if the checkpoint still has room for it. */
+  const laneReady = (now: number): void => {
+    const i = pendingReady.indexOf(now);
+    if (i < 0) throw new Error('a lane became ready without a decision');
+    pendingReady.splice(i, 1);
+    if (staffing === undefined) return;
+    if (plannedAt(now) + extraOpen < lanesAvailable && extraOpen < staffing.maxExtraLanes) {
+      extraOpen++;
+      lanesOpened++;
+      lastOpenedAtMs = now;
+      updateLanes(now);
+    }
+  };
+
+  /** Today's supervisor: decides on the wait the queue shows now. */
+  const reviewReactive = (now: number, lanes: ReactiveLanes): void => {
+    if (staffing === undefined || now - lastDecisionMs < lanes.cooldownMs) return;
+    const waitMs = (waitingPeople() / (open * rate)) * MS_PER_HOUR;
+    if (waitMs > lanes.openWhenWaitMs && room(now) > 0) {
+      laneDecisions++;
+      laneDecisionsFollowed++;
+      lastDecisionMs = now;
+      decideOpen(now, 1);
+    } else if (
+      waitMs < lanes.closeWhenWaitMs &&
+      extraOpen > 0 &&
+      now - lastOpenedAtMs >= staffing.minOpenMs
+    ) {
+      laneDecisions++;
+      laneDecisionsFollowed++;
+      lastDecisionMs = now;
+      closeExtraLane(now);
+    }
+  };
+
+  /** People the forecast expects in the minute that starts at `t`. */
+  const forecastAt = (t: number): number => {
+    const forecast = population.forecast;
+    if (forecast === undefined) return 0;
+    const i = Math.floor((t - forecast.startMs) / MS_PER_MINUTE);
+    return forecast.peoplePerMinute[i] ?? 0;
+  };
+
+  /** GateFlow: decides on a projection of the queue over the horizon. */
+  const reviewPredictive = (now: number, lanes: PredictiveLanes): void => {
+    if (staffing === undefined || now - lastDecisionMs < lanes.cooldownMs) return;
+    // Scale the forecast by the arrivals of the last hour.
+    while (recentArrivals.length > 0 && (recentArrivals[0]?.[0] ?? now) < now - MS_PER_HOUR) {
+      recentArrivals.shift();
+    }
+    let observed = 0;
+    for (const [, people] of recentArrivals) observed += people;
+    let expected = 0;
+    for (let t = now - MS_PER_HOUR; t < now; t += MS_PER_MINUTE) expected += forecastAt(t);
+    const scale = Math.min(2, Math.max(0.5, (observed + 5) / (expected + 5)));
+    const minutes = Math.ceil(lanes.horizonMs / MS_PER_MINUTE);
+    const perLaneMinute = rate / 60;
+    const out = outAt(now);
+    /** Longest projected wait (ms) with `added` lanes more from `fromMs` (negative: fewer). */
+    const project = (added: number, fromMs: number): number => {
+      let backlog = waitingPeople();
+      let longest = 0;
+      for (let m = 0; m < minutes; m++) {
+        const t = now + m * MS_PER_MINUTE;
+        let ready = 0;
+        for (const r of pendingReady) if (r <= t) ready++;
+        const extra = Math.max(0, extraOpen + ready + (t >= fromMs ? added : 0));
+        const lanesOpen = Math.max(1, Math.min(plannedAt(t) + extra, lanesAvailable) - out);
+        const capacity = lanesOpen * perLaneMinute;
+        longest = Math.max(longest, backlog / capacity);
+        backlog = Math.max(0, backlog + forecastAt(t) * scale - capacity);
+      }
+      return longest * MS_PER_MINUTE;
+    };
+    /** Whether the duty manager follows the next recommendation. */
+    const follows = (): boolean =>
+      at(staffing.follows, recommendationIndex++ % staffing.follows.length, 'follow decision');
+    if (project(0, now) > lanes.targetWaitMs) {
+      const free = room(now);
+      if (free <= 0) return;
+      const readyAt = now + staffing.openDelayEstimateMs;
+      let wanted = 1;
+      while (wanted < free && project(wanted, readyAt) > lanes.targetWaitMs) wanted++;
+      laneDecisions++;
+      lastDecisionMs = now;
+      if (!follows()) return;
+      laneDecisionsFollowed++;
+      decideOpen(now, wanted);
+    } else if (
+      extraOpen > 0 &&
+      pendingReady.length === 0 &&
+      now - lastOpenedAtMs >= staffing.minOpenMs &&
+      project(-1, now) <= lanes.closeWhenWaitMs
+    ) {
+      laneDecisions++;
+      lastDecisionMs = now;
+      if (!follows()) return;
+      laneDecisionsFollowed++;
+      closeExtraLane(now);
+    }
   };
 
   sim.run((event) => {
@@ -752,13 +990,32 @@ export function simulateCheckpoint(
         lastServiceEndMs = now;
         staffedAtLastServiceEnd = staffedMs;
         idleWithDemandAtLastServiceEnd = idleWithDemandMs;
+        extraAtLastServiceEnd = extraLaneMs;
         startServices(now);
         break;
       }
       case LANE_CHANGE:
-        changeLanes(payload.lanes);
+        // Staff beyond the lanes the plan leaves free go back (the plan grew).
+        if (staffing !== undefined) {
+          extraOpen = Math.min(extraOpen, Math.max(0, lanesAvailable - plannedAt(now)));
+        }
+        updateLanes(now);
         startServices(now);
         break;
+      case LANE_READY:
+        laneReady(now);
+        startServices(now);
+        break;
+      case LANE_REVIEW: {
+        if (management === undefined) break;
+        if (management.kind === 'reactive') reviewReactive(now, management);
+        else reviewPredictive(now, management);
+        const screening = open - freeOpen + busyClosing;
+        if (now < lastArrivalMs || waitingPeople() > 0 || screening > 0) {
+          sim.scheduleAt(now + management.reviewIntervalMs, LANE_REVIEW, { kind: LANE_REVIEW });
+        }
+        break;
+      }
       case PRESENT:
         present(payload.passenger, now);
         break;
@@ -844,6 +1101,12 @@ export function simulateCheckpoint(
       maxWaiting,
       standingAreaMs,
       maxStanding,
+      extraLaneMs: extraAtLastServiceEnd,
+      laneDecisions,
+      laneDecisionsFollowed,
+      lanesOpened,
+      lanesClosed,
+      maxOpenLanes,
     },
   };
 }

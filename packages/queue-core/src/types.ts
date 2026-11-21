@@ -55,12 +55,49 @@ export type QueueOperation = PhysicalQueue | VirtualQueue;
  * A named, versioned policy: how the next ticket is selected and how the queue is operated.
  * Versions are immutable: any change to `selection` or `queue` needs a new version.
  */
+/**
+ * Today's practice for extra lanes (S8): a supervisor looks at the queue every `reviewIntervalMs`.
+ * When the wait it shows (people waiting / lanes open x lane rate) exceeds `openWhenWaitMs`, they
+ * have one more lane staffed; when it falls below `closeWhenWaitMs`, they send the staff of an
+ * extra lane back. They decide again only after `cooldownMs`.
+ */
+export interface ReactiveLanes {
+  readonly kind: 'reactive';
+  readonly reviewIntervalMs: Millis;
+  readonly openWhenWaitMs: Millis;
+  readonly closeWhenWaitMs: Millis;
+  readonly cooldownMs: Millis;
+}
+
+/**
+ * GateFlow's recommendation of extra lanes (S8): every `reviewIntervalMs` it projects the queue
+ * over `horizonMs` from the people waiting, the forecast of arrivals (scaled by the arrivals of
+ * the last hour) and the lanes that will be open. When the longest projected wait exceeds
+ * `targetWaitMs`, it recommends the fewest extra lanes that keep it within the target, counting
+ * the time staff need to open them. When one lane fewer would keep it below `closeWhenWaitMs`, it
+ * recommends closing an extra lane. The duty manager follows a recommendation or not; nothing is
+ * recommended again before `cooldownMs`, and lanes already on their way count as open.
+ */
+export interface PredictiveLanes {
+  readonly kind: 'predict';
+  readonly reviewIntervalMs: Millis;
+  readonly horizonMs: Millis;
+  readonly targetWaitMs: Millis;
+  readonly closeWhenWaitMs: Millis;
+  readonly cooldownMs: Millis;
+}
+
+/** How lanes are opened beyond the plan during the day (S8). */
+export type LaneManagement = ReactiveLanes | PredictiveLanes;
+
 export interface Policy {
   readonly id: string;
   readonly version: string;
   readonly title: string;
   readonly selection: SelectionParams;
   readonly queue: QueueOperation;
+  /** Extra lanes beyond the plan (S8). Absent: the lanes follow the plan only. */
+  readonly lanes?: LaneManagement;
 }
 
 /** Data needed to issue a ticket. */

@@ -9,7 +9,7 @@ engine** brings forward passengers who would miss their flight under FIFO but ca
 It does so within **declared, measurable fairness bounds**. GateFlow never changes security or
 border procedures: it organises the flow before they start.
 
-> **Status: slices S1 to S3 done.** This repository contains the simulation foundations:
+> **Status: slices S1 to S4 done.** This repository contains the simulation foundations:
 > - the priority engine;
 > - the queue state machine that the operational product will share;
 > - a reproducible discrete-event simulator of a checkpoint. It runs either as today's physical
@@ -46,10 +46,11 @@ The last command simulates 200 days with four policies, then writes
 - `fifo-manual`: today's physical queue with staff calling the flights that close within 20
   minutes (policy A', an idealised version of today's manual handling);
 - `virtual-fifo`: the GateFlow virtual queue served in FIFO order;
-- `priority-v1`: the GateFlow virtual queue with priority policy v1.
+- `priority-v2`: the GateFlow virtual queue with priority policy v2 and the fast track (priority
+  calls go to the next free lane).
 
-Also available: `priority-v0` (the S2 policy) and `priority-v1-strict` (v1 with the
-late-presentation rule).
+Also available: `priority-v0` (S2), `priority-v1` (S3, without the fast track) and
+`priority-v1-strict` (v1 with the late-presentation rule).
 
 Other commands:
 
@@ -58,7 +59,7 @@ pnpm sim validate --scenario scenarios/single-checkpoint-staffed.yaml
 ```
 
 ```bash
-pnpm sim run --scenario scenarios/single-checkpoint-strategic.yaml --seeds 1-50 --policies fifo,fifo-manual,priority-v1,priority-v1-strict
+pnpm sim run --scenario scenarios/single-checkpoint-demo.yaml --seeds 1-50 --policies fifo,fifo-manual,virtual-fifo,priority-v1,priority-v2
 ```
 
 ```bash
@@ -71,28 +72,26 @@ pnpm sim --help
 
 ## What the simulator shows today
 
-| Scenario (200 simulated days, SYNTHETIC) | Missed flights per day: A, no intervention | A', staff call closing flights | GateFlow, priority v1 | Net saved by v1 vs A' [95% CI] | Mean time standing in a queue: today / GateFlow |
+| Scenario (200 simulated days, SYNTHETIC) | Missed flights per day: A, no intervention | A', staff call closing flights | GateFlow, priority v2 | Net saved by v2 vs A' [95% CI] | Mean time standing in a queue: today / GateFlow |
 |---|---:|---:|---:|---:|---:|
-| `single-checkpoint-demo` (congested morning peak) | 55.1 | 14.7 | 18.0 | -3.3 [-4.1, -2.5] | 3.1 / 0.6 min |
-| `single-checkpoint-moderate` | 14.3 | 7.2 | 9.4 | -2.3 [-2.7, -1.9] | 1.3 / 0.5 min |
-| `single-checkpoint-staffed` (lanes follow demand) | 65.9 | 17.8 | 23.0 | -5.2 [-6.2, -4.1] | 3.6 / 0.7 min |
+| `single-checkpoint-demo` (congested morning peak) | 55.1 | 14.7 | 11.5 | 3.2 [2.5, 4.0] | 3.1 / 0.6 min |
+| `single-checkpoint-moderate` | 14.3 | 7.2 | 5.6 | 1.5 [1.2, 1.9] | 1.3 / 0.5 min |
+| `single-checkpoint-staffed` (lanes follow demand) | 65.9 | 17.8 | 16.5 | 1.2 [0.3, 2.3] | 3.6 / 0.7 min |
 
 How to read these numbers:
 - Today's manual handling, idealised (A'), is the benchmark that matters: staff who call closing
   flights every five minutes remove 50-75% of the misses.
-- GateFlow v1 saves 5 to 43 flights per day against a queue without intervention, and people
-  stop standing in line. It still misses 2.3 to 5.2 flights per day more than A'.
-  **On these assumptions GateFlow cannot claim to catch more flights than an attentive staff.**
-- The gap is last-minute passengers. Staff take them straight to a lane, while the virtual queue
-  makes them wait several minutes. The proposed slice S4 (fast track and staff escalation)
-  addresses exactly this; see [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
-- Non-prioritised passengers wait 0.02 to 0.18 minutes longer on average, and at most 0.07% of
-  them more than 5 minutes.
+- GateFlow v2 catches more flights than A' on all three scenarios, and people stop standing in
+  line.
+- The difference comes from the fast track: a priority call is made next and the passenger goes to
+  the next free lane. It saves 3.8 to 6.5 flights per day over v1, which did not have it. It
+  needs a fast-track entry to the lanes.
+- Non-prioritised passengers wait 0.03 to 0.24 minutes longer on average; at most 0.10% of them
+  more than 5 minutes.
 - The numbers rest on synthetic assumptions: response times, missed calls and today's practice
   must be measured. Reports with every assumption and limitation:
-  [docs/reports/slice-3](docs/reports/slice-3/README.md). Earlier reports, on simpler models,
-  remain in [docs/reports/slice-2](docs/reports/slice-2) and
-  [docs/reports/slice-1](docs/reports/slice-1).
+  [docs/reports/slice-4](docs/reports/slice-4/README.md). Earlier reports, on simpler models or
+  without the fast track, remain in [docs/reports](docs/reports).
 
 ## Repository layout
 

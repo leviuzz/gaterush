@@ -10,7 +10,7 @@ Status legend: **Done**, **Next**, **Planned**, **Gated** (needs a business deci
 
 | Milestone | Business plan stage | Status |
 |---|---|---|
-| M1: Simulator core and priority engine | R1 | In progress (S1 to S3 done) |
+| M1: Simulator core and priority engine | R1 | In progress (S1 to S4 done) |
 | M2: Simulator Studio (web, runs in the browser) | R1-R2 | Planned |
 | M3: Priority end-to-end in the browser, digital twin | R2 | Planned |
 | M4: Operations console and Predict preview (pitch-ready) | R2 | Planned |
@@ -25,8 +25,8 @@ Status legend: **Done**, **Next**, **Planned**, **Gated** (needs a business deci
 | **S1** | First reproducible FIFO vs priority comparison (CLI) + repository foundations | **Done** |
 | **S2** | Realistic calls: access buffer target, call latency, no-shows, recalls, recovery, committed "prepare" window, planned lane schedules | **Done** |
 | **S3** | Baseline A' (FIFO + manual handling of urgent passengers), groups and families, assisted path, eligibility and anti-abuse rules | **Done** |
-| S4 | Priority fast track and staff escalation: priority calls go to the next free lane, CRITICAL passengers are escalated to staff (see "S4 proposal" below) | **Next (proposed, needs approval)** |
-| S5 | Disruptions and data quality: delays with notification time, gate changes, lane outages, stale or missing feeds, ground truth vs knowledge, hysteresis, stability metrics | Planned |
+| **S4** | Priority fast track: priority calls go to the next free lane; staff escalation evaluated and not adopted (ADR-027, ADR-028) | **Done** |
+| S5 | Disruptions and data quality: delays with notification time, gate changes, lane outages, stale or missing feeds, ground truth vs knowledge, hysteresis, stability metrics | **Next** |
 | S6 | Parallel batches (worker threads), sensitivity sweeps (k/N, K, lanes, load factor, show-up), HTML report with charts | Planned |
 | S7 | Real schedules (OPDI import for VCE/TSF, seats mapping) and scenario library: normal, peak, disrupted, Mexico-like transfer hub | Planned (check data licences first) |
 | S8 | Experiment C: lane-opening recommendations with an operator model | Planned |
@@ -197,33 +197,62 @@ crowd at the checkpoint falls from 200-270 people to about 32. But on these assu
 not catch more flights than an attentive staff. Full reports and observations:
 [docs/reports/slice-3](docs/reports/slice-3/README.md).
 
-## S4 proposal: priority fast track and staff escalation (needs approval)
+## S4: acceptance criteria and evidence
 
-**Problem.** In the virtual queue, a boosted passenger still waits for the prepare window, their
-own walk back and the call-ahead buffer at the lanes. A passenger who arrives 10-20 minutes before
-boarding closes cannot get through in time, and the engine flags them CRITICAL. In the simulation
-nobody acts on that flag, while A' staff take them straight to a lane. The same staff rule applied
-to the virtual queue misses 27.3 flights per day on the demo instead of 14.0 (calibration seeds).
+Scope delivered (approved as "priority fast track and staff escalation"):
+- **Fast track** (ADR-027, policy `priority-v2` = v1 + fast track):
+  - a priority call is made next, ahead of the prepare window;
+  - the party goes to the next free lane once it has validated its ticket;
+  - the engine estimates such calls with the fast-track response time, shortened for a passenger
+    who has just been at the access point;
+  - an URGENT head of the waiting list is boosted too;
+  - every person passed, in the queue, in the window and at the lanes, counts towards K.
+- **Staff escalation** of CRITICAL passengers was prototyped and measured. It adds at most 0.45
+  flights per day once the fast track exists, so it is not part of the simulated policy
+  (ADR-028).
+- Results schema 4, CLI 0.4.0 (default policies with `priority-v2`), engine 0.4.0, queue core
+  0.3.0, model 0.4.0.
 
-**Proposal.**
-1. **Fast track.** A priority-called party validates at the access point and goes to the next free
-   lane, ahead of the passengers already waiting at the lanes, as assisted passengers do. These
-   passes count as overtakes, so the bound K still covers them.
-2. **Staff escalation.** CRITICAL passengers are listed for staff, who escort them to the next free
-   lane. To stay comparable with A', the simulation idealises staff the same way: they act on the
-   list every five minutes. Groups too large for the cap are escalated the same way.
-3. **Engine estimate.** For fast-tracked calls, the call-to-screening estimate becomes the response
-   time instead of the call-ahead time, so fewer passengers are written off as CRITICAL.
-4. **To evaluate:** whether priority calls should also overtake the prepare window, which delays
-   each "prepare" ticket by one call.
+| # | Criterion (as proposed) | Evidence |
+|---|---|---|
+| 1 | On the S3 scenarios, B with the new features is not worse than A' | On the three main scenarios (200 days), `priority-v2` misses fewer flights than A': +3.2 [2.5, 4.0], +1.5 [1.2, 1.9] and +1.2 [0.3, 2.3] per day. On the strategic stress test it misses 9.6 more, because A' also pulls forward the people who arrive late on purpose. For everybody else v2 is better there too (12.7 against 13.9 missed per day). Escalation is not included (ADR-028). |
+| 2 | The cost to other passengers stays within the ADR-025 criterion | Calibration seeds 1001-1020 (ADR-027) and report seeds 1-200: at most 0.10% of non-prioritised passengers are delayed by more than 5 minutes against `virtual-fifo`. Overtakes alone delay nobody by more than 7.3 minutes, since K = 30 covers the queue, the window and the lanes. Larger delays are knock-on effects of missed calls; they are reported and analysed. |
+| 3 | With the new features disabled, S3 is reproduced exactly | `packages/sim-metrics/test/s3-regression.test.ts`: `priority-v1` (no fast track) on seeds 1-3 reproduces every metric of the four S3 policies and five S3 comparisons, against a fixture saved from the S3 commit. The S1 and S2 regressions still hold. |
 
-**Acceptance criteria (proposed):**
-- On the S3 scenarios, B with fast track and escalation is not worse than A'.
-- The cost to other passengers stays within the ADR-025 criterion.
-- With both features disabled, S3 is reproduced exactly.
+Verification beyond the criteria:
+- **Engine properties.** Margins from their definitions with the fast track; a fast-track boost
+  never pushes a committed person past K; the fast track never makes a ticket less feasible;
+  without it the new inputs are ignored.
+- **Queue properties.** An independent model of the prepare window with fast-track insertions
+  and the overtakes they cause.
+- **Simulator properties.** On random and congested populations, parties are screened in the
+  order of validation except for fast-tracked ones, and K holds for every passenger, lane passes
+  included. A coverage test requires passes at the lanes and the bound K to be reached.
+- **Hand-computed timeline** of two fast-tracked parties passing the people at a lane, in their
+  own order, and stopped by K.
+- **Mutation checks:** 16 deliberate defects in the new mechanisms are caught, 6 in the engine, 5
+  in the queue and 5 in the simulator.
 
-**To confirm with the airport:** a priority entry at the lanes, and staff available to escort
-escalated passengers.
+Findings that changed the design during the slice:
+- **K covers every pass.** A first prototype that did not count the passes at the window and at
+  the lanes caught more flights but delayed up to 0.59% of other passengers by more than
+  5 minutes. Counting them brings the cost back within the criterion.
+- **URGENT head.** Under the fast track an URGENT ticket at the head of the waiting list is
+  boosted too. Without that rule it waited behind the window and the people at the lanes.
+- **Escalation not adopted** (ADR-028), see above.
+
+### S4 results at a glance (SIMULATED, synthetic data: not operational evidence)
+
+| Scenario (200 simulated days) | Missed flights per day: A `fifo` | A' `fifo-manual` | `priority-v1` | `priority-v2` | Net saved by v2 vs A' [95% CI] | Net saved by the fast track alone (v2 vs v1) |
+|---|---:|---:|---:|---:|---:|---:|
+| `single-checkpoint-demo` | 55.1 | 14.7 | 18.0 | 11.5 | 3.2 [2.5, 4.0] | 6.5 [6.0, 7.1] |
+| `single-checkpoint-moderate` | 14.3 | 7.2 | 9.4 | 5.6 | 1.5 [1.2, 1.9] | 3.8 [3.4, 4.2] |
+| `single-checkpoint-staffed` | 65.9 | 17.8 | 23.0 | 16.5 | 1.2 [0.3, 2.3] | 6.5 [5.9, 7.0] |
+| `single-checkpoint-strategic` (stress test) | 204.5 | 132.0 | 164.7 | 141.6 | -9.6 [-10.9, -8.2] | 23.1 [22.1, 24.2] |
+
+On these assumptions GateFlow v2 catches more flights than idealised manual handling on every
+main scenario, with 60-80% less standing time. It needs a fast-track entry to the lanes. Full
+reports: [docs/reports/slice-4](docs/reports/slice-4/README.md).
 
 ## Later milestones (summary)
 

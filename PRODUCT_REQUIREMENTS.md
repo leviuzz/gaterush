@@ -158,9 +158,9 @@ These must be checked with counsel; nothing below is legal advice.
 7. How quickly do passengers answer a call at the target checkpoint, and how many miss it? These
    values size the call-ahead buffer and the timeouts (ADR-017, ADR-018), and must be measured,
    for instance in shadow mode.
-8. Is there, or can there be, a priority entry to the lanes that called priority passengers can
-   use, and staff to escort passengers escalated as CRITICAL? Both are needed to match today's
-   manual handling for last-minute passengers (S4 proposal in the implementation plan).
+8. Is there, or can there be, a fast-track entry to the lanes for priority passengers, and what is
+   its capacity? Policy v2 relies on it to beat today's manual handling (ADR-027): fast-tracked
+   passengers pass the people waiting at the lanes, within the bound K.
 
 ## 10. Glossary
 
@@ -174,6 +174,9 @@ These must be checked with counsel; nothing below is legal advice.
 - **Call-ahead buffer:** passengers called in advance so that lanes are not left waiting for
   people walking back; sized in seconds of lane work (ADR-017).
 - **Cut-off (deadline):** boarding close of the passenger's flight.
+- **Fast track:** priority calls made next, ahead of the prepare window, with the passenger going
+  to the next free lane once the ticket is validated; every person passed counts towards K
+  (ADR-027).
 - **Feasibility margin (F):** the margin below which a passenger counts as unable to make it even
   if called now (CRITICAL), separate from the safety buffer used to detect risk (ADR-023).
 - **Group (party):** passengers travelling together on one ticket, called together; every count

@@ -1,6 +1,6 @@
 # GateFlow architecture
 
-This document describes the architecture as implemented (slices S1 to S3: priority engine, queue
+This document describes the architecture as implemented (slices S1 to S4: priority engine, queue
 state machine and simulator) and the agreed direction for the operational product. Decisions are
 referenced as ADR-nnn ([DECISIONS.md](DECISIONS.md)).
 
@@ -97,7 +97,7 @@ Verification:
 - byte-identical golden files, run on Node 22 and 24 in CI;
 - an end-to-end `cmp` of two CLI runs in CI.
 
-## 5. Priority engine (engine version 0.3.0)
+## 5. Priority engine (engine version 0.4.0)
 
 Pure functions in `@gateflow/priority-engine`:
 
@@ -149,6 +149,20 @@ Selection (`constrained-edf`):
    either (`OVERTAKE_ROOM_EXHAUSTED`).
 3. Else select the oldest ticket (`FIFO`, or `CAP_REACHED` when the cap blocked a boost).
 
+Fast track (`fastTrack`, ADR-027, used by `priority-v2`):
+- a boost is made next, ahead of the committed window;
+- the party goes to the next free lane once its ticket is validated.
+
+The engine therefore estimates a boosted journey differently from the journey through the queue
+(`journeyEstimates`):
+- the response time is the fast-track estimate (the walk back, without the call-ahead), or the
+  time since the passenger was last at the access point when that is shorter;
+- the time C to call the window is not counted;
+- `slackFifo` keeps the journey through the queue.
+
+An URGENT head of the waiting list is boosted too. A boost is refused when it would push one of
+the committed people past K (`aheadMaxOvertakenCount`, reason `OVERTAKE_ROOM_EXHAUSTED`).
+
 Selection `flight-call` models today's staff practice (baseline A', ADR-022): at the last
 announcement `floor(t / I) x I`, the tickets whose deadline is at most `W` away are called first,
 earliest deadline first, with no cap and no overtake bound (`FLIGHT_CALL`).
@@ -167,7 +181,9 @@ Guarantees, verified by property tests with 1,000 generated cases each:
 - both margins match their definitions, and selection and assessment agree on boost eligibility;
 - late presenters and parties larger than `k` are never boosted;
 - the S3 parameters at their defaults reproduce the S2 engine;
-- the flight-call selection matches an independent oracle.
+- the flight-call selection matches an independent oracle;
+- under the fast track a boost never pushes a committed person past K, the fast track never
+  makes a ticket less feasible, and without it the new inputs are ignored.
 
 Mutation checks (cap and guard off by one, guard disabled, committed window ignored, people counted
 as tickets, rules disabled) are caught by the suite.
@@ -203,8 +219,13 @@ States: `QUEUED -> PREPARE -> CALLED -> RECALLED -> NO_SHOW -> EXPIRED`, where:
 - **Parties.** A ticket carries its party size, presentation time and scheduled departure. The
   window, the waiting list and the outstanding calls are also counted in people; a party called
   ahead of older tickets adds its size to their overtake counts.
+- **Fast track.** A fast-track priority commitment goes ahead of the prepare window, behind earlier
+  fast-track commitments only. The tickets it passes are overtaken by its people.
+- **Last seen.** Each ticket records when the passenger was last at the access point (issue,
+  rescan), which shortens the engine's fast-track estimate.
 - **Presets.** `fifo` (A, physical), `fifo-manual` (A', physical, staff flight calls),
-  `virtual-fifo`, `priority-v0`, `priority-v1` and `priority-v1-strict` (virtual queue).
+  `virtual-fifo`, `priority-v0`, `priority-v1`, `priority-v1-strict` and `priority-v2` (virtual
+  queue).
 
 Property tests (1,000 random operation sequences on random policies, 300 for determinism) check,
 independently of the implementation: zero churn, window size at most M, state counters, a single admission per ticket,
@@ -212,7 +233,7 @@ terminal states, chronological events, the cap and the K bound over commitments 
 independent overtake model), and determinism. A coverage test guarantees that the sequences reach
 priority commitments, the cap, the guard and reactivations.
 
-## 7. Checkpoint simulation model (model version 0.3.0)
+## 7. Checkpoint simulation model (model version 0.4.0)
 
 `simulateCheckpoint(population, policy, { classification })` is a discrete-event simulation of
 one checkpoint operated by a `CheckpointQueue`:
@@ -231,6 +252,9 @@ one checkpoint operated by a `CheckpointQueue`:
   together on one lane, its members one after the other. Assisted parties go to the next free
   lane ahead of the queue and of the call-ahead buffer, under every policy, and count in the call
   pipeline.
+- **Fast track at the lanes (ADR-027).** A fast-tracked party that validates its ticket goes ahead
+  of the parties waiting at the lanes, never ahead of an earlier fast-tracked party, and stops
+  behind the first party that would exceed K overtakes. Every party it passes counts the pass.
 - **Lanes.** A planned schedule gives the open lanes over the day. Lanes close from the highest
   number down, finish the passenger they are screening, and a lane closing at time t takes nobody
   at t.
@@ -254,8 +278,10 @@ Validation:
   physical queue";
 - exact Little's law, equivalences (zero cap = FIFO with and without call mechanics; unknown
   deadlines = FIFO), Erlang C on three M/M/c configurations (ADR-012);
-- the S1 and S2 regressions: with the S3 features disabled, every S1 and S2 metric is
+- the S1, S2 and S3 regressions: with the later features disabled, every S1, S2 and S3 metric is
   reproduced exactly on seeds 1-3 (sim-metrics);
+- the lane order (validation order, except for fast-tracked parties) and the bound K, lane passes
+  included, on random and congested populations, with a hand-computed fast-track timeline;
 - hand-computed cases for groups (a family boosted as a whole) and for assisted precedence;
 - mutation checks on the event order, lane accounting, call rule, response rule, party handling
   and metrics.
@@ -282,8 +308,8 @@ Validation:
 - policy metrics, counted in people: missed flights (total and by segment), time to screening
   and standing time, prioritised passengers, overtakes, calls, second calls, no-shows,
   reactivations, new tickets, staffed lane-hours, lane utilisation, idle lane time, tickets
-  waiting and people standing, risk classes on arrival, groups, assisted passengers and strategic
-  late arrivals;
+  waiting and people standing, risk classes on arrival, groups, assisted passengers, strategic
+  late arrivals, people through the fast track and people passed at the lanes;
 - paired comparisons for each requested `candidate`/`reference` pair, weighted by party size:
   saved, lost, net, the at-risk cohort, the extra wait of non-prioritised passengers, and the
   change in time to screening and standing time. By default:
@@ -293,7 +319,7 @@ Validation:
     priority policies listed before it.
 
 `buildResults` aggregates over days (mean, P5, P50, P95, min, max, and bootstrap intervals for
-comparisons) into `results.json` (`schema: gateflow.sim.results/3`):
+comparisons) into `results.json` (`schema: gateflow.sim.results/4`):
 - disclaimer;
 - manifest: versions, scenario hash, seeds, policies, comparisons, classification, statistics
   settings, source revision, reproduce command;

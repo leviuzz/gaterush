@@ -6,6 +6,69 @@ must be listed, together with the component versions it bumps.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-21: Slice S4
+
+The fast track for priority calls (policy `priority-v2`). On the S3 scenarios GateFlow now catches
+more flights than idealised manual handling (A').
+
+### Simulated numbers change
+
+- New policy `priority-v2` (v1 plus the fast track). On the slice-4 reports (200 days) it misses
+  11.5, 5.6 and 16.5 flights per day on the demo, moderate and staffed scenarios. That is 3.2, 1.5
+  and 1.2 fewer than A' (all intervals exclude zero), and 6.5, 3.8 and 6.5 fewer than v1.
+- `fifo`, `fifo-manual`, `virtual-fifo`, `priority-v0`, `priority-v1` and `priority-v1-strict` are
+  unchanged. With the fast track off, every S3 metric is reproduced exactly (new regression test
+  against a fixture saved from the S3 commit, seeds 1-3); S1 and S2 still are.
+- Golden files regenerated: five policies (`priority-v2` added), nine comparisons, two new
+  metrics.
+
+### Added
+
+- Fast track (ADR-027), selection parameter `fastTrack`:
+  - a priority call is made next, ahead of the prepare window;
+  - the party goes to the next free lane once it has validated its ticket;
+  - the engine estimates such calls with the fast-track response time, shortened for a
+    passenger who has just been at the access point, and without the time to call the window;
+  - an URGENT head of the waiting list is boosted too;
+  - every person passed, in the queue, in the window and at the lanes, counts towards K.
+- Preset `priority-v2` 0.1.0 (v1 plus the fast track, ADR-027).
+- Metrics `fastTrackPeople` (people through the fast track) and `lanePassedPeople` (people
+  passed at the lanes), with report rows for fast-track policies.
+- Engine, queue and simulator tests:
+  - engine properties for the fast track;
+  - an independent model of the prepare window with fast-track insertions;
+  - the lane-order property and the bound K including lane passes, with coverage on congested
+    populations;
+  - a hand-computed timeline;
+  - 16 mutation checks.
+- ADR-027 and ADR-028, slice-4 reports.
+
+### Changed
+
+- `@gateflow/priority-engine` 0.4.0 (engine version 0.4.0):
+  - `ClassificationParams.fastTrack`;
+  - `CheckpointEstimates.fastTrackResponseMs`, which may not exceed `responseMs`;
+  - `WaitingTicket.lastSeenAtMs`;
+  - `EngineInput.aheadMaxOvertakenCount`;
+  - `journeyEstimates()`;
+  - the FIFO margin always uses the journey through the queue, while L, the margin if selected
+    now and feasibility use the boosted journey.
+- `@gateflow/queue-core` 0.3.0:
+  - fast-track commitments go ahead of the prepare window (behind earlier ones) and count as
+    overtakes of the tickets they pass;
+  - tickets remember when the passenger was last at the access point;
+  - `TicketView.fastTracked` and `TicketView.lastSeenAtMs`;
+  - `fastTrackResponseEstimateMs()`.
+- `@gateflow/sim-model` 0.4.0 (model version 0.4.0): fast-tracked parties go ahead of the people
+  at the lanes who still have room under K; passes at the lanes count in each passenger's
+  overtakes; new run statistics.
+- `@gateflow/sim-metrics` 0.4.0 (results schema `gateflow.sim.results/4`): new metrics, report
+  rows and model limitations (fast track; staff escorts not modelled).
+- `@gateflow/sim-cli` 0.4.0: default policies `fifo,fifo-manual,virtual-fifo,priority-v2`; risk
+  classes fall back to `priority-v2`.
+- CI publishes the four 200-day reports with `fifo,fifo-manual,virtual-fifo,priority-v1,priority-v2`.
+- Implementation plan: S4 done, S5 (disruptions and data quality) next.
+
 ## [0.3.0] - 2026-11-21: Slice S3
 
 Baseline A' (today's manual handling), groups and families, the assisted path, eligibility rules

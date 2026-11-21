@@ -25,7 +25,7 @@ dimensions:
   - id: screening-time
     title: Mean screening time per person
     parameter: serviceTimeMeanSeconds
-    values: [24, 30, 36, 42]
+    values: [24, 27, 30, 33, 36]
   - id: connection-time
     title: Time left when connecting passengers reach the checkpoint
     parameter: showUpShiftMinutes

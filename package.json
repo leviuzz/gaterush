@@ -1,6 +1,6 @@
 {
   "name": "gateflow",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "description": "GateFlow: deterministic, explainable priority queuing for airport checkpoints (monorepo).",
   "type": "module",

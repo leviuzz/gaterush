@@ -9,7 +9,7 @@
     "commit": "test",
     "versions": {
       "engine": "0.5.0",
-      "queueCore": "0.4.0",
+      "queueCore": "0.5.0",
       "model": "0.5.0",
       "kernel": "0.1.0",
       "populationGenerator": "0.4.0",
@@ -107,7 +107,7 @@
       },
       {
         "id": "priority-v3",
-        "version": "0.1.0",
+        "version": "0.2.0",
         "title": "GateFlow virtual queue with constrained EDF priority v3: fast track, stale-data rule and hysteresis (policy B)",
         "selection": {
           "kind": "constrained-edf",
@@ -124,7 +124,7 @@
           ],
           "latePresentationCutoffMs": null,
           "fastTrack": true,
-          "maxDeadlineAgeMs": 1800000,
+          "maxDeadlineAgeMs": 3600000,
           "hysteresisMs": 180000
         },
         "queue": {

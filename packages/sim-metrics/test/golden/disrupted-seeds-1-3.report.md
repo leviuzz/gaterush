@@ -14,7 +14,7 @@ Means per simulated day. P5-P95 is the spread across days; brackets give the 95%
 | Physical FIFO queue with staff calling closing flights (status quo with manual handling, policy A'): `fifo-manual` 0.1.0 | 13.3 (P5-P95 7.9-16.9) | 4.7 | 2.10 |
 | GateFlow virtual queue in FIFO order: `virtual-fifo` 0.1.0 | 69.0 (P5-P95 47.3-97.7) | 30.0 | 10.87 |
 | GateFlow virtual queue with constrained EDF priority v2 and fast track (policy B): `priority-v2` 0.1.0 | 12.3 (P5-P95 3.4-25.0) | 4.0 | 1.94 |
-| GateFlow virtual queue with constrained EDF priority v3: fast track, stale-data rule and hysteresis (policy B): `priority-v3` 0.1.0 | 19.3 (P5-P95 8.8-25.9) | 6.0 | 3.05 |
+| GateFlow virtual queue with constrained EDF priority v3: fast track, stale-data rule and hysteresis (policy B): `priority-v3` 0.2.0 | 12.0 (P5-P95 3.4-24.1) | 4.0 | 1.89 |
 
 | `fifo-manual` compared with `fifo` | Mean per day [95% CI] |
 |---|---:|
@@ -48,12 +48,12 @@ Means per simulated day. P5-P95 is the spread across days; brackets give the 95%
 
 | `priority-v3` compared with `fifo` | Mean per day [95% CI] |
 |---|---:|
-| Flights saved: missed with `fifo`, caught with `priority-v3` | 50.3 [29.0, 69.0] |
-| Flights lost: caught with `fifo`, missed with `priority-v3` | 2.0 [0.7, 3.4] |
-| **Net flights saved** | **48.3 [27.0, 80.0]** |
+| Flights saved: missed with `fifo`, caught with `priority-v3` | 57.0 [38.0, 72.6] |
+| Flights lost: caught with `fifo`, missed with `priority-v3` | 1.3 [0.0, 2.7] |
+| **Net flights saved** | **55.7 [38.0, 80.0]** |
 | Days with a net gain / with a net loss | 100.0% / 0.0% |
-| At-risk passengers reaching the gate in time (117.0 per day classified URGENT on arrival under `fifo`) | 44.2% with `fifo`, 85.5% with `priority-v3` |
-| Change in mean time from arrival to screening (min) | 0.00 [0.00, 0.00] |
+| At-risk passengers reaching the gate in time (117.0 per day classified URGENT on arrival under `fifo`) | 44.2% with `fifo`, 91.7% with `priority-v3` |
+| Change in mean time from arrival to screening (min) | 0.00 [0.00, 0.01] |
 | Change in mean time standing in a queue (min) | -2.97 [-3.50, -2.68] |
 
 | `priority-v2` compared with `virtual-fifo` | Mean per day [95% CI] |
@@ -78,32 +78,32 @@ Means per simulated day. P5-P95 is the spread across days; brackets give the 95%
 
 | `priority-v3` compared with `virtual-fifo` | Mean per day [95% CI] |
 |---|---:|
-| Flights saved: missed with `virtual-fifo`, caught with `priority-v3` | 50.3 [35.7, 78.0] |
+| Flights saved: missed with `virtual-fifo`, caught with `priority-v3` | 57.7 [39.0, 78.0] |
 | Flights lost: caught with `virtual-fifo`, missed with `priority-v3` | 0.7 [0.0, 2.0] |
-| **Net flights saved** | **49.7 [34.0, 76.0]** |
+| **Net flights saved** | **57.0 [44.5, 76.0]** |
 | Days with a net gain / with a net loss | 100.0% / 0.0% |
-| At-risk passengers reaching the gate in time (125.3 per day classified URGENT on arrival under `virtual-fifo`) | 48.7% with `virtual-fifo`, 85.9% with `priority-v3` |
-| Change in mean time from arrival to screening (min) | 0.00 [-0.01, 0.00] |
+| At-risk passengers reaching the gate in time (125.3 per day classified URGENT on arrival under `virtual-fifo`) | 48.7% with `virtual-fifo`, 91.8% with `priority-v3` |
+| Change in mean time from arrival to screening (min) | 0.00 [0.00, 0.00] |
 | Change in mean time standing in a queue (min) | 0.01 [0.01, 0.02] |
 
 | `priority-v3` compared with `fifo-manual` | Mean per day [95% CI] |
 |---|---:|
-| Flights saved: missed with `fifo-manual`, caught with `priority-v3` | 4.0 [1.0, 6.3] |
-| Flights lost: caught with `fifo-manual`, missed with `priority-v3` | 10.0 [1.0, 16.0] |
-| **Net flights saved** | **-6.0 [-9.3, 0.0]** |
-| Days with a net gain / with a net loss | 0.0% / 66.7% |
-| At-risk passengers reaching the gate in time (117.0 per day classified URGENT on arrival under `fifo-manual`) | 90.0% with `fifo-manual`, 85.5% with `priority-v3` |
-| Change in mean time from arrival to screening (min) | 0.00 [0.00, 0.00] |
+| Flights saved: missed with `fifo-manual`, caught with `priority-v3` | 6.0 [1.0, 10.3] |
+| Flights lost: caught with `fifo-manual`, missed with `priority-v3` | 4.7 [0.0, 13.0] |
+| **Net flights saved** | **1.3 [-6.8, 14.0]** |
+| Days with a net gain / with a net loss | 33.3% / 33.3% |
+| At-risk passengers reaching the gate in time (117.0 per day classified URGENT on arrival under `fifo-manual`) | 90.0% with `fifo-manual`, 91.7% with `priority-v3` |
+| Change in mean time from arrival to screening (min) | 0.00 [0.00, 0.01] |
 | Change in mean time standing in a queue (min) | -2.98 [-3.27, -2.62] |
 
 | `priority-v3` compared with `priority-v2` | Mean per day [95% CI] |
 |---|---:|
 | Flights saved: missed with `priority-v2`, caught with `priority-v3` | 0.3 [0.0, 0.7] |
-| Flights lost: caught with `priority-v2`, missed with `priority-v3` | 7.3 [0.0, 22.0] |
-| **Net flights saved** | **-7.0 [-22.0, 1.0]** |
-| Days with a net gain / with a net loss | 33.3% / 33.3% |
-| At-risk passengers reaching the gate in time (125.7 per day classified URGENT on arrival under `priority-v2`) | 91.8% with `priority-v2`, 86.2% with `priority-v3` |
-| Change in mean time from arrival to screening (min) | 0.00 [-0.01, 0.00] |
+| Flights lost: caught with `priority-v2`, missed with `priority-v3` | 0.0 [0.0, 0.0] |
+| **Net flights saved** | **0.3 [0.0, 1.0]** |
+| Days with a net gain / with a net loss | 33.3% / 0.0% |
+| At-risk passengers reaching the gate in time (125.7 per day classified URGENT on arrival under `priority-v2`) | 91.8% with `priority-v2`, 92.0% with `priority-v3` |
+| Change in mean time from arrival to screening (min) | 0.00 [0.00, 0.00] |
 | Change in mean time standing in a queue (min) | 0.00 [0.00, 0.00] |
 
 ## 2. Waiting times
@@ -116,7 +116,7 @@ Means per simulated day. P5-P95 is the spread across days; brackets give the 95%
 | `fifo-manual` | 3.6 | 0.1 | 15.0 | 23.1 | 32.2 | 3.6 | 15.0 | 32.2 |
 | `virtual-fifo` | 3.6 | 0.1 | 15.8 | 21.2 | 79.7 | 0.6 | 1.9 | 4.1 |
 | `priority-v2` | 3.6 | 0.1 | 15.7 | 23.5 | 82.8 | 0.7 | 2.1 | 4.1 |
-| `priority-v3` | 3.6 | 0.1 | 15.6 | 23.4 | 83.3 | 0.7 | 2.1 | 4.1 |
+| `priority-v3` | 3.6 | 0.1 | 15.7 | 23.6 | 83.3 | 0.7 | 2.1 | 4.1 |
 
 ## 3. Cost for passengers not prioritised by `fifo-manual` (compared with `fifo`)
 
@@ -154,16 +154,16 @@ Extra wait = time to screening with the candidate minus time to screening with t
 
 | Metric | Value [95% CI] |
 |---|---:|
-| Passengers prioritised per day | 127.3 (P5-P95 100.6-162.7) (1.89% of tickets called) |
-| Mean extra wait of non-prioritised passengers (min) | 0.24 [0.14, 0.35] |
-| P90 extra wait of non-prioritised passengers (min) | 0.90 [0.64, 1.15] |
+| Passengers prioritised per day | 136.3 (P5-P95 116.1-163.8) (2.02% of tickets called) |
+| Mean extra wait of non-prioritised passengers (min) | 0.26 [0.20, 0.35] |
+| P90 extra wait of non-prioritised passengers (min) | 0.96 [0.64, 1.21] |
 | Largest extra wait of any non-prioritised passenger, worst day (min) | 63.3 |
-| Share of non-prioritised passengers delayed by more than 5 min | 0.61% |
+| Share of non-prioritised passengers delayed by more than 5 min | 0.63% |
 | Most people who overtook one ticket, worst day (bound K = 30, passes in the window and at the lanes included) | 30 |
-| Calls where the cap blocked a priority call, per day | 6.0 |
+| Calls where the cap blocked a priority call, per day | 10.3 |
 | Calls where the overtake guard took precedence (a ticket had reached K overtakes), per day | 12.3 |
-| People through the fast track per day | 127.0 |
-| People passed at the lanes by fast-tracked parties per day | 804.0 |
+| People through the fast track per day | 136.0 |
+| People passed at the lanes by fast-tracked parties per day | 884.3 |
 
 ## 6. Cost for passengers not prioritised by `priority-v2` (compared with `virtual-fifo`)
 
@@ -205,16 +205,16 @@ Extra wait = time to screening with the candidate minus time to screening with t
 
 | Metric | Value [95% CI] |
 |---|---:|
-| Passengers prioritised per day | 127.3 (P5-P95 100.6-162.7) (1.89% of tickets called) |
-| Mean extra wait of non-prioritised passengers (min) | 0.24 [0.14, 0.35] |
-| P90 extra wait of non-prioritised passengers (min) | 1.06 [0.59, 1.49] |
+| Passengers prioritised per day | 136.3 (P5-P95 116.1-163.8) (2.02% of tickets called) |
+| Mean extra wait of non-prioritised passengers (min) | 0.26 [0.20, 0.35] |
+| P90 extra wait of non-prioritised passengers (min) | 1.11 [0.59, 1.53] |
 | Largest extra wait of any non-prioritised passenger, worst day (min) | 4.5 |
 | Share of non-prioritised passengers delayed by more than 5 min | 0.00% |
 | Most people who overtook one ticket, worst day (bound K = 30, passes in the window and at the lanes included) | 30 |
-| Calls where the cap blocked a priority call, per day | 6.0 |
+| Calls where the cap blocked a priority call, per day | 10.3 |
 | Calls where the overtake guard took precedence (a ticket had reached K overtakes), per day | 12.3 |
-| People through the fast track per day | 127.0 |
-| People passed at the lanes by fast-tracked parties per day | 804.0 |
+| People through the fast track per day | 136.0 |
+| People passed at the lanes by fast-tracked parties per day | 884.3 |
 
 ## 9. Cost for passengers not prioritised by `priority-v3` (compared with `fifo-manual`)
 
@@ -222,16 +222,16 @@ Extra wait = time to screening with the candidate minus time to screening with t
 
 | Metric | Value [95% CI] |
 |---|---:|
-| Passengers prioritised per day | 127.3 (P5-P95 100.6-162.7) (1.89% of tickets called) |
-| Mean extra wait of non-prioritised passengers (min) | 0.08 [0.04, 0.12] |
-| P90 extra wait of non-prioritised passengers (min) | 0.21 [0.13, 0.29] |
+| Passengers prioritised per day | 136.3 (P5-P95 116.1-163.8) (2.02% of tickets called) |
+| Mean extra wait of non-prioritised passengers (min) | 0.09 [0.07, 0.12] |
+| P90 extra wait of non-prioritised passengers (min) | 0.24 [0.16, 0.32] |
 | Largest extra wait of any non-prioritised passenger, worst day (min) | 61.4 |
-| Share of non-prioritised passengers delayed by more than 5 min | 0.79% |
+| Share of non-prioritised passengers delayed by more than 5 min | 0.74% |
 | Most people who overtook one ticket, worst day (bound K = 30, passes in the window and at the lanes included) | 30 |
-| Calls where the cap blocked a priority call, per day | 6.0 |
+| Calls where the cap blocked a priority call, per day | 10.3 |
 | Calls where the overtake guard took precedence (a ticket had reached K overtakes), per day | 12.3 |
-| People through the fast track per day | 127.0 |
-| People passed at the lanes by fast-tracked parties per day | 804.0 |
+| People through the fast track per day | 136.0 |
+| People passed at the lanes by fast-tracked parties per day | 884.3 |
 
 ## 10. Cost for passengers not prioritised by `priority-v3` (compared with `priority-v2`)
 
@@ -239,16 +239,16 @@ Extra wait = time to screening with the candidate minus time to screening with t
 
 | Metric | Value [95% CI] |
 |---|---:|
-| Passengers prioritised per day | 127.3 (P5-P95 100.6-162.7) (1.89% of tickets called) |
-| Mean extra wait of non-prioritised passengers (min) | 0.00 [-0.01, 0.00] |
+| Passengers prioritised per day | 136.3 (P5-P95 116.1-163.8) (2.02% of tickets called) |
+| Mean extra wait of non-prioritised passengers (min) | 0.00 [0.00, 0.00] |
 | P90 extra wait of non-prioritised passengers (min) | 0.00 [0.00, 0.00] |
-| Largest extra wait of any non-prioritised passenger, worst day (min) | 14.1 |
-| Share of non-prioritised passengers delayed by more than 5 min | 0.14% |
+| Largest extra wait of any non-prioritised passenger, worst day (min) | 7.3 |
+| Share of non-prioritised passengers delayed by more than 5 min | 0.01% |
 | Most people who overtook one ticket, worst day (bound K = 30, passes in the window and at the lanes included) | 30 |
-| Calls where the cap blocked a priority call, per day | 6.0 |
+| Calls where the cap blocked a priority call, per day | 10.3 |
 | Calls where the overtake guard took precedence (a ticket had reached K overtakes), per day | 12.3 |
-| People through the fast track per day | 127.0 |
-| People passed at the lanes by fast-tracked parties per day | 804.0 |
+| People through the fast track per day | 136.0 |
+| People passed at the lanes by fast-tracked parties per day | 884.3 |
 
 ## 11. Call mechanics
 
@@ -280,7 +280,7 @@ Disruptions of the simulated days (ground truth, the same for every policy), mea
 | `fifo-manual` | 0.0 of 1798 | 18.3 | not classified | - | - |
 | `virtual-fifo` | 4.3 of 1798 | 0.0 | not classified | - | - |
 | `priority-v2` | 0.0 of 1798 | 13.7 | 5.48 | 217.7 | 41.3 |
-| `priority-v3` | 0.0 of 1798 | 13.7 | 1.22 | 0.0 | 0.0 |
+| `priority-v3` | 0.0 of 1798 | 13.7 | 1.08 | 0.0 | 0.0 |
 
 ## 13. Groups, assisted passengers and late arrivals
 
@@ -292,7 +292,7 @@ Means per day. A group (two people or more) holds one ticket and counts as its p
 | `fifo-manual` | 1055.0 (2605.7) | 33.7 | 52.7, 0.05, 0.0 | none in this scenario |
 | `virtual-fifo` | 1055.0 (2605.7) | 0.0 | 52.7, 0.06, 0.0 | none in this scenario |
 | `priority-v2` | 1055.0 (2605.7) | 27.0 | 52.7, 0.06, 0.0 | none in this scenario |
-| `priority-v3` | 1055.0 (2605.7) | 25.3 | 52.7, 0.05, 0.0 | none in this scenario |
+| `priority-v3` | 1055.0 (2605.7) | 27.0 | 52.7, 0.05, 0.0 | none in this scenario |
 
 ## 14. Checkpoint operations
 
@@ -380,7 +380,7 @@ Selection: `constrained-edf`. Queue: `virtual` (GateFlow virtual queue: passenge
 
 All parameter values are initial hypotheses to be calibrated and approved, not measured optima.
 
-### GateFlow virtual queue with constrained EDF priority v3: fast track, stale-data rule and hysteresis (policy B): `priority-v3` 0.1.0
+### GateFlow virtual queue with constrained EDF priority v3: fast track, stale-data rule and hysteresis (policy B): `priority-v3` 0.2.0
 
 Selection: `constrained-edf`. Queue: `virtual` (GateFlow virtual queue: passengers wait anywhere, are called on displays and validate their ticket at the access point).
 
@@ -396,7 +396,7 @@ Selection: `constrained-edf`. Queue: `virtual` (GateFlow virtual queue: passenge
 | selection.eligibleSegments | DEPARTING; TRANSFER |
 | selection.latePresentationCutoffMs | none |
 | selection.fastTrack | true |
-| selection.maxDeadlineAgeMs | 30.0 min |
+| selection.maxDeadlineAgeMs | 60.0 min |
 | selection.hysteresisMs | 3.0 min |
 | queue.callAheadSeconds | 180 s |
 | queue.responseEstimateSeconds | 90 s |
@@ -461,7 +461,7 @@ Every model parameter, with its source. SYNTHETIC values are illustrative assump
 | Scenario hash | `sha256:cd6543fec27ef95e8ef656a4ba29b664c604f0b2e8139f3ea420efc6c013e8d2` |
 | Seeds | 1-3 (3) |
 | Source revision | `test` |
-| Versions | engine 0.5.0, queue core 0.4.0, model 0.5.0, kernel 0.1.0, population generator 0.4.0, scenario schema 4 |
+| Versions | engine 0.5.0, queue core 0.5.0, model 0.5.0, kernel 0.1.0, population generator 0.4.0, scenario schema 4 |
 | Generated by | test 0.0.0 |
 
 Command:

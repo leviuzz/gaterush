@@ -1,0 +1,68 @@
+# GateFlow sensitivity sweep (schema version 1).
+#
+# SYNTHETIC: every number comes from the synthetic demo scenario. Results are simulated and must
+# never be presented as operational evidence.
+
+schemaVersion: 1
+id: sensitivity-demo
+title: Priority v3 on the congested demo day, one assumption at a time
+description: >-
+  How much do the results depend on the fairness bounds, the prepare window, the hysteresis, the
+  number of lanes, the demand, when passengers arrive and how they answer calls? Each curve varies
+  one of them around the base of the demo scenario and of priority v3, all else equal.
+scenario: ../scenarios/single-checkpoint-demo.yaml
+seeds: 1-200
+policies: [fifo, fifo-manual, virtual-fifo, priority-v3]
+baseline: fifo
+candidate: priority-v3
+compare: [priority-v3:fifo-manual, priority-v3:virtual-fifo, priority-v3:fifo]
+dimensions:
+  - id: overtake-bound
+    title: Overtake bound K
+    parameter: maxOvertakes
+    values: [10, 15, 20, 30, 40, 60]
+  - id: priority-cap
+    title: Priority cap k (people among 20 called)
+    parameter: capMaxPriorityCalls
+    values: [2, 5, 10, 15, 20]
+  - id: prepare-window
+    title: Prepare window M
+    parameter: prepareWindowSize
+    values: [0, 5, 10, 15, 20]
+  - id: hysteresis
+    title: Hysteresis h
+    parameter: hysteresisMinutes
+    values: [0, 1, 3, 5]
+  - id: lanes
+    title: Lanes open
+    parameter: lanesDelta
+    values: [-1, 0, 1, 2]
+  - id: load-factor
+    title: Load factor
+    parameter: loadFactorScale
+    values: [0.8, 0.9, 1, 1.1]
+  - id: arrival-shift
+    title: When passengers arrive
+    parameter: showUpShiftMinutes
+    values: [-20, -10, 0, 10, 20]
+  - id: call-response
+    title: How fast passengers answer a call
+    parameter: callResponseMedianSeconds
+    values: [45, 75, 120, 180]
+  - id: missed-calls
+    title: Passengers who miss the first call
+    parameter: absentProbability
+    values: [0.02, 0.04, 0.08, 0.12]
+  - id: call-ahead-slow-response
+    title: Call-ahead, when passengers take 3 minutes to answer a call
+    parameter: callAheadSeconds
+    values: [180, 300, 420, 600]
+    base:
+      - { parameter: callResponseMedianSeconds, value: 180 }
+      - { parameter: responseEstimateSeconds, value: 180 }
+  - id: overtake-bound-overload
+    title: Overtake bound K, with one lane fewer (overload)
+    parameter: maxOvertakes
+    values: [30, 60, 120, 240]
+    base:
+      - { parameter: lanesDelta, value: -1 }

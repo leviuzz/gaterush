@@ -1,0 +1,51 @@
+# GateFlow sensitivity sweep (schema version 1).
+#
+# SYNTHETIC: every number comes from the synthetic disrupted scenario. Results are simulated and
+# must never be presented as operational evidence.
+
+schemaVersion: 1
+id: data-quality-disrupted
+title: Priority v3 on the disrupted day, as the flight feed and the disruptions vary
+description: >-
+  What does the stale-data rule cost, and what does it protect, as the flight feed becomes less
+  reliable? Each curve varies one parameter around the base of the disrupted scenario and of
+  priority v3 (maximum data age 30 minutes, hysteresis 3 minutes); priority v2 trusts every
+  deadline whatever its age.
+scenario: ../scenarios/single-checkpoint-disrupted.yaml
+seeds: 1-200
+policies: [fifo, fifo-manual, virtual-fifo, priority-v2, priority-v3]
+baseline: fifo
+candidate: priority-v3
+compare:
+  [priority-v3:fifo-manual, priority-v3:virtual-fifo, priority-v3:priority-v2, priority-v3:fifo]
+dimensions:
+  - id: data-age
+    title: Maximum data age
+    parameter: maxDeadlineAgeMinutes
+    values: [15, 30, 45, 60, 90, none]
+  - id: feed-outages
+    title: Feed outages per day
+    parameter: feedOutagesPerDay
+    values: [0, 1, 2, 4, 6]
+  - id: data-age-unreliable-feed
+    title: Maximum data age, with the feed down four times a day
+    parameter: maxDeadlineAgeMinutes
+    values: [15, 30, 60, none]
+    base:
+      - { parameter: feedOutagesPerDay, value: 4 }
+  - id: feed-outage-length
+    title: Median length of a feed outage
+    parameter: feedOutageMedianMinutes
+    values: [15, 30, 60, 90]
+  - id: hysteresis
+    title: Hysteresis h
+    parameter: hysteresisMinutes
+    values: [0, 1, 3, 5]
+  - id: delays
+    title: Share of delayed flights
+    parameter: flightDelayShare
+    values: [0, 0.25, 0.5]
+  - id: lane-outages
+    title: Lane outages per day
+    parameter: laneOutagesPerDay
+    values: [0, 2, 4]

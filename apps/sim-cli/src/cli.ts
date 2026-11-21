@@ -5,14 +5,32 @@ import { POLICY_PRESETS, PRIORITY_V3_POLICY, classificationOf } from '@gateflow/
 import type { Policy } from '@gateflow/queue-core';
 import {
   DEFAULT_BOOTSTRAP,
+  SweepConfigError,
+  assembleExperiment,
+  assembleSweep,
   buildResults,
+  buildSweepResults,
   comparisonKey,
   defaultComparisons,
+  planExperiment,
+  planSweep,
+  renderHtmlReport,
   renderReport,
-  runExperiment,
+  renderSweepHtml,
+  renderSweepReport,
   stringifyResults,
+  stringifySweep,
+  sweepDayJob,
 } from '@gateflow/sim-metrics';
-import type { PolicyComparison, ResultsDocument } from '@gateflow/sim-metrics';
+import type {
+  PolicyComparison,
+  ResultsDocument,
+  SeedResult,
+  SweepConfig,
+  SweepDayResult,
+  SweepDocument,
+  SweepPlan,
+} from '@gateflow/sim-metrics';
 import {
   ScenarioValidationError,
   canonicalJson,
@@ -29,6 +47,8 @@ import {
   parseSeeds,
 } from './args';
 import type { CliIo } from './io';
+import { parseSweepSpec, sweepDimensions, sweepScenarioPath } from './sweep-spec';
+import type { Task, TaskResult } from './tasks';
 import { CLI_NAME, CLI_VERSION } from './version';
 
 export const EXIT_OK = 0;
@@ -40,7 +60,8 @@ const DEFAULT_POLICIES = 'fifo,fifo-manual,virtual-fifo,priority-v3';
 const HELP = `${CLI_NAME} ${CLI_VERSION}: GateFlow simulation experiments
 
 Usage:
-  ${CLI_NAME} run --scenario <file> [options]   Run an experiment and write results.json + report.md
+  ${CLI_NAME} run --scenario <file> [options]   Run an experiment: results.json, report.md, report.html
+  ${CLI_NAME} sweep --spec <file> [options]     Run a sensitivity sweep: sweep.json, sweep.md, sweep.html
   ${CLI_NAME} validate --scenario <file>        Validate a scenario file
   ${CLI_NAME} policies                          List the available policy presets
   ${CLI_NAME} --help | --version
@@ -53,8 +74,15 @@ Options for "run":
   --compare <pairs>              Paired comparisons candidate:reference  (default: see below)
   --out <dir>                    Output directory                        (default out/<scenario id>)
   --bootstrap-resamples <n>      Bootstrap resamples for intervals       (default ${DEFAULT_BOOTSTRAP.resamples})
+  --workers <n>                  Worker threads; results do not depend on it (default: all CPUs)
   --commit <rev>                 Source revision recorded in the manifest (default: detected)
   --quiet                        Do not print progress
+
+Options for "sweep" (a sensitivity sweep is described in a file, see sweeps/):
+  --spec <file>                  Sweep specification (YAML or JSON)      (required)
+  --seeds <spec>                 Seeds of every point                    (default: from the file)
+  --out <dir>                    Output directory                        (default out/sweeps/<id>)
+  --bootstrap-resamples, --workers, --commit, --quiet: as for "run"
 
 By default every policy is compared with the baseline. Each priority policy is also compared with
 the FIFO policy that runs the same virtual queue (this isolates the prioritisation), with today's
@@ -64,16 +92,36 @@ Risk classes on arrival use the parameters of the first priority policy listed.
 All results are SIMULATED on the assumptions of the scenario and are not operational evidence.
 `;
 
-function loadScenario(io: CliIo, file: string): Scenario {
-  let text: string;
+function readText(io: CliIo, file: string, what: string): string {
   try {
-    text = io.readFile(file);
+    return io.readFile(file);
   } catch (error) {
     throw new UsageError(
-      `cannot read scenario file ${file}: ${error instanceof Error ? error.message : String(error)}`,
+      `cannot read ${what} file ${file}: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+}
+
+function loadScenario(io: CliIo, file: string): Scenario {
+  const text = readText(io, file, 'scenario');
   return parseScenarioText(text, file.toLowerCase().endsWith('.json') ? 'json' : 'yaml');
+}
+
+function experimentDays(results: readonly TaskResult[]): SeedResult[] {
+  return results.map((r) => {
+    if (r.kind !== 'experiment-day') throw new Error(`unexpected task result ${r.kind}`);
+    return r.day;
+  });
+}
+
+function sweepDays(plan: SweepPlan, results: readonly TaskResult[]): SweepDayResult[][] {
+  const perVariant = plan.seeds.length;
+  return plan.variants.map((_, v) =>
+    results.slice(v * perVariant, (v + 1) * perVariant).map((r) => {
+      if (r.kind !== 'sweep-day') throw new Error(`unexpected task result ${r.kind}`);
+      return r.day;
+    }),
+  );
 }
 
 function scenarioHash(io: CliIo, scenario: Scenario): string {
@@ -165,7 +213,7 @@ function summaryLines(doc: ResultsDocument): string[] {
   return lines;
 }
 
-function commandRun(argv: string[], io: CliIo): number {
+async function commandRun(argv: string[], io: CliIo): Promise<number> {
   const { values } = parseArgs({
     args: argv,
     options: {
@@ -176,6 +224,7 @@ function commandRun(argv: string[], io: CliIo): number {
       compare: { type: 'string' },
       out: { type: 'string' },
       'bootstrap-resamples': { type: 'string', default: String(DEFAULT_BOOTSTRAP.resamples) },
+      workers: { type: 'string' },
       commit: { type: 'string' },
       quiet: { type: 'boolean', default: false },
     },
@@ -184,6 +233,8 @@ function commandRun(argv: string[], io: CliIo): number {
   });
   if (values.scenario === undefined) throw new UsageError('--scenario is required');
   const seeds = parseSeeds(values.seeds);
+  const workers =
+    values.workers === undefined ? io.cpus() : parsePositiveInteger(values.workers, '--workers');
   const policies = parsePolicies(values.policies);
   const baselinePolicyId = values.baseline ?? (policies[0] as Policy).id;
   if (!policies.some((p) => p.id === baselinePolicyId)) {
@@ -201,22 +252,24 @@ function commandRun(argv: string[], io: CliIo): number {
   const outDir = values.out ?? join('out', scenario.id);
 
   const progressEvery = Math.max(1, Math.ceil(seeds.length / 4));
-  const experiment = runExperiment(
-    {
-      scenario,
-      seeds,
-      policies,
-      baselinePolicyId,
-      comparisons,
-      classification: classificationFor(policies),
-      bootstrap: { ...DEFAULT_BOOTSTRAP, resamples },
-    },
-    (done, total) => {
-      if (!values.quiet && (done % progressEvery === 0 || done === total)) {
-        io.stderr(`simulated ${done}/${total} days\n`);
-      }
-    },
-  );
+  const config = {
+    scenario,
+    seeds,
+    policies,
+    baselinePolicyId,
+    comparisons,
+    classification: classificationFor(policies),
+    bootstrap: { ...DEFAULT_BOOTSTRAP, resamples },
+  };
+  // Every simulated day is independent: they can run on any number of threads.
+  const plan = planExperiment(config);
+  const tasks: Task[] = plan.seeds.map((seed) => ({ kind: 'experiment-day', job: plan.job, seed }));
+  const results = await io.runTasks(tasks, workers, (done, total) => {
+    if (!values.quiet && (done % progressEvery === 0 || done === total)) {
+      io.stderr(`simulated ${done}/${total} days\n`);
+    }
+  });
+  const experiment = assembleExperiment(config, experimentDays(results));
   const doc = buildResults(experiment, {
     generator: { name: CLI_NAME, version: CLI_VERSION },
     commit,
@@ -226,8 +279,10 @@ function commandRun(argv: string[], io: CliIo): number {
   io.mkdir(outDir);
   const resultsPath = join(outDir, 'results.json');
   const reportPath = join(outDir, 'report.md');
+  const htmlPath = join(outDir, 'report.html');
   io.writeFile(resultsPath, stringifyResults(doc));
   io.writeFile(reportPath, renderReport(doc));
+  io.writeFile(htmlPath, renderHtmlReport(doc));
 
   io.stdout(
     [
@@ -236,6 +291,120 @@ function commandRun(argv: string[], io: CliIo): number {
       '',
       `written    ${resultsPath}`,
       `           ${reportPath}`,
+      `           ${htmlPath}`,
+      '',
+    ].join('\n'),
+  );
+  return EXIT_OK;
+}
+
+function sweepSummaryLines(doc: SweepDocument): string[] {
+  const { manifest } = doc;
+  const first = manifest.comparisons.find((c) => c.candidateId === manifest.candidateId);
+  const key = first === undefined ? undefined : comparisonKey(first);
+  const lines = [
+    `sweep      ${manifest.sweep.id} (${manifest.sweep.hash.slice(0, 19)}...)`,
+    `scenario   ${manifest.scenario.id} (${manifest.scenario.hash.slice(0, 19)}...)`,
+    `seeds      ${manifest.seeds.ranges} (${manifest.seeds.count} days per point, ${manifest.simulatedDays} distinct simulated days)`,
+    '',
+    `missed flights per day with ${manifest.candidateId}` +
+      (key === undefined ? '' : `; net saved vs ${first?.referenceId ?? ''}`),
+  ];
+  for (const dimension of doc.dimensions) {
+    const points = dimension.points.map((p) => {
+      const missed = p.policies[manifest.candidateId]?.missed.mean ?? 0;
+      const net = key === undefined ? undefined : p.comparisons[key]?.metrics.net.mean;
+      return `${p.label}${p.isBase ? '*' : ''}: ${missed.toFixed(1)}${net === undefined ? '' : ` (${net >= 0 ? '+' : ''}${net.toFixed(1)})`}`;
+    });
+    lines.push(`  ${dimension.id}: ${points.join(', ')}`);
+  }
+  lines.push('  (* = base)');
+  return lines;
+}
+
+async function commandSweep(argv: string[], io: CliIo): Promise<number> {
+  const { values } = parseArgs({
+    args: argv,
+    options: {
+      spec: { type: 'string' },
+      seeds: { type: 'string' },
+      out: { type: 'string' },
+      'bootstrap-resamples': { type: 'string', default: String(DEFAULT_BOOTSTRAP.resamples) },
+      workers: { type: 'string' },
+      commit: { type: 'string' },
+      quiet: { type: 'boolean', default: false },
+    },
+    strict: true,
+    allowPositionals: false,
+  });
+  if (values.spec === undefined) throw new UsageError('--spec is required');
+  const spec = parseSweepSpec(readText(io, values.spec, 'sweep'), values.spec);
+  const scenario = loadScenario(io, sweepScenarioPath(spec, values.spec));
+  const policies = parsePolicies(spec.policies.join(','));
+  if (!policies.some((p) => p.id === spec.baseline)) {
+    throw new UsageError(`baseline "${spec.baseline}" must be one of the policies`);
+  }
+  const config: SweepConfig = {
+    id: spec.id,
+    title: spec.title,
+    description: spec.description,
+    scenario,
+    seeds: parseSeeds(values.seeds ?? spec.seeds),
+    policies,
+    baselinePolicyId: spec.baseline,
+    candidateId: spec.candidate,
+    comparisons: parseComparisons(spec.compare.join(','), policies),
+    classification: classificationFor(policies),
+    bootstrap: {
+      ...DEFAULT_BOOTSTRAP,
+      resamples: parsePositiveInteger(values['bootstrap-resamples'], '--bootstrap-resamples'),
+    },
+    dimensions: sweepDimensions(spec),
+  };
+  const workers =
+    values.workers === undefined ? io.cpus() : parsePositiveInteger(values.workers, '--workers');
+  let plan: SweepPlan;
+  try {
+    plan = planSweep(config);
+  } catch (error) {
+    if (error instanceof SweepConfigError) throw new UsageError(`invalid sweep: ${error.message}`);
+    throw error;
+  }
+  const tasks: Task[] = plan.variants.flatMap((variant) => {
+    const job = sweepDayJob(config, variant);
+    return plan.seeds.map((seed): Task => ({ kind: 'sweep-day', job, seed }));
+  });
+  const progressEvery = Math.max(1, Math.ceil(tasks.length / 4));
+  const results = await io.runTasks(tasks, workers, (done, total) => {
+    if (!values.quiet && (done % progressEvery === 0 || done === total)) {
+      io.stderr(`simulated ${done}/${total} days (${plan.variants.length} variants)\n`);
+    }
+  });
+  const sweep = assembleSweep(config, plan, sweepDays(plan, results));
+  const doc = buildSweepResults(sweep, {
+    generator: { name: CLI_NAME, version: CLI_VERSION },
+    commit: values.commit ?? io.commit(),
+    scenarioHash: scenarioHash(io, scenario),
+    sweepHash: `sha256:${io.sha256(canonicalJson(spec))}`,
+    specPath: `sweeps/${spec.id}.yaml`,
+  });
+
+  const outDir = values.out ?? join('out', 'sweeps', spec.id);
+  io.mkdir(outDir);
+  const jsonPath = join(outDir, 'sweep.json');
+  const reportPath = join(outDir, 'sweep.md');
+  const htmlPath = join(outDir, 'sweep.html');
+  io.writeFile(jsonPath, stringifySweep(doc));
+  io.writeFile(reportPath, renderSweepReport(doc));
+  io.writeFile(htmlPath, renderSweepHtml(doc));
+  io.stdout(
+    [
+      'GateFlow sensitivity sweep: SIMULATED RESULTS, not operational evidence',
+      ...sweepSummaryLines(doc),
+      '',
+      `written    ${jsonPath}`,
+      `           ${reportPath}`,
+      `           ${htmlPath}`,
       '',
     ].join('\n'),
   );
@@ -269,13 +438,15 @@ function commandPolicies(io: CliIo): number {
   return EXIT_OK;
 }
 
-/** Runs the CLI and returns the process exit code. Never throws. */
-export function runCli(argv: readonly string[], io: CliIo): number {
+/** Runs the CLI and resolves to the process exit code. Never rejects. */
+export async function runCli(argv: readonly string[], io: CliIo): Promise<number> {
   const [command, ...rest] = argv;
   try {
     switch (command) {
       case 'run':
-        return commandRun(rest, io);
+        return await commandRun(rest, io);
+      case 'sweep':
+        return await commandSweep(rest, io);
       case 'validate':
         return commandValidate(rest, io);
       case 'policies':

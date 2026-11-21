@@ -595,10 +595,10 @@ describe('policies and helpers', () => {
       'priority-v2',
       'priority-v3',
     ]);
-    // v3 differs from v2 only by the S5 data-quality rules (ADR-029).
+    // v3 differs from v2 only by the S5 data-quality rules (ADR-029, ADR-034).
     expect(findPolicyPreset('priority-v3')?.selection).toEqual({
       ...findPolicyPreset('priority-v2')?.selection,
-      maxDeadlineAgeMs: 30 * MIN,
+      maxDeadlineAgeMs: 60 * MIN,
       hysteresisMs: 3 * MIN,
     });
     // v2 differs from v1 only by the fast track.

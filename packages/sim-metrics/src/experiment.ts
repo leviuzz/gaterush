@@ -124,44 +124,103 @@ function resolveComparisons(config: ExperimentConfig): PolicyComparison[] {
   return comparisons.map(({ candidateId, referenceId }) => ({ candidateId, referenceId }));
 }
 
+/** Everything that one simulated day needs: the experiment without its seeds and statistics. */
+export interface DayJob {
+  readonly scenario: Scenario;
+  readonly policies: readonly Policy[];
+  readonly comparisons: readonly PolicyComparison[];
+  readonly classification: ClassificationParams;
+}
+
+/** A validated experiment: the work of one day and the seeds to run it on. */
+export interface ExperimentPlan {
+  readonly job: DayJob;
+  readonly seeds: readonly number[];
+}
+
+/** Validates an experiment and splits it into independent days (for parallel execution). */
+export function planExperiment(config: ExperimentConfig): ExperimentPlan {
+  const comparisons = resolveComparisons(config);
+  return {
+    job: {
+      scenario: config.scenario,
+      policies: config.policies,
+      comparisons,
+      classification: config.classification,
+    },
+    seeds: normaliseSeeds(config.seeds),
+  };
+}
+
 /**
- * Runs every policy on every seed. All policies see exactly the same passengers on a given seed
- * (common random numbers), so comparisons are paired passenger by passenger.
+ * Simulates one day: every policy on the same passengers (common random numbers), so that
+ * comparisons are paired passenger by passenger. Pure and deterministic: the result depends on the
+ * job and the seed only, wherever and in whatever order the days are computed.
  */
+export function runDay(job: DayJob, seed: number): SeedResult {
+  const population = generatePopulation(job.scenario, seed);
+  const runs = new Map<string, RunResult>();
+  const policies: Record<string, PolicyDayMetrics> = {};
+  for (const policy of job.policies) {
+    const run = simulateCheckpoint(population, policy, { classification: job.classification });
+    runs.set(policy.id, run);
+    policies[policy.id] = policyDayMetrics(population, run);
+  }
+  const pairs: Record<string, ComparisonDayMetrics> = {};
+  for (const comparison of job.comparisons) {
+    const reference = runs.get(comparison.referenceId);
+    const candidate = runs.get(comparison.candidateId);
+    if (reference === undefined || candidate === undefined) {
+      throw new ExperimentConfigError(`missing run for ${comparisonKey(comparison)}`);
+    }
+    pairs[comparisonKey(comparison)] = comparisonDayMetrics(population, reference, candidate);
+  }
+  return {
+    seed,
+    passengers: population.passengers.length,
+    flights: population.flights.length,
+    disruptions: dayDisruptions(population),
+    policies,
+    comparisons: pairs,
+  };
+}
+
+/**
+ * Assembles an experiment from its days, computed in any order (e.g. by parallel workers). Every
+ * planned seed must be present exactly once; days are ordered by seed, so the result is the same
+ * as a sequential run.
+ */
+export function assembleExperiment(
+  config: ExperimentConfig,
+  days: readonly SeedResult[],
+): ExperimentResult {
+  const { job, seeds } = planExperiment(config);
+  const bySeed = new Map<number, SeedResult>();
+  for (const day of days) {
+    if (bySeed.has(day.seed)) throw new ExperimentConfigError(`seed ${day.seed} computed twice`);
+    bySeed.set(day.seed, day);
+  }
+  const perSeed = seeds.map((seed) => {
+    const day = bySeed.get(seed);
+    if (day === undefined) throw new ExperimentConfigError(`seed ${seed} was not computed`);
+    return day;
+  });
+  if (bySeed.size !== seeds.length) {
+    throw new ExperimentConfigError('days were computed for seeds that are not in the experiment');
+  }
+  return { config, seeds, comparisons: job.comparisons, perSeed };
+}
+
+/** Runs every policy on every seed, one day after the other. */
 export function runExperiment(
   config: ExperimentConfig,
   onSeedDone?: (done: number, total: number) => void,
 ): ExperimentResult {
-  const comparisons = resolveComparisons(config);
-  const seeds = normaliseSeeds(config.seeds);
-  const perSeed: SeedResult[] = [];
-  seeds.forEach((seed, i) => {
-    const population = generatePopulation(config.scenario, seed);
-    const runs = new Map<string, RunResult>();
-    const policies: Record<string, PolicyDayMetrics> = {};
-    for (const policy of config.policies) {
-      const run = simulateCheckpoint(population, policy, { classification: config.classification });
-      runs.set(policy.id, run);
-      policies[policy.id] = policyDayMetrics(population, run);
-    }
-    const pairs: Record<string, ComparisonDayMetrics> = {};
-    for (const comparison of comparisons) {
-      const reference = runs.get(comparison.referenceId);
-      const candidate = runs.get(comparison.candidateId);
-      if (reference === undefined || candidate === undefined) {
-        throw new ExperimentConfigError(`missing run for ${comparisonKey(comparison)}`);
-      }
-      pairs[comparisonKey(comparison)] = comparisonDayMetrics(population, reference, candidate);
-    }
-    perSeed.push({
-      seed,
-      passengers: population.passengers.length,
-      flights: population.flights.length,
-      disruptions: dayDisruptions(population),
-      policies,
-      comparisons: pairs,
-    });
+  const { job, seeds } = planExperiment(config);
+  const days = seeds.map((seed, i) => {
+    const day = runDay(job, seed);
     onSeedDone?.(i + 1, seeds.length);
+    return day;
   });
-  return { config, seeds, comparisons, perSeed };
+  return assembleExperiment(config, days);
 }

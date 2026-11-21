@@ -780,3 +780,111 @@ founder on 2026-11-21 together with all of its recommendations.
     the last known times during an outage.
   - The main scenarios have no disruptions. Their S5 numbers differ from S4 only through the
     priority policy: `priority-v3` replaces `priority-v2` as the default.
+
+## ADR-031: Simulated days run in parallel worker threads; results never depend on them
+
+- **Status:** Accepted (2026-11-21). Metrics 0.6.0, CLI 0.6.0. Implements the approved S6
+  proposal ("parallel batches with worker_threads").
+- **Context:** The kickoff set a performance target of 1000 seeds × 3 policies in less than
+  10 minutes on a laptop, and required regenerated reports to be identical.
+- **Decision:**
+  - An experiment is split into independent days (`planExperiment`, `runDay`, a pure function
+    of the job and the seed) and assembled in seed order (`assembleExperiment`), whatever the
+    order in which the days finish.
+  - The CLI runs the days on `--workers` worker threads (default: every CPU). Each thread runs
+    the CLI bundle itself, takes the next day as soon as it finishes one, and returns plain data.
+    `--workers 1` runs in the main thread.
+  - The packages stay pure: threads, files and the clock live in the CLI only.
+  - Progress counts the days as they finish; the outputs carry no timing and no thread count.
+- **Evidence:**
+  - Tests compare `results.json`, `report.md`, `report.html` and `sweep.json` written with 1
+    and with 3 worker threads (built bundle, end to end), and days assembled in shuffled order
+    with a sequential run.
+  - CI repeats the comparison with 1 and 4 threads on every push.
+  - Speed: see the S6 evidence in the implementation plan.
+- **Consequences:** A report can be regenerated on any machine with any number of threads and
+  must match byte for byte. The bootstrap stays in the main thread, after all days.
+
+## ADR-032: Sensitivity sweeps, one assumption at a time
+
+- **Status:** Accepted (2026-11-21). Sweep schema `gateflow.sim.sweep/1`, CLI 0.6.0.
+- **Context:** Every number of the simulator rests on synthetic assumptions (risk RT-03). The
+  kickoff asked for sweeps on k/N, K, lanes, load factor, the show-up curves and M, and the S5
+  open points asked how much the feed's reliability matters.
+- **Decision:**
+  - A sweep is a file in `sweeps/` (YAML): a base scenario, the policies, the candidate whose
+    parameters vary, the comparisons, and curves. Each curve varies one parameter over values,
+    optionally on a modified base (e.g. a less reliable feed for that curve only).
+  - Parameters:
+    - policy: K, k, N, hysteresis, maximum data age (or none), and for every virtual queue M,
+      call-ahead and response estimate;
+    - scenario: lanes, load factor, arrival shift, call response and missed calls, flight
+      delays, lane outages and feed outages.
+  - Every point uses the same seeds (common random numbers across points and policies). Points
+    with the same scenario share their days, and a policy is simulated once per day however many
+    points use it.
+  - Outputs: `sweep.json`, `sweep.md` and `sweep.html`. Each point has the missed flights of
+    every policy, the net flights saved by the candidate against each reference with a bootstrap
+    interval, the cost to other passengers and the largest overtake count.
+  - Two sweeps are published: `sensitivity-demo` (policy and demand assumptions on the demo day)
+    and `data-quality-disrupted` (feed reliability, maximum data age, disruptions).
+- **Consequences:**
+  - Claims can be stated with the conditions under which they hold.
+  - One-at-a-time curves do not show interactions, except where a curve is drawn on a modified
+    base. Sweeps cost compute: about 5 minutes per published sweep on 4 threads.
+
+## ADR-033: HTML reports, self-contained and deterministic
+
+- **Status:** Accepted (2026-11-21). Metrics 0.6.0.
+- **Context:** The kickoff asked for HTML reports with charts for people, next to the Markdown
+  and the JSON.
+- **Decision:**
+  - `report.html` and `sweep.html` are rendered from the same documents as the Markdown, in pure
+    code: the Markdown report converted to HTML, with charts added under the headline (run
+    report) or under each curve (sweep).
+  - Charts are inline SVG, with no script, font or other external resource, and coordinates
+    rounded to 0.1 px. The same document always gives the same bytes, offline, so golden tests
+    lock the HTML.
+  - They follow the project's data-visualisation rules:
+    - thin marks and a hairline grid;
+    - one axis per chart;
+    - a legend for two or more series and direct labels only where they do not collide;
+    - colours by entity in a fixed order (GateFlow blue, A' orange, the third series aqua),
+      validated for colour-blind separation in light and dark mode;
+    - a text alternative on every mark;
+    - every value also in the report tables.
+  - Light and dark modes follow the reader's system setting. Charts scroll inside their card
+    on a phone, and the page never scrolls sideways.
+- **Consequences:** Reports can be read and shared without tools. The HTML adds about 30 KB per
+  run report.
+
+## ADR-034: Maximum data age raised to 60 minutes (priority v3 0.2.0)
+
+- **Status:** Accepted (2026-11-21). Queue core 0.5.0. Supersedes the 30-minute value of
+  ADR-029; the rule itself is unchanged.
+- **Context:** In S5, 30 minutes was chosen on 20 calibration days and found to cost flights on
+  200 days. The founder delegated the choice of the threshold (open point 1 of the S5 reports).
+- **Evidence** (`data-quality-disrupted` sweep on report days 1-200, explored with the 30-minute
+  base; S5 calibration on days 1001-1200 agrees):
+
+  | Maximum age | v3 vs v2, disrupted day | v3 vs v2, feed down 4 times a day | v3 vs A', feed down 4 times a day | People boosted on wrong information (disrupted day) |
+  |---|---:|---:|---:|---:|
+  | 15 min | -0.56 | -1.32 | +0.23 | 11.0 |
+  | 30 min (v3 0.1.0) | -0.29 | -0.65 | +0.91 | 11.2 |
+  | 45 min | -0.05 | | | 11.4 |
+  | **60 min (v3 0.2.0)** | **+0.02** | **+0.03** | **+1.57** | 11.5 |
+  | none | +0.03 | +0.06 | +1.61 | 11.5 |
+
+  Net flights saved per day. Negative means v3 misses more flights than v2.
+- **Decision:** `priority-v3` 0.2.0 trusts a deadline for 60 minutes after the feed last
+  confirmed it; beyond that, the ticket is served in FIFO order, as before.
+- **Rationale:**
+  - 30 minutes costs 0.3 flights per day, up to 0.7 with an unreliable feed. It buys 0.3 to
+    0.5 fewer boosts a day on wrong information, which pass other passengers by a few seconds
+    each.
+  - 60 minutes recovers almost all those flights and still applies the principle: no automatic
+    priority once the data is an hour old. Above 60 minutes nothing changes in the model.
+  - The model only knows errors that make a deadline look earlier than it is (a delay not yet
+    announced). An airport whose deadlines can also move earlier, or whose gates change often,
+    should set a shorter age. The parameter stays an airport decision (FR-15).
+- **Consequences:** The S5 reports remain the record of v3 0.1.0; the S6 reports use 0.2.0.

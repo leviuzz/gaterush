@@ -159,17 +159,17 @@ export const PRIORITY_V2_SELECTION: ConstrainedEdfSelection = {
 };
 
 /**
- * Selection of policy B, version 3 (ADR-029): v2 with the S5 data-quality rules, calibrated on
- * seeds 1001-1020:
- * - stale data: a deadline the flight feed has not confirmed for more than 30 minutes is not
- *   trusted (the ticket is UNVERIFIED and served in FIFO order) until the feed recovers;
+ * Selection of policy B, version 3 (ADR-029, ADR-034): v2 with the S5 data-quality rules:
+ * - stale data: a deadline the flight feed has not confirmed for more than 60 minutes is not
+ *   trusted (the ticket is UNVERIFIED and served in FIFO order) until the feed recovers. The S6
+ *   sweeps raised it from 30 minutes, which cost flights and bought almost no protection;
  * - hysteresis of 3 minutes: a ticket escalates at once and returns to a less urgent class only
  *   when its margin exceeds the threshold by 3 minutes, so classes no longer flap with the
  *   seconds-long oscillations of the FIFO estimate.
  */
 export const PRIORITY_V3_SELECTION: ConstrainedEdfSelection = {
   ...PRIORITY_V2_SELECTION,
-  maxDeadlineAgeMs: 30 * MS_PER_MINUTE,
+  maxDeadlineAgeMs: 60 * MS_PER_MINUTE,
   hysteresisMs: 3 * MS_PER_MINUTE,
 };
 
@@ -270,7 +270,7 @@ export const PRIORITY_V2_POLICY: Policy = {
  */
 export const PRIORITY_V3_POLICY: Policy = {
   id: 'priority-v3',
-  version: '0.1.0',
+  version: '0.2.0',
   title:
     'GateFlow virtual queue with constrained EDF priority v3: fast track, stale-data rule and hysteresis (policy B)',
   selection: PRIORITY_V3_SELECTION,

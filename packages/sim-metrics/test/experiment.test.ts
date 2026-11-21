@@ -15,11 +15,21 @@ import { canonicalJson, collectAssumptions, parseScenarioText } from '@gateflow/
 import { describe, expect, it } from 'vitest';
 import {
   ExperimentConfigError,
+  assembleExperiment,
   buildResults,
+  buildSweepResults,
+  planExperiment,
+  renderHtmlReport,
   renderReport,
+  renderSweepHtml,
+  renderSweepReport,
+  runDay,
   runExperiment,
+  runSweep,
   stringifyResults,
+  stringifySweep,
 } from '../src';
+import { balancedTags } from './html-check';
 import type { ExperimentConfig, PolicyComparison } from '../src';
 
 const scenario = parseScenarioText(
@@ -139,6 +149,18 @@ describe('runExperiment', () => {
     rejects({ comparisons: [{ candidateId: 'fifo', referenceId: 'fifo' }] });
     rejects({ comparisons: [COMPARISONS[0]!, COMPARISONS[0]!] });
   });
+
+  it('gives the same result when the days are computed separately, in any order', () => {
+    const c = config({ seeds: [1, 2, 3] });
+    const { job, seeds } = planExperiment(c);
+    expect(seeds).toEqual([1, 2, 3]);
+    // As parallel workers would: each day on its own, finishing in any order.
+    const days = [3, 1, 2].map((seed) => structuredClone(runDay(job, seed)));
+    expect(assembleExperiment(c, days)).toEqual(runExperiment(c));
+    expect(() => assembleExperiment(c, days.slice(1))).toThrow(/seed 3 was not computed/);
+    expect(() => assembleExperiment(c, [...days, days[0]!])).toThrow(/computed twice/);
+    expect(() => assembleExperiment(c, [...days, runDay(job, 4)])).toThrow(/not in the experiment/);
+  });
 });
 
 describe('results document', () => {
@@ -164,7 +186,7 @@ describe('results document', () => {
       comparisons: COMPARISONS,
       versions: {
         engine: '0.5.0',
-        queueCore: '0.4.0',
+        queueCore: '0.5.0',
         model: '0.5.0',
         kernel: '0.1.0',
         populationGenerator: '0.4.0',
@@ -234,11 +256,64 @@ describe('golden files (regenerate with UPDATE_GOLDEN=1 and explain the change i
     ...manifest,
     scenarioHash: `sha256:${createHash('sha256').update(canonicalJson(disrupted)).digest('hex')}`,
   });
+  // A small sensitivity sweep: two curves, two days per point.
+  const sweepDoc = buildSweepResults(
+    runSweep({
+      id: 'golden-sweep',
+      title: 'Golden sweep',
+      description: 'Two curves on two simulated days, to lock the sweep outputs.',
+      scenario,
+      seeds: [1, 2],
+      policies: [FIFO_POLICY, FIFO_MANUAL_POLICY, VIRTUAL_FIFO_POLICY, PRIORITY_V3_POLICY],
+      baselinePolicyId: 'fifo',
+      candidateId: 'priority-v3',
+      comparisons: [
+        { candidateId: 'priority-v3', referenceId: 'fifo-manual' },
+        { candidateId: 'priority-v3', referenceId: 'virtual-fifo' },
+      ],
+      classification,
+      bootstrap: { resamples: 200, confidence: 0.95, seed: 20261121 },
+      dimensions: [
+        {
+          id: 'overtake-bound',
+          title: 'Overtake bound K',
+          parameter: 'maxOvertakes',
+          values: [15, 30],
+        },
+        { id: 'lanes', title: 'Lanes open', parameter: 'lanesDelta', values: [0, 1] },
+      ],
+    }),
+    {
+      generator: { name: 'test', version: '0.0.0' },
+      commit: 'test',
+      scenarioHash,
+      sweepHash: 'sha256:test',
+      specPath: 'sweeps/golden-sweep.yaml',
+    },
+  );
   const files: [string, string][] = [
     ['demo-seeds-1-3.results.json', stringifyResults(doc)],
     ['demo-seeds-1-3.report.md', renderReport(doc)],
+    ['demo-seeds-1-3.report.html', renderHtmlReport(doc)],
     ['disrupted-seeds-1-3.report.md', renderReport(disruptedDoc)],
+    ['sweep-seeds-1-2.sweep.json', stringifySweep(sweepDoc)],
+    ['sweep-seeds-1-2.sweep.md', renderSweepReport(sweepDoc)],
+    ['sweep-seeds-1-2.sweep.html', renderSweepHtml(sweepDoc)],
   ];
+
+  it('writes well-formed HTML with the disclaimer, the charts and every table', () => {
+    for (const html of [renderHtmlReport(doc), renderSweepHtml(sweepDoc)]) {
+      expect(balancedTags(html)).toBe(true);
+      expect(html).toContain('SIMULATED RESULTS ON SYNTHETIC OR HYPOTHETICAL DATA');
+      expect(html).toContain('<svg viewBox=');
+      expect(html).not.toMatch(/NaN|undefined|Infinity/);
+      expect(html).toContain('prefers-color-scheme: dark');
+    }
+    const report = renderHtmlReport(doc);
+    for (const assumption of doc.assumptions) expect(report).toContain(assumption.path);
+    expect(report.match(/<table>/g)?.length).toBe(renderReport(doc).match(/\n\|---/g)?.length);
+    expect(renderSweepHtml(sweepDoc).match(/<figure class="chart">/g)).toHaveLength(4);
+  });
 
   if (process.env.UPDATE_GOLDEN === '1') {
     mkdirSync(goldenDir, { recursive: true });

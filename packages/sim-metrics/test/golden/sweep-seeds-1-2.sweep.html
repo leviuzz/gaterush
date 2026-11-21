@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GateFlow sweep: golden-sweep</title>
+<meta name="description" content="SIMULATED sensitivity sweep: Golden sweep.">
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.1);
+  --deemph: #a9a79f;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --text-primary: #f0efec;
+  --text-secondary: #c3c2b7;
+  --muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255, 255, 255, 0.1);
+  --deemph: #6e6d67;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --text-primary: #f0efec;
+  --text-secondary: #c3c2b7;
+  --muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255, 255, 255, 0.1);
+  --deemph: #6e6d67;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text-primary);
+  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font-size: 26px; line-height: 1.25; margin: 8px 0 16px; }
+h2 { font-size: 20px; margin: 36px 0 12px; }
+h3 { font-size: 16px; margin: 24px 0 8px; }
+p, li { color: var(--text-primary); }
+a { color: var(--series-1); }
+blockquote {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+blockquote p { margin: 0; }
+code {
+  font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+pre { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow-x: auto; }
+pre code { border: 0; padding: 0; background: none; white-space: pre; }
+.table { overflow-x: auto; margin: 12px 0 20px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { padding: 6px 10px; border-bottom: 1px solid var(--grid); text-align: left; vertical-align: top; }
+th { color: var(--text-secondary); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+.right { text-align: right; }
+.center { text-align: center; }
+figure.chart { margin: 16px 0 24px; padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; }
+figure.chart figcaption { font-weight: 600; margin-bottom: 4px; }
+figure.chart .note { color: var(--text-secondary); font-size: 13px; margin: 0 0 8px; }
+figure.chart svg { display: block; width: 100%; min-width: 560px; height: auto; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 4px 0 8px; font-size: 13px; color: var(--text-secondary); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { display: inline-block; width: 16px; height: 2px; border-radius: 1px; }
+svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+</style>
+</head>
+<body>
+<main>
+<h1 id="gateflow-sensitivity-sweep-golden-sweep">GateFlow sensitivity sweep: Golden sweep</h1>
+<blockquote><p><strong>SIMULATED RESULTS ON SYNTHETIC OR HYPOTHETICAL DATA. These numbers are model outputs, not measurements, and must not be presented as evidence of operational performance.</strong></p></blockquote>
+<p>Two curves on two simulated days, to lock the sweep outputs.</p>
+<p>Base scenario <code>single-checkpoint-demo</code> (data: SYNTHETIC). Every point is 2 simulated days (seeds 1-2); the parameters vary for <code>priority-v3</code>. Each table varies one parameter and keeps everything else at the base, marked <strong>(base)</strong>. Means per day; brackets give the 95% confidence interval of the mean (bootstrap over days). &quot;Others delayed &gt; 5 min&quot; is the share of non-prioritised passengers who wait more than 5 minutes longer than with the same queue in FIFO order; &quot;most overtakes&quot; is the largest number of people who overtook one ticket, on the worst day.</p>
+<h2 id="1-overtake-bound-k">1. Overtake bound K</h2>
+<figure class="chart">
+<figcaption>Overtake bound K (people): missed flights per day</figcaption>
+<p class="note">Mean per simulated day at each value; everything else at the base.</p>
+<div class="legend"><span><i style="background: var(--series-1)"></i>priority-v3</span><span><i style="background: var(--series-2)"></i>fifo-manual</span></div>
+<svg viewBox="0 0 720 252" role="img" aria-label="Missed flights per day by Overtake bound K (people)">
+<line x1="52" y1="212" x2="631.4" y2="212" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="216" text-anchor="end" font-size="11" fill="var(--muted)">4</text>
+<line x1="52" y1="172" x2="631.4" y2="172" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="176" text-anchor="end" font-size="11" fill="var(--muted)">6</text>
+<line x1="52" y1="132" x2="631.4" y2="132" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="136" text-anchor="end" font-size="11" fill="var(--muted)">8</text>
+<line x1="52" y1="92" x2="631.4" y2="92" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="96" text-anchor="end" font-size="11" fill="var(--muted)">10</text>
+<line x1="52" y1="52" x2="631.4" y2="52" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="56" text-anchor="end" font-size="11" fill="var(--muted)">12</text>
+<line x1="52" y1="12" x2="631.4" y2="12" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="16" text-anchor="end" font-size="11" fill="var(--muted)">14</text>
+<text x="64" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">15</text>
+<text x="619.4" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)" font-weight="600">30</text>
+<text x="619.4" y="245" text-anchor="middle" font-size="11" fill="var(--muted)">(base)</text>
+<polyline points="64,32 619.4,182" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>priority-v3, 15: 13.0</title>
+<circle cx="64" cy="32" r="12" fill="transparent"/>
+<circle cx="64" cy="32" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>priority-v3, 30: 5.5</title>
+<circle cx="619.4" cy="182" r="12" fill="transparent"/>
+<circle cx="619.4" cy="182" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<polyline points="64,12 619.4,12" fill="none" stroke="var(--series-2)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual, 15: 14.0</title>
+<circle cx="64" cy="12" r="12" fill="transparent"/>
+<circle cx="64" cy="12" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual, 30: 14.0</title>
+<circle cx="619.4" cy="12" r="12" fill="transparent"/>
+<circle cx="619.4" cy="12" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<text x="629.4" y="186" font-size="12" fill="var(--text-primary)">priority-v3</text>
+<text x="629.4" y="16" font-size="12" fill="var(--text-primary)">fifo-manual</text>
+</svg>
+</figure>
+<figure class="chart">
+<figcaption>Overtake bound K (people): net flights saved per day by priority-v3 compared with fifo-manual</figcaption>
+<p class="note">Mean per day with its 95% confidence interval (shaded). Above zero, priority-v3 catches more flights.</p>
+<svg viewBox="0 0 720 252" role="img" aria-label="Net flights saved by priority-v3 vs fifo-manual, by Overtake bound K (people)">
+<line x1="52" y1="212" x2="696" y2="212" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="216" text-anchor="end" font-size="11" fill="var(--muted)">-10</text>
+<line x1="52" y1="172" x2="696" y2="172" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="176" text-anchor="end" font-size="11" fill="var(--muted)">-5</text>
+<line x1="52" y1="132" x2="696" y2="132" stroke="var(--axis)" stroke-width="1"/>
+<text x="44" y="136" text-anchor="end" font-size="11" fill="var(--muted)">0</text>
+<line x1="52" y1="92" x2="696" y2="92" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="96" text-anchor="end" font-size="11" fill="var(--muted)">5</text>
+<line x1="52" y1="52" x2="696" y2="52" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="56" text-anchor="end" font-size="11" fill="var(--muted)">10</text>
+<line x1="52" y1="12" x2="696" y2="12" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="16" text-anchor="end" font-size="11" fill="var(--muted)">15</text>
+<text x="64" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">15</text>
+<text x="684" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)" font-weight="600">30</text>
+<text x="684" y="245" text-anchor="middle" font-size="11" fill="var(--muted)">(base)</text>
+<polygon points="64,68 684,20 684,108 64,180" fill="var(--series-1)" fill-opacity="0.1"/>
+<polyline points="64,124 684,64" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>priority-v3 vs fifo-manual, 15: 1.0 [-6.0, 8.0]</title>
+<circle cx="64" cy="124" r="12" fill="transparent"/>
+<circle cx="64" cy="124" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>priority-v3 vs fifo-manual, 30: 8.5 [3.0, 14.0]</title>
+<circle cx="684" cy="64" r="12" fill="transparent"/>
+<circle cx="684" cy="64" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+</svg>
+</figure>
+<div class="table"><table><thead><tr><th>Overtake bound K (people)</th><th class="right">Missed: <code>fifo</code></th><th class="right">Missed: <code>fifo-manual</code></th><th class="right">Missed: <code>virtual-fifo</code></th><th class="right">Missed: <code>priority-v3</code></th><th class="right">Net saved vs <code>fifo-manual</code></th><th class="right">Net saved vs <code>virtual-fifo</code></th><th class="right">Others delayed &gt; 5 min</th><th class="right">Most overtakes</th></tr></thead><tbody>
+<tr><td>15</td><td class="right">56.5</td><td class="right">14.0</td><td class="right">61.0</td><td class="right">13.0</td><td class="right">1.0 [-6.0, 8.0]</td><td class="right">48.0 [44.0, 52.0]</td><td class="right">0.00%</td><td class="right">15</td></tr>
+<tr><td><strong>30 (base)</strong></td><td class="right">56.5</td><td class="right">14.0</td><td class="right">61.0</td><td class="right">5.5</td><td class="right">8.5 [3.0, 14.0]</td><td class="right">55.5 [53.0, 58.0]</td><td class="right">0.00%</td><td class="right">30</td></tr>
+</tbody></table></div>
+<h2 id="2-lanes-open">2. Lanes open</h2>
+<figure class="chart">
+<figcaption>Lanes added to every period of the schedule: missed flights per day</figcaption>
+<p class="note">Mean per simulated day at each value; everything else at the base.</p>
+<div class="legend"><span><i style="background: var(--series-1)"></i>priority-v3</span><span><i style="background: var(--series-2)"></i>fifo-manual</span></div>
+<svg viewBox="0 0 720 252" role="img" aria-label="Missed flights per day by Lanes added to every period of the schedule">
+<line x1="52" y1="212" x2="631.4" y2="212" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="216" text-anchor="end" font-size="11" fill="var(--muted)">3</text>
+<line x1="52" y1="172" x2="631.4" y2="172" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="176" text-anchor="end" font-size="11" fill="var(--muted)">5</text>
+<line x1="52" y1="132" x2="631.4" y2="132" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="136" text-anchor="end" font-size="11" fill="var(--muted)">8</text>
+<line x1="52" y1="92" x2="631.4" y2="92" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="96" text-anchor="end" font-size="11" fill="var(--muted)">10</text>
+<line x1="52" y1="52" x2="631.4" y2="52" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="56" text-anchor="end" font-size="11" fill="var(--muted)">13</text>
+<line x1="52" y1="12" x2="631.4" y2="12" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="16" text-anchor="end" font-size="11" fill="var(--muted)">15</text>
+<text x="64" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)" font-weight="600">0</text>
+<text x="64" y="245" text-anchor="middle" font-size="11" fill="var(--muted)">(base)</text>
+<text x="619.4" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">+1</text>
+<polyline points="64,164 619.4,196" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>priority-v3, 0: 5.5</title>
+<circle cx="64" cy="164" r="12" fill="transparent"/>
+<circle cx="64" cy="164" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>priority-v3, +1: 3.5</title>
+<circle cx="619.4" cy="196" r="12" fill="transparent"/>
+<circle cx="619.4" cy="196" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<polyline points="64,28 619.4,156" fill="none" stroke="var(--series-2)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual, 0: 14.0</title>
+<circle cx="64" cy="28" r="12" fill="transparent"/>
+<circle cx="64" cy="28" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual, +1: 6.0</title>
+<circle cx="619.4" cy="156" r="12" fill="transparent"/>
+<circle cx="619.4" cy="156" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<text x="629.4" y="200" font-size="12" fill="var(--text-primary)">priority-v3</text>
+<text x="629.4" y="160" font-size="12" fill="var(--text-primary)">fifo-manual</text>
+</svg>
+</figure>
+<figure class="chart">
+<figcaption>Lanes added to every period of the schedule: net flights saved per day by priority-v3 compared with fifo-manual</figcaption>
+<p class="note">Mean per day with its 95% confidence interval (shaded). Above zero, priority-v3 catches more flights.</p>
+<svg viewBox="0 0 720 252" role="img" aria-label="Net flights saved by priority-v3 vs fifo-manual, by Lanes added to every period of the schedule">
+<line x1="52" y1="212" x2="696" y2="212" stroke="var(--axis)" stroke-width="1"/>
+<text x="44" y="216" text-anchor="end" font-size="11" fill="var(--muted)">0</text>
+<line x1="52" y1="145.3" x2="696" y2="145.3" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="149.3" text-anchor="end" font-size="11" fill="var(--muted)">5</text>
+<line x1="52" y1="78.7" x2="696" y2="78.7" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="82.7" text-anchor="end" font-size="11" fill="var(--muted)">10</text>
+<line x1="52" y1="12" x2="696" y2="12" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="16" text-anchor="end" font-size="11" fill="var(--muted)">15</text>
+<text x="64" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)" font-weight="600">0</text>
+<text x="64" y="245" text-anchor="middle" font-size="11" fill="var(--muted)">(base)</text>
+<text x="684" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">+1</text>
+<polygon points="64,25.3 684,145.3 684,212 64,172" fill="var(--series-1)" fill-opacity="0.1"/>
+<polyline points="64,98.7 684,178.7" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>priority-v3 vs fifo-manual, 0: 8.5 [3.0, 14.0]</title>
+<circle cx="64" cy="98.7" r="12" fill="transparent"/>
+<circle cx="64" cy="98.7" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>priority-v3 vs fifo-manual, +1: 2.5 [0.0, 5.0]</title>
+<circle cx="684" cy="178.7" r="12" fill="transparent"/>
+<circle cx="684" cy="178.7" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+</svg>
+</figure>
+<div class="table"><table><thead><tr><th>Lanes added to every period of the schedule</th><th class="right">Missed: <code>fifo</code></th><th class="right">Missed: <code>fifo-manual</code></th><th class="right">Missed: <code>virtual-fifo</code></th><th class="right">Missed: <code>priority-v3</code></th><th class="right">Net saved vs <code>fifo-manual</code></th><th class="right">Net saved vs <code>virtual-fifo</code></th><th class="right">Others delayed &gt; 5 min</th><th class="right">Most overtakes</th></tr></thead><tbody>
+<tr><td><strong>0 (base)</strong></td><td class="right">56.5</td><td class="right">14.0</td><td class="right">61.0</td><td class="right">5.5</td><td class="right">8.5 [3.0, 14.0]</td><td class="right">55.5 [53.0, 58.0]</td><td class="right">0.00%</td><td class="right">30</td></tr>
+<tr><td>+1</td><td class="right">6.5</td><td class="right">6.0</td><td class="right">8.0</td><td class="right">3.5</td><td class="right">2.5 [0.0, 5.0]</td><td class="right">4.5 [1.0, 8.0]</td><td class="right">0.02%</td><td class="right">7</td></tr>
+</tbody></table></div>
+<h2 id="3-method">3. Method</h2>
+<ul>
+<li>One-at-a-time sensitivity: each curve varies one parameter around the base, all else equal.</li>
+<li>At every point all policies run on the same passengers (common random numbers), and the same seeds are used at every point, so the differences between points are not noise of different days.</li>
+<li>Points that only change a policy share their simulated days, and the policies they do not change are simulated once.</li>
+<li>Policy parameters change the candidate; the prepare window changes every virtual queue, so that the comparison with the same queue in FIFO order stays valid. Scenario parameters change the simulated days for every policy.</li>
+<li>Confidence intervals: percentile bootstrap of the mean over days (200 resamples, seed 20261121). Quantiles: linear interpolation between order statistics (Hyndman-Fan type 7).</li>
+</ul>
+<h2 id="4-policies-at-the-base">4. Policies at the base</h2>
+<ul>
+<li>Physical FIFO queue (status quo, policy A): <code>fifo</code> 1.1.0</li>
+<li>Physical FIFO queue with staff calling closing flights (status quo with manual handling, policy A'): <code>fifo-manual</code> 0.1.0</li>
+<li>GateFlow virtual queue in FIFO order: <code>virtual-fifo</code> 0.1.0</li>
+<li>GateFlow virtual queue with constrained EDF priority v3: fast track, stale-data rule and hysteresis (policy B): <code>priority-v3</code> 0.2.0</li>
+</ul>
+<p>Full parameters are in the <code>manifest</code> of <code>sweep.json</code>.</p>
+<h2 id="5-assumptions-of-the-base-scenario">5. Assumptions of the base scenario</h2>
+<div class="table"><table><thead><tr><th>Parameter</th><th>Source</th><th>Note</th></tr></thead><tbody>
+<tr><td>checkpoint.laneSchedule</td><td>SYNTHETIC</td><td>Six lanes open all day, as in slice S1, so that results remain comparable.</td></tr>
+<tr><td>checkpoint.serviceTimeMeanSeconds</td><td>SYNTHETIC</td><td>About 90 passengers per hour per lane.</td></tr>
+<tr><td>checkpoint.serviceTimeCv</td><td>SYNTHETIC</td><td></td></tr>
+<tr><td>schedule.departuresPerHour</td><td>SYNTHETIC</td><td>Design day with a morning bank of departures, typical of low-cost bases.</td></tr>
+<tr><td>schedule.aircraftMix</td><td>SYNTHETIC</td><td></td></tr>
+<tr><td>schedule.gateZones</td><td>SYNTHETIC</td><td>Nominal walking time from the checkpoint exit to the gate zone.</td></tr>
+<tr><td>passengers.loadFactor</td><td>SYNTHETIC</td><td>Triangular distribution, drawn per flight and replication.</td></tr>
+<tr><td>passengers.transferShare</td><td>SYNTHETIC</td><td>Connecting passengers who cross this checkpoint. Not an official statistic.</td></tr>
+<tr><td>passengers.showUp.departing</td><td>SYNTHETIC</td><td>Arrival at the checkpoint = STD minus (25 min + log-normal with median 70 min).</td></tr>
+<tr><td>passengers.showUp.transfer</td><td>SYNTHETIC</td><td>Connecting passengers arrive later, after their inbound flight.</td></tr>
+<tr><td>passengers.walkSpeedSigma</td><td>SYNTHETIC</td><td>Individual walking time = nominal zone time x log-normal(median 1, sigma).</td></tr>
+<tr><td>passengers.callResponse</td><td>SYNTHETIC</td><td>Virtual queue only. Time from a call to presenting at the access point is log-normal with a median of 75 s (passengers wait near the checkpoint); 4% do not notice the first call and present later by a log-normal extra delay with a median of 4 minutes. Hypotheses to measure in a pilot.</td></tr>
+<tr><td>passengers.groups</td><td>SYNTHETIC</td><td>Shares over parties: about 40% of passengers travel with others. A party holds one ticket, is called together and is screened on one lane, one person after the other.</td></tr>
+<tr><td>passengers.assistedShare</td><td>SYNTHETIC</td><td>Parties taking the assisted path (PRM and similar): staff take them to the next free lane, ahead of the queue, under every policy. The reason is never recorded.</td></tr>
+<tr><td>passengers.strategicLateArrival</td><td>SYNTHETIC</td><td>Nobody arrives late on purpose in this scenario.</td></tr>
+<tr><td>operations.boardingCloseMinutesBeforeStd</td><td>SYNTHETIC</td><td>Boarding closes 20 minutes before the scheduled departure, for every flight.</td></tr>
+<tr><td>operations.deadlineKnowledge</td><td>SYNTHETIC</td><td>The system applies the closing rule to the schedule; without disruptions it matches the ground truth exactly.</td></tr>
+<tr><td>disruptions.flightDelays</td><td>SYNTHETIC</td><td>No delays in this scenario (see single-checkpoint-disrupted).</td></tr>
+<tr><td>disruptions.gateChanges</td><td>SYNTHETIC</td><td>No gate changes in this scenario.</td></tr>
+<tr><td>disruptions.laneOutages</td><td>SYNTHETIC</td><td>No unplanned lane outages in this scenario.</td></tr>
+<tr><td>disruptions.feedOutages</td><td>SYNTHETIC</td><td>The flight feed never goes down in this scenario.</td></tr>
+</tbody></table></div>
+<h2 id="6-limitations-of-this-model-version">6. Limitations of this model version</h2>
+<ul>
+<li>Single checkpoint. Lanes follow a planned schedule, minus unplanned outages when the scenario has them: a lane going out of service finishes its passenger first, at least one lane always stays open, and the system knows at once. No lanes are opened in reaction to the queue.</li>
+<li>Every passenger uses the virtual queue when one is simulated: no opt-outs, no passengers without a phone or a view of the displays.</li>
+<li>Response times and absences are drawn per party from assumed distributions. A second call does not make an absent passenger come sooner, the prepare window does not shorten response times, and a passenger who has been at the access point once answers later calls at once.</li>
+<li>The access point never becomes a bottleneck, and the walk from the access point to the lanes is part of the response time.</li>
+<li>Fast track (priority v2): a fast-tracked party is called next and, once its ticket is validated, goes ahead of the people waiting at the lanes who still have room under K. The fast-track entry never becomes a bottleneck of its own and needs no staff in the model.</li>
+<li>CRITICAL passengers are flagged for staff, but staff escorts are not modelled: such passengers wait in the queue order.</li>
+<li>Before any disruption the system's deadline equals the ground truth (boarding close from a fixed rule). Delays and gate changes, when the scenario has them, are known only once the flight feed announces them, and messages sent while the feed is down arrive when it recovers. Delays only move boarding later; passengers still arrive for the scheduled departure. A gate change affects only passengers who finish screening after it.</li>
+<li>Staff of baseline A' learn of delays when the system does and keep using the last known times while the feed is down (no stale-data rule).</li>
+<li>Passengers never abandon the queue, even after their flight has closed.</li>
+<li>A group stays together: one ticket, one call, one lane, screened one person after the other. Assisted passengers always get the next free lane and are not assessed by the engine.</li>
+<li>Baseline A' (<code>fifo-manual</code>) is an idealised staff practice: every five minutes staff call the flights closing within 20 minutes, and every passenger of those flights comes forward at once. Real practice is less systematic, so A' may overstate today's handling where it is informal, or understate it where staff watch individual passengers.</li>
+<li>Strategic late arrivals are a fixed share in a stress-test scenario, not a behavioural response to the policy.</li>
+<li>Tickets are issued on arrival with no kiosk or scanning delay.</li>
+<li>The engine estimates screening time as the mean screening time per person, walking time as the nominal time of the gate zone, and the time from call to screening as the larger of the response estimate and the call-ahead time (through the fast track: the response estimate, or the time since the passenger was last at the access point when shorter).</li>
+</ul>
+<h2 id="7-reproducibility">7. Reproducibility</h2>
+<div class="table"><table><thead><tr><th>Item</th><th>Value</th></tr></thead><tbody>
+<tr><td>Sweep specification hash</td><td><code>sha256:test</code></td></tr>
+<tr><td>Base scenario hash</td><td><code>sha256:9ccf37cfba384e844c1d47723edd82513efca0120c1edb1d1ce81e073d2e2991</code></td></tr>
+<tr><td>Seeds</td><td>1-2 (2)</td></tr>
+<tr><td>Distinct simulated days</td><td>4</td></tr>
+<tr><td>Source revision</td><td><code>test</code></td></tr>
+<tr><td>Versions</td><td>engine 0.5.0, queue core 0.5.0, model 0.5.0, kernel 0.1.0, population generator 0.4.0, scenario schema 4</td></tr>
+<tr><td>Generated by</td><td>test 0.0.0</td></tr>
+</tbody></table></div>
+<p>Command:</p>
+<pre><code class="language-bash">gateflow-sim sweep --spec sweeps/golden-sweep.yaml --seeds 1-2 --bootstrap-resamples 200</code></pre>
+</main>
+</body>
+</html>

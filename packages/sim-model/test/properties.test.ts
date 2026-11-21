@@ -137,6 +137,7 @@ const selectionArb: fc.Arbitrary<SelectionParams> = fc.oneof(
           { weight: 3, arbitrary: fc.constant(null) },
           { weight: 1, arbitrary: fc.integer({ min: 0, max: 60 * MINUTE }) },
         ),
+        fastTrack: fc.boolean(),
       }),
     ),
   },
@@ -242,6 +243,21 @@ function checkRun(population: Population, p: Policy, run: RunResult): void {
       expect(o.priorityCall).toBe(false);
     }
   });
+  // At the lanes, parties are screened in the order in which they validated their tickets; only
+  // assisted parties and, under the fast track, fast-tracked priority parties go ahead.
+  if (p.queue.kind === 'virtual') {
+    const fastTrack = p.selection.kind === 'constrained-edf' && p.selection.fastTrack;
+    const queued = run.outcomes
+      .map((o, i) => ({ o, i, admitted: o.serviceStartMs - o.standingMs }))
+      .filter(({ i }) => passengers[i]!.path === 'QUEUE');
+    for (const a of queued) {
+      for (const b of queued) {
+        if (b.admitted > a.admitted && b.o.serviceStartMs < a.o.serviceStartMs) {
+          expect(fastTrack && b.o.priorityCall).toBe(true);
+        }
+      }
+    }
+  }
   // A lane screens one passenger at a time.
   for (const intervals of byLane.values()) {
     intervals.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
@@ -385,5 +401,112 @@ describe('checkpoint model properties', () => {
     expect(hits.groupPriority).toBeGreaterThanOrEqual(1);
     expect(hits.flightCallJump).toBeGreaterThanOrEqual(9);
     expect(hits.assistedWaited).toBeGreaterThanOrEqual(50);
+  });
+});
+
+/** Fast-track policies on congested checkpoints, where parties wait at the lanes (ADR-027). */
+const fastTrackPolicyArb: fc.Arbitrary<Policy> = fc
+  .record({
+    maxOvertakes: fc.integer({ min: 2, max: 20 }),
+    safetyBufferMs: fc.integer({ min: 0, max: 2 * MINUTE }),
+    callAheadSeconds: fc.integer({ min: 120, max: 300 }),
+    responseEstimateSeconds: fc.integer({ min: 0, max: 120 }),
+    prepareWindowSize: fc.integer({ min: 0, max: 3 }),
+  })
+  .map((r) =>
+    policy(
+      {
+        kind: 'constrained-edf',
+        capWindowCalls: 10,
+        capMaxPriorityCalls: 10,
+        maxOvertakes: r.maxOvertakes,
+        attentionThresholdMs: 15 * MINUTE,
+        safetyBufferMs: r.safetyBufferMs,
+        feasibilityMarginMs: 0,
+        allowRuleBasedDeadline: true,
+        eligibleSegments: ['DEPARTING', 'TRANSFER'],
+        latePresentationCutoffMs: null,
+        fastTrack: true,
+      },
+      {
+        kind: 'virtual',
+        callAheadSeconds: r.callAheadSeconds,
+        responseEstimateSeconds: r.responseEstimateSeconds,
+        prepareWindowSize: r.prepareWindowSize,
+        callTimeoutMs: 3 * MINUTE,
+        recallTimeoutMs: 2 * MINUTE,
+        reactivationWindowMs: 10 * MINUTE,
+        maxReactivations: 1,
+        reactivationPosition: 'ORIGINAL',
+      },
+    ),
+  );
+
+/** Bursts of arrivals on one or two slow lanes, so that parties wait at the lanes. */
+const congestedPopulationArb: fc.Arbitrary<Population> = fc
+  .record({
+    lanes: fc.integer({ min: 1, max: 2 }),
+    rate: fc.integer({ min: 20, max: 60 }),
+    flights: flightsArb,
+    rows: fc.array(passengerRowArb, { minLength: 20, maxLength: 50, size: 'max' }),
+  })
+  .map(({ lanes, rate, flights, rows }) => ({
+    checkpoint: {
+      laneSchedule: [{ fromMs: 0, lanes }],
+      serviceRatePerLanePerHour: rate,
+      processEstimateMs: Math.round(3_600_000 / rate),
+    },
+    flights,
+    passengers: rows.map((row, index): SimPassenger => ({
+      index,
+      id: `p${index}`,
+      flightIndex: row.flightPick % flights.length,
+      segment: row.transfer ? 'TRANSFER' : 'DEPARTING',
+      arrivalMs: Math.floor(row.arrivalMs / 4),
+      serviceMs: Math.round(3_600_000 / rate),
+      walkMs: row.walkMs,
+      walkEstimateMs: row.walkEstimateMs,
+      callResponseMs: Math.floor(row.callResponseMs / 2),
+      absenceDelayMs: 0,
+      partySize: row.partySize,
+      path: 'QUEUE',
+      strategic: false,
+    })),
+  }));
+
+describe('fast track at the lanes', () => {
+  it('passes people at the lanes only within K and keeps the lane order rule', () => {
+    fc.assert(
+      fc.property(
+        fc.oneof(populationArb, congestedPopulationArb),
+        fastTrackPolicyArb,
+        (population, p) => {
+          checkRun(population, p, simulateCheckpoint(population, p, OPTIONS));
+        },
+      ),
+      RUNS,
+    );
+  });
+
+  it('reaches passes at the lanes and parties stopped by K', () => {
+    const samples = fc.sample(fc.tuple(congestedPopulationArb, fastTrackPolicyArb), {
+      numRuns: 300,
+      seed: 20261121,
+    });
+    let passes = 0;
+    let fastTracked = 0;
+    let boundReached = 0;
+    for (const [population, p] of samples) {
+      const run = simulateCheckpoint(population, p, OPTIONS);
+      if (run.stats.fastTrackPeople > 0) fastTracked++;
+      if (run.stats.lanePassedPeople > 0) passes++;
+      const k = p.selection.kind === 'constrained-edf' ? p.selection.maxOvertakes : -1;
+      if (run.outcomes.some((o) => o.overtakenCount === k)) boundReached++;
+    }
+    // Thresholds at about half of the counts observed with this seed.
+    expect(fastTracked).toBeGreaterThanOrEqual(130);
+    expect(passes).toBeGreaterThanOrEqual(90);
+    expect(boundReached).toBeGreaterThanOrEqual(100);
+    expect(passes).toBeGreaterThanOrEqual(20);
   });
 });

@@ -1,5 +1,5 @@
 /** Version of the queue state machine. Bump on any change that can alter behaviour. */
-export const QUEUE_CORE_VERSION = '0.2.0';
+export const QUEUE_CORE_VERSION = '0.3.0';
 
 export { CheckpointQueue } from './queue';
 export {
@@ -14,10 +14,13 @@ export {
   PRIORITY_V1_SELECTION,
   PRIORITY_V1_STRICT_POLICY,
   PRIORITY_V1_STRICT_SELECTION,
+  PRIORITY_V2_POLICY,
+  PRIORITY_V2_SELECTION,
   QueueError,
   VIRTUAL_FIFO_POLICY,
   callAheadTarget,
   classificationOf,
+  fastTrackResponseEstimateMs,
   findPolicyPreset,
   prepareWindowSizeOf,
   responseEstimateMs,

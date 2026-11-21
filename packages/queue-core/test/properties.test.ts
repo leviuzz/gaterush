@@ -42,6 +42,7 @@ const selectionArb: fc.Arbitrary<SelectionParams> = fc.oneof(
         latePresentationCutoffMs: fc.option(fc.integer({ min: 0, max: 40 * MIN }), {
           nil: null,
         }),
+        fastTrack: fc.boolean(),
       }),
     ),
   },
@@ -148,6 +149,10 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
   const windowSize = policy.queue.kind === 'virtual' ? policy.queue.prepareWindowSize : 0;
   const backOnReactivation =
     policy.queue.kind === 'virtual' && policy.queue.reactivationPosition === 'BACK';
+  const fastTrack = policy.selection.kind === 'constrained-edf' && policy.selection.fastTrack;
+  /** Independent model of the prepare window: ids in call order, and which are fast-tracked. */
+  const modelWindow: string[] = [];
+  const modelFast = new Set<string>();
   // Independent model of overtakes, rebuilt from the events: when a ticket is committed, every
   // ticket still waiting with a lower FIFO key is overtaken once.
   const queuedKeys = new Map<string, number>();
@@ -213,10 +218,14 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
     const after = q.prepareWindow().map((t) => t.id);
 
     // Window: never above M; a committed ticket leaves only by being called (zero churn), and the
-    // remaining tickets keep their order, with new ones appended at the end.
+    // remaining tickets keep their order. New tickets are appended at the end, except fast-track
+    // priority commitments, which go ahead of every ticket that is not fast-tracked.
     expect(after.length).toBeLessThanOrEqual(windowSize);
-    const expectedPrefix = calledId !== null && before[0] === calledId ? before.slice(1) : before;
-    expect(after.slice(0, expectedPrefix.length)).toEqual(expectedPrefix);
+    const remaining = calledId !== null && before[0] === calledId ? before.slice(1) : before;
+    expect(after.filter((id) => remaining.includes(id))).toEqual(remaining);
+    const fastInWindow = after.filter((id) => q.ticket(id)!.fastTracked);
+    expect(after.slice(0, fastInWindow.length)).toEqual(fastInWindow);
+    if (!fastTrack) expect(after.slice(0, remaining.length)).toEqual(remaining);
 
     for (; seen < events.length; seen++) {
       const e = events[seen]!;
@@ -231,6 +240,23 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
           if (k < key) overtaken.set(id, (overtaken.get(id) ?? 0) + size);
         }
         for (let p = 0; p < size; p++) personFlags.push(e.priority);
+        if (windowSize > 0) {
+          if (fastTrack && e.priority) {
+            // A fast-track commitment passes every window ticket that is not fast-tracked.
+            const at = modelWindow.filter((id) => modelFast.has(id)).length;
+            for (const id of modelWindow.slice(at)) {
+              overtaken.set(id, (overtaken.get(id) ?? 0) + size);
+            }
+            modelWindow.splice(at, 0, e.ticketId);
+            modelFast.add(e.ticketId);
+          } else {
+            modelWindow.push(e.ticketId);
+          }
+        }
+      } else if (e.type === 'CALLED' && windowSize > 0) {
+        expect(modelWindow[0]).toBe(e.ticketId);
+        modelWindow.shift();
+        modelFast.delete(e.ticketId);
       }
     }
 
@@ -316,9 +342,29 @@ describe('queue state machine properties', () => {
   it('exercises priority commitments, the cap, the overtake guard and reactivations', () => {
     // Guards against vacuous properties: the generated scenarios must reach the limits above.
     const samples = fc.sample(fc.tuple(policyArb, opsArb), { numRuns: 500, seed: 20261121 });
-    const hits = { priority: 0, cap: 0, guard: 0, reactivations: 0, expirations: 0, admissions: 0 };
+    const hits = {
+      priority: 0,
+      cap: 0,
+      guard: 0,
+      reactivations: 0,
+      expirations: 0,
+      admissions: 0,
+      fastTrackPasses: 0,
+    };
     for (const [policy, ops] of samples) {
-      const { stats } = run(policy, ops);
+      const { stats, events } = run(policy, ops);
+      const windowSize = policy.queue.kind === 'virtual' ? policy.queue.prepareWindowSize : 0;
+      const fastTrack = policy.selection.kind === 'constrained-edf' && policy.selection.fastTrack;
+      // A fast-track commitment while the window was not empty passed somebody.
+      let inWindow = 0;
+      let passed = false;
+      for (const e of events) {
+        if (e.type === 'COMMITTED' && windowSize > 0) {
+          if (fastTrack && e.priority && inWindow > 0) passed = true;
+          inWindow++;
+        } else if (e.type === 'CALLED' && windowSize > 0) inWindow--;
+      }
+      if (passed) hits.fastTrackPasses++;
       const guardIsTrivial =
         policy.selection.kind === 'constrained-edf' && policy.selection.maxOvertakes === 0;
       if (stats.priorityCommitments > 0) hits.priority++;

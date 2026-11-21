@@ -62,9 +62,9 @@ describe('gateflow-sim run', () => {
     for (const key of [
       'fifo-manual vs fifo',
       'virtual-fifo vs fifo',
-      'priority-v1 vs fifo',
-      'priority-v1 vs virtual-fifo',
-      'priority-v1 vs fifo-manual',
+      'priority-v2 vs fifo',
+      'priority-v2 vs virtual-fifo',
+      'priority-v2 vs fifo-manual',
     ]) {
       expect(a.stdout).toContain(`${key}: net flights saved per day`);
     }
@@ -132,6 +132,7 @@ describe('gateflow-sim validate, policies, help', () => {
       'priority-v0',
       'priority-v1',
       'priority-v1-strict',
+      'priority-v2',
     ]);
   });
 
@@ -153,7 +154,7 @@ describe('gateflow-sim validate, policies, help', () => {
 
   it('prints help and version', () => {
     expect(cli(['--help']).stdout).toContain('Usage:');
-    expect(cli(['--version']).stdout.trim()).toBe('0.3.0');
+    expect(cli(['--version']).stdout.trim()).toBe('0.4.0');
   });
 });
 

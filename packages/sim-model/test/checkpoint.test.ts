@@ -1,4 +1,9 @@
-import { PRIORITY_V0_POLICY, VIRTUAL_FIFO_POLICY } from '@gateflow/queue-core';
+import {
+  DEFAULT_VIRTUAL_QUEUE,
+  PRIORITY_V0_POLICY,
+  VIRTUAL_FIFO_POLICY,
+} from '@gateflow/queue-core';
+import type { VirtualQueue } from '@gateflow/queue-core';
 import { describe, expect, it } from 'vitest';
 import { PopulationError, firstCallDelayMs, simulateCheckpoint } from '../src';
 import type { Population, RunResult } from '../src';
@@ -663,5 +668,88 @@ describe('simulateCheckpoint: input validation', () => {
 
   it('keeps the instant queue free of call-ahead and prepare window', () => {
     expect(INSTANT_QUEUE).toMatchObject({ callAheadSeconds: 0, prepareWindowSize: 0 });
+  });
+});
+
+describe('fast track: hand-computed case (ADR-027)', () => {
+  // One lane, one person per minute. p0-p3 arrive at 0 and are called at once (300 s of
+  // call-ahead): p0 is screened from 0, p1-p3 wait at the lane. U and V arrive at 30 s for a
+  // flight closing at 4 min.
+  const population: Population = {
+    checkpoint: checkpoint(1, 60, MINUTE),
+    flights: [flight(0), flight(1, 4 * MINUTE)],
+    passengers: [
+      passenger(0, 0, MINUTE),
+      passenger(1, 0, MINUTE),
+      passenger(2, 0, MINUTE),
+      passenger(3, 0, MINUTE),
+      passenger(4, 30 * SECOND, MINUTE, { flightIndex: 1 }),
+      passenger(5, 30 * SECOND, MINUTE, { flightIndex: 1 }),
+    ],
+  };
+  const queue: VirtualQueue = {
+    ...DEFAULT_VIRTUAL_QUEUE,
+    callAheadSeconds: 300,
+    responseEstimateSeconds: 60,
+    prepareWindowSize: 0,
+  };
+  const fast = (maxOvertakes: number, fastTrack = true) =>
+    edfWith(
+      {
+        safetyBufferMs: 0,
+        feasibilityMarginMs: 0,
+        capWindowCalls: 10,
+        capMaxPriorityCalls: 10,
+        maxOvertakes,
+        fastTrack,
+      },
+      queue,
+    );
+  const starts = (run: RunResult) => run.outcomes.map((o) => o.serviceStartMs / MINUTE);
+
+  it('without the fast track, U and V wait behind p1-p3 and miss the flight', () => {
+    const run = simulateCheckpoint(population, fast(2, false), OPTIONS);
+    expect(starts(run)).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(run.outcomes.slice(4).map((o) => o.missed)).toEqual([true, true]);
+    expect(run.stats).toMatchObject({ fastTrackPeople: 0, lanePassedPeople: 0 });
+  });
+
+  it('with it, U and V go ahead of the people at the lane, in their own order', () => {
+    const run = simulateCheckpoint(population, fast(2), OPTIONS);
+    // U then V, each passing p1-p3, who are overtaken twice.
+    expect(starts(run)).toEqual([0, 3, 4, 5, 1, 2]);
+    expect(run.outcomes.slice(4).map((o) => [o.missed, o.priorityCall])).toEqual([
+      [false, true],
+      [false, true],
+    ]);
+    expect(run.outcomes.map((o) => o.overtakenCount)).toEqual([0, 2, 2, 2, 0, 0]);
+    expect(run.stats).toMatchObject({ fastTrackPeople: 2, lanePassedPeople: 6 });
+  });
+
+  it('estimates a boosted call with the fast-track response time, not the call-ahead', () => {
+    // One lane, two minutes per person: p0-p3 are called at 0 (three people of call-ahead), p4,
+    // p5 and W wait. At 2 min W has waited 2 minutes: through the fast track it needs 1 min to walk
+    // back (the estimate) and 2 min of screening, so with its flight closing at 5.5 min it is still
+    // feasible and is boosted; with the call-ahead time (5 min) as its estimate it would be CRITICAL.
+    const waited: Population = {
+      checkpoint: checkpoint(1, 30, 2 * MINUTE),
+      flights: [flight(0), flight(1, 5.5 * MINUTE)],
+      passengers: [
+        ...Array.from({ length: 6 }, (_, i) => passenger(i, 0, 2 * MINUTE)),
+        passenger(6, 0, 2 * MINUTE, { flightIndex: 1, callResponseMs: 30 * SECOND }),
+      ],
+    };
+    const run = simulateCheckpoint(waited, fast(5), OPTIONS);
+    expect(run.outcomes[6]).toMatchObject({ priorityCall: true, firstCalledAtMs: 2 * MINUTE });
+    expect(run.outcomes[4]?.firstCalledAtMs).toBeGreaterThan(2 * MINUTE);
+  });
+
+  it('never lets a fast-tracked party push somebody at the lane past K', () => {
+    const run = simulateCheckpoint(population, fast(1), OPTIONS);
+    // U passes p1-p3 (one overtake each); V would push them to two, so it joins the back.
+    expect(starts(run)).toEqual([0, 2, 3, 4, 1, 5]);
+    expect(run.outcomes[5]).toMatchObject({ priorityCall: true, missed: true });
+    expect(Math.max(...run.outcomes.map((o) => o.overtakenCount))).toBe(1);
+    expect(run.stats).toMatchObject({ fastTrackPeople: 2, lanePassedPeople: 3 });
   });
 });

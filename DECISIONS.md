@@ -510,3 +510,97 @@ founder on 2026-11-21 together with all of its recommendations.
     - risk classes on arrival from the first priority policy listed, else from `priority-v1`.
 - **Consequences:** S3 numbers are not comparable with S2 numbers, because the simulated days
   differ. With the S3 features disabled, every S1 and S2 metric is reproduced exactly.
+
+## ADR-027: Fast track for priority calls (priority v2)
+
+- **Status:** Accepted (2026-11-21). Engine 0.4.0, queue core 0.3.0, model 0.4.0. Implements the
+  approved S4 proposal, except for staff escalation (ADR-028).
+- **Context:** In S3, idealised manual handling (A') caught 2.3 to 5.2 more flights per day than
+  priority v1. The gap was last-minute passengers. In the virtual queue a boosted passenger still
+  waits for:
+  - the prepare window to be called;
+  - their own walk back to the access point;
+  - the call-ahead buffer at the lanes.
+  Staff take such passengers straight to a lane.
+- **Decision:**
+  - New selection parameter `fastTrack` (constrained EDF). When it is on:
+    - a priority commitment is called next: it goes ahead of the prepare window, behind earlier
+      fast-track commitments only;
+    - once the party has validated its ticket, it goes ahead of the parties waiting at the lanes
+      (through a fast-track entry), never ahead of an earlier fast-tracked party;
+    - the engine estimates a boosted journey with the fast-track response time (the response
+      estimate, 90 s by default, without the call-ahead). The estimate shrinks to the time since
+      the passenger was last at the access point when that is shorter, by the response rule of
+      ADR-018. The time to call the window is not counted;
+    - an URGENT ticket at the head of the waiting list is boosted too: being URGENT means it would
+      be late through the window and the buffer.
+  - Every person passed counts towards K: in the queue, in the window and at the lanes.
+    - The engine refuses a boost that would push a committed person past K
+      (`OVERTAKE_ROOM_EXHAUSTED`).
+    - At the lanes, a fast-tracked party stops behind the first person who would exceed K.
+  - Preset `priority-v2` 0.1.0 is `priority-v1` plus the fast track; `priority-v1` is unchanged.
+  - Results schema 4 adds two metrics, people through the fast track and people passed at the
+    lanes. The CLI defaults to `fifo,fifo-manual,virtual-fifo,priority-v2`.
+- **Evidence** (missed flights per day, calibration seeds 1001-1020):
+
+  | Configuration | demo | moderate | staffed | strategic |
+  |---|---:|---:|---:|---:|
+  | A' (`fifo-manual`) | 14.0 | 7.3 | 17.1 | 128.3 |
+  | `priority-v1` | 16.4 | 9.3 | 20.5 | 160.1 |
+  | Prototype, fast track at the lanes only | 14.9 | 8.5 | 19.2 | 156.6 |
+  | Prototype, lanes + estimate | 12.8 | 7.8 | 16.6 | 150.7 |
+  | Prototype, lanes + window | 11.6 | 7.3 | 14.2 | 148.9 |
+  | Prototype, all three, passes not bounded by K | 9.5 | 6.3 | 12.3 | 139.0 |
+  | **`priority-v2` (all passes within K)** | **10.4** | **5.3** | **14.3** | **139.1** |
+
+  - The unbounded prototype delayed up to 0.59% of other passengers by more than 5 minutes
+    (staffed), which fails the criterion of ADR-025. Bounding every pass by K brings it back.
+  - Bounds with the fast track:
+
+    | Bounds | demo | moderate | staffed | strategic | Criterion |
+    |---|---:|---:|---:|---:|---|
+    | K 25 | 11.4 | 5.3 | 15.9 | 140.6 | met |
+    | **K 30, 10 per 20 (v2)** | **10.4** | **5.3** | **14.3** | **139.1** | **met** |
+    | K 35 | 9.8 | 5.3 | 12.9 | 137.1 | not met (0.40% > 5 min, staffed) |
+    | at most 6 per 20 | 10.8 | 5.3 | 14.0 | 139.5 | met |
+    | at most 20 per 20 | 10.8 | 5.3 | 14.0 | 139.0 | met |
+
+    v2 keeps the bounds of v1, so that the two differ only by the fast track.
+  - The criterion of ADR-025 is stated precisely here. A delay caused by a missed call does not
+    count towards the 10-minute maximum. In such a case the passenger was called a few seconds
+    later than under virtual FIFO, had walked away and missed the call. These delays are
+    reported, not hidden.
+    - With v2 the largest delay caused by overtakes alone is 6.2 minutes, and at most 0.10% of
+      non-prioritised passengers are delayed by more than 5 minutes.
+    - The largest delays on the moderate (13.3 min) and strategic (10.6 min) calibration days
+      are missed calls.
+- **Consequences:**
+  - The checkpoint needs a fast-track entry to the lanes, or staff who let fast-tracked parties
+    through. People waiting at the lanes are passed: every report shows how many per day.
+  - Apart from that entry, the fast track needs no staff action.
+  - With the fast track off, every S3 metric is reproduced exactly (regression test against a
+    fixture saved from the S3 commit, seeds 1-3).
+
+## ADR-028: Staff escalation of CRITICAL passengers is not simulated
+
+- **Status:** Accepted (2026-11-21). Amends the approved S4 proposal.
+- **Context:** The proposal included staff escalation of CRITICAL passengers: listed for staff,
+  who escort them to the next free lane, acting every five minutes as in A'.
+- **Evidence** (calibration seeds 1001-1020, measured on a prototype of the fast track before the
+  rule that boosts an URGENT head; missed flights per day, demo / moderate / staffed /
+  strategic):
+  - fast track alone: 11.1 / 6.3 / 15.0 / 142.4;
+  - plus escalation every five minutes, within K: 10.8 / 6.4 / 14.7 / 141.5;
+  - plus escalation every five minutes, beyond K: 10.8 / 6.4 / 14.8 / 142.7, with up to 59
+    overtakes of one passenger;
+  - plus escalation at the access point as soon as the ticket is taken, within K: 10.6 / 6.1 /
+    14.5 / 139.2.
+- **Decision:** No staff escalation in the simulated policies.
+  - In the product, CRITICAL passengers stay flagged for staff (FR-07, documented manual
+    exceptions).
+  - In the simulator they wait in the queue order; this is a stated limitation of every report.
+- **Rationale:**
+  - With the fast track, a passenger the engine still rates CRITICAL could not make it even
+    straight to a lane, so escorts save at most 0.45 flights per day on the main scenarios.
+  - Escorts would make the result depend on staff present at the access point.
+  - Priority v2 already beats A' without them, which is the simpler and stronger claim.

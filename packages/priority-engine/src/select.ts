@@ -3,6 +3,7 @@ import {
   assessTicket,
   fifoWaitEstimateMs,
   isDeadlineTrusted,
+  journeyEstimates,
   partySizeOf,
   presentationBlock,
 } from './assess';
@@ -15,6 +16,7 @@ import type {
 } from './types';
 import {
   toFifoOrder,
+  validateAheadMaxOvertakenCount,
   validateAheadOfWaiting,
   validateCheckpoint,
   validateNow,
@@ -58,8 +60,8 @@ export function capAllows(
  *    unless that would push an older ticket beyond K: then call the oldest ticket.
  * 2. Otherwise take the boost-eligible URGENT ticket with the earliest latest-call time L (ties:
  *    lower fifoKey), ignoring groups larger than the cap. Call it if the cap has room for its
- *    people and no older ticket would be overtaken by more than K people; otherwise call the
- *    oldest ticket.
+ *    people and no older ticket would be overtaken by more than K people (under the fast track,
+ *    the committed people ahead included); otherwise call the oldest ticket.
  * 3. Otherwise call the oldest ticket (FIFO).
  *
  * The function is pure and deterministic: the same input always yields the same selection,
@@ -70,6 +72,7 @@ export function selectNext(input: EngineInput): Selection | null {
   validateCheckpoint(input.checkpoint);
   validateSelectionParams(input.selection);
   validateAheadOfWaiting(input.aheadOfWaiting ?? 0);
+  validateAheadMaxOvertakenCount(input.aheadMaxOvertakenCount ?? 0);
   const waiting = toFifoOrder(input.waiting);
   const head = waiting[0];
   if (head === undefined) return null;
@@ -137,8 +140,6 @@ function selectConstrainedEdf(
   const { nowMs, checkpoint } = input;
   const offset = input.aheadOfWaiting ?? 0;
   const throughput = checkpoint.throughputPerHour;
-  // Time to call the committed people ahead of the waiting list: nobody can be called earlier.
-  const committedDrainMs = fifoWaitEstimateMs(offset, throughput);
   const maxBoostParty = Math.max(1, policy.capMaxPriorityCalls);
   let guardIndex = -1;
   let guardMaxOvertakenAhead = 0;
@@ -163,13 +164,21 @@ function selectConstrainedEdf(
       policy.eligibleSegments.includes(ticket.segment) &&
       presentationBlock(ticket, policy) === null
     ) {
-      const journeyMs = checkpoint.responseMs + checkpoint.processMs * size + ticket.walkEstimateMs;
-      const latest = deadlineMs - journeyMs - policy.safetyBufferMs;
+      // Without the fast track the boosted call waits for the committed people ahead (the drain);
+      // with it the call is made next.
+      const journey = journeyEstimates(ticket, nowMs, checkpoint, policy, offset);
+      const latest = deadlineMs - journey.boostJourneyMs - policy.safetyBufferMs;
       const feasible =
-        deadlineMs - journeyMs - policy.feasibilityMarginMs - nowMs - committedDrainMs >= 0;
+        deadlineMs -
+          journey.boostJourneyMs -
+          policy.feasibilityMarginMs -
+          nowMs -
+          journey.boostDrainMs >=
+        0;
       // The FIFO wait already counts the committed people ahead (the offset).
       const fifoWait = fifoWaitEstimateMs(peopleAhead, throughput);
-      if (feasible && latest - nowMs - fifoWait < 0) {
+      const latestThroughQueue = deadlineMs - journey.queueJourneyMs - policy.safetyBufferMs;
+      if (feasible && latestThroughQueue - nowMs - fifoWait < 0) {
         // URGENT and boost-eligible. Groups larger than the cap are counted but never boosted
         // (a single passenger is always a candidate: with a zero cap it meets CAP_REACHED).
         urgentCandidates++;
@@ -192,18 +201,27 @@ function selectConstrainedEdf(
     const index = guardMaxOvertakenAhead + size > policy.maxOvertakes ? 0 : guardIndex;
     return build(input, waiting, policy, index, false, ['OVERTAKE_LIMIT_GUARD'], urgentCandidates);
   }
-  if (urgentIndex > 0) {
+  // A boost jumps the older waiting tickets. Under the fast track it also jumps the committed people
+  // and the people waiting at the lanes, so an URGENT head of the waiting list is boosted too: being
+  // URGENT means that it would be too late through the window and the call-ahead buffer.
+  const jumps = urgentIndex > 0 || (urgentIndex === 0 && policy.fastTrack);
+  if (jumps) {
     const size = partySizeOf(waiting[urgentIndex] as WaitingTicket);
     if (!capAllows(input.recentPriorityCalls, policy, size)) {
       return build(input, waiting, policy, 0, false, ['CAP_REACHED'], urgentCandidates);
     }
-    if (urgentMaxOvertakenAhead + size > policy.maxOvertakes) {
+    // A fast-track call is made ahead of the committed people too, so they count as overtaken.
+    const passedMax = policy.fastTrack
+      ? Math.max(urgentMaxOvertakenAhead, input.aheadMaxOvertakenCount ?? 0)
+      : urgentMaxOvertakenAhead;
+    if (passedMax + size > policy.maxOvertakes) {
       return build(input, waiting, policy, 0, false, ['OVERTAKE_ROOM_EXHAUSTED'], urgentCandidates);
     }
     return build(input, waiting, policy, urgentIndex, true, ['URGENT_FEASIBLE'], urgentCandidates);
   }
   // Without people ahead of the waiting list the head can never be URGENT (its FIFO wait is
-  // zero); with a committed window ahead it can, and it is simply called in FIFO order.
+  // zero); with a committed window ahead it can, and without the fast track it is simply called in
+  // FIFO order.
   return build(input, waiting, policy, 0, false, ['FIFO'], urgentCandidates);
 }
 

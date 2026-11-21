@@ -84,6 +84,16 @@ export function responseEstimateMs(queue: QueueOperation): Millis {
 }
 
 /**
+ * Engine estimate of the time from a fast-track call to the start of screening: the walk back to
+ * the access point (the response estimate), without the call-ahead buffer, since the party goes to
+ * the next free lane. Zero for the physical queue.
+ */
+export function fastTrackResponseEstimateMs(queue: QueueOperation): Millis {
+  if (queue.kind === 'physical') return 0;
+  return Math.min(responseEstimateMs(queue), Math.round(queue.responseEstimateSeconds * 1000));
+}
+
+/**
  * Number of passengers to keep in the pipeline beyond the free lanes: the call-ahead seconds of
  * work at the current throughput, rounded up. Zero for the physical queue.
  */
@@ -111,6 +121,7 @@ export const PRIORITY_V0_SELECTION: ConstrainedEdfSelection = {
   allowRuleBasedDeadline: true,
   eligibleSegments: ['DEPARTING', 'TRANSFER'],
   latePresentationCutoffMs: null,
+  fastTrack: false,
 };
 
 /**
@@ -132,6 +143,17 @@ export const PRIORITY_V1_SELECTION: ConstrainedEdfSelection = {
   maxOvertakes: 30,
   feasibilityMarginMs: 0,
   latePresentationCutoffMs: null,
+};
+
+/**
+ * Selection of policy B, version 2 (ADR-027): v1 with the fast track. A priority call is made next,
+ * ahead of the prepare window, and the party goes to the next free lane on validating its ticket;
+ * every person it passes counts towards K = 30. Calibrated on seeds 1001-1020 with the criterion of
+ * ADR-025.
+ */
+export const PRIORITY_V2_SELECTION: ConstrainedEdfSelection = {
+  ...PRIORITY_V1_SELECTION,
+  fastTrack: true,
 };
 
 /**
@@ -216,6 +238,15 @@ export const PRIORITY_V1_POLICY: Policy = {
   queue: DEFAULT_VIRTUAL_QUEUE,
 };
 
+/** Policy B, version 2: GateFlow virtual queue with constrained EDF priority and the fast track. */
+export const PRIORITY_V2_POLICY: Policy = {
+  id: 'priority-v2',
+  version: '0.1.0',
+  title: 'GateFlow virtual queue with constrained EDF priority v2 and fast track (policy B)',
+  selection: PRIORITY_V2_SELECTION,
+  queue: DEFAULT_VIRTUAL_QUEUE,
+};
+
 /** Policy B v1 with the late-presentation rule (anti-abuse). */
 export const PRIORITY_V1_STRICT_POLICY: Policy = {
   id: 'priority-v1-strict',
@@ -232,6 +263,7 @@ export const POLICY_PRESETS: readonly Policy[] = [
   PRIORITY_V0_POLICY,
   PRIORITY_V1_POLICY,
   PRIORITY_V1_STRICT_POLICY,
+  PRIORITY_V2_POLICY,
 ];
 
 export function findPolicyPreset(id: string): Policy | undefined {
@@ -249,5 +281,6 @@ export function classificationOf(policy: Policy): ClassificationParams | null {
     allowRuleBasedDeadline: selection.allowRuleBasedDeadline,
     eligibleSegments: selection.eligibleSegments,
     latePresentationCutoffMs: selection.latePresentationCutoffMs,
+    fastTrack: selection.fastTrack,
   };
 }

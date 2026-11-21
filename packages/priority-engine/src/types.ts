@@ -26,6 +26,12 @@ export interface WaitingTicket {
   readonly presentedAtMs?: Millis;
   /** Scheduled departure of the passenger's flight, as known by the system (presentation rule). */
   readonly scheduledDepartureMs?: Millis | null;
+  /**
+   * Last time the passenger was at the access point (taking the ticket, or rescanning it). A
+   * passenger called sooner after it than their response time answers sooner (ADR-018), which
+   * shortens the fast-track estimate. Unknown: no shortening.
+   */
+  readonly lastSeenAtMs?: Millis;
 }
 
 /** Operational estimates for the checkpoint at the time of the decision. */
@@ -36,6 +42,11 @@ export interface CheckpointEstimates {
   readonly processMs: Millis;
   /** Estimated time from the call to the start of screening (R). */
   readonly responseMs: Millis;
+  /**
+   * Estimated time from a fast-track call to the start of screening: the walk back to the access
+   * point, without the call-ahead buffer at the lanes. Default: `responseMs`.
+   */
+  readonly fastTrackResponseMs?: Millis;
 }
 
 /** Parameters that decide how a ticket is classified and whether it may be boosted. */
@@ -60,6 +71,14 @@ export interface ClassificationParams {
    * `null`: no such rule.
    */
   readonly latePresentationCutoffMs: Millis | null;
+  /**
+   * Fast track (ADR-027): a priority call is made next, ahead of the committed window, and the
+   * party goes to the next free lane on validating its ticket. The engine then estimates a boosted
+   * journey with the fast-track response time (shortened for a passenger who has just been at the
+   * access point) and without the time to call the committed window. Every person the fast track
+   * passes, in the window or at the lanes, counts towards the overtake bound K.
+   */
+  readonly fastTrack: boolean;
 }
 
 /** Plain first-in, first-out order. */
@@ -115,6 +134,11 @@ export interface EngineInput {
    * shown on displays). They count as people ahead in FIFO wait estimates. Default 0.
    */
   readonly aheadOfWaiting?: number;
+  /**
+   * Largest overtake count among the people committed ahead of the waiting list. A fast-track call
+   * passes them too, so it is allowed only while none of them would exceed K. Default 0.
+   */
+  readonly aheadMaxOvertakenCount?: number;
 }
 
 /** The engine's explanation of a ticket's situation. */
@@ -125,18 +149,25 @@ export interface Assessment {
   readonly aheadInFifo: number;
   /** Estimated wait until the call if served in FIFO order. */
   readonly fifoWaitEstimateMs: Millis;
-  /** Latest instant at which the passenger can be called and still make it with the margin B (L). */
+  /**
+   * Latest instant at which the passenger can be called by priority and still make it with the
+   * margin B (L). Under the fast track the journey is the fast-track one.
+   */
   readonly latestCallMs: Millis | null;
-  /** Margin if served in FIFO order: L - (now + FIFO wait). */
+  /**
+   * Margin if served in FIFO order: deadline - (R + P + W + B) - now - FIFO wait, always with the
+   * journey through the queue.
+   */
   readonly slackFifoMs: Millis | null;
   /**
    * Margin if selected now: L - now - C, where C is the time to call the committed tickets that
-   * cannot be overtaken (zero without a prepare window).
+   * cannot be overtaken (zero without a prepare window, and zero with the fast track).
    */
   readonly slackNowMs: Millis | null;
   /**
    * Margin if selected now, measured with the feasibility margin F instead of B:
-   * deadline - (R + P + W + F) - now - C. Negative means CRITICAL.
+   * deadline - (R + P + W + F) - now - C, with the fast-track R and C = 0 under the fast track.
+   * Negative means CRITICAL.
    */
   readonly feasibilitySlackMs: Millis | null;
   /** True when the ticket may be boosted automatically (URGENT and eligible). */

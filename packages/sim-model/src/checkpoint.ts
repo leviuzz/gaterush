@@ -1,7 +1,12 @@
 import { SEGMENTS } from '@gateflow/domain';
 import type { RiskClass } from '@gateflow/domain';
 import type { CheckpointEstimates } from '@gateflow/priority-engine';
-import { CheckpointQueue, callAheadTarget, responseEstimateMs } from '@gateflow/queue-core';
+import {
+  CheckpointQueue,
+  callAheadTarget,
+  fastTrackResponseEstimateMs,
+  responseEstimateMs,
+} from '@gateflow/queue-core';
 import type { Policy, QueueEvent } from '@gateflow/queue-core';
 import { DiscreteEventSimulation } from '@gateflow/sim-kernel';
 import type {
@@ -180,11 +185,16 @@ export function simulateCheckpoint(
   const laneCount = schedule.reduce((max, entry) => Math.max(max, entry.lanes), 0);
   const rate = checkpoint.serviceRatePerLanePerHour;
   const responseMs = responseEstimateMs(policy.queue);
+  const fastTrackResponseMs = fastTrackResponseEstimateMs(policy.queue);
   const estimatesFor = (lanes: number): CheckpointEstimates => ({
     throughputPerHour: lanes * rate,
     processMs: checkpoint.processEstimateMs,
     responseMs,
+    fastTrackResponseMs,
   });
+  /** The overtake bound, which also limits the passes of fast-tracked parties at the lanes. */
+  const maxOvertakes =
+    policy.selection.kind === 'constrained-edf' ? policy.selection.maxOvertakes : Infinity;
 
   const state: PassengerState[] = passengers.map((p) => ({
     ticketId: p.id,
@@ -251,9 +261,19 @@ export function simulateCheckpoint(
   let freeOpen = open;
   /** Busy lanes that are closing (index >= open): they finish their passenger, then close. */
   let busyClosing = 0;
-  /** Parties who validated their ticket and wait for a lane, in order of validation. */
+  /**
+   * Parties who validated their ticket and wait for a lane, in the order they will be screened:
+   * order of validation, except that fast-tracked parties go ahead (ADR-027).
+   */
   const buffer: number[] = [];
   let bufferPeople = 0;
+  /** Overtakes of each party at the moment it validated its ticket (in the call order). */
+  const overtakenAtAdmission: number[] = new Array<number>(passengers.length).fill(0);
+  /** People who passed each party at the lanes through the fast track. */
+  const lanePasses: number[] = new Array<number>(passengers.length).fill(0);
+  const fastTrackedAtLanes: boolean[] = new Array<boolean>(passengers.length).fill(false);
+  let fastTrackPeople = 0;
+  let lanePassedPeople = 0;
   /** Assisted parties waiting for the next free lane, which they get before the buffer. */
   const assisted: number[] = [];
   let assistedPeople = 0;
@@ -371,6 +391,37 @@ export function simulateCheckpoint(
     }
   };
 
+  /**
+   * A party that validated its ticket joins the lanes. A fast-tracked party goes ahead of the
+   * parties waiting there, but never ahead of an earlier fast-tracked party, nor of a party that
+   * would then exceed K overtakes; every party it passes counts it as an overtake.
+   */
+  const joinLanes = (passengerIndex: number): void => {
+    const s = at(state, passengerIndex, 'passenger');
+    const size = at(passengers, passengerIndex, 'passenger').partySize;
+    const view = queue.ticket(s.ticketId);
+    overtakenAtAdmission[passengerIndex] = view?.overtakenCount ?? 0;
+    let position = buffer.length;
+    if (view?.fastTracked === true) {
+      fastTrackedAtLanes[passengerIndex] = true;
+      fastTrackPeople += size;
+      while (position > 0) {
+        const before = at(buffer, position - 1, 'buffer entry');
+        if (fastTrackedAtLanes[before] === true) break;
+        const overtaken = (overtakenAtAdmission[before] ?? 0) + (lanePasses[before] ?? 0) + size;
+        if (overtaken > maxOvertakes) break;
+        position--;
+      }
+      for (let i = position; i < buffer.length; i++) {
+        const passed = at(buffer, i, 'buffer entry');
+        lanePasses[passed] = (lanePasses[passed] ?? 0) + size;
+        lanePassedPeople += at(passengers, passed, 'passenger').partySize;
+      }
+    }
+    buffer.splice(position, 0, passengerIndex);
+    bufferPeople += size;
+  };
+
   const present = (passengerIndex: number, now: number): void => {
     const s = at(state, passengerIndex, 'passenger');
     s.presented = true;
@@ -378,8 +429,7 @@ export function simulateCheckpoint(
     switch (outcome) {
       case 'ADMITTED':
         s.admittedAtMs = now;
-        buffer.push(passengerIndex);
-        bufferPeople += at(passengers, passengerIndex, 'passenger').partySize;
+        joinLanes(passengerIndex);
         startServices(now);
         break;
       case 'REACTIVATED':
@@ -491,7 +541,11 @@ export function simulateCheckpoint(
       standingMs: s.serviceStartMs - (physical ? passenger.arrivalMs : s.admittedAtMs),
       missed: gateArrivalMs > flight.boardingCloseMs,
       priorityCall: s.prioritized,
-      overtakenCount: Math.max(s.maxOvertakenExpired, ticket?.overtakenCount ?? 0),
+      // Overtakes in the call order (queue and prepare window) plus passes at the lanes.
+      overtakenCount: Math.max(
+        s.maxOvertakenExpired,
+        (ticket?.overtakenCount ?? 0) + (lanePasses[passenger.index] ?? 0),
+      ),
       selectionReasons: ticket?.selectionReasons ?? [],
       classAtArrival: s.classAtArrival,
       laneIndex: s.lane,
@@ -515,6 +569,8 @@ export function simulateCheckpoint(
       recalls: q.recalls,
       noShows: q.noShows,
       reactivations: q.reactivations,
+      fastTrackPeople,
+      lanePassedPeople,
       // Every queue party holds one ticket, plus one per expiry; assisted parties hold none.
       reissuedTickets: q.issued - passengers.filter((p) => p.path === 'QUEUE').length,
       firstArrivalMs,

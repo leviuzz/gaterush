@@ -1,5 +1,5 @@
 /** Version of the checkpoint model. Bump on any change that can alter simulated outcomes. */
-export const MODEL_VERSION = '0.3.0';
+export const MODEL_VERSION = '0.4.0';
 
 export {
   PopulationError,

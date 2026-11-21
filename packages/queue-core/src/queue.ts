@@ -38,8 +38,12 @@ interface TicketRecord {
   readonly presentedAtMs: Millis;
   readonly scheduledDepartureMs: Millis | null;
   fifoKey: number;
-  /** People who overtook this ticket while it waited. */
+  /** People who overtook this ticket while it waited (in the queue or in the prepare window). */
   overtakenCount: number;
+  /** Last time the passenger was at the access point: taking the ticket, or rescanning it. */
+  lastSeenAtMs: Millis;
+  /** Committed by a fast-track priority call (ahead of the prepare window). */
+  fastTracked: boolean;
   state: TicketState;
   readonly issuedAtMs: Millis;
   readonly classAtIssue: RiskClass;
@@ -63,6 +67,7 @@ function view(record: TicketRecord): TicketView {
     partySize: record.partySize,
     presentedAtMs: record.presentedAtMs,
     issuedAtMs: record.issuedAtMs,
+    lastSeenAtMs: record.lastSeenAtMs,
     classAtIssue: record.classAtIssue,
     overtakenCount: record.overtakenCount,
     calls: record.calls,
@@ -71,6 +76,7 @@ function view(record: TicketRecord): TicketView {
     noShows: record.noShows,
     reactivations: record.reactivations,
     priorityCommitment: record.priorityCommitment,
+    fastTracked: record.fastTracked,
     everPrioritized: record.everPrioritized,
     selectionReasons: record.selectionReasons,
     admittedAtMs: record.admittedAtMs,
@@ -118,7 +124,8 @@ function insertionIndex(list: readonly TicketRecord[], fifoKey: number): number 
  * Invariants (checked by property tests):
  * - a ticket is admitted at most once and `ADMITTED`/`EXPIRED` are terminal;
  * - a ticket in the prepare window leaves it only by being called (no churn on displays);
- * - the window never holds more than M tickets;
+ * - the window never holds more than M tickets, and keeps its order except that a fast-track
+ *   priority commitment goes ahead of the tickets that are not fast-tracked;
  * - the engine's cap and overtake bound hold over the sequence of commitments;
  * - events reach the listener in chronological order.
  */
@@ -127,6 +134,8 @@ export class CheckpointQueue {
   private readonly classification: ClassificationParams;
   private readonly virtual: VirtualQueue | null;
   private readonly windowSize: number;
+  /** Priority calls go through the fast track (ADR-027). */
+  private readonly fastTrack: boolean;
   private readonly listener: QueueListener | undefined;
   /** QUEUED tickets, sorted by fifoKey. */
   private readonly waiting: TicketRecord[] = [];
@@ -169,6 +178,7 @@ export class CheckpointQueue {
     this.classification = classification;
     this.virtual = policy.queue.kind === 'virtual' ? policy.queue : null;
     this.windowSize = prepareWindowSizeOf(policy.queue);
+    this.fastTrack = policy.selection.kind === 'constrained-edf' && policy.selection.fastTrack;
     this.listener = options.listener;
     this.historyLimit =
       policy.selection.kind === 'constrained-edf' ? policy.selection.capWindowCalls : 1;
@@ -242,6 +252,7 @@ export class CheckpointQueue {
       deadline: input.deadline,
       walkEstimateMs: input.walkEstimateMs,
       overtakenCount: 0,
+      lastSeenAtMs: nowMs,
       ...people,
     };
     check(() => {
@@ -260,6 +271,8 @@ export class CheckpointQueue {
     const record: TicketRecord = {
       ...asWaiting,
       ...people,
+      lastSeenAtMs: nowMs,
+      fastTracked: false,
       state: 'QUEUED',
       issuedAtMs: nowMs,
       classAtIssue,
@@ -388,6 +401,7 @@ export class CheckpointQueue {
       recentPriorityCalls: this.recentPriority,
       selection: this.policy.selection,
       aheadOfWaiting: peopleOn(this.window),
+      aheadMaxOvertakenCount: this.window.reduce((max, r) => Math.max(max, r.overtakenCount), 0),
     });
     if (selection === null) return undefined;
     const position = selection.positionInFifo;
@@ -405,6 +419,7 @@ export class CheckpointQueue {
       this.recentPriority.splice(0, this.recentPriority.length - this.historyLimit);
     }
     record.priorityCommitment = selection.priorityCall;
+    record.fastTracked = selection.priorityCall && this.fastTrack;
     if (selection.priorityCall) record.everPrioritized = true;
     record.selectionReasons = selection.reasons;
     this.counters.commitments++;
@@ -429,7 +444,20 @@ export class CheckpointQueue {
       const record = this.commit(nowMs, estimates);
       if (record === undefined) return;
       record.state = 'PREPARE';
-      this.window.push(record);
+      if (!record.fastTracked) {
+        this.window.push(record);
+        continue;
+      }
+      // Fast track: called next, behind earlier fast-track commitments only. Every person it passes
+      // in the window is overtaken (the engine checked that none of them exceeds K).
+      let index = 0;
+      while (index < this.window.length && (this.window[index] as TicketRecord).fastTracked) {
+        index++;
+      }
+      for (let i = index; i < this.window.length; i++) {
+        (this.window[i] as TicketRecord).overtakenCount += record.partySize;
+      }
+      this.window.splice(index, 0, record);
     }
   }
 
@@ -438,8 +466,10 @@ export class CheckpointQueue {
     if (v === null) throw new QueueError('no-shows cannot exist in a physical queue');
     this.remove(this.noShows, record);
     record.reactivations++;
+    record.lastSeenAtMs = nowMs;
     record.state = 'QUEUED';
     record.priorityCommitment = false;
+    record.fastTracked = false;
     if (v.reactivationPosition === 'BACK') {
       record.fifoKey = this.nextFifoKey++;
       record.overtakenCount = 0;

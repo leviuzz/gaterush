@@ -151,7 +151,9 @@ export function renderReport(doc: ResultsDocument): string {
     const m = policyMetrics(candidate.id);
     const bound =
       selection.kind === 'constrained-edf'
-        ? `bound K = ${selection.maxOvertakes}`
+        ? selection.fastTrack
+          ? `bound K = ${selection.maxOvertakes}, passes in the window and at the lanes included`
+          : `bound K = ${selection.maxOvertakes}`
         : 'no bound for staff flight calls';
     push(
       `## ${section}. Cost for passengers not prioritised by \`${candidate.id}\` (compared with \`${c.referenceId}\`)`,
@@ -172,6 +174,12 @@ export function renderReport(doc: ResultsDocument): string {
         `| Calls where the cap blocked a priority call, per day | ${num(m.capReachedCalls.mean)} |`,
         `| Calls where the overtake guard took precedence (a ticket had reached K overtakes), per day | ${num(m.overtakeGuardCalls.mean)} |`,
       );
+      if (selection.fastTrack) {
+        push(
+          `| People through the fast track per day | ${num(m.fastTrackPeople.mean)} |`,
+          `| People passed at the lanes by fast-tracked parties per day | ${num(m.lanePassedPeople.mean)} |`,
+        );
+      }
     }
     push('');
     section++;

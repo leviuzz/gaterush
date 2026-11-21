@@ -114,7 +114,10 @@ export interface PassengerOutcome {
   readonly missed: boolean;
   /** True when any commitment of the passenger's tickets jumped the FIFO order. */
   readonly priorityCall: boolean;
-  /** Most overtakes suffered by one of the passenger's tickets (the bound K applies per ticket). */
+  /**
+   * Most people who overtook one of the passenger's tickets (the bound K applies per ticket): in
+   * the call order, in the prepare window and, through the fast track, at the lanes.
+   */
   readonly overtakenCount: number;
   /** Reasons of the latest commitment of the ticket that was admitted. */
   readonly selectionReasons: readonly ReasonCode[];
@@ -145,6 +148,10 @@ export interface RunStats {
   readonly recalls: number;
   readonly noShows: number;
   readonly reactivations: number;
+  /** People who entered the lanes through the fast track (ADR-027). */
+  readonly fastTrackPeople: number;
+  /** People waiting at the lanes who were passed by a fast-tracked party, counted once per pass. */
+  readonly lanePassedPeople: number;
   readonly reissuedTickets: number;
   readonly firstArrivalMs: Millis;
   readonly lastServiceEndMs: Millis;

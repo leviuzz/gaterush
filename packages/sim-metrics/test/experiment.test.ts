@@ -6,6 +6,7 @@ import {
   PRIORITY_V0_POLICY,
   PRIORITY_V0_SELECTION,
   PRIORITY_V1_POLICY,
+  PRIORITY_V2_POLICY,
   VIRTUAL_FIFO_POLICY,
   classificationOf,
 } from '@gateflow/queue-core';
@@ -29,21 +30,33 @@ const classification = classificationOf(PRIORITY_V1_POLICY)!;
 
 /**
  * The comparisons of the published reports: every policy against the status quo, the
- * prioritisation alone, and GateFlow against today's manual handling.
+ * prioritisation alone, GateFlow against today's manual handling, and v2 against v1 (the fast
+ * track alone).
  */
 const COMPARISONS: PolicyComparison[] = [
   { candidateId: 'fifo-manual', referenceId: 'fifo' },
   { candidateId: 'virtual-fifo', referenceId: 'fifo' },
   { candidateId: 'priority-v1', referenceId: 'fifo' },
+  { candidateId: 'priority-v2', referenceId: 'fifo' },
   { candidateId: 'priority-v1', referenceId: 'virtual-fifo' },
   { candidateId: 'priority-v1', referenceId: 'fifo-manual' },
+  { candidateId: 'priority-v2', referenceId: 'virtual-fifo' },
+  { candidateId: 'priority-v2', referenceId: 'fifo-manual' },
+  { candidateId: 'priority-v2', referenceId: 'priority-v1' },
 ];
+const POLICY_IDS = ['fifo', 'fifo-manual', 'virtual-fifo', 'priority-v1', 'priority-v2'];
 
 function config(overrides: Partial<ExperimentConfig> = {}): ExperimentConfig {
   return {
     scenario,
     seeds: [1, 2, 3],
-    policies: [FIFO_POLICY, FIFO_MANUAL_POLICY, VIRTUAL_FIFO_POLICY, PRIORITY_V1_POLICY],
+    policies: [
+      FIFO_POLICY,
+      FIFO_MANUAL_POLICY,
+      VIRTUAL_FIFO_POLICY,
+      PRIORITY_V1_POLICY,
+      PRIORITY_V2_POLICY,
+    ],
     baselinePolicyId: 'fifo',
     comparisons: COMPARISONS,
     classification,
@@ -64,19 +77,10 @@ describe('runExperiment', () => {
     expect(result.seeds).toEqual([1, 2, 3]);
     expect(result.perSeed.map((s) => s.seed)).toEqual([1, 2, 3]);
     for (const day of result.perSeed) {
-      expect(Object.keys(day.policies)).toEqual([
-        'fifo',
-        'fifo-manual',
-        'virtual-fifo',
-        'priority-v1',
-      ]);
-      expect(Object.keys(day.comparisons)).toEqual([
-        'fifo-manual vs fifo',
-        'virtual-fifo vs fifo',
-        'priority-v1 vs fifo',
-        'priority-v1 vs virtual-fifo',
-        'priority-v1 vs fifo-manual',
-      ]);
+      expect(Object.keys(day.policies)).toEqual(POLICY_IDS);
+      expect(Object.keys(day.comparisons)).toEqual(
+        COMPARISONS.map((c) => `${c.candidateId} vs ${c.referenceId}`),
+      );
       for (const c of COMPARISONS) {
         const metrics = day.comparisons[`${c.candidateId} vs ${c.referenceId}`]!;
         expect(metrics.net).toBe(
@@ -88,11 +92,9 @@ describe('runExperiment', () => {
 
   it('compares every policy with the baseline by default', () => {
     const result = runExperiment(config({ comparisons: undefined, seeds: [1] }));
-    expect(result.comparisons).toEqual([
-      { candidateId: 'fifo-manual', referenceId: 'fifo' },
-      { candidateId: 'virtual-fifo', referenceId: 'fifo' },
-      { candidateId: 'priority-v1', referenceId: 'fifo' },
-    ]);
+    expect(result.comparisons).toEqual(
+      POLICY_IDS.slice(1).map((candidateId) => ({ candidateId, referenceId: 'fifo' })),
+    );
   });
 
   it('shows no difference between virtual FIFO and priority with a zero cap', () => {
@@ -155,17 +157,18 @@ describe('results document', () => {
       baselinePolicyId: 'fifo',
       comparisons: COMPARISONS,
       versions: {
-        engine: '0.3.0',
-        queueCore: '0.2.0',
-        model: '0.3.0',
+        engine: '0.4.0',
+        queueCore: '0.3.0',
+        model: '0.4.0',
         kernel: '0.1.0',
         populationGenerator: '0.3.0',
         scenarioSchema: 3,
       },
     });
-    expect(doc.schema).toBe('gateflow.sim.results/3');
+    expect(doc.schema).toBe('gateflow.sim.results/4');
+    expect(doc.manifest.reproduce).toContain(`--policies ${POLICY_IDS.join(',')}`);
     expect(doc.manifest.reproduce).toContain(
-      '--compare fifo-manual:fifo,virtual-fifo:fifo,priority-v1:fifo,priority-v1:virtual-fifo,priority-v1:fifo-manual',
+      `--compare ${COMPARISONS.map((c) => `${c.candidateId}:${c.referenceId}`).join(',')}`,
     );
     expect(doc.assumptions).toEqual(collectAssumptions(scenario));
     expect(doc.modelLimitations.length).toBeGreaterThan(0);
@@ -205,6 +208,8 @@ describe('report', () => {
     for (const limitation of doc.modelLimitations) expect(report).toContain(limitation);
     expect(report).toContain('Net flights saved');
     expect(report).toContain('`priority-v1` compared with `fifo-manual`');
+    expect(report).toContain('`priority-v2` compared with `priority-v1`');
+    expect(report).toContain('People through the fast track per day');
     expect(report).toContain('Groups, assisted passengers and late arrivals');
     expect(report).toContain('Call mechanics');
     expect(report).toContain('No-shows (missed-call rate)');

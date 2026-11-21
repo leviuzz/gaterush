@@ -8,6 +8,7 @@ import type {
   WaitingTicket,
 } from '../src';
 import { assessQueue, assessTicket, priorityCallsInWindow, selectNext } from '../src';
+import type { CheckpointEstimates } from '../src';
 import { MIN } from './fixtures';
 
 const RUNS = { numRuns: 1000 };
@@ -36,6 +37,7 @@ const policyArb: fc.Arbitrary<ConstrainedEdfSelection> = fc
       allowRuleBasedDeadline: fc.boolean(),
       eligibleSegments: fc.subarray<Segment>(['DEPARTING', 'TRANSFER']),
       latePresentationCutoffMs: fc.option(fc.integer({ min: 0, max: 90 * MIN }), { nil: null }),
+      fastTrack: fc.boolean(),
     }),
   );
 
@@ -77,17 +79,23 @@ function ticketsArb(maxOvertakes: number, maxLength = 30): fc.Arbitrary<WaitingT
           scheduledDepartureMs: fc.option(fc.integer({ min: -30 * MIN, max: 260 * MIN }), {
             nil: null,
           }),
+          lastSeenAtMs: fc.integer({ min: -60 * MIN, max: 60 * MIN }),
         }),
       ),
     ),
   );
 }
 
-const checkpointArb = fc.record({
-  throughputPerHour: fc.integer({ min: 30, max: 2000 }),
-  processMs: fc.integer({ min: 0, max: 3 * MIN }),
-  responseMs: fc.integer({ min: 0, max: 3 * MIN }),
-});
+const checkpointArb: fc.Arbitrary<CheckpointEstimates> = fc
+  .integer({ min: 0, max: 3 * MIN })
+  .chain((responseMs) =>
+    fc.record({
+      throughputPerHour: fc.integer({ min: 30, max: 2000 }),
+      processMs: fc.integer({ min: 0, max: 3 * MIN }),
+      responseMs: fc.constant(responseMs),
+      fastTrackResponseMs: fc.integer({ min: 0, max: responseMs }),
+    }),
+  );
 
 const inputArb: fc.Arbitrary<EngineInput> = policyArb.chain((policy) =>
   fc.record({
@@ -96,9 +104,22 @@ const inputArb: fc.Arbitrary<EngineInput> = policyArb.chain((policy) =>
     waiting: ticketsArb(policy.maxOvertakes),
     recentPriorityCalls: fc.array(fc.boolean(), { maxLength: 15 }),
     aheadOfWaiting: fc.integer({ min: 0, max: 20 }),
+    aheadMaxOvertakenCount: fc.integer({ min: 0, max: policy.maxOvertakes + 2 }),
     selection: fc.constant(policy),
   }),
 );
+
+/** The response time of a boosted call, from its definition (ADR-027). */
+function boostResponse(
+  t: WaitingTicket,
+  inp: Pick<EngineInput, 'nowMs' | 'checkpoint'>,
+  policy: ConstrainedEdfSelection,
+): number {
+  if (!policy.fastTrack) return inp.checkpoint.responseMs;
+  const base = inp.checkpoint.fastTrackResponseMs ?? inp.checkpoint.responseMs;
+  if (t.lastSeenAtMs === undefined) return base;
+  return Math.min(base, Math.max(0, inp.nowMs - t.lastSeenAtMs));
+}
 
 function byFifo(waiting: readonly WaitingTicket[]): WaitingTicket[] {
   return [...waiting].sort((a, b) => a.fifoKey - b.fifoKey);
@@ -319,14 +340,22 @@ describe('priority engine properties', () => {
           const aheadOfThis = ahead;
           ahead += people(t);
           if (a.latestCallMs === null) return;
-          const journey =
-            inp.checkpoint.responseMs + inp.checkpoint.processMs * people(t) + t.walkEstimateMs;
-          const latest = t.deadline.atMs! - (journey + policy.safetyBufferMs);
+          const tail = inp.checkpoint.processMs * people(t) + t.walkEstimateMs;
+          const queueJourney = inp.checkpoint.responseMs + tail;
+          const boostJourney = boostResponse(t, inp, policy) + tail;
+          // Under the fast track a boosted call is made next: no time to call the committed ones.
+          const drain = policy.fastTrack ? 0 : wait(offset);
+          const latest = t.deadline.atMs! - (boostJourney + policy.safetyBufferMs);
           const feasibility =
-            t.deadline.atMs! - (journey + policy.feasibilityMarginMs) - inp.nowMs - wait(offset);
+            t.deadline.atMs! - (boostJourney + policy.feasibilityMarginMs) - inp.nowMs - drain;
           expect(a.latestCallMs).toBe(latest);
-          expect(a.slackFifoMs).toBe(latest - inp.nowMs - wait(aheadOfThis));
-          expect(a.slackNowMs).toBe(latest - inp.nowMs - wait(offset));
+          expect(a.slackFifoMs).toBe(
+            t.deadline.atMs! -
+              (queueJourney + policy.safetyBufferMs) -
+              inp.nowMs -
+              wait(aheadOfThis),
+          );
+          expect(a.slackNowMs).toBe(latest - inp.nowMs - drain);
           expect(a.feasibilitySlackMs).toBe(feasibility);
           expect(a.riskClass === 'CRITICAL').toBe(feasibility < 0);
         });
@@ -475,6 +504,65 @@ describe('priority engine properties', () => {
           expect(selection?.reasons).toEqual([expected === undefined ? 'FIFO' : 'FLIGHT_CALL']);
         },
       ),
+      RUNS,
+    );
+  });
+
+  it('P15 under the fast track a priority call never pushes a committed person beyond K', () => {
+    fc.assert(
+      fc.property(inputArb, (inp) => {
+        const policy = inp.selection as ConstrainedEdfSelection;
+        const selection = selectNext(inp);
+        if (!selection?.priorityCall || !policy.fastTrack) return;
+        const size = people(byFifo(inp.waiting)[selection.positionInFifo]!);
+        expect((inp.aheadMaxOvertakenCount ?? 0) + size).toBeLessThanOrEqual(policy.maxOvertakes);
+      }),
+      RUNS,
+    );
+  });
+
+  it('P16 the fast track never makes a ticket less feasible, and leaves the FIFO margin unchanged', () => {
+    fc.assert(
+      fc.property(inputArb, (inp) => {
+        const policy = inp.selection as ConstrainedEdfSelection;
+        const on = assessQueue(inp, { ...policy, fastTrack: true });
+        const off = assessQueue(inp, { ...policy, fastTrack: false });
+        on.forEach((a, i) => {
+          const b = off[i]!;
+          expect(a.slackFifoMs).toBe(b.slackFifoMs);
+          if (a.feasibilitySlackMs !== null) {
+            expect(a.feasibilitySlackMs).toBeGreaterThanOrEqual(b.feasibilitySlackMs!);
+          }
+          // A ticket feasible without the fast track stays feasible with it.
+          if (b.riskClass !== 'CRITICAL') expect(a.riskClass).not.toBe('CRITICAL');
+        });
+      }),
+      RUNS,
+    );
+  });
+
+  it('P17 without the fast track, the S4 inputs are ignored (S3 behaviour)', () => {
+    fc.assert(
+      fc.property(inputArb, (inp) => {
+        const policy = { ...(inp.selection as ConstrainedEdfSelection), fastTrack: false };
+        const s3Input: EngineInput = {
+          nowMs: inp.nowMs,
+          checkpoint: {
+            throughputPerHour: inp.checkpoint.throughputPerHour,
+            processMs: inp.checkpoint.processMs,
+            responseMs: inp.checkpoint.responseMs,
+          },
+          waiting: inp.waiting.map((t) => {
+            const copy = { ...t };
+            delete copy.lastSeenAtMs;
+            return copy;
+          }),
+          recentPriorityCalls: inp.recentPriorityCalls,
+          selection: policy,
+          ...(inp.aheadOfWaiting === undefined ? {} : { aheadOfWaiting: inp.aheadOfWaiting }),
+        };
+        expect(selectNext({ ...inp, selection: policy })).toEqual(selectNext(s3Input));
+      }),
       RUNS,
     );
   });

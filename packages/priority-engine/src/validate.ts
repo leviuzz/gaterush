@@ -60,6 +60,9 @@ export function validateClassificationParams(params: ClassificationParams): void
   if (typeof allowRule !== 'boolean') {
     throw new EngineInputError('allowRuleBasedDeadline must be a boolean');
   }
+  // Widened: callers may pass untyped data (e.g. parsed JSON).
+  const fastTrack: unknown = params.fastTrack;
+  if (typeof fastTrack !== 'boolean') throw new EngineInputError('fastTrack must be a boolean');
   const seen = new Set<string>();
   for (const segment of params.eligibleSegments) {
     if (!(SEGMENTS as readonly string[]).includes(segment)) {
@@ -78,6 +81,12 @@ export function validateCheckpoint(checkpoint: CheckpointEstimates): void {
   }
   requireSafeInteger(checkpoint.processMs, 'processMs', 0);
   requireSafeInteger(checkpoint.responseMs, 'responseMs', 0);
+  if (checkpoint.fastTrackResponseMs !== undefined) {
+    requireSafeInteger(checkpoint.fastTrackResponseMs, 'fastTrackResponseMs', 0);
+    if (checkpoint.fastTrackResponseMs > checkpoint.responseMs) {
+      throw new EngineInputError('fastTrackResponseMs must not exceed responseMs');
+    }
+  }
 }
 
 export function validateNow(nowMs: number): void {
@@ -86,6 +95,10 @@ export function validateNow(nowMs: number): void {
 
 export function validateAheadOfWaiting(aheadOfWaiting: number): void {
   requireSafeInteger(aheadOfWaiting, 'aheadOfWaiting', 0);
+}
+
+export function validateAheadMaxOvertakenCount(count: number): void {
+  requireSafeInteger(count, 'aheadMaxOvertakenCount', 0);
 }
 
 export function validateTicket(ticket: WaitingTicket): void {
@@ -103,6 +116,9 @@ export function validateTicket(ticket: WaitingTicket): void {
   }
   if (ticket.scheduledDepartureMs !== undefined && ticket.scheduledDepartureMs !== null) {
     requireSafeInteger(ticket.scheduledDepartureMs, `scheduledDepartureMs of ${ticket.id}`);
+  }
+  if (ticket.lastSeenAtMs !== undefined) {
+    requireSafeInteger(ticket.lastSeenAtMs, `lastSeenAtMs of ${ticket.id}`);
   }
   if (!(SEGMENTS as readonly string[]).includes(ticket.segment)) {
     throw new EngineInputError(`unknown segment of ${ticket.id}: ${ticket.segment}`);

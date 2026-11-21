@@ -21,6 +21,7 @@ export const EDF: ConstrainedEdfSelection = {
   allowRuleBasedDeadline: true,
   eligibleSegments: ['DEPARTING', 'TRANSFER'],
   latePresentationCutoffMs: null,
+  fastTrack: false,
 };
 
 /** 180 pax/h: one person every 20 s, so `ahead` tickets wait ahead * 20 s. */
@@ -46,6 +47,7 @@ export function ticket(
     ...(overrides.scheduledDepartureMs === undefined
       ? {}
       : { scheduledDepartureMs: overrides.scheduledDepartureMs }),
+    ...(overrides.lastSeenAtMs === undefined ? {} : { lastSeenAtMs: overrides.lastSeenAtMs }),
   };
 }
 
@@ -60,5 +62,8 @@ export function input(
     recentPriorityCalls: overrides.recentPriorityCalls ?? [],
     selection: overrides.selection ?? EDF,
     ...(overrides.aheadOfWaiting === undefined ? {} : { aheadOfWaiting: overrides.aheadOfWaiting }),
+    ...(overrides.aheadMaxOvertakenCount === undefined
+      ? {}
+      : { aheadMaxOvertakenCount: overrides.aheadMaxOvertakenCount }),
   };
 }

@@ -16,7 +16,7 @@ import type { ExperimentResult, PolicyComparison, SeedResult } from './experimen
 import { acrossDays, bootstrapMeanInterval } from './stats';
 import type { AcrossDays } from './stats';
 
-export const RESULTS_SCHEMA = 'gateflow.sim.results/3';
+export const RESULTS_SCHEMA = 'gateflow.sim.results/4';
 
 export const DISCLAIMER =
   'SIMULATED RESULTS ON SYNTHETIC OR HYPOTHETICAL DATA. These numbers are model outputs, not ' +
@@ -28,13 +28,15 @@ export const MODEL_LIMITATIONS: readonly string[] = [
   'Every passenger uses the virtual queue when one is simulated: no opt-outs, no passengers without a phone or a view of the displays.',
   'Response times and absences are drawn per party from assumed distributions. A second call does not make an absent passenger come sooner, the prepare window does not shorten response times, and a passenger who has been at the access point once answers later calls at once.',
   'The access point never becomes a bottleneck, and the walk from the access point to the lanes is part of the response time.',
+  'Fast track (priority v2): a fast-tracked party is called next and, once its ticket is validated, goes ahead of the people waiting at the lanes who still have room under K. The fast-track entry never becomes a bottleneck of its own and needs no staff in the model.',
+  'CRITICAL passengers are flagged for staff, but staff escorts are not modelled: such passengers wait in the queue order.',
   "The system's deadline equals the ground truth (boarding close from a fixed rule): no flight delays, gate changes or stale data.",
   'Passengers never abandon the queue, even after their flight has closed.',
   'A group stays together: one ticket, one call, one lane, screened one person after the other. Assisted passengers always get the next free lane and are not assessed by the engine.',
   "Baseline A' (`fifo-manual`) is an idealised staff practice: every five minutes staff call the flights closing within 20 minutes, and every passenger of those flights comes forward at once. Real practice is less systematic, so A' may overstate today's handling where it is informal, or understate it where staff watch individual passengers.",
   'Strategic late arrivals are a fixed share in a stress-test scenario, not a behavioural response to the policy.',
   'Tickets are issued on arrival with no kiosk or scanning delay.',
-  'The engine estimates screening time as the mean screening time per person, walking time as the nominal time of the gate zone, and the time from call to screening as the larger of the response estimate and the call-ahead time.',
+  'The engine estimates screening time as the mean screening time per person, walking time as the nominal time of the gate zone, and the time from call to screening as the larger of the response estimate and the call-ahead time (through the fast track: the response estimate, or the time since the passenger was last at the access point when shorter).',
 ];
 
 export interface ManifestInput {

@@ -57,12 +57,11 @@ jobs:
       - run: pnpm build
       - name: Simulate the demo scenarios
         run: |
-          for scenario in single-checkpoint-demo single-checkpoint-moderate single-checkpoint-staffed; do
-            node apps/sim-cli/dist/gateflow-sim.mjs run --scenario "scenarios/$scenario.yaml" --seeds 1-200 --out "out/$scenario"
+          # Priority v1 is included so that every report also shows the effect of the fast track.
+          for scenario in single-checkpoint-demo single-checkpoint-moderate single-checkpoint-staffed single-checkpoint-strategic; do
+            node apps/sim-cli/dist/gateflow-sim.mjs run --scenario "scenarios/$scenario.yaml" --seeds 1-200 \
+              --policies fifo,fifo-manual,virtual-fifo,priority-v1,priority-v2 --out "out/$scenario"
           done
-          # The stress test of strategic late arrivals also runs the late-presentation rule.
-          node apps/sim-cli/dist/gateflow-sim.mjs run --scenario scenarios/single-checkpoint-strategic.yaml --seeds 1-200 \
-            --policies fifo,fifo-manual,virtual-fifo,priority-v1,priority-v1-strict --out out/single-checkpoint-strategic
       - uses: actions/upload-artifact@v4
         with:
           name: simulation-reports

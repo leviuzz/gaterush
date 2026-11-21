@@ -44,6 +44,8 @@ function run(outcomes: PassengerOutcome[], extra: Partial<RunResult['stats']> = 
       recalls: 0,
       noShows: 0,
       reactivations: 0,
+      fastTrackPeople: 0,
+      lanePassedPeople: 0,
       reissuedTickets: 0,
       firstArrivalMs: 0,
       lastServiceEndMs: 100 * MIN,
@@ -166,6 +168,14 @@ describe('policyDayMetrics', () => {
       idleLaneWithDemandMin: 10,
       idleLaneWithDemandShare: 0.1,
     });
+  });
+
+  it('reports the people through the fast track and the people it passed at the lanes', () => {
+    const m = policyDayMetrics(
+      population,
+      run(reference.outcomes.slice(), { fastTrackPeople: 3, lanePassedPeople: 7 }),
+    );
+    expect(m).toMatchObject({ fastTrackPeople: 3, lanePassedPeople: 7 });
   });
 
   it('returns zeros instead of NaN for an empty day', () => {

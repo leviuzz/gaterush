@@ -108,6 +108,18 @@ describe('comparisons', () => {
     expect(
       defaultCompare(parsePolicies('fifo,priority-v1,priority-v1-strict'), 'fifo').slice(2),
     ).toEqual([{ candidateId: 'priority-v1-strict', referenceId: 'priority-v1' }]);
+    // The fast track is part of the selection: v2 runs the same queue as v1 and virtual FIFO.
+    expect(
+      defaultCompare(parsePolicies('fifo,fifo-manual,virtual-fifo,priority-v1,priority-v2'), 'fifo')
+        .slice(4)
+        .map((c) => `${c.candidateId}:${c.referenceId}`),
+    ).toEqual([
+      'priority-v1:virtual-fifo',
+      'priority-v1:fifo-manual',
+      'priority-v2:virtual-fifo',
+      'priority-v2:fifo-manual',
+      'priority-v2:priority-v1',
+    ]);
   });
 });
 

@@ -88,9 +88,11 @@ export interface TicketView {
   readonly partySize: number;
   readonly presentedAtMs: Millis;
   readonly issuedAtMs: Millis;
+  /** Last time the passenger was at the access point: taking the ticket, or rescanning it. */
+  readonly lastSeenAtMs: Millis;
   /** Risk class when the ticket was issued. */
   readonly classAtIssue: RiskClass;
-  /** People who overtook this ticket while it waited. */
+  /** People who overtook this ticket while it waited (in the queue or in the prepare window). */
   readonly overtakenCount: number;
   /** Number of times the ticket was called (second calls excluded). */
   readonly calls: number;
@@ -100,6 +102,11 @@ export interface TicketView {
   readonly reactivations: number;
   /** True when the latest commitment jumped the FIFO order because of urgency. */
   readonly priorityCommitment: boolean;
+  /**
+   * True when the latest commitment went through the fast track: called ahead of the prepare
+   * window, the party goes to the next free lane on validating its ticket (ADR-027).
+   */
+  readonly fastTracked: boolean;
   /** True when any commitment of this ticket was a priority jump. */
   readonly everPrioritized: boolean;
   /** Reasons of the latest commitment. */

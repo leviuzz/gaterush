@@ -24,6 +24,10 @@ export interface PolicyDayMetrics {
   readonly standingMaxMin: number;
   /** Passengers whose tickets were committed through a priority call. */
   readonly prioritized: number;
+  /** People who entered the lanes through the fast track. */
+  readonly fastTrackPeople: number;
+  /** People waiting at the lanes who were passed by a fast-tracked party (once per pass). */
+  readonly lanePassedPeople: number;
   readonly priorityCallShare: number;
   readonly capReachedCalls: number;
   readonly overtakeGuardCalls: number;
@@ -191,6 +195,8 @@ export function policyDayMetrics(population: Population, run: RunResult): Policy
     standingP90Min: standingSummary.p90,
     standingMaxMin: standingSummary.max,
     prioritized,
+    fastTrackPeople: stats.fastTrackPeople,
+    lanePassedPeople: stats.lanePassedPeople,
     priorityCallShare: share(stats.priorityCalls, stats.calls),
     capReachedCalls: stats.capReachedCalls,
     overtakeGuardCalls: stats.overtakeGuardCalls,

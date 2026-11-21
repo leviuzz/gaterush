@@ -12,6 +12,7 @@ import {
   VIRTUAL_FIFO_POLICY,
   callAheadTarget,
   classificationOf,
+  fastTrackResponseEstimateMs,
   findPolicyPreset,
   responseEstimateMs,
   validatePolicy,
@@ -225,6 +226,99 @@ describe('prepare window', () => {
     expect(q.ticket('d')?.overtakenCount).toBe(1);
   });
 
+  it('calls a fast-track priority commitment ahead of the window, which it overtakes', () => {
+    const policy = virtual(
+      { prepareWindowSize: 2 },
+      { ...PRIORITY_V0_SELECTION, safetyBufferMs: 0, feasibilityMarginMs: 0, fastTrack: true },
+    );
+    const q = new CheckpointQueue(policy, CLASSIFICATION);
+    for (const id of ['a', 'b', 'c', 'd']) q.issue(ticket(id, 600), 0, EST);
+    q.issue(ticket('e', 2), 0, EST);
+    expect(q.callNext(0, EST)?.id).toBe('a');
+    // e goes ahead of b (committed) and of the waiting c and d, all overtaken once.
+    expect(q.prepareWindow().map((t) => t.id)).toEqual(['e', 'b']);
+    expect(q.ticket('e')).toMatchObject({ priorityCommitment: true, fastTracked: true });
+    expect(['b', 'c', 'd'].map((id) => q.ticket(id)?.overtakenCount)).toEqual([1, 1, 1]);
+    expect(q.callNext(0, EST)?.id).toBe('e');
+  });
+
+  it('keeps fast-track commitments in their own order and respects K in the window', () => {
+    const selection = {
+      ...PRIORITY_V0_SELECTION,
+      safetyBufferMs: 0,
+      feasibilityMarginMs: 0,
+      maxOvertakes: 1,
+      fastTrack: true,
+    };
+    const q = new CheckpointQueue(virtual({ prepareWindowSize: 3 }, selection), CLASSIFICATION);
+    for (const id of ['a', 'b', 'c']) q.issue(ticket(id, 600), 0, EST);
+    q.issue(ticket('x', 1.5), 0, EST);
+    q.issue(ticket('y', 1.8), 0, EST);
+    // x (the head of the waiting list) goes ahead of b and c, which are overtaken once (K = 1).
+    expect(q.callNext(0, EST)?.id).toBe('a');
+    expect(q.prepareWindow().map((t) => t.id)).toEqual(['x', 'b', 'c']);
+    expect(['b', 'c'].map((id) => q.ticket(id)?.overtakenCount)).toEqual([1, 1]);
+    // y is URGENT too, but passing b and c would exceed K: it is committed in FIFO order.
+    expect(q.callNext(0, EST)?.id).toBe('x');
+    expect(q.prepareWindow().map((t) => t.id)).toEqual(['b', 'c', 'y']);
+    expect(q.ticket('y')).toMatchObject({
+      fastTracked: false,
+      selectionReasons: ['OVERTAKE_ROOM_EXHAUSTED'],
+    });
+
+    // Two fast-track commitments in a row keep their own order, both ahead of the window.
+    const q2 = new CheckpointQueue(
+      virtual({ prepareWindowSize: 3 }, { ...selection, maxOvertakes: 5 }),
+      CLASSIFICATION,
+    );
+    q2.issue(ticket('a', 600), 0, EST);
+    q2.issue(ticket('x', 0.5), 0, EST);
+    q2.issue(ticket('y', 0.6), 0, EST);
+    expect(q2.prepareWindow().map((t) => t.id)).toEqual(['x', 'y', 'a']);
+    expect(q2.ticket('a')?.overtakenCount).toBe(2);
+    expect(q2.ticket('x')?.overtakenCount).toBe(0);
+  });
+
+  it('remembers when the passenger was last at the access point', () => {
+    const q = new CheckpointQueue(virtual(), CLASSIFICATION);
+    q.issue(ticket('a'), 5 * MIN, EST);
+    expect(q.ticket('a')?.lastSeenAtMs).toBe(5 * MIN);
+    q.callNext(5 * MIN, EST);
+    q.advance(10 * MIN); // second call at 8 min, no-show at 10 min
+    expect(q.present('a', 12 * MIN, EST)).toBe('REACTIVATED');
+    expect(q.ticket('a')?.lastSeenAtMs).toBe(12 * MIN);
+  });
+
+  it('fast-tracks an urgent ticket at the head of the waiting list past the window', () => {
+    const policy = virtual(
+      { prepareWindowSize: 2 },
+      { ...PRIORITY_V0_SELECTION, safetyBufferMs: 0, feasibilityMarginMs: 0, fastTrack: true },
+    );
+    const q = new CheckpointQueue(policy, CLASSIFICATION);
+    for (const id of ['a', 'b']) q.issue(ticket(id, 600), 0, EST);
+    q.issue(ticket('x', 0.5), 0, EST);
+    // x is alone in the waiting list behind b: 1 minute in FIFO order, too late; 0 by fast track.
+    expect(q.callNext(0, EST)?.id).toBe('a');
+    expect(q.prepareWindow().map((t) => t.id)).toEqual(['x', 'b']);
+    expect(q.ticket('x')).toMatchObject({
+      fastTracked: true,
+      selectionReasons: ['URGENT_FEASIBLE'],
+    });
+    expect(q.ticket('b')?.overtakenCount).toBe(1);
+    // Without the fast track the head is simply committed in FIFO order.
+    const slow = new CheckpointQueue(
+      virtual({ prepareWindowSize: 2 }, {
+        ...policy.selection,
+        fastTrack: false,
+      } as typeof policy.selection),
+      CLASSIFICATION,
+    );
+    for (const id of ['a', 'b']) slow.issue(ticket(id, 600), 0, EST);
+    slow.issue(ticket('x', 0.5), 0, EST);
+    slow.callNext(0, EST);
+    expect(slow.prepareWindow().map((t) => t.id)).toEqual(['b', 'x']);
+  });
+
   it('classifies a new ticket against the window and the waiting list ahead of it', () => {
     const q = new CheckpointQueue(virtual({ prepareWindowSize: 3 }), CLASSIFICATION);
     for (let i = 0; i < 10; i++) q.issue(ticket(`t${i}`, 600), 0, EST);
@@ -335,7 +429,14 @@ describe('policies and helpers', () => {
       'priority-v0',
       'priority-v1',
       'priority-v1-strict',
+      'priority-v2',
     ]);
+    // v2 differs from v1 only by the fast track.
+    expect(findPolicyPreset('priority-v2')?.selection).toEqual({
+      ...findPolicyPreset('priority-v1')?.selection,
+      fastTrack: true,
+    });
+    expect(classificationOf(findPolicyPreset('priority-v2')!)?.fastTrack).toBe(true);
     for (const policy of POLICY_PRESETS) {
       expect(() => {
         validatePolicy(policy);
@@ -349,6 +450,8 @@ describe('policies and helpers', () => {
   it('computes the engine response estimate and the call-ahead target', () => {
     expect(responseEstimateMs(FIFO_POLICY.queue)).toBe(0);
     expect(responseEstimateMs(DEFAULT_VIRTUAL_QUEUE)).toBe(180_000); // max(90 s, 180 s)
+    expect(fastTrackResponseEstimateMs(DEFAULT_VIRTUAL_QUEUE)).toBe(90_000); // walk back only
+    expect(fastTrackResponseEstimateMs(FIFO_POLICY.queue)).toBe(0);
     expect(callAheadTarget(FIFO_POLICY.queue, 6, 90)).toBe(0);
     expect(callAheadTarget(DEFAULT_VIRTUAL_QUEUE, 6, 90)).toBe(27); // 180 s x 6 lanes x 90/h
     expect(callAheadTarget(DEFAULT_VIRTUAL_QUEUE, 1, 70)).toBe(4); // ceil(3.5)

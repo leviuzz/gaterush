@@ -53,17 +53,57 @@ export function presentationBlock(
   return presented > departure - cutoff ? 'LATE_PRESENTATION' : null;
 }
 
+/** Estimated journeys of a ticket, from a call made now to the gate. */
+export interface JourneyEstimates {
+  /** Through the queue: R + n P + W (n people screened one after the other). */
+  readonly queueJourneyMs: Millis;
+  /** If boosted: as through the queue, or with the fast-track response time under the fast track. */
+  readonly boostJourneyMs: Millis;
+  /**
+   * Time before a boosted ticket is called: the time C to call the committed people ahead, or
+   * zero under the fast track (a fast-track call is made next).
+   */
+  readonly boostDrainMs: Millis;
+}
+
+/**
+ * The journeys of `ticket` through the queue and through a boost. Under the fast track the
+ * response time of a boosted call is the fast-track estimate, or the time since the passenger was
+ * last at the access point when that is shorter: they cannot have walked further away (ADR-018).
+ */
+export function journeyEstimates(
+  ticket: WaitingTicket,
+  nowMs: Millis,
+  checkpoint: CheckpointEstimates,
+  params: Pick<ClassificationParams, 'fastTrack'>,
+  committedAhead: number,
+): JourneyEstimates {
+  // A group is screened one person after the other: the last one is through after size x P.
+  const tailMs = checkpoint.processMs * partySizeOf(ticket) + ticket.walkEstimateMs;
+  const drainMs = fifoWaitEstimateMs(committedAhead, checkpoint.throughputPerHour);
+  const queueJourneyMs = checkpoint.responseMs + tailMs;
+  if (!params.fastTrack) {
+    return { queueJourneyMs, boostJourneyMs: queueJourneyMs, boostDrainMs: drainMs };
+  }
+  let responseMs = checkpoint.fastTrackResponseMs ?? checkpoint.responseMs;
+  if (ticket.lastSeenAtMs !== undefined) {
+    responseMs = Math.min(responseMs, Math.max(0, nowMs - ticket.lastSeenAtMs));
+  }
+  return { queueJourneyMs, boostJourneyMs: responseMs + tailMs, boostDrainMs: 0 };
+}
+
 /**
  * Classifies one ticket.
  *
  * L = deadline - (R + n P + W + B) is the latest useful call time with the safety margin B, for a
- * ticket of n people (screened one after the other). The
- * ticket is compared with what would happen under plain FIFO (slackFifo = L - now - FIFO wait,
- * the FIFO wait counting everybody ahead, committed tickets included) and if it were selected
- * right now (slackNow = L - now - C, where C is the estimated time to call the `committedAhead`
- * people already committed ahead of the waiting list, who cannot be overtaken). Using the FIFO
+ * ticket of n people (screened one after the other). The ticket is compared with what would
+ * happen under plain FIFO (slackFifo = deadline - (R + n P + W + B) - now - FIFO wait, the FIFO
+ * wait counting everybody ahead, committed tickets included) and if it were selected right now
+ * (slackNow = L - now - C, where C is the estimated time to call the `committedAhead` people
+ * already committed ahead of the waiting list, who cannot be overtaken). Using the FIFO
  * counterfactual avoids the circularity of estimating a wait that itself depends on the priority
- * decision.
+ * decision. Under the fast track, L and slackNow use the fast-track journey and C = 0
+ * ({@link journeyEstimates}); slackFifo keeps the journey through the queue.
  *
  * The ticket is CRITICAL when, selected now, it would not make it even with the smaller
  * feasibility margin F: deadline - (R + P + W + F) - now - C < 0.
@@ -99,16 +139,17 @@ export function assessTicket(
     return unverified(ticket.id, aheadInFifo, fifoWait, reasons);
   }
 
-  // A group is screened one person after the other: the last one is through after size x P.
-  const journeyMs =
-    checkpoint.responseMs + checkpoint.processMs * partySizeOf(ticket) + ticket.walkEstimateMs;
-  const drainMs = fifoWaitEstimateMs(committedAhead, checkpoint.throughputPerHour);
-  const latestCallMs = deadline.atMs - (journeyMs + params.safetyBufferMs);
-  const slackNowMs = latestCallMs - nowMs - drainMs;
+  const journey = journeyEstimates(ticket, nowMs, checkpoint, params, committedAhead);
+  const latestCallMs = deadline.atMs - (journey.boostJourneyMs + params.safetyBufferMs);
+  const slackNowMs = latestCallMs - nowMs - journey.boostDrainMs;
   // The FIFO wait already counts the committed tickets ahead: they must not be subtracted twice.
-  const slackFifoMs = latestCallMs - nowMs - fifoWait;
+  const slackFifoMs =
+    deadline.atMs - (journey.queueJourneyMs + params.safetyBufferMs) - nowMs - fifoWait;
   const feasibilitySlackMs =
-    deadline.atMs - (journeyMs + params.feasibilityMarginMs) - nowMs - drainMs;
+    deadline.atMs -
+    (journey.boostJourneyMs + params.feasibilityMarginMs) -
+    nowMs -
+    journey.boostDrainMs;
   let riskClass: RiskClass;
   if (feasibilitySlackMs < 0) {
     riskClass = 'CRITICAL';

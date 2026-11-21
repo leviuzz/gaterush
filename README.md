@@ -9,7 +9,7 @@ engine** brings forward passengers who would miss their flight under FIFO but ca
 It does so within **declared, measurable fairness bounds**. GateFlow never changes security or
 border procedures: it organises the flow before they start.
 
-> **Status: slices S1 to S6 done.** This repository contains the simulation foundations:
+> **Status: slices S1 to S7 done.** This repository contains the simulation foundations:
 > - the priority engine;
 > - the queue state machine that the operational product will share;
 > - a reproducible discrete-event simulator of a checkpoint. It runs either as today's physical
@@ -18,7 +18,10 @@ border procedures: it organises the flow before they start.
 >   gate changes, lane outages and flight feed outages: the system decides on what it knows,
 >   and outcomes are judged on what really happens;
 > - a CLI that compares policies on the same simulated passengers, runs sensitivity sweeps, uses
->   every CPU and writes JSON, Markdown and HTML reports with charts.
+>   every CPU and writes JSON, Markdown and HTML reports with charts;
+> - scenarios that take their flights from the airport's own flight list (a CSV file), with the
+>   source and licence of every datum printed in every report, and a library of synthetic
+>   VCE-like, TSF-like and MX-like checkpoints.
 >
 > There is no operational system, API or user interface yet. See
 > [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
@@ -73,6 +76,19 @@ pnpm sim sweep --spec sweeps/sensitivity-demo.yaml
 ```
 
 ```bash
+pnpm sim run --scenario scenarios/mx-like-transfer-hub.yaml --seeds 1-50
+```
+
+```bash
+pnpm sim flights --scenario scenarios/single-checkpoint-demo.yaml --out out/demo-flights.csv
+```
+
+The last command writes the design day of a scenario as a flight list
+(`gateflow.flights/1`). An airport can send its own flights in that format: see
+[docs/data-request](docs/data-request/README.md) for what the simulator needs, and
+[scenarios/flights](scenarios/flights/README.md) for the format.
+
+```bash
 pnpm sim policies
 ```
 
@@ -89,6 +105,17 @@ pnpm sim --help
 | `single-checkpoint-staffed` (lanes follow demand) | 65.9 | 17.8 | 16.6 | 1.2 [0.1, 2.2] | 3.6 / 0.7 min |
 | `single-checkpoint-disrupted` (delays, gate changes, lane and feed outages) | 47.8 | 12.4 | 10.8 | 1.6 [0.7, 2.3] | 3.3 / 0.6 min |
 
+The scenario library of S7 (synthetic flight lists sized from SAVE's published 2025 traffic,
+lanes planned with a stated rule):
+
+| Scenario (200 simulated days, SYNTHETIC) | People per day | A | A' | GateFlow, priority v3 | Net saved by v3 vs A' [95% CI] |
+|---|---:|---:|---:|---:|---:|
+| `vce-like-normal-day` (departures, average day) | 16,623 | 11.5 | 10.9 | 10.9 | 0.0 [-0.1, 0.1] |
+| `vce-like-peak-day` (summer peak, 12 lanes at most) | 21,792 | 25.0 | 18.8 | 18.6 | 0.2 [-0.1, 0.6] |
+| `vce-like-disrupted-day` | 21,792 | 20.0 | 14.3 | 14.1 | 0.3 [-0.1, 0.7] |
+| `tsf-like-peak-day` (low-cost base, one morning bank) | 5,981 | 25.8 | 0.0 | 2.3 | **-2.3** [-3.1, -1.6] |
+| `mx-like-transfer-hub` (transfer screening, tight connections) | 4,473 | 131.6 | 96.7 | 87.9 | **8.7** [7.2, 10.4] |
+
 How to read these numbers:
 - Today's manual handling, idealised (A'), is the benchmark that matters: staff who call closing
   flights every five minutes remove 50-75% of the misses.
@@ -104,14 +131,29 @@ How to read these numbers:
     other passengers by more than 5 minutes: a choice for the airport;
   - the virtual queue must also be tuned to how fast passengers answer a call (3 minutes
     instead of 75 seconds needs a longer call-ahead).
-- Non-prioritised passengers wait 0.03 to 0.24 minutes longer on average; at most 0.10% of them
-  more than 5 minutes. Risk classes do not flap.
+- **The kind of checkpoint decides the value case** (S7 library):
+  - at the transfer screening of a hub, connecting passengers arrive in waves with mixed
+    deadlines, and GateFlow catches 8.7 more flights per day than A';
+  - at a VCE-like departures checkpoint whose lanes follow demand, the two are level;
+  - at a low-cost base with a single morning bank, staff calling the closing flights catches
+    everyone and A' is better (2.3 flights per day).
+- **At a departures checkpoint, capacity decides.** On the VCE-like peak day the margin over A'
+  grows from nothing to 2-35 flights per day with 1 to 3 more seconds of screening per person,
+  and to 23 with one lane fewer. Where a real checkpoint sits depends on its lanes, its throughput
+  and its measured waits: the data to ask the airport for.
+- Non-prioritised passengers wait 0.03 to 0.24 minutes longer on average on the demo days; at
+  most 0.10% of them more than 5 minutes. At the hub and at the low-cost base, 0.5-0.8% are
+  delayed by more than 5 minutes with K = 30, so the bound is to be set for each checkpoint. Risk
+  classes do not flap.
 - GateFlow gives no priority on flight data older than 60 minutes. With a reasonably reliable
   flight feed that costs nothing; with long outages it ends level with A'.
-- The numbers rest on synthetic assumptions: response times, missed calls, today's practice and
-  the reliability of the flight feed must be measured. Reports with every assumption and
-  limitation, and pages with charts: [docs/reports/slice-6](docs/reports/slice-6/README.md).
-  Earlier reports remain in [docs/reports](docs/reports).
+- The numbers rest on synthetic assumptions. Response times, missed calls, today's practice,
+  lane throughput and the reliability of the flight feed must be measured. Public flight data
+  (OPDI) is published for non-commercial use only and is not used (ADR-035).
+- Reports with every assumption, data source and limitation, and pages with charts:
+  - the library: [docs/reports/slice-7](docs/reports/slice-7/README.md);
+  - the demo days: [docs/reports/slice-6](docs/reports/slice-6/README.md);
+  - earlier reports: [docs/reports](docs/reports).
 
 ## Repository layout
 
@@ -125,9 +167,10 @@ How to read these numbers:
 | `packages/sim-scenarios` | Scenario schema, assumptions registry, synthetic population (pure) |
 | `packages/sim-metrics` | Experiments, paired metrics, statistics, results and report (pure) |
 | `apps/sim-cli` | `gateflow-sim` command-line interface |
-| `scenarios/` | Scenario files |
+| `scenarios/` | Scenario files, including the S7 library |
+| `scenarios/flights/` | Flight lists (CSV) and the generator of the synthetic ones |
 | `sweeps/` | Sensitivity sweep specifications |
-| `docs/` | Kickoff proposal, generated reports |
+| `docs/` | Kickoff proposal, data request for airports, generated reports |
 
 ## Documentation
 

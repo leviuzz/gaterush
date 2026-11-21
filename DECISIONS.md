@@ -889,3 +889,145 @@ founder on 2026-11-21 together with all of its recommendations.
     announced). An airport whose deadlines can also move earlier, or whose gates change often,
     should set a shorter age. The parameter stays an airport decision (FR-15).
 - **Consequences:** The S5 reports remain the record of v3 0.1.0; the S6 reports use 0.2.0.
+
+## ADR-035: Public flight data (OPDI, OpenSky, EUROCONTROL portal) is not used: non-commercial terms
+
+- **Status:** Accepted (2026-11-21). Settles decision 10 of the kickoff ("OPDI/OpenSky licences, to
+  verify before the real-schedules slice"). Replaces the OPDI import planned for S7.
+- **Context:**
+  - S7 was to import OPDI flight lists for Venice (LIPZ) and Treviso (LIPH).
+  - GateFlow is a commercial product, and its simulation reports are meant for sales to airports.
+- **What the sources say** (read on 2026-11-21):
+  - OPDI's About page (<https://www.opdi.aero/about>): "The focus of the OPDI is on open data, in
+    particular open access and open use of data for non-commercial purposes."
+  - OPDI's Data page (<https://www.opdi.aero/data>) names no licence. It says that the flight,
+    event and measurement tables "are published under the Open Performance Data Initiative (OPDI)
+    in collaboration with the OpenSky Network (OSN)". The files are served by
+    `www.eurocontrol.int/performance/data/download/OPDI/v002/`.
+  - EUROCONTROL's performance data portal hosts the alternative datasets, such as daily airport
+    traffic. Its disclaimer (<https://ansperformance.eu/about/disclaimer/>) says the data "may be
+    copied in whole or in part, provided that EUROCONTROL is mentioned as the source and it is not
+    used for commercial purposes (i.e. for financial gain)". It may not be modified without
+    EUROCONTROL's written permission.
+  - The OpenSky Network's terms could not be read from the session (the connection was closed).
+    Secondary copies say that use by a for-profit entity needs OpenSky's written permission. This
+    is still to verify.
+  - The MIT licence of the OPDI repository covers the pipeline code, not the published data.
+- **Coverage, for the record:**
+  - OPDI v0.0.2 covers January 2022 to September 2026.
+  - Its trajectories cover a box around Europe (26.7°N to 70.3°N, 25.9°W to 49.7°E): no Mexico.
+  - The v0.0.2 flight list has first-seen and last-seen times but no off-block or take-off time.
+    Those are in the events table, or in a newer flight-list schema that is not yet published.
+- **Decision:**
+  - No OPDI, OpenSky or EUROCONTROL portal data is downloaded, committed, imported or used to
+    calibrate scenarios, unless written permission for commercial use is obtained first.
+  - The OPDI adapter is not built. Real schedules enter through the airport's own flight list, in
+    the `gateflow.flights/1` format (ADR-036), under the data agreement of the pilot.
+  - The scenario library stays synthetic (ADR-037). The VCE-like and TSF-like days take their size
+    from SAVE's published annual traffic, an aggregate figure cited with attribution.
+- **Consequences:**
+  - The value case at the real checkpoints waits for the airport's data
+    ([docs/data-request](docs/data-request/README.md)).
+  - If a historical replay from OPDI is wanted, the founder must first ask EUROCONTROL's
+    Performance Review Unit (<pru-support@eurocontrol.int>) and the OpenSky Network for written
+    permission. The adapter would map `adep`, `typecode` and the take-off times of the events table
+    to the flight list.
+  - Mexico was never covered by OPDI: the MX-like scenario stays synthetic until an operator
+    provides data.
+
+## ADR-036: Scenario schema 5: data sources and flight lists (results schema 6)
+
+- **Status:** Accepted (2026-11-21). Scenario schema 5, population generator 0.5.0, results schema
+  `gateflow.sim.results/6`, sweep schema `gateflow.sim.sweep/2`, metrics and CLI 0.7.0.
+- **Context:** The kickoff's criterion for this slice was "provenance and licence of the data
+  visible in the report". Airports keep their schedules in AODB, FIDS or spreadsheet exports,
+  not in hourly profiles.
+- **Decision:**
+  - Every scenario lists its `dataSources`, at least one:
+    - an id, a title and a kind (the labels of ADR-009);
+    - the provider and the licence or terms of use;
+    - optionally a URL, the date of retrieval and a note.
+
+    A parameter may name the source it comes from (`ref`); unknown references are rejected.
+  - A new schedule kind, `flight-list`, takes the design day from a CSV file in the
+    `gateflow.flights/1` format:
+    - columns `flight`, `std` (required), `aircraft`, `seats`, `passengers`, `gate_zone` and
+      `destination`, in any order;
+    - comments, quoted fields and semicolon-separated files are accepted;
+    - errors are reported with their line numbers.
+
+    The CLI reads the file relative to the scenario and records its SHA-256. The scenario names
+    the data source of the list.
+  - The number of passengers of a flight:
+    - is `passengers` when the list gives it;
+    - otherwise it is drawn as seats x load factor;
+    - the seats come from the row, or else from `schedule.seats` by aircraft type (an assumption,
+      labelled as such).
+
+    Missing gate zones are drawn from the zone shares with the generator seed, so they are the
+    same on every simulated day.
+  - `gateflow-sim flights` writes the design day of any scenario in that format. A flight list
+    made from it, with the same zones, simulates exactly the same passengers. This is tested
+    from the file to the results.
+  - Every report and sweep has a section "Data sources and licences". The manifest carries the
+    sources and how the design day was built (kind, flights, file, hash, source).
+  - The sweeps gain `serviceTimeMeanSeconds`, the throughput of a lane.
+- **Rationale:**
+  - The format needs no personal data: one row per departure.
+  - An airport can produce it from any system or spreadsheet.
+  - The license of every input travels with every number.
+- **Consequences:**
+  - Version 4 scenarios are rejected with migration instructions. The six existing scenarios
+    were migrated; their passengers and results are unchanged (golden files differ only in the
+    manifest and the new section).
+  - Flights with a fixed number of passengers do not vary with the load factor, so the
+    `loadFactorScale` sweep does not change them.
+
+## ADR-037: Scenario library on synthetic flight lists (VCE-like, TSF-like, MX-like)
+
+- **Status:** Accepted (2026-11-21).
+- **Context:**
+  - The exit gate of M1 asks for three demand scenarios with a fairness analysis.
+  - The kickoff asked for a VCE-like departures checkpoint and an MX-like transfer checkpoint
+    (C-01, C-03).
+  - Real schedules are not available (ADR-035).
+- **Decision:** five scenarios. The flights come from synthetic lists written by
+  `scenarios/flights/make-library-flights.mjs` (no third-party schedule data).
+
+  | Scenario | Day | Departures | Passengers | Lanes at most | Screening time |
+  |---|---|---:|---:|---:|---:|
+  | `vce-like-normal-day` | normal | 116 | about 16,600 | 12 | 24 s |
+  | `vce-like-peak-day` | summer peak | 138 | about 21,800 | 12 | 24 s |
+  | `vce-like-disrupted-day` | peak with delays, gate changes, lane and feed outages | 138 | about 21,800 | 12 | 24 s |
+  | `tsf-like-peak-day` | summer peak at a low-cost base | 34 | about 6,000 | 5 | 30 s |
+  | `mx-like-transfer-hub` | transfer screening at a hub | 58 | 4,473 connecting | 4 | 30 s |
+
+  - **Size.** The VCE-like normal day is the average day of Venice's 2025 traffic: 11.85 million
+    passengers, half of them departing, over 365 days. Peak days are 1.35 times the average day
+    (an assumed peak factor), and TSF-like follows Treviso's 3.2 million passengers the same way.
+    The MX-like hub is not sized from any data.
+  - **Lanes.** Every hour gets enough lanes to screen the expected arrivals of that hour at 90%
+    utilisation, between a minimum and the lanes the checkpoint has. The expected arrivals are
+    computed on 100 simulated days. The plan is written in the scenario, with the rule in its
+    note. The same rule applies to every day, so a peak day differs from a normal day by its
+    demand only: in the morning bank it exceeds the lanes the checkpoint has.
+  - **Hub.** Only connecting passengers cross the MX-like checkpoint. The list gives their number
+    per flight (25% to 70% of the seats). They arrive 25 minutes plus a log-normal (median
+    35 minutes) before departure, after immigration, customs and the bag drop. A quarter of the
+    departures are delayed, and gates change more often than at an origin airport.
+- **Not calibrated to measured waits:**
+  - The press reports 9 minutes 12 seconds at Venice's security for 2025, citing the airports'
+    service charters. That figure could not be verified (the airport's website refused automated
+    access), and its definition (90th percentile or mean) is unclear.
+  - On the library days the 90th percentile of the FIFO wait is 0.8 minutes on the normal day and
+    4.5 on the peak day.
+  - The `vce-like-peak-capacity` sweep shows how much that matters. With 1 to 3 seconds more per
+    person, or one lane fewer, the wait grows to 7 to 18 minutes, and GateFlow's margin over A'
+    grows from nothing to 2 to 35 flights per day. Lane throughput and staffing are therefore the
+    first numbers to ask the airport for.
+- **Consequences:**
+  - The library is the three demand scenarios of the M1 gate (normal, peak, disrupted) plus a
+    low-cost base and a transfer hub.
+  - Replacing a flight list and a lane plan with the airport's gives the real case without code
+    changes.
+  - Results are in [docs/reports/slice-7](docs/reports/slice-7/README.md).

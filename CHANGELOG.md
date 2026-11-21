@@ -6,6 +6,70 @@ must be listed, together with the component versions it bumps.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-21: Slice S7
+
+Flight lists from files, data sources and licences in every report, and a scenario library.
+Public flight data (OPDI) is not used: its terms are non-commercial.
+
+### Simulated numbers change
+
+- None for the existing scenarios: the six scenarios migrated to schema 5 simulate exactly the
+  same passengers and give the same results. Golden files differ only in the manifest
+  (results schema 6, scenario schema 5, population generator 0.5.0, scenario hash, data sources)
+  and in the new section "Data sources and licences".
+
+### Added
+
+- Scenario schema 5 (ADR-036):
+  - `dataSources`, the sources of a scenario's data with their licence or terms of use, and an
+    optional `ref` from any parameter to its source;
+  - schedule kind `flight-list`, read from a CSV file in the `gateflow.flights/1` format. It
+    supports seats by aircraft type, fixed passenger counts and gate zones (drawn when
+    missing). Errors carry line numbers, and the file's SHA-256 goes into the manifest.
+- `gateflow-sim flights --scenario <file> [--out <file.csv>]`: the design day of any scenario as
+  a flight list. A flight list scenario made from it simulates the same passengers (tested end
+  to end through the CLI).
+- "Data sources and licences" in every run report and sweep report. Data sources and the origin of
+  the design day in the manifests.
+- Sweep parameter `serviceTimeMeanSeconds`.
+- Scenario library on synthetic flight lists (ADR-037):
+  - `vce-like-normal-day`, `vce-like-peak-day` and `vce-like-disrupted-day`, sized from Venice's
+    2025 traffic;
+  - `tsf-like-peak-day`, sized from Treviso's;
+  - `mx-like-transfer-hub`, a transfer security checkpoint fed by tight connections.
+
+  The flight lists are written by `scenarios/flights/make-library-flights.mjs`.
+- Sweeps `vce-like-peak-capacity` and `mx-like-hub`.
+- [docs/data-request](docs/data-request/README.md): what GateFlow needs from an airport to
+  simulate its checkpoint, with a CSV template. `scenarios/private/` is ignored by git for
+  airport-provided files.
+- ADR-035 (public flight data not used), ADR-036 and ADR-037, slice-7 reports.
+
+### Fixed
+
+- The first line of every run report said "about N passengers per day" but counted parties: a
+  family of four counted once. It now gives people and parties ("about 6,207 passengers per day
+  (4,695 parties)" on the demo day). The summary of `results.json` gives `peoplePerDay` and
+  `partiesPerDay` instead of `passengersPerDay`. Reports of S3 to S6 keep the old wording; their
+  tables always counted people.
+- HTML pages: long inline code (the SHA-256 of a flight list) wraps instead of making the page
+  scroll sideways on a phone.
+
+### Changed
+
+- `@gateflow/sim-scenarios` 0.5.0 (schema 5, generator 0.5.0, `ScenarioValidationError` in a
+  module of its own, `parseScenarioText` reads the flight list through caller-provided file
+  access).
+- `@gateflow/sim-metrics` 0.7.0 (results schema `gateflow.sim.results/6`, sweep schema
+  `gateflow.sim.sweep/2`).
+- `@gateflow/sim-cli` 0.7.0 (reads flight list files relative to the scenario, `flights`
+  command, data sources in `validate`).
+- CI:
+  - a flight-list scenario is run with 1 and 4 threads and the outputs compared;
+  - the library flight lists are checked against their generator;
+  - the reports job also simulates the library.
+- Implementation plan: S7 done (without the OPDI import, ADR-035), S8 (lane opening) next.
+
 ## [0.6.0] - 2026-11-21: Slice S6
 
 Parallel batches, sensitivity sweeps and HTML reports. Maximum data age of priority v3 raised to

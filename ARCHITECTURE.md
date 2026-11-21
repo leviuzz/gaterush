@@ -32,9 +32,12 @@ packages/
   sim-model/        checkpoint simulation: physical queue or GateFlow virtual queue (pure)
   sim-scenarios/    scenario schema, validation, assumptions, synthetic population (pure)
   sim-metrics/      experiments, sweeps, paired metrics, statistics, results, Markdown and HTML (pure)
-scenarios/          scenario files (YAML)
+scenarios/          scenario files (YAML), including the S7 library
+scenarios/flights/  flight lists (CSV, gateflow.flights/1) and the generator of the synthetic ones
+scenarios/private/  airport-provided files, ignored by git (docs/data-request)
 sweeps/             sensitivity sweep specifications (YAML)
 docs/kickoff/       kickoff analysis and proposal (Italian)
+docs/data-request/  what GateFlow needs from an airport, with a flight list template
 ```
 
 ## 3. Dependency rules
@@ -323,16 +326,29 @@ Validation:
   exactly the outcomes of the same queue in FIFO order, and with calls answered at once those of
   the physical FIFO queue A.
 
-## 8. Scenarios and population (ADR-003, ADR-009, ADR-018, ADR-026, ADR-030)
+## 8. Scenarios and population (ADR-003, ADR-009, ADR-018, ADR-026, ADR-030, ADR-035 to ADR-037)
 
-- A scenario (`schemaVersion: 4`) defines the checkpoint (planned lane schedule, screening
-  times), a synthetic hourly design day of departures, the aircraft mix, gate zones, load factors,
+- A scenario (`schemaVersion: 5`) lists its data sources with their licence or terms of use
+  (`dataSources`; any parameter can name its source with `ref`). It defines the checkpoint
+  (planned lane schedule, screening times) and the design day of departures. The design day is
+  either a synthetic hourly profile with an aircraft mix, or a flight list read from a CSV file
+  (`gateflow.flights/1`, see `scenarios/flights/README.md`). It also defines gate zones, load factors,
   show-up curves per segment, walking variability, how passengers answer calls, party sizes, the
   assisted share, strategic late arrivals (for stress tests), the boarding-close rule, how the
   system learns deadlines (`RULE`, `FEED` or `NONE`) and the disruptions (flight delays with their
   notice, gate changes, lane outages, feed outages).
+- The package does no I/O: `parseScenarioText(text, format, files)` receives functions that read
+  the flight list named by the scenario (relative to the scenario file) and hash it. The CLI
+  passes file system access. The rows are then part of the scenario, so its hash, the worker
+  threads and the sweeps see the same data; the file's SHA-256 is recorded too.
 - `generateSchedule(scenario)` builds the same flights for every replication (it uses
-  `schedule.generatorSeed`).
+  `schedule.generatorSeed`). For a flight list, flights are ordered by departure. Seats come from
+  the row or from the seats of the aircraft type (`schedule.seats`). A row may fix its passengers.
+  Missing gate zones are drawn from the zone shares. `designDayRows` and
+  `formatFlightCsv` write any design day back as a flight list; a flight list scenario made from it
+  generates exactly the same population.
+- Public flight data is not used: OPDI and EUROCONTROL's portal publish for non-commercial use
+  only (ADR-035). Real schedules come from the airport, under a data agreement.
 - `generatePopulation(scenario, seed)` draws the passengers of one day: load factor per flight,
   then segment, arrival, screening time, walking factor, call response and absence per passenger
   slot, each from its own stream. Generator 0.3.0 groups consecutive slots into parties: a party
@@ -368,10 +384,11 @@ thread; the CLI spreads the days over worker threads (section 10). For each day:
     priority policies listed before it.
 
 `buildResults` aggregates over days (mean, P5, P50, P95, min, max, and bootstrap intervals for
-comparisons) into `results.json` (`schema: gateflow.sim.results/5`):
+comparisons) into `results.json` (`schema: gateflow.sim.results/6`):
 - disclaimer;
-- manifest: versions, scenario hash, seeds, policies, comparisons, classification, statistics
-  settings, source revision, reproduce command;
+- manifest: versions, scenario hash, the scenario's data sources and how its design day was built
+  (hourly profile or flight list, with the file and its SHA-256), seeds, policies, comparisons,
+  classification, statistics settings, source revision, reproduce command;
 - assumptions;
 - model limitations;
 - summary;
@@ -394,7 +411,7 @@ dark, rounded to 0.1 px, so the HTML is as deterministic as the JSON (ADR-033).
   baselines are shared by every policy-only point;
 - `buildSweepResults` summarises each point (missed flights per policy, net saved against each
   reference with a bootstrap interval, cost to other passengers, largest overtake count) into
-  `sweep.json` (`gateflow.sim.sweep/1`), rendered as `sweep.md` and `sweep.html` (two charts per
+  `sweep.json` (`gateflow.sim.sweep/2`), rendered as `sweep.md` and `sweep.html` (two charts per
   curve).
 
 Golden files (`packages/sim-metrics/test/golden`) lock the full results, Markdown and HTML report

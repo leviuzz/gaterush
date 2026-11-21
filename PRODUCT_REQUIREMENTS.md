@@ -62,7 +62,7 @@ without disproportionate harm to passengers who are not prioritised (ADR-002).
 | FR-15 | Data quality: every datum has a source, observation time, validity and confidence; stale data leaves automatic mode for the affected criterion. |
 | FR-16 | Dedicated paths for assisted passengers, groups and families, without penalising existing rights. |
 | FR-17 | Defined degraded modes for network or device failure; never disable security barriers. |
-| FR-18 | Simulator: scenarios, policies (FIFO, rules, variants, lane opening), multi-seed batches, KPIs, reports, comparisons. |
+| FR-18 | Simulator: scenarios (synthetic or from the airport's flight list, with the source and licence of every datum), policies (FIFO, rules, variants, lane opening), multi-seed batches, KPIs, reports, comparisons. |
 | FR-19 | Forecasts at 15/30/60/90 min, saturation, lane-opening recommendations with logged decisions and outcomes. |
 | FR-20 | Passenger information: current waits, forecast at arrival time, flight-based estimate, indicative priority only. |
 | FR-21 | Coordination between checkpoints: informative first, operator-driven later, never automatic reassignment. |
@@ -171,6 +171,18 @@ These must be checked with counsel; nothing below is legal advice.
 8. Is there, or can there be, a fast-track entry to the lanes for priority passengers, and what is
    its capacity? Policy v2 relies on it to beat today's manual handling (ADR-027): fast-tracked
    passengers pass the people waiting at the lanes, within the bound K.
+9. Which data can the airport provide for the value case, under which agreement? The simulator
+   reads the airport's flight list and records its source and licence in every report (ADR-036).
+   What it needs is listed in [docs/data-request](docs/data-request/README.md): flights of two
+   or three design days, the lanes and their throughput, walking times, boarding close, arrival
+   histograms and measured waits. Public flight data (OPDI) cannot be used commercially
+   (ADR-035).
+10. Which checkpoint has the strongest case? In the S7 library GateFlow beats today's idealised
+    practice clearly only at the transfer checkpoint of a hub, where connecting passengers
+    arrive in waves with mixed deadlines (MX-like: 8.7 more flights per day). At a planned
+    VCE-like departures checkpoint the gain is within noise. At a low-cost base with one morning
+    bank, staff calling the closing flights is as good or better. The lane throughput and the
+    staffing plan decide where a real checkpoint sits (`vce-like-peak-capacity` sweep).
 
 ## 10. Glossary
 

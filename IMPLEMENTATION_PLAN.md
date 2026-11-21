@@ -10,7 +10,7 @@ Status legend: **Done**, **Next**, **Planned**, **Gated** (needs a business deci
 
 | Milestone | Business plan stage | Status |
 |---|---|---|
-| M1: Simulator core and priority engine | R1 | In progress (S1 to S6 done) |
+| M1: Simulator core and priority engine | R1 | In progress (S1 to S7 done) |
 | M2: Simulator Studio (web, runs in the browser) | R1-R2 | Planned |
 | M3: Priority end-to-end in the browser, digital twin | R2 | Planned |
 | M4: Operations console and Predict preview (pitch-ready) | R2 | Planned |
@@ -28,8 +28,8 @@ Status legend: **Done**, **Next**, **Planned**, **Gated** (needs a business deci
 | **S4** | Priority fast track: priority calls go to the next free lane; staff escalation evaluated and not adopted (ADR-027, ADR-028) | **Done** |
 | **S5** | Disruptions and data quality: delays with notification time, gate changes, lane outages, stale or missing feeds, ground truth vs knowledge, hysteresis, stability metrics (ADR-029, ADR-030) | **Done** |
 | **S6** | Parallel batches (worker threads), sensitivity sweeps (k/N, K, lanes, load factor, show-up, maximum data age, feed reliability), HTML report with charts (ADR-031 to ADR-034) | **Done** |
-| S7 | Real schedules (OPDI import for VCE/TSF, seats mapping) and scenario library: normal, peak, disrupted, Mexico-like transfer hub | **Next** (check data licences first) |
-| S8 | Experiment C: lane-opening recommendations with an operator model | Planned |
+| **S7** | Data licences checked (OPDI is non-commercial, not imported: ADR-035); airport flight lists from CSV files, seats by aircraft type, data sources and licences in every report (ADR-036); scenario library: VCE-like normal, peak and disrupted days, TSF-like peak day, MX-like transfer hub (ADR-037) | **Done** |
+| S8 | Experiment C: lane-opening recommendations with an operator model | **Next** |
 
 The slices after S3 were renumbered when S4 was proposed: S4 to S7 of the kickoff proposal (and of
 earlier documents) are now S5 to S8.
@@ -391,6 +391,91 @@ Findings that changed the design or the claims during the slice:
 GateFlow is fast enough for batch analysis on a laptop, and every report is reproducible to the
 byte on any number of threads. Full reports with charts:
 [docs/reports/slice-6](docs/reports/slice-6/README.md).
+
+## S7: acceptance criteria and evidence
+
+Scope delivered (approved as "real schedules and scenario library", data licences first):
+- **Data licences checked first** (ADR-035). OPDI and EUROCONTROL's performance portal publish
+  for non-commercial use, and OpenSky's terms restrict for-profit use. No public flight data was
+  downloaded or used, and the planned OPDI import was replaced by the next item.
+- **Flight lists from the airport** (ADR-036). Scenario schema 5 adds:
+  - `dataSources`, with the licence or terms of use of each source;
+  - schedule kind `flight-list`, a CSV file in the `gateflow.flights/1` format, read by the CLI
+    with its SHA-256;
+  - seats by aircraft type, marked as an assumption;
+  - `gateflow-sim flights`, which writes any design day in that format.
+- **Data sources and licences in every report**, run and sweep, and in their manifests.
+- **Scenario library** (ADR-037), on synthetic flight lists:
+  - VCE-like normal, peak and disrupted days, sized from Venice's published 2025 traffic;
+  - a TSF-like peak day at a low-cost base;
+  - an MX-like transfer security checkpoint fed by tight connections.
+
+  Lanes follow an hourly plan from a stated rule. Two sweeps go with it, and sweeps gain the
+  screening time per person as a parameter.
+- **Data request** for the airport: [docs/data-request](docs/data-request/README.md).
+- Scenario schema 5, results schema 6, sweep schema 2, population generator 0.5.0, scenarios
+  0.5.0, metrics and CLI 0.7.0.
+
+| # | Criterion (kickoff, as proposed) | Evidence |
+|---|---|---|
+| 1 | Check the data licences before importing (kickoff decision 10) | ADR-035 quotes the terms of OPDI, of EUROCONTROL's portal and of the OpenSky Network, read on 2026-11-21, and records the decision not to use them. |
+| 2 | The three demand scenarios of the M1 gate run end to end | `vce-like-normal-day`, `vce-like-peak-day` and `vce-like-disrupted-day` run from their CSV flight lists through the CLI to JSON, Markdown and HTML reports. Each run is 200 days x 5 policies, 29-46 s on 4 threads, from a clean checkout. CI runs them on every push, and checks that a flight-list scenario gives identical outputs on 1 and 4 threads. |
+| 3 | Provenance and licence of the data visible in the report | Section "Data sources and licences" in every run and sweep report. It lists each source with its kind, provider, licence, retrieval date and uses, and the flight list with its SHA-256. The manifest carries the same. Tests in `packages/sim-metrics/test/provenance.test.ts` and in the golden files. |
+| 4 | Real schedules can be imported (in place of OPDI: the airport's own list) | The `gateflow.flights/1` reader and writer are tested (`packages/sim-scenarios/test/flights.test.ts`): quoting, semicolons, comments, errors with line numbers, unknown types, zones and duplicates. The round trip is tested too: demo scenario, `flights` export, flight-list scenario, identical passengers and identical results through the CLI (`apps/sim-cli/test/cli.test.ts`). |
+| 5 | Seats mapping marked as an assumption | `schedule.seats`, source SYNTHETIC with a note, by ICAO type designator. A flight without seats, passengers or a known type is rejected, naming the flight. |
+| 6 | MX-like hub (synthetic) | `mx-like-transfer-hub`: transfer security checkpoint, time zone America/Mexico_City, connecting passengers only, six banks. |
+
+**Deviation.** The OPDI import was not built (ADR-035): its data is for non-commercial use, it
+does not cover Mexico, and its public flight list has no take-off time. The airport's flight
+list takes its place. If written permission is obtained, an OPDI adapter would map the OPDI
+columns to the same format.
+
+Verification beyond the criteria:
+- The library flight lists match their generator (test and CI).
+- Each library scenario has the stated number of flights and of people, and a valid
+  population.
+- The disrupted day has exactly the passengers and lanes of the peak day.
+- Version 4 scenarios are rejected with migration instructions, and the migrated scenarios
+  reproduce their S6 results exactly.
+- The template of the data request parses.
+- Fixed: the first line of every report counted parties as passengers; it now gives both.
+
+Findings that change the claims (SIMULATED, 200 days per point; details in
+[docs/reports/slice-7](docs/reports/slice-7/README.md)):
+- **The kind of checkpoint decides the value case.** Compared with A':
+  - transfer security of a hub: **+8.7 flights per day** [7.2, 10.4];
+  - a VCE-like departures checkpoint with lanes planned to demand: within noise (0.0 to +0.3);
+  - a low-cost base with one morning bank: **-2.3**, because staff calling the closing flights
+    catches everyone there.
+- **Capacity decides at a departures checkpoint.** On the VCE-like peak day the margin over A'
+  grows with tighter capacity: +1.7, +7.9 and +35.5 per day at 25, 26 and 27 s per person
+  instead of 24, and +23.1 with one lane fewer. Unlike the demo day of S6, A' does not catch up in
+  these overloads. Just beyond, the plans collapse (thousands of missed flights), where a real
+  airport would open lanes: this is S8.
+- **Fairness at the hub.** With K = 30, 0.81% of the other passengers are delayed by more than
+  5 minutes (0.52% at the low-cost base), above the 0.1% criterion of ADR-025. K = 15 gives 0.28%
+  and +2.9 flights per day. K is a setting for each checkpoint.
+- **Data first.** The library cannot say where VCE or TSF really sit. The airport's lanes,
+  throughput, measured waits and flight lists can, without code changes:
+  [docs/data-request](docs/data-request/README.md).
+
+### S7 results at a glance (SIMULATED, synthetic data: not operational evidence)
+
+| Scenario (200 simulated days) | People per day | Missed per day: A / A' / v3 | Net saved by v3 vs A' [95% CI] |
+|---|---:|---:|---:|
+| VCE-like normal day | 16,623 | 11.5 / 10.9 / 10.9 | 0.0 [-0.1, 0.1] |
+| VCE-like peak day | 21,792 | 25.0 / 18.8 / 18.6 | +0.2 [-0.1, 0.6] |
+| VCE-like disrupted day | 21,792 | 20.0 / 14.3 / 14.1 | +0.3 [-0.1, 0.7] |
+| TSF-like peak day | 5,981 | 25.8 / 0.0 / 2.3 | -2.3 [-3.1, -1.6] |
+| MX-like transfer hub | 4,473 | 131.6 / 96.7 / 87.9 | +8.7 [7.2, 10.4] |
+
+With S7 the technical part of the M1 exit gate is met:
+- three demand scenarios: the VCE-like normal, peak and disrupted days;
+- a fairness analysis in every report;
+- reports reproducible to the byte;
+- every number labelled as simulated.
+
+S8 (lane opening) completes M1.
 
 ## Later milestones (summary)
 

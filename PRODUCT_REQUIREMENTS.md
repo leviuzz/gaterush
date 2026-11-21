@@ -147,20 +147,39 @@ These must be checked with counsel; nothing below is legal advice.
 2. Which flight, gate and boarding-close feeds exist, with what latency?
 3. Which Fast Track and PRM rights exist, and how are they respected?
 4. Which fairness bounds (k/N, K) and late-arrival eligibility rule does the operator accept?
-5. How is the baseline measured today (FIFO plus manual handling of urgent passengers)?
+   Policy v1 uses K = 30 people and at most 10 priority people among any 20 called, with no
+   late-presentation rule: in simulation the rule cost flights to genuinely late passengers
+   (ADR-025). `priority-v1-strict` keeps it for operators who want it.
+5. How is the baseline measured today (FIFO plus manual handling of urgent passengers)? S3
+   models it as staff calling closing flights every five minutes (A', ADR-022), idealised. How
+   often staff really call, and how many passengers come forward, decide how strong today's
+   practice is.
 6. Cloud (EU or Mexico region) or on-premises?
 7. How quickly do passengers answer a call at the target checkpoint, and how many miss it? These
    values size the call-ahead buffer and the timeouts (ADR-017, ADR-018), and must be measured,
    for instance in shadow mode.
+8. Is there, or can there be, a priority entry to the lanes that called priority passengers can
+   use, and staff to escort passengers escalated as CRITICAL? Both are needed to match today's
+   manual handling for last-minute passengers (S4 proposal in the implementation plan).
 
 ## 10. Glossary
 
+- **Assisted path:** passengers with reduced mobility and similar needs are taken by staff to the
+  next free lane, outside the queue and the engine; the reason is never recorded (ADR-021).
+- **Baseline A':** today's physical queue with staff calling the flights that close soon; the
+  benchmark for any claim about today's practice (ADR-022).
 - **Checkpoint:** a controlled point (e.g. a departure security filter) with its own logical queue.
 - **Lane:** a service unit of the checkpoint, with a throughput.
 - **Access point:** where tickets are validated before the physical buffer. It is not the screening.
 - **Call-ahead buffer:** passengers called in advance so that lanes are not left waiting for
   people walking back; sized in seconds of lane work (ADR-017).
 - **Cut-off (deadline):** boarding close of the passenger's flight.
+- **Feasibility margin (F):** the margin below which a passenger counts as unable to make it even
+  if called now (CRITICAL), separate from the safety buffer used to detect risk (ADR-023).
+- **Group (party):** passengers travelling together on one ticket, called together; every count
+  and bound treats them as their number of people (ADR-021).
+- **Late-presentation rule:** optional anti-abuse rule: departing passengers who present later
+  than a set time before departure are not boosted automatically (ADR-025).
 - **Latest call time (L):** the latest moment a passenger can be called and still make it.
 - **No-show:** a called ticket not validated after the second call; it can be reactivated by a
   rescan within a limited window, after which the passenger needs a new ticket.

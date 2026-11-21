@@ -334,3 +334,179 @@ founder on 2026-11-21 together with all of its recommendations.
     access point, timeouts, arrivals.
 - **Consequences:** With no response time, no absences, no call-ahead and no window, every S1
   metric is reproduced exactly on seeds 1-3 (a regression test against a fixture saved from S1).
+
+## ADR-021: Groups counted per person; the assisted path stays outside the engine
+
+- **Status:** Accepted (2026-11-21). Engine 0.3.0, queue core 0.2.0, model 0.3.0.
+- **Context:** About 40% of passengers travel with others (FR-16). Splitting a family is not
+  acceptable, and counting a family of five as one ticket in the fairness bounds would understate
+  the cost to the passengers it overtakes.
+- **Decision:**
+  - A ticket holds a party (`partySize` >= 1). The party is called together, validated together
+    and screened on one lane, one person after the other (its screening time is the sum of its
+    members').
+  - The engine and the queue count people:
+    - the FIFO wait and the committed window drain count the people ahead;
+    - a priority party of three takes three of the `k` places in the window of `N` calls;
+    - a party of three that is called ahead of older tickets adds three to their overtake counts;
+    - every metric counts people.
+  - A party larger than `k` is never boosted automatically, since it would exceed the cap on its
+    own. Its assessment carries `GROUP_EXCEEDS_CAP` for staff.
+  - The overtake guard keeps K with groups and reactivated tickets. If calling the ticket at the
+    limit would push an older ticket past K, the head of the queue is called instead. Likewise an
+    urgent ticket is not boosted when that would push someone past K (`OVERTAKE_ROOM_EXHAUSTED`).
+    The queue-core property tests found the original violation.
+  - Assisted parties (PRM and similar, `path: ASSISTED`):
+    - staff take them to the next free lane, ahead of the queue, under every policy;
+    - they hold no ticket in the simulation and the engine never assesses them;
+    - they count in the call pipeline;
+    - the reason for assistance is never recorded (it can be health data).
+- **Consequences:**
+  - Unit and property tests check the cap and K in people, with groups and reactivations.
+  - With every party of one person and nobody assisted, S2 is reproduced exactly (regression test
+    against a fixture saved from the S2 commit, seeds 1-3).
+
+## ADR-022: Baseline A': staff calling closing flights on the physical queue
+
+- **Status:** Accepted (2026-11-21)
+- **Context:** The S2 status quo was a physical FIFO queue without staff intervention, so the
+  benefit of prioritisation was overstated (an explicit S2 limitation). At most checkpoints staff
+  call the passengers of closing flights out of the line.
+- **Decision:**
+  - New selection `flight-call`. At each call, the last staff announcement is at
+    `floor(t / I) x I`. Tickets whose trusted deadline is at most `W` after that announcement are
+    taken first, earliest deadline first (FIFO among equals); otherwise FIFO. There is no cap, no
+    overtake bound and no feasibility check. Reasons: `FLIGHT_CALL` or `FIFO`.
+  - Preset `fifo-manual` 0.1.0 (policy A'): the physical queue with flight calls, `W` = 20 min,
+    `I` = 5 min.
+  - A' is idealised:
+    - staff are always available and announce every five minutes;
+    - every passenger of a called flight hears the call and comes forward at once;
+    - staff know the same deadlines as GateFlow.
+- **Consequences:**
+  - The comparison with A' estimates the benefit of GateFlow over today's practice. It is
+    conservative where real practice is less systematic, and optimistic where staff watch
+    individual passengers. How today's practice really works must be observed (product
+    requirements, open question 5).
+  - S3 shows that A' removes 50-75% of the misses of the queue without intervention, and that
+    priority v1 misses 2.3 to 5.2 more flights per day than A' (slice-3 reports).
+
+## ADR-023: Feasibility margin separate from the safety buffer
+
+- **Status:** Accepted (2026-11-21). Amends ADR-004 and ADR-019.
+- **Context:** Engines 0.1 and 0.2 used the safety buffer `B` for two purposes:
+  - to detect risk: URGENT means "misses under FIFO with margin B";
+  - to give up: CRITICAL means "cannot keep margin B even if selected now".
+  Open point 3 of S2 found late arrivals classified too pessimistically.
+- **Decision:**
+  - New parameter `feasibilityMarginMs` (F). CRITICAL means
+    `D - (R + P + W + F) - t - C < 0`.
+  - URGENT keeps `slackFifo < 0` with B. A boosted ticket that cannot keep the whole buffer is
+    flagged `INSIDE_SAFETY_MARGIN`.
+  - `priority-v0` keeps F = B = 5 min, so its behaviour is unchanged. `priority-v1` uses F = 0.
+  - The engine's call-to-screening estimate R stays `max(response estimate, call-ahead)` = 180 s.
+- **Evidence** (S2 scenarios, 40 seeds, net flights saved per day vs `virtual-fifo`):
+  - Lowering R to 0 raised the net from 2.0 to 3.5 (moderate) and from 21.4 to 28.3 (demo). But
+    180 s is what passengers who had waited 5 minutes or more actually needed (mean 174 s, median
+    166 s, P90 240 s). Only fresh tickets were faster (mean 22 s). A lower R would be wrong for
+    the passengers who matter in the peak.
+  - The gain came through the CRITICAL threshold. With B = 5 min:
+    - F = B: 2.0 (moderate), 21.4 (demo);
+    - F = 0: 4.7 (moderate), 31.9 (demo; 0.3 flights lost per day, mean extra wait of
+      non-prioritised passengers 0.13 min).
+- **Consequences:** Priority commitments are no longer withheld from passengers who can still make
+  it without the safety margin.
+
+## ADR-024: Expired tickets go to the back of the queue
+
+- **Status:** Accepted (2026-11-21). Settles open point 2 of the S2 reports.
+- **Decision:** A passenger whose ticket expired (no-show, then no rescan within the reactivation
+  window) takes a new ticket at the back of the queue, as before. Staff can still help them
+  manually.
+- **Evidence** (exploratory runs on the S2 scenarios):
+  - about 1.5 new tickets per day, of which about 0.5 per day missed their flight;
+  - returning expired tickets to their original place once changed the net flights saved by +0.25
+    and -0.07 per day on the two scenarios tried, and shortened the longest waits by about
+    7 minutes.
+- **Rationale:** The benefit is not material, and the rule must not reward ignoring a call.
+- **Consequences:** The longest waits of the virtual queue (108-118 minutes over 200 days) remain
+  those of passengers who missed their call and came back late. They are reported as such.
+
+## ADR-025: Calibration of priority v1; the late-presentation rule is optional
+
+- **Status:** Accepted (2026-11-21). The bounds are value choices for the airport to confirm.
+- **Decision:**
+  - `priority-v1` 0.1.0 has:
+    - at most 10 priority people among any 20 people called;
+    - K = 30 people;
+    - F = 0 and B = 5 min;
+    - the 15-minute attention threshold;
+    - no late-presentation rule.
+  - `priority-v1-strict` 0.1.0 adds the late-presentation rule: departing passengers must present
+    at least 45 minutes before the scheduled departure to be boosted automatically. Transfers are
+    exempt. A blocked passenger gets the reason `LATE_PRESENTATION`, or `PRESENTATION_UNVERIFIED`
+    when the presentation time or the departure is unknown.
+- **Method:**
+  - calibration seeds 1001-1020, disjoint from the report seeds 1-200, on the four S3 scenarios;
+  - criterion: in every scenario, no non-prioritised passenger delayed by more than 10 minutes
+    against `virtual-fifo` on any calibration day, and at most 0.1% delayed by more than 5
+    minutes;
+  - among the configurations that meet it, the one with the fewest missed flights.
+- **Evidence** (missed flights per day, seeds 1001-1020; "6 per 20" means at most 6 priority people
+  among any 20 people called; "rule" is the late-presentation rule):
+
+  | Configuration | demo | moderate | staffed | strategic | Meets the criterion |
+  |---|---:|---:|---:|---:|---|
+  | A' (`fifo-manual`), for reference | 14.0 | 7.3 | 17.1 | 128.3 | - |
+  | First proposal: K 15, 6 per 20, rule on | 27.5 | 10.4 | 33.7 | 179.1 | yes |
+  | K 15, 6 per 20, rule off | 20.5 | 9.2 | 26.5 | 163.8 | yes |
+  | K 30, 6 per 20, rule off | 17.6 | 9.2 | 21.6 | 160.6 | yes |
+  | **K 30, 10 per 20, rule off (v1)** | **16.4** | **9.3** | **20.5** | **160.1** | **yes** |
+  | K 30, 10 per 20, rule on (v1-strict) | 24.7 | 10.4 | 29.2 | 176.9 | yes |
+  | K 60, 10 per 20, rule off | 14.3 | 9.3 | 17.1 | 157.5 | no: up to 0.63% delayed > 5 min |
+
+  - Without any bound and without the rule: 13.6 (demo) and 9.2 (moderate). The bounds cost about
+    3 flights per day in the congested demo and nothing in the moderate one.
+  - The rule cost 1.1 to 16.8 flights per day. In the strategic scenario it did not protect the
+    others on balance: passengers who did not arrive late on purpose missed 15.9 flights per day
+    without the rule and 20.7 with it, because the rule also blocks genuinely late passengers. The
+    simulated behaviour is fixed, so the model cannot show the deterrent effect the rule is meant
+    to have.
+- **Consequences:**
+  - The slice-3 reports confirm the calibration on the report seeds:
+    - at most 0.07% of non-prioritised passengers are delayed by more than 5 minutes;
+    - being overtaken alone delays nobody by more than about 8 minutes;
+    - larger delays (up to 31 minutes) are knock-on effects of missed calls.
+  - The remaining gap to A' is not a matter of bounds (see the S4 proposal in the implementation
+    plan).
+
+## ADR-026: Scenario schema 3, results schema 3 and default comparisons
+
+- **Status:** Accepted (2026-11-21)
+- **Decision:**
+  - Scenario schema 3 adds three parameters, each with its source label:
+    - `passengers.groups`: shares of party sizes 1 to 10;
+    - `passengers.assistedShare`;
+    - `passengers.strategicLateArrival`: share of departing parties that arrive late on purpose,
+      and their window before departure (for stress tests).
+    Version 1 and 2 files are rejected with a migration message.
+  - Population generator 0.3.0:
+    - a party takes the attributes that its leader's slot had in S2, and its screening time is
+      the sum of the screening times of its members' slots, so with parties of one person the S2
+      population is reproduced exactly;
+    - party size, assistance and strategic arrival have their own streams.
+  - `gateflow.sim.results/3`:
+    - metrics count people;
+    - new per-policy metrics: parties, groups, people in groups, groups prioritised, assisted
+      people (mean time to screening, misses), strategic late arrivals (prioritised, missed);
+    - a report section "Groups, assisted passengers and late arrivals".
+  - Default comparisons (CLI 0.3.0):
+    - every policy against the baseline;
+    - each reordering policy against the FIFO policy that operates the same queue;
+    - each priority policy against today's practice with manual handling (A') and against the
+      priority policies listed before it on the same queue.
+  - CLI defaults:
+    - policies `fifo,fifo-manual,virtual-fifo,priority-v1`;
+    - risk classes on arrival from the first priority policy listed, else from `priority-v1`.
+- **Consequences:** S3 numbers are not comparable with S2 numbers, because the simulated days
+  differ. With the S3 features disabled, every S1 and S2 metric is reproduced exactly.

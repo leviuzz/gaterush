@@ -1,8 +1,8 @@
 # GateFlow architecture
 
-This document describes the architecture as implemented (slices S1 and S2: priority engine,
-queue state machine and simulator) and the agreed direction for the operational product. Decisions are referenced as ADR-nnn
-([DECISIONS.md](DECISIONS.md)).
+This document describes the architecture as implemented (slices S1 to S3: priority engine, queue
+state machine and simulator) and the agreed direction for the operational product. Decisions are
+referenced as ADR-nnn ([DECISIONS.md](DECISIONS.md)).
 
 ## 1. Principles
 
@@ -97,15 +97,19 @@ Verification:
 - byte-identical golden files, run on Node 22 and 24 in CI;
 - an end-to-end `cmp` of two CLI runs in CI.
 
-## 5. Priority engine (v0, engine version 0.2.0)
+## 5. Priority engine (engine version 0.3.0)
 
 Pure functions in `@gateflow/priority-engine`:
 
 - `assessTicket(ticket, aheadInFifo, now, checkpoint, params, committedAhead)`: risk class and
   explanation.
 - `selectNext({ now, checkpoint, waiting, recentPriorityCalls, selection, aheadOfWaiting })`: the
-  next ticket to commit. `aheadOfWaiting` counts the tickets already committed ahead of the
-  waiting list (the prepare window of the virtual queue).
+  next ticket to commit. `aheadOfWaiting` counts the people already committed ahead of the waiting
+  list (the prepare window of the virtual queue).
+
+A ticket may hold a party (`partySize`, ADR-021). Everything the engine counts is people: the
+people ahead, the committed window, the overtake count of a ticket and the cap history (one entry
+per person called).
 - `assessQueue(snapshot, params)`: assessment of every waiting ticket in FIFO order.
 
 Definitions for ticket *i* at time *t*:
@@ -113,28 +117,41 @@ Definitions for ticket *i* at time *t*:
 | Symbol | Meaning |
 |---|---|
 | `D_i` | Deadline known to the system, from a feed or an approved rule (`allowRuleBasedDeadline`). |
-| `L_i = D_i - (R + P + W_i + B)` | Latest useful call time. R = call to start of screening, P = process, W = walk, B = buffer. |
-| `FIFO wait_i = floor(ahead_i * 1 h / throughput)` | Wait if served in FIFO order; `ahead_i` includes the committed tickets. |
-| `C = floor(committed * 1 h / throughput)` | Time to call the committed tickets, which nobody can overtake. |
+| `L_i = D_i - (R + P_i + W_i + B)` | Latest useful call time. R = call to start of screening, P = screening time of the party (per person x party size), W = walk, B = safety buffer. |
+| `FIFO wait_i = floor(ahead_i * 1 h / throughput)` | Wait if served in FIFO order; `ahead_i` counts the people ahead, committed ones included. |
+| `C = floor(committed * 1 h / throughput)` | Time to call the committed people, whom nobody can overtake. |
 | `slackFifo_i = L_i - t - FIFO wait_i`, `slackNow_i = L_i - t - C` | Margins under FIFO and if selected now (ADR-019). |
+| `feasible_i = D_i - (R + P_i + W_i + F) - t - C` | Margin if selected now with the feasibility margin F instead of B (ADR-023). |
 
 Classes:
 
 | Class | Condition |
 |---|---|
 | `UNVERIFIED` | No trusted deadline. |
-| `CRITICAL` | `slackNow < 0` (escalate, never boost). |
-| `URGENT` | `slackFifo < 0` and `slackNow >= 0`. |
+| `CRITICAL` | `feasible < 0` (escalate, never boost). |
+| `URGENT` | `slackFifo < 0` and `feasible >= 0` (`INSIDE_SAFETY_MARGIN` when `slackNow < 0`). |
 | `ATTENTION` | `0 <= slackFifo < threshold`. |
 | `NORMAL` | Otherwise. |
 
+A ticket is boost-eligible when it is `URGENT`, its segment is eligible and the late-presentation
+rule (optional, `latePresentationCutoffMs`) does not block it: a departing passenger who presented
+later than the cutoff before the scheduled departure is not boosted (`LATE_PRESENTATION`, or
+`PRESENTATION_UNVERIFIED` when a time is unknown). A party larger than `k` is never boosted
+(`GROUP_EXCEEDS_CAP`).
+
 Selection (`constrained-edf`):
-1. If a waiting ticket has been overtaken `K` times, select the oldest such ticket
-   (`OVERTAKE_LIMIT_GUARD`).
-2. Else, if boost-eligible `URGENT` tickets exist and fewer than `k` of the last `N - 1`
-   commitments were priority commitments, select the one with the smallest `L`
-   (`URGENT_FEASIBLE`).
-3. Else select the oldest ticket (`FIFO` or `CAP_REACHED`).
+1. If a waiting ticket has been overtaken `K` times or more (in people), select the oldest such
+   ticket (`OVERTAKE_LIMIT_GUARD`), unless calling it would push an older ticket past K: then
+   select the oldest ticket.
+2. Else, if boost-eligible tickets exist, select the one with the smallest `L` (`URGENT_FEASIBLE`)
+   if the cap allows it: the priority people among the last commitments, plus this party, may not
+   exceed `k` within a window of `N` people. Calling it may not push any older ticket past K
+   either (`OVERTAKE_ROOM_EXHAUSTED`).
+3. Else select the oldest ticket (`FIFO`, or `CAP_REACHED` when the cap blocked a boost).
+
+Selection `flight-call` models today's staff practice (baseline A', ADR-022): at the last
+announcement `floor(t / I) x I`, the tickets whose deadline is at most `W` away are called first,
+earliest deadline first, with no cap and no overtake bound (`FLIGHT_CALL`).
 
 Guarantees, verified by property tests with 1,000 generated cases each:
 - determinism and independence from input order;
@@ -142,17 +159,20 @@ Guarantees, verified by property tests with 1,000 generated cases each:
 - the selection is always a waiting ticket;
 - priority selections are always `URGENT` and eligible;
 - the guard takes precedence;
-- the cap holds for a single decision, exactly at its boundary, and in every window of a
-  sequence;
-- no ticket is overtaken more than `K` times;
+- the cap holds, in people, for a single decision, exactly at its boundary, and in every window
+  of a sequence;
+- no ticket is overtaken by more than `K` people;
 - reduction to FIFO with a zero cap;
-- monotonicity: an earlier but still feasible deadline never loses a selection.
+- monotonicity: an earlier but still feasible deadline never loses a selection;
+- both margins match their definitions, and selection and assessment agree on boost eligibility;
+- late presenters and parties larger than `k` are never boosted;
+- the S3 parameters at their defaults reproduce the S2 engine;
+- the flight-call selection matches an independent oracle.
 
-Mutation checks (cap and guard off by one, guard disabled, committed window ignored) are caught by
-the suite.
+Mutation checks (cap and guard off by one, guard disabled, committed window ignored, people counted
+as tickets, rules disabled) are caught by the suite.
 
-Not yet implemented (by design, later slices): eligibility rules against strategic late arrival
-(S3) and hysteresis (S4).
+Not yet implemented (by design, later slices): hysteresis (S5).
 
 ## 6. Queue state machine (`@gateflow/queue-core`, ADR-016)
 
@@ -180,6 +200,11 @@ States: `QUEUED -> PREPARE -> CALLED -> RECALLED -> NO_SHOW -> EXPIRED`, where:
   presenting exactly at a deadline is on time.
 - **Events.** Every transition is reported to a listener in chronological order (the audit log in
   production, metrics in simulation).
+- **Parties.** A ticket carries its party size, presentation time and scheduled departure. The
+  window, the waiting list and the outstanding calls are also counted in people; a party called
+  ahead of older tickets adds its size to their overtake counts.
+- **Presets.** `fifo` (A, physical), `fifo-manual` (A', physical, staff flight calls),
+  `virtual-fifo`, `priority-v0`, `priority-v1` and `priority-v1-strict` (virtual queue).
 
 Property tests (1,000 random operation sequences on random policies, 300 for determinism) check,
 independently of the implementation: zero churn, window size at most M, state counters, a single admission per ticket,
@@ -187,7 +212,7 @@ terminal states, chronological events, the cap and the K bound over commitments 
 independent overtake model), and determinism. A coverage test guarantees that the sequences reach
 priority commitments, the cap, the guard and reactivations.
 
-## 7. Checkpoint simulation model (S2, model version 0.2.0)
+## 7. Checkpoint simulation model (model version 0.3.0)
 
 `simulateCheckpoint(population, policy, { classification })` is a discrete-event simulation of
 one checkpoint operated by a `CheckpointQueue`:
@@ -202,6 +227,10 @@ one checkpoint operated by a `CheckpointQueue`:
   call and present later; the queue then recalls them, marks a no-show, reactivates them if they
   rescan in time, or they take a new ticket. After the first presentation the passenger answers
   later calls at once.
+- **Parties and assisted passengers (ADR-021).** A party is called, validated and screened
+  together on one lane, its members one after the other. Assisted parties go to the next free
+  lane ahead of the queue and of the call-ahead buffer, under every policy, and count in the call
+  pipeline.
 - **Lanes.** A planned schedule gives the open lanes over the day. Lanes close from the highest
   number down, finish the passenger they are screening, and a lane closing at time t takes nobody
   at t.
@@ -225,35 +254,46 @@ Validation:
   physical queue";
 - exact Little's law, equivalences (zero cap = FIFO with and without call mechanics; unknown
   deadlines = FIFO), Erlang C on three M/M/c configurations (ADR-012);
-- the S1 regression: every S1 metric reproduced exactly on seeds 1-3 (sim-metrics);
-- mutation checks on the event order, lane accounting, call rule, response rule and metrics.
+- the S1 and S2 regressions: with the S3 features disabled, every S1 and S2 metric is
+  reproduced exactly on seeds 1-3 (sim-metrics);
+- hand-computed cases for groups (a family boosted as a whole) and for assisted precedence;
+- mutation checks on the event order, lane accounting, call rule, response rule, party handling
+  and metrics.
 
-## 8. Scenarios and population (ADR-003, ADR-009, ADR-018)
+## 8. Scenarios and population (ADR-003, ADR-009, ADR-018, ADR-026)
 
-- A scenario (`schemaVersion: 2`) defines the checkpoint (planned lane schedule, screening
+- A scenario (`schemaVersion: 3`) defines the checkpoint (planned lane schedule, screening
   times), a synthetic hourly design day of departures, the aircraft mix, gate zones, load factors,
-  show-up curves per segment, walking variability, how passengers answer calls, the
-  boarding-close rule and how the system learns deadlines.
+  show-up curves per segment, walking variability, how passengers answer calls, party sizes, the
+  assisted share, strategic late arrivals (for stress tests), the boarding-close rule and how the
+  system learns deadlines.
 - `generateSchedule(scenario)` builds the same flights for every replication (it uses
   `schedule.generatorSeed`).
 - `generatePopulation(scenario, seed)` draws the passengers of one day: load factor per flight,
-  then segment, arrival, screening time, walking factor, call response and absence per passenger,
-  each from its own stream (generator 0.2.0 added the last two without moving the others).
+  then segment, arrival, screening time, walking factor, call response and absence per passenger
+  slot, each from its own stream. Generator 0.3.0 groups consecutive slots into parties: a party
+  takes its leader's attributes and the sum of its members' screening times, and party size,
+  assistance and strategic arrival have their own streams. With parties of one person the S2
+  population is reproduced exactly.
 
-## 9. Experiments, metrics and reports (ADR-011, ADR-015, ADR-020)
+## 9. Experiments, metrics and reports (ADR-011, ADR-015, ADR-020, ADR-026)
 
 `runExperiment` runs every policy on every seed and computes, per day:
-- policy metrics: missed flights (total and by segment), time to screening and standing time,
-  prioritised passengers, overtakes, calls, second calls, no-shows, reactivations, new tickets,
-  staffed lane-hours, lane utilisation, idle lane time, tickets waiting and people standing,
-  risk classes on arrival;
-- paired comparisons for each requested `candidate`/`reference` pair (by default every policy
-  against the status quo, and each priority policy against the FIFO policy with the same virtual
-  queue): saved, lost, net, the at-risk cohort, the extra wait of non-prioritised passengers, and
-  the change in time to screening and standing time.
+- policy metrics, counted in people: missed flights (total and by segment), time to screening
+  and standing time, prioritised passengers, overtakes, calls, second calls, no-shows,
+  reactivations, new tickets, staffed lane-hours, lane utilisation, idle lane time, tickets
+  waiting and people standing, risk classes on arrival, groups, assisted passengers and strategic
+  late arrivals;
+- paired comparisons for each requested `candidate`/`reference` pair, weighted by party size:
+  saved, lost, net, the at-risk cohort, the extra wait of non-prioritised passengers, and the
+  change in time to screening and standing time. By default:
+  - every policy against the status quo;
+  - each reordering policy against the FIFO policy of the same queue;
+  - each priority policy against today's practice with manual handling (A') and against the
+    priority policies listed before it.
 
 `buildResults` aggregates over days (mean, P5, P50, P95, min, max, and bootstrap intervals for
-comparisons) into `results.json` (`schema: gateflow.sim.results/2`):
+comparisons) into `results.json` (`schema: gateflow.sim.results/3`):
 - disclaimer;
 - manifest: versions, scenario hash, seeds, policies, comparisons, classification, statistics
   settings, source revision, reproduce command;
@@ -278,7 +318,7 @@ changelog.
   the sources of dependencies. `scenarios/**` is a global dependency.
 - `pnpm check` runs Prettier, dependency-cruiser and every Turborepo task.
 - CI (GitHub Actions) runs `pnpm check` on Node 22 and 24, builds the CLI, compares two CLI runs
-  byte for byte, and publishes 200-day reports for the three demo scenarios as an artefact.
+  byte for byte, and publishes 200-day reports for the four scenarios as an artefact.
 
 ## 11. Target architecture of the operational product (ADR-013)
 

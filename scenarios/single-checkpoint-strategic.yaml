@@ -8,10 +8,11 @@ schemaVersion: 3
 id: single-checkpoint-strategic
 title: Single departure checkpoint, congested morning peak with strategic late arrivals
 description: >-
-  Stress test of the presentation rule. Identical to single-checkpoint-demo except that 5% of the
-  departing parties arrive late on purpose, 25 to 35 minutes before departure (5 to 15 minutes
-  before boarding closes), hoping to be prioritised. Compare priority-v0 (no presentation rule)
-  with priority-v1 (departing passengers must present at least 45 minutes before departure).
+  Stress test of the late-presentation rule. Identical to single-checkpoint-demo except that 5% of
+  the departing parties arrive late on purpose, 25 to 35 minutes before departure (5 to 15
+  minutes before boarding closes), hoping to be prioritised. Compare priority-v1 (no rule) with
+  priority-v1-strict (departing passengers must present at least 45 minutes before departure to
+  be boosted automatically).
 dataClassification: SYNTHETIC
 timeZone: Europe/Rome
 

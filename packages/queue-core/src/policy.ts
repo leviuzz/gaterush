@@ -116,8 +116,8 @@ export const PRIORITY_V0_SELECTION: ConstrainedEdfSelection = {
 /**
  * Selection of policy B, version 1 (ADR-021 to ADR-026). Changes from v0, calibrated on seeds
  * 1001-1020 of the four S3 scenarios (ADR-025):
- * - the cap counts people: at most 10 people in any window of 20 calls, so groups can be boosted
- *   as a whole and the cap no longer binds before the overtake bound;
+ * - the cap counts people: at most 10 priority people among any 20 people called, so groups can
+ *   be boosted as a whole and the cap no longer binds before the overtake bound;
  * - the overtake bound is 30 people: with it no passenger was delayed more than 10 minutes on any
  *   calibration day, and at most 0.1% more than 5 minutes;
  * - CRITICAL means "cannot make it even without the safety margin" (F = 0): the margin is used to

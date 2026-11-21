@@ -9,11 +9,12 @@ engine** brings forward passengers who would miss their flight under FIFO but ca
 It does so within **declared, measurable fairness bounds**. GateFlow never changes security or
 border procedures: it organises the flow before they start.
 
-> **Status: slices S1 and S2 done.** This repository contains the simulation foundations:
+> **Status: slices S1 to S3 done.** This repository contains the simulation foundations:
 > - the priority engine;
 > - the queue state machine that the operational product will share;
-> - a reproducible discrete-event simulator of a checkpoint, run either as today's physical queue
->   or as a GateFlow virtual queue with realistic call mechanics;
+> - a reproducible discrete-event simulator of a checkpoint. It runs either as today's physical
+>   queue, with or without staff calling closing flights, or as a GateFlow virtual queue with
+>   realistic call mechanics, groups and assisted passengers;
 > - a CLI that compares policies on the same simulated passengers.
 >
 > There is no operational system, API or user interface yet. See
@@ -39,11 +40,16 @@ pnpm check
 pnpm sim run --scenario scenarios/single-checkpoint-demo.yaml --seeds 1-200
 ```
 
-The last command simulates 200 days with three policies, then writes
+The last command simulates 200 days with four policies, then writes
 `out/single-checkpoint-demo/results.json` and `out/single-checkpoint-demo/report.md`:
-- `fifo`: today's physical queue, the status quo;
+- `fifo`: today's physical queue without intervention (policy A);
+- `fifo-manual`: today's physical queue with staff calling the flights that close within 20
+  minutes (policy A', an idealised version of today's manual handling);
 - `virtual-fifo`: the GateFlow virtual queue served in FIFO order;
-- `priority-v0`: the GateFlow virtual queue with priority policy v0.
+- `priority-v1`: the GateFlow virtual queue with priority policy v1.
+
+Also available: `priority-v0` (the S2 policy) and `priority-v1-strict` (v1 with the
+late-presentation rule).
 
 Other commands:
 
@@ -52,7 +58,7 @@ pnpm sim validate --scenario scenarios/single-checkpoint-staffed.yaml
 ```
 
 ```bash
-pnpm sim run --scenario scenarios/single-checkpoint-demo.yaml --seeds 1-50 --policies fifo,priority-v0 --compare priority-v0:fifo
+pnpm sim run --scenario scenarios/single-checkpoint-strategic.yaml --seeds 1-50 --policies fifo,fifo-manual,priority-v1,priority-v1-strict
 ```
 
 ```bash
@@ -65,22 +71,27 @@ pnpm sim --help
 
 ## What the simulator shows today
 
-| Scenario (200 simulated days, SYNTHETIC) | Missed flights per day: today's physical queue | GateFlow, FIFO order | GateFlow, priority v0 | Net flights saved by priority v0 [95% CI] | Mean time standing in a queue: today / GateFlow |
+| Scenario (200 simulated days, SYNTHETIC) | Missed flights per day: A, no intervention | A', staff call closing flights | GateFlow, priority v1 | Net saved by v1 vs A' [95% CI] | Mean time standing in a queue: today / GateFlow |
 |---|---:|---:|---:|---:|---:|
-| `single-checkpoint-demo` (congested morning peak) | 48.7 | 49.3 | 29.7 | 19.1 [17.4, 20.7] | 3.0 / 0.5 min |
-| `single-checkpoint-moderate` | 11.9 | 12.3 | 10.1 | 1.8 [1.4, 2.4] | 1.2 / 0.4 min |
-| `single-checkpoint-staffed` (lanes follow demand) | 58.9 | 59.5 | 37.0 | 21.9 [20.1, 23.7] | 3.5 / 0.7 min |
+| `single-checkpoint-demo` (congested morning peak) | 55.1 | 14.7 | 18.0 | -3.3 [-4.1, -2.5] | 3.1 / 0.6 min |
+| `single-checkpoint-moderate` | 14.3 | 7.2 | 9.4 | -2.3 [-2.7, -1.9] | 1.3 / 0.5 min |
+| `single-checkpoint-staffed` (lanes follow demand) | 65.9 | 17.8 | 23.0 | -5.2 [-6.2, -4.1] | 3.6 / 0.7 min |
 
 How to read these numbers:
-- The call mechanics of the virtual queue cost about half a missed flight per day (passengers who
-  miss their call). In exchange, people stop standing in line.
-- The benefit comes from the prioritisation and depends heavily on congestion. Non-prioritised
-  passengers wait 0.01 to 0.13 minutes longer on average.
-- The numbers rest on synthetic assumptions, notably the response times and missed calls, which
-  must be measured. The baseline does not yet include today's manual handling of urgent
-  passengers, so the benefit is likely overstated.
-- Reports with every assumption and limitation: [docs/reports/slice-2](docs/reports/slice-2).
-  The S1 reports, which ignored call mechanics, remain in
+- Today's manual handling, idealised (A'), is the benchmark that matters: staff who call closing
+  flights every five minutes remove 50-75% of the misses.
+- GateFlow v1 saves 5 to 43 flights per day against a queue without intervention, and people
+  stop standing in line. It still misses 2.3 to 5.2 flights per day more than A'.
+  **On these assumptions GateFlow cannot claim to catch more flights than an attentive staff.**
+- The gap is last-minute passengers. Staff take them straight to a lane, while the virtual queue
+  makes them wait several minutes. The proposed slice S4 (fast track and staff escalation)
+  addresses exactly this; see [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+- Non-prioritised passengers wait 0.02 to 0.18 minutes longer on average, and at most 0.07% of
+  them more than 5 minutes.
+- The numbers rest on synthetic assumptions: response times, missed calls and today's practice
+  must be measured. Reports with every assumption and limitation:
+  [docs/reports/slice-3](docs/reports/slice-3/README.md). Earlier reports, on simpler models,
+  remain in [docs/reports/slice-2](docs/reports/slice-2) and
   [docs/reports/slice-1](docs/reports/slice-1).
 
 ## Repository layout

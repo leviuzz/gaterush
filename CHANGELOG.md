@@ -6,6 +6,80 @@ must be listed, together with the component versions it bumps.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-21: Slice S3
+
+Baseline A' (today's manual handling), groups and families, the assisted path, eligibility rules
+and priority policy v1.
+
+### Simulated numbers change
+
+- Every simulated day changes. Groups (about 40% of passengers travel with others), assisted
+  passengers and population generator 0.3.0 produce different populations. S3 numbers are not
+  comparable with S2 numbers.
+- With parties of one person, nobody assisted and no strategic arrivals, the S3 code reproduces
+  every S2 metric exactly (new regression test against a fixture saved from the S2 commit,
+  seeds 1-3), and every S1 metric as before.
+- New baseline A' (`fifo-manual`). On the slice-3 reports (200 days) it misses 14.7, 7.2 and 17.8
+  flights per day on the demo, moderate and staffed scenarios. `priority-v1` misses 18.0, 9.4 and
+  23.0, so 3.3, 2.3 and 5.2 more than A' (all statistically clear).
+- Golden files regenerated: four policies (`fifo`, `fifo-manual`, `virtual-fifo`,
+  `priority-v1`), five comparisons, metrics in people, new report section.
+
+### Added
+
+- `fifo-manual` 0.1.0 (policy A'): the physical queue with staff calling the flights that close
+  within 20 minutes, every 5 minutes (ADR-022). It uses the engine's new `flight-call` selection.
+- Groups and families (ADR-021). A ticket holds a party, called together and screened on one lane.
+  The FIFO wait, the cap, the overtake bound and the metrics count people. Groups larger than the
+  cap are never boosted automatically (`GROUP_EXCEEDS_CAP`).
+- Assisted path (ADR-021): staff take assisted parties to the next free lane under every policy;
+  the reason is never recorded.
+- `priority-v1` 0.1.0 (ADR-025): at most 10 priority people among any 20 people called,
+  K = 30 people, feasibility margin F = 0, no late-presentation rule. Calibrated on seeds
+  1001-1020, disjoint from the report seeds.
+- `priority-v1-strict` 0.1.0: v1 with the late-presentation rule. Departing passengers must
+  present at least 45 minutes before departure to be boosted automatically; transfers are exempt.
+- Scenario `single-checkpoint-strategic`: the demo day where 5% of departing parties arrive 25-35
+  minutes before departure on purpose (stress test).
+- Report section "Groups, assisted passengers and late arrivals".
+- Regression test against S2, property tests with groups and the new rules, coverage tests.
+  39 mutation checks are caught.
+- ADR-021 to ADR-026, slice-3 reports and the S4 proposal in the implementation plan.
+
+### Changed
+
+- `@gateflow/priority-engine` 0.3.0 (engine version 0.3.0):
+  - optional `partySize`, `presentedAtMs` and `scheduledDepartureMs` on waiting tickets;
+  - `feasibilityMarginMs` separates CRITICAL from the safety buffer (ADR-023);
+  - `latePresentationCutoffMs` (late-presentation rule, `null` = off);
+  - the `flight-call` selection;
+  - with groups, calling the ticket at the overtake limit could push an older, reactivated ticket
+    past K: the guard then calls the head of the queue (found by the queue-core property tests
+    during the slice);
+  - new reasons `OVERTAKE_ROOM_EXHAUSTED`, `FLIGHT_CALL`, `INSIDE_SAFETY_MARGIN`,
+    `LATE_PRESENTATION`, `PRESENTATION_UNVERIFIED` and `GROUP_EXCEEDS_CAP`.
+- `@gateflow/queue-core` 0.2.0: parties, presentation time and departure time on tickets;
+  per-person window, waiting and outstanding counts; per-person overtakes and cap history; presets
+  `fifo-manual`, `priority-v1` and `priority-v1-strict`. `priority-v0` keeps its behaviour
+  (F = B = 5 min, no presentation rule).
+- `@gateflow/sim-model` 0.3.0 (model version 0.3.0): parties served on one lane, the assisted
+  path with lane precedence, the strategic flag, standing and idle-lane statistics in people.
+- `@gateflow/sim-scenarios` 0.3.0: scenario schema 3 (`passengers.groups`,
+  `passengers.assistedShare`, `passengers.strategicLateArrival`); version 1 and 2 files are
+  rejected with a migration message. Population generator 0.3.0 (ADR-026).
+- `@gateflow/sim-metrics` 0.3.0 (results schema `gateflow.sim.results/3`): metrics and paired
+  comparisons weighted by party size, new group, assisted and strategic metrics, cost section for
+  staff flight calls, parameters set to `null` shown as "none".
+- `@gateflow/sim-cli` 0.3.0:
+  - default policies `fifo,fifo-manual,virtual-fifo,priority-v1`;
+  - default comparisons add each priority policy against A' and against earlier priority policies
+    on the same queue;
+  - risk classes fall back to `priority-v1`.
+- Scenarios `single-checkpoint-demo`, `-moderate` and `-staffed` migrated to schema 3. They now
+  have groups and 0.7% assisted parties.
+- CI publishes 200-day reports for the four scenarios. The strategic scenario also runs
+  `priority-v1-strict`.
+
 ## [0.2.1] - 2026-11-21: engine fix
 
 ### Fixed

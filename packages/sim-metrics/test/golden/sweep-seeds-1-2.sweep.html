@@ -80,9 +80,10 @@ code {
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 0 4px;
+  overflow-wrap: anywhere;
 }
 pre { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow-x: auto; }
-pre code { border: 0; padding: 0; background: none; white-space: pre; }
+pre code { border: 0; padding: 0; background: none; white-space: pre; overflow-wrap: normal; }
 .table { overflow-x: auto; margin: 12px 0 20px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
 table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
 th, td { padding: 6px 10px; border-bottom: 1px solid var(--grid); text-align: left; vertical-align: top; }

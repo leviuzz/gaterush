@@ -9,7 +9,7 @@ engine** brings forward passengers who would miss their flight under FIFO but ca
 It does so within **declared, measurable fairness bounds**. GateFlow never changes security or
 border procedures: it organises the flow before they start.
 
-> **Status: slices S1 to S5 done.** This repository contains the simulation foundations:
+> **Status: slices S1 to S6 done.** This repository contains the simulation foundations:
 > - the priority engine;
 > - the queue state machine that the operational product will share;
 > - a reproducible discrete-event simulator of a checkpoint. It runs either as today's physical
@@ -17,7 +17,8 @@ border procedures: it organises the flow before they start.
 >   realistic call mechanics, groups and assisted passengers. Days can include flight delays,
 >   gate changes, lane outages and flight feed outages: the system decides on what it knows,
 >   and outcomes are judged on what really happens;
-> - a CLI that compares policies on the same simulated passengers.
+> - a CLI that compares policies on the same simulated passengers, runs sensitivity sweeps, uses
+>   every CPU and writes JSON, Markdown and HTML reports with charts.
 >
 > There is no operational system, API or user interface yet. See
 > [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
@@ -42,14 +43,15 @@ pnpm check
 pnpm sim run --scenario scenarios/single-checkpoint-demo.yaml --seeds 1-200
 ```
 
-The last command simulates 200 days with four policies, then writes
-`out/single-checkpoint-demo/results.json` and `out/single-checkpoint-demo/report.md`:
+The last command simulates 200 days with four policies on every CPU (about 15 seconds on four
+cores), then writes `results.json`, `report.md` and `report.html` (a page with charts) in
+`out/single-checkpoint-demo/`:
 - `fifo`: today's physical queue without intervention (policy A);
 - `fifo-manual`: today's physical queue with staff calling the flights that close within 20
   minutes (policy A', an idealised version of today's manual handling);
 - `virtual-fifo`: the GateFlow virtual queue served in FIFO order;
 - `priority-v3`: the GateFlow virtual queue with priority policy v3: the fast track (priority
-  calls go to the next free lane), no priority on flight data older than 30 minutes, and a
+  calls go to the next free lane), no priority on flight data older than 60 minutes, and a
   3-minute hysteresis that keeps risk classes from flapping.
 
 Also available: `priority-v0` (S2), `priority-v1` (S3, without the fast track),
@@ -67,6 +69,10 @@ pnpm sim run --scenario scenarios/single-checkpoint-disrupted.yaml --seeds 1-50 
 ```
 
 ```bash
+pnpm sim sweep --spec sweeps/sensitivity-demo.yaml
+```
+
+```bash
 pnpm sim policies
 ```
 
@@ -81,27 +87,31 @@ pnpm sim --help
 | `single-checkpoint-demo` (congested morning peak) | 55.1 | 14.7 | 11.5 | 3.2 [2.4, 4.0] | 3.1 / 0.6 min |
 | `single-checkpoint-moderate` | 14.3 | 7.2 | 5.6 | 1.5 [1.2, 1.9] | 1.3 / 0.5 min |
 | `single-checkpoint-staffed` (lanes follow demand) | 65.9 | 17.8 | 16.6 | 1.2 [0.1, 2.2] | 3.6 / 0.7 min |
-| `single-checkpoint-disrupted` (delays, gate changes, lane and feed outages) | 47.8 | 12.4 | 11.1 | 1.3 [0.4, 2.0] | 3.3 / 0.6 min |
+| `single-checkpoint-disrupted` (delays, gate changes, lane and feed outages) | 47.8 | 12.4 | 10.8 | 1.6 [0.7, 2.3] | 3.3 / 0.6 min |
 
 How to read these numbers:
 - Today's manual handling, idealised (A'), is the benchmark that matters: staff who call closing
   flights every five minutes remove 50-75% of the misses.
-- GateFlow v3 catches more flights than A' on all four scenarios, disruptions included, and
-  people stop standing in line. The difference comes from the fast track: a priority call is
-  made next and the passenger goes to the next free lane. It needs a fast-track entry to the
-  lanes.
+- On congested but manageable days, GateFlow v3 catches 1 to 3 more flights per day than A', with
+  disruptions too, and people stop standing in line. The difference comes from the fast track: a
+  priority call is made next and the passenger goes to the next free lane, which needs a
+  fast-track entry to the lanes.
+- **The advantage holds in a band of conditions** (sensitivity sweeps):
+  - in overload (one lane fewer, 10% more passengers, passengers arriving later), A' saves far
+    more flights, because staff overtake passengers without limit;
+  - GateFlow keeps every passenger within K = 30 overtakes, the largest bound within its
+    fairness criterion. Matching A' in overload would need K = 120 and would delay 13% of the
+    other passengers by more than 5 minutes: a choice for the airport;
+  - the virtual queue must also be tuned to how fast passengers answer a call (3 minutes
+    instead of 75 seconds needs a longer call-ahead).
 - Non-prioritised passengers wait 0.03 to 0.24 minutes longer on average; at most 0.10% of them
-  more than 5 minutes.
-- Risk classes are stable: the 3-minute hysteresis removes the 25 to 190 class reversals a day of
-  v2, at no cost in missed flights.
-- GateFlow gives no priority on flight data older than 30 minutes. With a reliable feed that
-  costs little (0.3 flights per day on the disrupted scenario, almost all on the few days when
-  the feed fails for more than an hour). With a feed down for hours a day, GateFlow falls back
-  to arrival order for long periods and loses its advantage over A' (stress test in the reports).
+  more than 5 minutes. Risk classes do not flap.
+- GateFlow gives no priority on flight data older than 60 minutes. With a reasonably reliable
+  flight feed that costs nothing; with long outages it ends level with A'.
 - The numbers rest on synthetic assumptions: response times, missed calls, today's practice and
   the reliability of the flight feed must be measured. Reports with every assumption and
-  limitation: [docs/reports/slice-5](docs/reports/slice-5/README.md). Earlier reports, on simpler
-  models, remain in [docs/reports](docs/reports).
+  limitation, and pages with charts: [docs/reports/slice-6](docs/reports/slice-6/README.md).
+  Earlier reports remain in [docs/reports](docs/reports).
 
 ## Repository layout
 
@@ -116,6 +126,7 @@ How to read these numbers:
 | `packages/sim-metrics` | Experiments, paired metrics, statistics, results and report (pure) |
 | `apps/sim-cli` | `gateflow-sim` command-line interface |
 | `scenarios/` | Scenario files |
+| `sweeps/` | Sensitivity sweep specifications |
 | `docs/` | Kickoff proposal, generated reports |
 
 ## Documentation

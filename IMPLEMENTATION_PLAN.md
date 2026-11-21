@@ -10,7 +10,7 @@ Status legend: **Done**, **Next**, **Planned**, **Gated** (needs a business deci
 
 | Milestone | Business plan stage | Status |
 |---|---|---|
-| M1: Simulator core and priority engine | R1 | In progress (S1 to S5 done) |
+| M1: Simulator core and priority engine | R1 | In progress (S1 to S6 done) |
 | M2: Simulator Studio (web, runs in the browser) | R1-R2 | Planned |
 | M3: Priority end-to-end in the browser, digital twin | R2 | Planned |
 | M4: Operations console and Predict preview (pitch-ready) | R2 | Planned |
@@ -27,8 +27,8 @@ Status legend: **Done**, **Next**, **Planned**, **Gated** (needs a business deci
 | **S3** | Baseline A' (FIFO + manual handling of urgent passengers), groups and families, assisted path, eligibility and anti-abuse rules | **Done** |
 | **S4** | Priority fast track: priority calls go to the next free lane; staff escalation evaluated and not adopted (ADR-027, ADR-028) | **Done** |
 | **S5** | Disruptions and data quality: delays with notification time, gate changes, lane outages, stale or missing feeds, ground truth vs knowledge, hysteresis, stability metrics (ADR-029, ADR-030) | **Done** |
-| S6 | Parallel batches (worker threads), sensitivity sweeps (k/N, K, lanes, load factor, show-up, maximum data age, feed reliability), HTML report with charts | **Next** |
-| S7 | Real schedules (OPDI import for VCE/TSF, seats mapping) and scenario library: normal, peak, disrupted, Mexico-like transfer hub | Planned (check data licences first) |
+| **S6** | Parallel batches (worker threads), sensitivity sweeps (k/N, K, lanes, load factor, show-up, maximum data age, feed reliability), HTML report with charts (ADR-031 to ADR-034) | **Done** |
+| S7 | Real schedules (OPDI import for VCE/TSF, seats mapping) and scenario library: normal, peak, disrupted, Mexico-like transfer hub | **Next** (check data licences first) |
 | S8 | Experiment C: lane-opening recommendations with an operator model | Planned |
 
 The slices after S3 were renumbered when S4 was proposed: S4 to S7 of the kickoff proposal (and of
@@ -323,6 +323,74 @@ with stable classes. The stale-data rule costs 0.3 flights per day on the disrup
 on the few days when the feed fails for more than an hour; with a feed down for hours a day it
 costs 3.1 and GateFlow falls behind A'. Full reports:
 [docs/reports/slice-5](docs/reports/slice-5/README.md).
+
+## S6: acceptance criteria and evidence
+
+Scope delivered (approved as "parallel batches and statistics"):
+- **Parallel batches** (ADR-031): the CLI spreads the simulated days over worker threads
+  (`--workers`, default every CPU). Days are pure functions of the job and the seed and are
+  assembled in seed order, so the outputs never depend on the number of threads.
+- **Sensitivity sweeps** (ADR-032): `gateflow-sim sweep --spec sweeps/<id>.yaml` varies one
+  assumption at a time. The parameters are the policy (K, k, N, h, maximum data age), every virtual
+  queue (M, call-ahead, response estimate) and the scenario (lanes, load factor, arrival shift,
+  call response, missed calls, delays, lane and feed outages). Points with the same days share
+  them, and each policy runs once per day. Two sweeps are published.
+- **HTML reports with charts** (ADR-033): `report.html` and `sweep.html`, self-contained and
+  deterministic, light and dark.
+- **Maximum data age raised to 60 minutes** (`priority-v3` 0.2.0, ADR-034), as the sweeps showed
+  that 30 minutes cost flights and protected almost nothing. The founder delegated this choice.
+- Sweep schema `gateflow.sim.sweep/1`, metrics 0.6.0, CLI 0.6.0, queue core 0.5.0.
+
+| # | Criterion (as proposed) | Evidence |
+|---|---|---|
+| 1 | 1000 seeds x 3 policies within the measured time target (kickoff: under 10 minutes on a laptop with worker threads) | Demo scenario, `fifo`, `fifo-manual`, `priority-v3`, 1000 days: **48 s with 4 worker threads**, 148 s with one, in the 4-vCPU cloud container used for the reports. The identical outputs were compared with `cmp`. One day of about 15,000 passengers (11,248 parties) takes about 0.4 s per policy on one thread (kickoff target: under 2 s). 200 days x 5 policies take 15-18 s per scenario. |
+| 2 | Regenerated report identical | The worker-thread test (`apps/sim-cli/test/workers.test.ts`) builds the bundle and compares `results.json`, `report.md`, `report.html` and `sweep.json` written with 1 and with 3 threads. CI compares 1 and 4 threads on every push. Days computed separately and in shuffled order assemble into the same experiment and the same sweep (`experiment.test.ts`, `sweep.test.ts`). Golden files lock the HTML report and a sweep in JSON, Markdown and HTML. |
+| 3 | Sweeps on k/N, K, lanes and load factor | `sweeps/sensitivity-demo.yaml` (200 days per point, 3,400 distinct simulated days) covers k, K, lanes and load factor. It also covers M, hysteresis, arrival shift, call response, missed calls, the call-ahead with slow passengers and K under overload. `sweeps/data-quality-disrupted.yaml` (2,400 days) covers the maximum data age, the feed's reliability, delays and lane outages. Reports: [docs/reports/slice-6](docs/reports/slice-6/README.md). |
+
+Verification beyond the criteria:
+- Every setting changes exactly what it should (the candidate, every virtual queue, or the
+  scenario, validated again) and rejects values that make no sense.
+- Every point of a sweep reproduces an ordinary experiment with the same settings, metric by
+  metric.
+- Policies shared by several points are simulated once per day, and their results are
+  identical across points.
+- The HTML is well formed, carries the disclaimer, every assumption and every table of the
+  Markdown, and passes a render check in light, dark and phone widths (no sideways page scroll).
+- The chart palette was validated for colour-blind separation in light and dark mode.
+
+Findings that changed the design or the claims during the slice:
+- **The advantage over today's practice holds in a band of conditions.** On congested but
+  manageable days GateFlow catches 1 to 3 more flights per day than idealised A'. In overload,
+  A' saves far more:
+  - one lane fewer: -95 per day;
+  - 10% more passengers: -10;
+  - passengers 20 minutes later: -40.
+
+  The bound K is the reason: on those days A' overtakes one passenger up to 738 times, and
+  matching A' would need K = 120, with 13% of the other passengers delayed by more than
+  5 minutes. The claims in the README now state this band.
+- **The call-ahead must follow the measured response time.** With passengers answering in a
+  median 3 minutes, the default call-ahead costs 26 flights per day against A'; a call-ahead of
+  300 s restores the advantage.
+- **K = 30 is the largest bound within the fairness criterion of ADR-025**, confirmed by the
+  sweep (K = 40 delays 0.27% of the others by more than 5 minutes).
+- **Maximum data age** (ADR-034): 60 minutes costs nothing with a reasonably reliable feed and
+  still degrades to FIFO during long outages.
+
+### S6 results at a glance (SIMULATED, synthetic data: not operational evidence)
+
+| Demo day, one assumption varied (200 simulated days per point) | Net flights saved per day by `priority-v3` vs A' |
+|---|---:|
+| Base (6 lanes, demand as in the scenario) | +3.2 [2.4, 4.0] |
+| 7 lanes / 5 lanes | +0.6 / **-95.1** |
+| Demand x0.9 / x1.1 | +1.1 / **-10.1** |
+| Passengers 10 minutes earlier / later | +2.6 / **-11.0** |
+| Call response 120 s / 180 s (180 s with a 300 s call-ahead) | +1.7 / **-25.7** (+2.0) |
+| K = 20 / K = 40 (others delayed > 5 min: 0.00% / 0.27%) | +0.0 / +4.7 |
+
+GateFlow is fast enough for batch analysis on a laptop, and every report is reproducible to the
+byte on any number of threads. Full reports with charts:
+[docs/reports/slice-6](docs/reports/slice-6/README.md).
 
 ## Later milestones (summary)
 

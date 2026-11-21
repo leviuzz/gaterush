@@ -145,16 +145,19 @@ These must be checked with counsel; nothing below is legal advice.
 1. Which checkpoint can actually be authorised, measured and controlled, and who has authority
    over the lane order?
 2. Which flight, gate and boarding-close feeds exist, with what latency, and how often are they
-   down? Policy v3 stops prioritising on a deadline the feed has not confirmed for 30 minutes
-   (ADR-029). In simulation, with about one outage a day, that costs 0.3 flights per day, almost
-   all on the days when the feed is down for more than an hour. With a feed down for hours a day
-   GateFlow falls back to FIFO and loses its advantage over today's practice. The freshness
-   target of each source is the operator's decision (FR-15).
+   down? Policy v3 stops prioritising on a deadline the feed has not confirmed for 60 minutes
+   (ADR-029, ADR-034). In simulation that costs nothing with a reasonably reliable feed; with
+   outages of an hour or more GateFlow ends level with today's practice. The freshness target of
+   each source is the operator's decision (FR-15).
 3. Which Fast Track and PRM rights exist, and how are they respected?
 4. Which fairness bounds (k/N, K) and late-arrival eligibility rule does the operator accept?
    Policy v1 uses K = 30 people and at most 10 priority people among any 20 called, with no
    late-presentation rule: in simulation the rule cost flights to genuinely late passengers
-   (ADR-025). `priority-v1-strict` keeps it for operators who want it.
+   (ADR-025). `priority-v1-strict` keeps it for operators who want it. The S6 sweeps show
+   that K = 30 is the largest bound within the fairness criterion, and that in overload today's
+   unbounded practice saves far more flights (one lane fewer: 95 per day). Matching it would
+   need K = 120, with 13% of the other passengers delayed by more than 5 minutes. Does the
+   operator want an approved overload mode with a larger K?
 5. How is the baseline measured today (FIFO plus manual handling of urgent passengers)? S3
    models it as staff calling closing flights every five minutes (A', ADR-022), idealised. How
    often staff really call, and how many passengers come forward, decide how strong today's
@@ -162,7 +165,9 @@ These must be checked with counsel; nothing below is legal advice.
 6. Cloud (EU or Mexico region) or on-premises?
 7. How quickly do passengers answer a call at the target checkpoint, and how many miss it? These
    values size the call-ahead buffer and the timeouts (ADR-017, ADR-018), and must be measured,
-   for instance in shadow mode.
+   for instance in shadow mode. In the S6 sweep this is the assumption the virtual queue is most
+   sensitive to: with a median response of 3 minutes instead of 75 seconds, the default
+   call-ahead costs 26 flights per day, and a call-ahead of 300 s restores the advantage.
 8. Is there, or can there be, a fast-track entry to the lanes for priority passengers, and what is
    its capacity? Policy v2 relies on it to beat today's manual handling (ADR-027): fast-tracked
    passengers pass the people waiting at the lanes, within the bound K.

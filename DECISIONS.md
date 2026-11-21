@@ -608,7 +608,8 @@ founder on 2026-11-21 together with all of its recommendations.
 ## ADR-029: Stale-data rule and hysteresis (priority v3)
 
 - **Status:** Accepted (2026-11-21). Engine 0.5.0, queue core 0.4.0, model 0.5.0. Implements the
-  approved S5 proposal ("stale or missing feeds, hysteresis, stability metrics").
+  approved S5 proposal ("stale or missing feeds, hysteresis, stability metrics"). The 30-minute
+  maximum age is superseded by ADR-034 (60 minutes); the rule and the hysteresis are unchanged.
 - **Context:**
   - A product principle of the kickoff: when data is missing or old, GateFlow does not invent. No
     automatic priority, service in arrival order, recovery when the data is fresh again (FR-15,

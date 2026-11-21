@@ -6,6 +6,58 @@ must be listed, together with the component versions it bumps.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-21: Slice S6
+
+Parallel batches, sensitivity sweeps and HTML reports. Maximum data age of priority v3 raised to
+60 minutes.
+
+### Simulated numbers change
+
+- `priority-v3` 0.2.0 trusts flight data for 60 minutes instead of 30 (ADR-034). On the slice-6
+  reports (200 days) it misses 10.8 flights per day on the disrupted scenario (0.1.0: 11.1), the
+  same as v2. With the unreliable feed it misses 12.3 (0.1.0: 14.2), level with A' (12.4). The
+  scenarios without feed outages are unchanged (11.5, 5.6, 16.6 and 141.6 on the demo, moderate,
+  staffed and strategic scenarios).
+- No other policy changes. The S1 to S4 regressions still hold.
+- Golden files regenerated: `priority-v3` 0.2.0 and queue core 0.5.0 in the manifests, plus new
+  golden files for the HTML report and for a small sweep (JSON, Markdown, HTML).
+
+### Added
+
+- Worker threads (ADR-031): `--workers` (default: every CPU) for `run` and `sweep`. Outputs are
+  byte-identical whatever the number of threads. 1000 days x 3 policies take 48 s on 4 threads.
+- `runDay`, `planExperiment` and `assembleExperiment`: an experiment as independent days.
+- Sensitivity sweeps (ADR-032):
+  - `gateflow-sim sweep --spec sweeps/<id>.yaml`, with schema `gateflow.sim.sweep/1`;
+  - 17 parameters across the policy, the virtual queue and the scenario;
+  - shared days and policy runs, and `sweep.json`, `sweep.md` and `sweep.html` outputs;
+  - published sweeps `sensitivity-demo` and `data-quality-disrupted`.
+- HTML reports (ADR-033): `report.html` next to every `report.md`, and `sweep.html`.
+  Self-contained, deterministic, with inline SVG charts in light and dark mode.
+- Tests:
+  - worker threads end to end (built bundle, 1 against 3 threads);
+  - days and sweep variants assembled in any order;
+  - sweep settings and their validation;
+  - a sweep point against an ordinary experiment;
+  - the Markdown-to-HTML converter, charts and tag balance;
+  - the CLI `sweep` command and its errors.
+- ADR-031 to ADR-034, slice-6 reports (six experiments and two sweeps).
+
+### Changed
+
+- `@gateflow/queue-core` 0.5.0: preset `priority-v3` 0.2.0 (maximum data age 60 minutes).
+- `@gateflow/sim-metrics` 0.6.0: experiments split into days; sweeps; HTML rendering. The
+  results schema is unchanged (`gateflow.sim.results/5`).
+- `@gateflow/sim-cli` 0.6.0:
+  - `runCli` is asynchronous;
+  - new `--workers` option and `sweep` command;
+  - writes `report.html`;
+  - the bundle doubles as its worker script;
+  - depends on `yaml` and `zod` for sweep files.
+- CI compares runs and sweeps made with 1 and 4 threads, and publishes 20-day sweeps with the
+  reports.
+- Implementation plan: S6 done, S7 (real schedules) next.
+
 ## [0.5.0] - 2026-11-21: Slice S5
 
 Disruptions and data quality: flight delays with their notice, gate changes, lane outages, flight

@@ -1,7 +1,7 @@
 # GateFlow architecture
 
-This document describes the architecture as implemented (slices S1 to S5: priority engine, queue
-state machine and simulator) and the agreed direction for the operational product. Decisions are
+This document describes the architecture as implemented (slices S1 to S6: priority engine, queue
+state machine, simulator, parallel batches and sensitivity sweeps) and the agreed direction for the operational product. Decisions are
 referenced as ADR-nnn ([DECISIONS.md](DECISIONS.md)).
 
 ## 1. Principles
@@ -23,7 +23,7 @@ referenced as ADR-nnn ([DECISIONS.md](DECISIONS.md)).
 
 ```
 apps/
-  sim-cli/          gateflow-sim: runs experiments, writes results.json and report.md (bundled)
+  sim-cli/          gateflow-sim: experiments and sweeps on worker threads; JSON, Markdown, HTML (bundled)
 packages/
   domain/           shared domain types and units (integer milliseconds, segments, risk classes)
   priority-engine/  assessment and selection of the next call (pure)
@@ -31,8 +31,9 @@ packages/
   sim-kernel/       seeded RNG streams, deterministic math, distributions, event calendar (pure)
   sim-model/        checkpoint simulation: physical queue or GateFlow virtual queue (pure)
   sim-scenarios/    scenario schema, validation, assumptions, synthetic population (pure)
-  sim-metrics/      experiment runner, paired metrics, statistics, results and report (pure)
+  sim-metrics/      experiments, sweeps, paired metrics, statistics, results, Markdown and HTML (pure)
 scenarios/          scenario files (YAML)
+sweeps/             sensitivity sweep specifications (YAML)
 docs/kickoff/       kickoff analysis and proposal (Italian)
 ```
 
@@ -343,9 +344,12 @@ Validation:
   the operating day, log-normal durations). Without disruptions the populations of generator
   0.3.0 are reproduced.
 
-## 9. Experiments, metrics and reports (ADR-011, ADR-015, ADR-020, ADR-026)
+## 9. Experiments, metrics and reports (ADR-011, ADR-015, ADR-020, ADR-026, ADR-031 to ADR-033)
 
-`runExperiment` runs every policy on every seed and computes, per day:
+An experiment is a set of independent days. `planExperiment` validates it, `runDay(job, seed)`
+simulates one day (every policy on the same passengers), and `assembleExperiment` orders the days
+by seed, whatever the order in which they were computed. `runExperiment` does all three in one
+thread; the CLI spreads the days over worker threads (section 10). For each day:
 - policy metrics, counted in people: missed flights (total and by segment), time to screening
   and standing time, prioritised passengers, overtakes, calls, second calls, no-shows,
   reactivations, new tickets, staffed lane-hours, lane utilisation, idle lane time, tickets
@@ -374,9 +378,28 @@ comparisons) into `results.json` (`schema: gateflow.sim.results/5`):
 - per-seed metrics.
 
 `renderReport` renders `report.md` from that document only, so the two cannot disagree.
+`renderHtmlReport` renders `report.html` from the same Markdown, converted to HTML, with charts
+under the headline: missed flights by policy (bars with the P5-P95 spread) and net flights saved
+by comparison (intervals). Charts are inline SVG, with no script or external resource, light and
+dark, rounded to 0.1 px, so the HTML is as deterministic as the JSON (ADR-033).
 
-Golden files (`packages/sim-metrics/test/golden`) lock the full results and report of the demo
-scenario for seeds 1-3, and the report of the disrupted scenario. To regenerate them after an intentional change, run
+**Sensitivity sweeps** (ADR-032). A sweep varies one parameter at a time around a base:
+- the specification (`sweeps/*.yaml`) names the base scenario, the policies, the candidate, the
+  comparisons and the curves (a parameter, its values, optionally a modified base);
+- `applySetting` changes the candidate (K, k, N, h, maximum data age), every virtual queue (M,
+  call-ahead, response estimate) or the scenario (lanes, load factor, arrival shift, call
+  response, missed calls, delays, lane and feed outages), and validates the result again;
+- `planSweep` groups the points by scenario. A task is one day of one scenario variant:
+  `runSweepDay` generates the population once and simulates each distinct policy once, so
+  baselines are shared by every policy-only point;
+- `buildSweepResults` summarises each point (missed flights per policy, net saved against each
+  reference with a bootstrap interval, cost to other passengers, largest overtake count) into
+  `sweep.json` (`gateflow.sim.sweep/1`), rendered as `sweep.md` and `sweep.html` (two charts per
+  curve).
+
+Golden files (`packages/sim-metrics/test/golden`) lock the full results, Markdown and HTML report
+of the demo scenario for seeds 1-3, the report of the disrupted scenario, and a small sweep (JSON,
+Markdown and HTML). To regenerate them after an intentional change, run
 `UPDATE_GOLDEN=1 pnpm --filter @gateflow/sim-metrics test` and explain the change in the
 changelog.
 
@@ -385,11 +408,17 @@ changelog.
 - Packages export TypeScript sources. The CLI is bundled with esbuild into
   `apps/sim-cli/dist/gateflow-sim.mjs`. The banner adds a shebang and `createRequire` for
   CommonJS dependencies.
+- **Worker threads** (ADR-031). The bundle is also the script of its worker threads: started
+  as a worker, it serves tasks (one simulated day of an experiment or of a sweep variant) and
+  returns plain data. The pool hands each thread the next task as soon as it finishes one, and
+  returns the results in task order. `--workers` defaults to every CPU; the outputs do not
+  depend on it. Threads, files and the clock stay in the CLI: the packages remain pure.
 - Turborepo runs `typecheck`, `lint`, `test` and `build`. A `transit` task makes caches depend on
   the sources of dependencies. `scenarios/**` is a global dependency.
 - `pnpm check` runs Prettier, dependency-cruiser and every Turborepo task.
-- CI (GitHub Actions) runs `pnpm check` on Node 22 and 24, builds the CLI, compares two CLI runs
-  byte for byte, and publishes 200-day reports for the four scenarios as an artefact.
+- CI (GitHub Actions) runs `pnpm check` on Node 22 and 24, builds the CLI, compares runs and
+  sweeps made with 1 and 4 worker threads byte for byte, and publishes 200-day reports for the
+  six scenarios and 20-day sweeps as an artefact.
 
 ## 11. Target architecture of the operational product (ADR-013)
 

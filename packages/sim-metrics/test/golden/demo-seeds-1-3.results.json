@@ -559,7 +559,15 @@
   ],
   "summary": {
     "days": 3,
-    "passengersPerDay": {
+    "peoplePerDay": {
+      "mean": 6353.3333,
+      "p05": 6327.3,
+      "p50": 6348,
+      "p95": 6383.1,
+      "min": 6325,
+      "max": 6387
+    },
+    "partiesPerDay": {
       "mean": 4802.6667,
       "p05": 4741,
       "p50": 4822,

@@ -47,6 +47,7 @@ export interface ExperimentConfig {
 
 export interface SeedResult {
   readonly seed: number;
+  /** Parties of the day (a party of three counts once; people are in the policy metrics). */
   readonly passengers: number;
   readonly flights: number;
   /** Disruptions of the day (S5), the same for every policy. */

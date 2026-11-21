@@ -106,7 +106,9 @@ export interface ResultsDocument {
   readonly modelLimitations: readonly string[];
   readonly summary: {
     readonly days: number;
-    readonly passengersPerDay: AcrossDays;
+    /** People (every member of a party) and parties per day, the same for every policy. */
+    readonly peoplePerDay: AcrossDays;
+    readonly partiesPerDay: AcrossDays;
     /** Disruptions per day (S5), the same for every policy. */
     readonly disruptions: Readonly<Record<keyof DayDisruptions, AcrossDays>>;
     readonly policies: Readonly<
@@ -258,7 +260,10 @@ export function buildResults(experiment: ExperimentResult, input: ManifestInput)
     modelLimitations: MODEL_LIMITATIONS,
     summary: roundNumbers({
       days: perSeed.length,
-      passengersPerDay: acrossDays(perSeed.map((s) => s.passengers)),
+      peoplePerDay: acrossDays(
+        perSeed.map((s) => s.policies[config.baselinePolicyId]?.passengers ?? 0),
+      ),
+      partiesPerDay: acrossDays(perSeed.map((s) => s.passengers)),
       disruptions: summariseRecords(perSeed.map((s) => s.disruptions)),
       policies,
       comparisons,

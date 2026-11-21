@@ -1,0 +1,6 @@
+# gateflow.flights/1 template: one row per departure; only flight and std are required.
+# The rows below are fictional examples. Times are local (HH:MM). Delete them and add your flights.
+flight,std,aircraft,seats,passengers,gate_zone,destination
+XY101,06:05,A320,180,164,A,
+XY203,06:20,B738,189,,B,
+XY305,11:40,B789,,251,C,

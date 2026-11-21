@@ -74,6 +74,14 @@ describe('flight list files (gateflow.flights/1)', () => {
     ]);
   });
 
+  it('reads the template of the data request', () => {
+    const template = readFileSync(
+      new URL('../../../docs/data-request/flight-list-template.csv', import.meta.url),
+      'utf8',
+    );
+    expect(parseFlightCsv(template).map((r) => r.flight)).toEqual(['XY101', 'XY203', 'XY305']);
+  });
+
   it('accepts columns in any order, only flight and std being required, and semicolons', () => {
     expect(parseFlightCsv('std;flight\n05:55;X1\n')).toEqual([{ flight: 'X1', std: '05:55' }]);
     expect(parseFlightCsv('STD,Flight,Gate_Zone\n23:59,X2,C\n')).toEqual([

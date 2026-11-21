@@ -80,7 +80,8 @@ export function renderReport(doc: ResultsDocument): string {
     `> **${doc.disclaimer}**`,
     '',
     `Scenario \`${manifest.scenario.id}\` (data: ${manifest.scenario.dataClassification}), ` +
-      `${summary.days} simulated days, about ${num(summary.passengersPerDay.mean, 0)} passengers per day. ` +
+      `${summary.days} simulated days, about ${num(summary.peoplePerDay.mean, 0)} passengers per day ` +
+      `(${num(summary.partiesPerDay.mean, 0)} parties). ` +
       `Status quo (baseline): \`${baseline.id}\`.`,
     '',
   );

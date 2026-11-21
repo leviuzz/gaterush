@@ -5,3 +5,6 @@ coverage/
 out/
 *.log
 .DS_Store
+
+# Airport-provided scenario data: never committed (docs/data-request).
+scenarios/private/

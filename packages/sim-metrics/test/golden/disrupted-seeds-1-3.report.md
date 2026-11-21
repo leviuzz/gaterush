@@ -2,7 +2,7 @@
 
 > **SIMULATED RESULTS ON SYNTHETIC OR HYPOTHETICAL DATA. These numbers are model outputs, not measurements, and must not be presented as evidence of operational performance.**
 
-Scenario `single-checkpoint-disrupted` (data: SYNTHETIC), 3 simulated days, about 4803 passengers per day. Status quo (baseline): `fifo`.
+Scenario `single-checkpoint-disrupted` (data: SYNTHETIC), 3 simulated days, about 6353 passengers per day (4803 parties). Status quo (baseline): `fifo`.
 
 ## 1. Headline
 

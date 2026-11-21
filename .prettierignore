@@ -5,3 +5,4 @@ pnpm-lock.yaml
 out/
 *.md
 **/test/golden/**
+docs/reports/**

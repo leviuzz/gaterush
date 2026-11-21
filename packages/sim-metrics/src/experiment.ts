@@ -4,8 +4,8 @@ import { simulateCheckpoint } from '@gateflow/sim-model';
 import type { RunResult } from '@gateflow/sim-model';
 import { generatePopulation } from '@gateflow/sim-scenarios';
 import type { Scenario } from '@gateflow/sim-scenarios';
-import { comparisonDayMetrics, policyDayMetrics } from './day-metrics';
-import type { ComparisonDayMetrics, PolicyDayMetrics } from './day-metrics';
+import { comparisonDayMetrics, dayDisruptions, policyDayMetrics } from './day-metrics';
+import type { ComparisonDayMetrics, DayDisruptions, PolicyDayMetrics } from './day-metrics';
 
 export interface BootstrapSettings {
   readonly resamples: number;
@@ -49,6 +49,8 @@ export interface SeedResult {
   readonly seed: number;
   readonly passengers: number;
   readonly flights: number;
+  /** Disruptions of the day (S5), the same for every policy. */
+  readonly disruptions: DayDisruptions;
   readonly policies: Readonly<Record<string, PolicyDayMetrics>>;
   /** Paired comparisons, keyed by {@link comparisonKey}. */
   readonly comparisons: Readonly<Record<string, ComparisonDayMetrics>>;
@@ -155,6 +157,7 @@ export function runExperiment(
       seed,
       passengers: population.passengers.length,
       flights: population.flights.length,
+      disruptions: dayDisruptions(population),
       policies,
       comparisons: pairs,
     });

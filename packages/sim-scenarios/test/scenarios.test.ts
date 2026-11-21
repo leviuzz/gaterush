@@ -40,6 +40,8 @@ describe('scenario files', () => {
     'single-checkpoint-moderate',
     'single-checkpoint-staffed',
     'single-checkpoint-strategic',
+    'single-checkpoint-disrupted',
+    'single-checkpoint-feed-stress',
   ])('%s is valid', (name) => {
     const scenario = parseScenarioText(scenarioFile(name));
     expect(scenario.id).toBe(name);
@@ -126,13 +128,18 @@ describe('parseScenario validation', () => {
     expect(responseIssues({ absentExtraMedianMinutes: 0 })).toMatch(/absentExtraMedianMinutes/);
   });
 
-  it('explains how to migrate scenarios of schema versions 1 and 2', () => {
+  it('explains how to migrate scenarios of schema versions 1 to 3', () => {
     const v1 = issuesOf(withChange((d) => (d.schemaVersion = 1)));
     expect(v1).toHaveLength(1);
-    expect(v1[0]).toMatch(/migrated to version 3.*laneSchedule.*callResponse.*groups/);
+    expect(v1[0]).toMatch(/migrated to version 4.*laneSchedule.*callResponse.*groups.*disruptions/);
     const v2 = issuesOf(withChange((d) => (d.schemaVersion = 2)));
     expect(v2).toHaveLength(1);
-    expect(v2[0]).toMatch(/migrated to version 3.*groups.*assistedShare.*strategicLateArrival/);
+    expect(v2[0]).toMatch(
+      /migrated to version 4.*groups.*assistedShare.*strategicLateArrival.*disruptions/,
+    );
+    const v3 = issuesOf(withChange((d) => (d.schemaVersion = 3)));
+    expect(v3).toHaveLength(1);
+    expect(v3[0]).toMatch(/migrated to version 4.*disruptions.*flightDelays.*feedOutages/);
   });
 
   it('validates groups and strategic late arrivals', () => {
@@ -275,6 +282,10 @@ describe('collectAssumptions', () => {
       'passengers.strategicLateArrival',
       'operations.boardingCloseMinutesBeforeStd',
       'operations.deadlineKnowledge',
+      'disruptions.flightDelays',
+      'disruptions.gateChanges',
+      'disruptions.laneOutages',
+      'disruptions.feedOutages',
     ]);
     expect(assumptions.every((a) => a.source === 'SYNTHETIC')).toBe(true);
   });
@@ -527,5 +538,172 @@ describe('generatePopulation', () => {
       expect(earliness).toBeGreaterThanOrEqual(25);
       expect(earliness).toBeLessThanOrEqual(35);
     }
+  });
+});
+
+describe('disruptions (generator 0.4.0)', () => {
+  const MIN = 60_000;
+  const disrupted = parseScenarioText(scenarioFile('single-checkpoint-disrupted'));
+
+  it('leaves a scenario without disruptions untouched: no delays, updates or outages', () => {
+    for (const seed of [1, 2, 3]) {
+      const population = generatePopulation(demo, seed);
+      expect(population.laneOutages).toBeUndefined();
+      expect(population.feedOutages).toBeUndefined();
+      for (const flight of population.flights) {
+        expect(Object.keys(flight).sort()).toEqual(
+          ['boardingCloseMs', 'gateZone', 'id', 'index', 'knownDeadline', 'stdMs'].sort(),
+        );
+      }
+    }
+  });
+
+  it('has the passengers of the demo scenario: disruptions use streams of their own', () => {
+    for (const seed of [1, 7]) {
+      expect(generatePopulation(disrupted, seed).passengers).toEqual(
+        generatePopulation(demo, seed).passengers,
+      );
+    }
+  });
+
+  it('delays a quarter of the flights; the feed announces each delay 10-120 minutes before departure', () => {
+    const close = 20 * MIN;
+    let flights = 0;
+    let delayed = 0;
+    for (let seed = 1; seed <= 50; seed++) {
+      for (const flight of generatePopulation(disrupted, seed).flights) {
+        flights++;
+        const delay = flight.delayMs ?? 0;
+        expect(flight.boardingCloseMs).toBe(flight.stdMs - close + delay);
+        // The day starts with the scheduled deadline.
+        expect(flight.knownDeadline).toEqual({ atMs: flight.stdMs - close, source: 'RULE' });
+        const deadlineUpdates = (flight.updates ?? []).filter((u) => u.knownDeadline !== undefined);
+        if (delay === 0) {
+          expect(deadlineUpdates).toHaveLength(0);
+          continue;
+        }
+        delayed++;
+        expect(delay).toBeLessThanOrEqual(180 * MIN);
+        expect(deadlineUpdates).toHaveLength(1);
+        const update = deadlineUpdates[0]!;
+        expect(update.knownDeadline).toEqual({ atMs: flight.boardingCloseMs, source: 'RULE' });
+        expect(update.atMs).toBeGreaterThanOrEqual(flight.stdMs - 120 * MIN);
+        expect(update.atMs).toBeLessThanOrEqual(flight.stdMs - 10 * MIN);
+      }
+    }
+    expect(delayed / flights).toBeGreaterThan(0.2);
+    expect(delayed / flights).toBeLessThan(0.3);
+  });
+
+  it('changes gates to another zone, reported within 5 minutes', () => {
+    let changes = 0;
+    for (let seed = 1; seed <= 50; seed++) {
+      for (const flight of generatePopulation(disrupted, seed).flights) {
+        const change = flight.gateChange;
+        if (change === undefined) continue;
+        changes++;
+        expect(change.gateZone).not.toBe(flight.gateZone);
+        expect(change.atMs).toBeGreaterThanOrEqual(flight.stdMs - 70 * MIN);
+        expect(change.atMs).toBeLessThanOrEqual(flight.stdMs - 30 * MIN);
+        const notice = (flight.updates ?? []).find((u) => u.walkEstimateMs !== undefined);
+        expect(notice?.walkEstimateMs).toBe(change.walkEstimateMs);
+        expect(notice!.atMs - change.atMs).toBeGreaterThanOrEqual(0);
+        expect(notice!.atMs - change.atMs).toBeLessThanOrEqual(5 * MIN);
+        const times = (flight.updates ?? []).map((u) => u.atMs);
+        expect(times).toEqual([...times].sort((a, b) => a - b));
+      }
+    }
+    expect(changes / (50 * 40)).toBeGreaterThan(0.07);
+    expect(changes / (50 * 40)).toBeLessThan(0.13);
+  });
+
+  it('draws lane and feed outages as Poisson processes, feed outages merged and sorted', () => {
+    let laneOutages = 0;
+    let feedOutages = 0;
+    for (let seed = 1; seed <= 100; seed++) {
+      const population = generatePopulation(disrupted, seed);
+      for (const o of population.laneOutages ?? []) {
+        laneOutages++;
+        expect(o.lanes).toBe(1);
+        expect(o.toMs - o.fromMs).toBeGreaterThan(0);
+        expect(o.toMs - o.fromMs).toBeLessThanOrEqual(60 * MIN);
+      }
+      const feed = population.feedOutages ?? [];
+      feedOutages += feed.length;
+      for (let i = 0; i < feed.length; i++) {
+        expect(feed[i]!.toMs).toBeGreaterThan(feed[i]!.fromMs);
+        if (i > 0) expect(feed[i]!.fromMs).toBeGreaterThan(feed[i - 1]!.toMs);
+      }
+    }
+    expect(laneOutages / 100).toBeGreaterThan(1.5);
+    expect(laneOutages / 100).toBeLessThan(2.5);
+    expect(feedOutages / 100).toBeGreaterThan(0.7);
+    expect(feedOutages / 100).toBeLessThan(1.3);
+  });
+
+  it('the feed stress test differs from the disrupted day only by its feed outages', () => {
+    const stress = parseScenarioText(scenarioFile('single-checkpoint-feed-stress'));
+    let downMs = 0;
+    for (const seed of [1, 2, 3]) {
+      const a = generatePopulation(stress, seed);
+      const b = generatePopulation(disrupted, seed);
+      expect(a.passengers).toEqual(b.passengers);
+      expect(a.flights).toEqual(b.flights);
+      expect(a.laneOutages).toEqual(b.laneOutages);
+      downMs += (a.feedOutages ?? []).reduce((sum, o) => sum + o.toMs - o.fromMs, 0);
+    }
+    // Several hours a day without the feed.
+    expect(downMs / 3).toBeGreaterThan(2 * 60 * MIN);
+  });
+
+  it('is deterministic, and the disruptions change from one simulated day to the next', () => {
+    expect(generatePopulation(disrupted, 4)).toEqual(generatePopulation(disrupted, 4));
+    expect(generatePopulation(disrupted, 4).flights).not.toEqual(
+      generatePopulation(disrupted, 5).flights,
+    );
+  });
+
+  it('knows no deadline at all when there is no flight feed', () => {
+    const noFeed = parseScenario(
+      withChange((d) => {
+        (d.operations as { deadlineKnowledge: { value: string } }).deadlineKnowledge.value = 'NONE';
+      }),
+    );
+    for (const flight of generatePopulation(noFeed, 2).flights) {
+      expect(flight.knownDeadline).toEqual({ atMs: null, source: 'NONE' });
+    }
+    const noFeedDisrupted = parseScenario({
+      ...structuredClone(disrupted),
+      operations: {
+        ...disrupted.operations,
+        deadlineKnowledge: { value: 'NONE', source: 'SYNTHETIC' },
+      },
+    });
+    for (const flight of generatePopulation(noFeedDisrupted, 2).flights) {
+      expect(flight.knownDeadline.atMs).toBeNull();
+      expect((flight.updates ?? []).every((u) => u.knownDeadline === undefined)).toBe(true);
+    }
+  });
+
+  it('validates the disruption parameters', () => {
+    const disruptionIssues = (path: string, change: Record<string, number>) =>
+      issuesOf(
+        withChange((d) => {
+          const all = d.disruptions as Record<string, { value: Record<string, number> }>;
+          Object.assign(all[path]!.value, change);
+        }),
+      ).join('\n');
+    expect(disruptionIssues('flightDelays', { share: 1.2 })).toMatch(/share/);
+    expect(
+      disruptionIssues('flightDelays', {
+        noticeMinMinutesBeforeStd: 90,
+        noticeMaxMinutesBeforeStd: 30,
+      }),
+    ).toMatch(/noticeMaxMinutesBeforeStd must not be smaller/);
+    expect(disruptionIssues('gateChanges', { minMinutesBeforeStd: 80 })).toMatch(
+      /maxMinutesBeforeStd must not be smaller/,
+    );
+    expect(disruptionIssues('laneOutages', { perDay: -1 })).toMatch(/perDay/);
+    expect(disruptionIssues('feedOutages', { maxMinutes: 2000 })).toMatch(/maxMinutes/);
   });
 });

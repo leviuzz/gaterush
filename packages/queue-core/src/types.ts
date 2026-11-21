@@ -78,6 +78,14 @@ export interface TicketInput {
   readonly presentedAtMs?: Millis;
   /** Scheduled departure of the flight as known by the system (for the presentation rule). */
   readonly scheduledDepartureMs?: Millis | null;
+  /** Flight of the ticket: `updateFlight` changes the knowledge of all its tickets at once. */
+  readonly flightId?: string;
+}
+
+/** New knowledge about a flight, from the flight feed. */
+export interface FlightKnowledge {
+  readonly deadline?: KnownDeadline;
+  readonly walkEstimateMs?: Millis;
 }
 
 /** Read-only snapshot of a ticket. */
@@ -90,6 +98,21 @@ export interface TicketView {
   readonly issuedAtMs: Millis;
   /** Last time the passenger was at the access point: taking the ticket, or rescanning it. */
   readonly lastSeenAtMs: Millis;
+  /** The deadline as currently known (it changes with the flight feed). */
+  readonly deadline: KnownDeadline;
+  readonly walkEstimateMs: Millis;
+  /**
+   * Risk class under the policy's own parameters at the latest assessment while waiting (`null`
+   * for policies that do not classify).
+   */
+  readonly riskClass: RiskClass | null;
+  /** How many times that class changed while the ticket waited (stability). */
+  readonly classChanges: number;
+  /**
+   * Changes of class opposite in direction to the ticket's previous change, e.g. ATTENTION to
+   * URGENT and back (flapping).
+   */
+  readonly classReversals: number;
   /** Risk class when the ticket was issued. */
   readonly classAtIssue: RiskClass;
   /** People who overtook this ticket while it waited (in the queue or in the prepare window). */
@@ -153,4 +176,8 @@ export interface QueueStats {
   readonly reactivations: number;
   readonly expirations: number;
   readonly admissions: number;
+  /** Changes of the risk class of waiting tickets (stability), over all tickets. */
+  readonly classChanges: number;
+  /** Changes that reverse the direction of the ticket's previous change (flapping). */
+  readonly classReversals: number;
 }

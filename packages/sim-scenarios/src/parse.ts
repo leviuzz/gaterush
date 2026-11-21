@@ -14,17 +14,22 @@ export class ScenarioValidationError extends Error {
 }
 
 /** Explains how to migrate a scenario written for an older schema version. */
+const NO_DISRUPTIONS =
+  'disruptions with flightDelays, gateChanges, laneOutages and feedOutages; to keep the earlier ' +
+  'behaviour set every share and perDay to 0 (see scenarios/single-checkpoint-demo.yaml)';
+
 const MIGRATIONS: Readonly<Record<number, string>> = {
   1:
-    'schemaVersion: version 1 scenarios must be migrated to version 3: set schemaVersion to 3, ' +
-    'replace checkpoint.lanes with checkpoint.laneSchedule (e.g. value: [{ from: "00:00", lanes: 6 }]) ' +
-    'and add passengers.callResponse, passengers.groups, passengers.assistedShare and ' +
-    'passengers.strategicLateArrival (see scenarios/single-checkpoint-demo.yaml)',
+    'schemaVersion: version 1 scenarios must be migrated to version 4: set schemaVersion to 4, ' +
+    'replace checkpoint.lanes with checkpoint.laneSchedule (e.g. value: [{ from: "00:00", lanes: 6 }]), ' +
+    'add passengers.callResponse, passengers.groups, passengers.assistedShare and ' +
+    `passengers.strategicLateArrival, and add ${NO_DISRUPTIONS}`,
   2:
-    'schemaVersion: version 2 scenarios must be migrated to version 3: set schemaVersion to 3 and ' +
-    'add passengers.groups, passengers.assistedShare and passengers.strategicLateArrival; to keep ' +
+    'schemaVersion: version 2 scenarios must be migrated to version 4: set schemaVersion to 4, ' +
+    'add passengers.groups, passengers.assistedShare and passengers.strategicLateArrival (to keep ' +
     'the version 2 behaviour use partySizes [{ size: 1, share: 1 }], assistedShare 0 and ' +
-    'strategicLateArrival share 0 (see scenarios/single-checkpoint-demo.yaml)',
+    `strategicLateArrival share 0), and add ${NO_DISRUPTIONS}`,
+  3: `schemaVersion: version 3 scenarios must be migrated to version 4: set schemaVersion to 4 and add ${NO_DISRUPTIONS}`,
 };
 
 /** Validates already-parsed data against the scenario schema. */

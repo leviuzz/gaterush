@@ -210,6 +210,53 @@ export function renderReport(doc: ResultsDocument): string {
     push('');
   }
 
+  push(`## ${section}. Disruptions, data quality and stability`, '');
+  section++;
+  const d = summary.disruptions;
+  const disrupted =
+    d.delayedFlights.max + d.gateChanges.max + d.laneOutages.max + d.feedOutages.max > 0;
+  if (disrupted) {
+    push(
+      'Disruptions of the simulated days (ground truth, the same for every policy), means per day. The system learns of a delay or a gate change only when the flight feed announces it; messages sent while the feed is down arrive when it recovers.',
+      '',
+      '| Disruption | Per day |',
+      '|---|---:|',
+      `| Delayed flights (mean delay of a delayed flight, min) | ${num(d.delayedFlights.mean)} (${num(d.delayMeanMin.mean)}) |`,
+      `| Gate changes | ${num(d.gateChanges.mean)} |`,
+      `| Lane outages (lane-minutes out of service) | ${num(d.laneOutages.mean)} (${num(d.laneOutageLaneMin.mean)}) |`,
+      `| Feed outages (minutes without the feed) | ${num(d.feedOutages.mean)} (${num(d.feedOutageMin.mean)}) |`,
+      `| Feed messages (sent while the feed was down) | ${num(d.feedMessages.mean)} (${num(d.heldFeedMessages.mean)}) |`,
+      '',
+    );
+  } else {
+    push('No delays, gate changes, lane outages or feed outages in this scenario.', '');
+  }
+  push(
+    "*Class changes* count the changes of risk class of waiting tickets under each policy's own " +
+      'classification. A *reversal* is a change in the direction opposite to the previous one, ' +
+      'e.g. ATTENTION to URGENT and back: the flapping that hysteresis prevents. *Boosts on wrong ' +
+      "information*: people prioritised while the system's knowledge of their flight differed " +
+      'from the truth (a delay or a gate change not yet known). Means per day.',
+    '',
+    '| Policy | Missed among passengers of delayed or re-gated flights | Boosts on wrong information (people) | Class changes per 100 parties | Reversals | People whose class flapped |',
+    '|---|---:|---:|---:|---:|---:|',
+  );
+  for (const policy of manifest.policies) {
+    const m = policyMetrics(policy.id);
+    const classifies = policy.selection.kind === 'constrained-edf';
+    const perHundred = m.parties.mean === 0 ? 0 : (100 * m.classChanges.mean) / m.parties.mean;
+    const stability = classifies
+      ? `${num(perHundred, 2)} | ${num(m.classReversals.mean)} | ${num(m.flappingPeople.mean)}`
+      : 'not classified | - | -';
+    const affected = disrupted
+      ? `${num(m.disruptedMissed.mean)} of ${num(m.disruptedPeople.mean, 0)}`
+      : '-';
+    push(
+      `| \`${policy.id}\` | ${affected} | ${num(m.misinformedPriorityPeople.mean)} | ${stability} |`,
+    );
+  }
+  push('');
+
   push(
     `## ${section}. Groups, assisted passengers and late arrivals`,
     '',

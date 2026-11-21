@@ -1,3 +1,4 @@
+import { RISK_CLASSES } from '@gateflow/domain';
 import type { KnownDeadline, Millis, RiskClass, Segment } from '@gateflow/domain';
 import {
   assessTicket,
@@ -10,11 +11,13 @@ import {
 import type {
   CheckpointEstimates,
   ClassificationParams,
+  ConstrainedEdfSelection,
   ReasonCode,
   WaitingTicket,
 } from '@gateflow/priority-engine';
 import { QueueError, prepareWindowSizeOf, validatePolicy } from './policy';
 import type {
+  FlightKnowledge,
   Policy,
   PresentOutcome,
   QueueEvent,
@@ -30,8 +33,17 @@ import type {
 interface TicketRecord {
   readonly id: string;
   readonly segment: Segment;
-  readonly deadline: KnownDeadline;
-  readonly walkEstimateMs: Millis;
+  /** Known deadline and walking time: they change when the flight feed sends news. */
+  deadline: KnownDeadline;
+  walkEstimateMs: Millis;
+  readonly flightId: string | null;
+  /** Class at the latest assessment under the policy (hysteresis input); null before any. */
+  lastRiskClass: RiskClass | undefined;
+  classChanges: number;
+  /** Direction of the latest change of class: +1 more urgent, -1 less urgent, 0 none yet. */
+  lastChange: -1 | 0 | 1;
+  /** Changes of class opposite in direction to the previous change (flapping). */
+  classReversals: number;
   /** People on the ticket (a group or family is called together). */
   readonly partySize: number;
   /** When the passenger first presented at the checkpoint (kept across new tickets). */
@@ -59,6 +71,11 @@ interface TicketRecord {
   admittedAtMs: Millis | null;
 }
 
+/** Rank of a risk class from least to most urgent (`RISK_CLASSES` is in that order). */
+function urgencyRank(riskClass: RiskClass): number {
+  return RISK_CLASSES.indexOf(riskClass);
+}
+
 function view(record: TicketRecord): TicketView {
   return {
     id: record.id,
@@ -68,6 +85,11 @@ function view(record: TicketRecord): TicketView {
     presentedAtMs: record.presentedAtMs,
     issuedAtMs: record.issuedAtMs,
     lastSeenAtMs: record.lastSeenAtMs,
+    deadline: record.deadline,
+    walkEstimateMs: record.walkEstimateMs,
+    riskClass: record.lastRiskClass ?? null,
+    classChanges: record.classChanges,
+    classReversals: record.classReversals,
     classAtIssue: record.classAtIssue,
     overtakenCount: record.overtakenCount,
     calls: record.calls,
@@ -146,6 +168,9 @@ export class CheckpointQueue {
   /** NO_SHOW tickets that may still be reactivated, in no-show order. */
   private readonly noShows: TicketRecord[] = [];
   private readonly byId = new Map<string, TicketRecord>();
+  private readonly byFlight = new Map<string, TicketRecord[]>();
+  /** The policy's own classification parameters, when it classifies (constrained EDF). */
+  private readonly ownClassification: ConstrainedEdfSelection | null;
   private readonly recentPriority: boolean[] = [];
   private readonly historyLimit: number;
   private nextFifoKey = 0;
@@ -163,6 +188,8 @@ export class CheckpointQueue {
     reactivations: 0,
     expirations: 0,
     admissions: 0,
+    classChanges: 0,
+    classReversals: 0,
   };
 
   constructor(
@@ -179,6 +206,7 @@ export class CheckpointQueue {
     this.virtual = policy.queue.kind === 'virtual' ? policy.queue : null;
     this.windowSize = prepareWindowSizeOf(policy.queue);
     this.fastTrack = policy.selection.kind === 'constrained-edf' && policy.selection.fastTrack;
+    this.ownClassification = policy.selection.kind === 'constrained-edf' ? policy.selection : null;
     this.listener = options.listener;
     this.historyLimit =
       policy.selection.kind === 'constrained-edf' ? policy.selection.capWindowCalls : 1;
@@ -271,6 +299,11 @@ export class CheckpointQueue {
     const record: TicketRecord = {
       ...asWaiting,
       ...people,
+      flightId: input.flightId ?? null,
+      lastRiskClass: undefined,
+      classChanges: 0,
+      lastChange: 0,
+      classReversals: 0,
       lastSeenAtMs: nowMs,
       fastTracked: false,
       state: 'QUEUED',
@@ -289,10 +322,51 @@ export class CheckpointQueue {
     };
     this.waiting.push(record);
     this.byId.set(record.id, record);
+    if (record.flightId !== null) {
+      const list = this.byFlight.get(record.flightId);
+      if (list === undefined) this.byFlight.set(record.flightId, [record]);
+      else list.push(record);
+    }
     this.counters.issued++;
     this.emit({ type: 'ISSUED', ticketId: record.id, atMs: nowMs });
     this.refillWindow(nowMs, estimates);
+    this.reclassify(nowMs, estimates);
     return view(record);
+  }
+
+  /**
+   * New knowledge about a flight from the feed (a delay, a gate change, a stale or fresh deadline).
+   * It applies to every ticket of the flight that is not admitted or expired; the engine uses it
+   * from the next decision on.
+   */
+  updateFlight(
+    flightId: string,
+    knowledge: FlightKnowledge,
+    nowMs: Millis,
+    estimates: CheckpointEstimates,
+  ): void {
+    this.begin(nowMs, estimates);
+    const records = this.byFlight.get(flightId);
+    if (records === undefined) return;
+    let live = 0;
+    for (const record of records) {
+      if (record.state === 'ADMITTED' || record.state === 'EXPIRED') continue;
+      const updated: WaitingTicket = {
+        ...record,
+        ...(knowledge.deadline === undefined ? {} : { deadline: knowledge.deadline }),
+        ...(knowledge.walkEstimateMs === undefined
+          ? {}
+          : { walkEstimateMs: knowledge.walkEstimateMs }),
+      };
+      check(() => {
+        validateTicket(updated);
+      });
+      record.deadline = updated.deadline;
+      record.walkEstimateMs = updated.walkEstimateMs;
+      records[live++] = record;
+    }
+    // Tickets that left for good are dropped from the index.
+    records.length = live;
   }
 
   /**
@@ -317,6 +391,7 @@ export class CheckpointQueue {
     this.counters.calls++;
     this.emit({ type: 'CALLED', ticketId: record.id, atMs: nowMs });
     if (this.windowSize > 0) this.refillWindow(nowMs, estimates);
+    this.reclassify(nowMs, estimates);
     return view(record);
   }
 
@@ -458,6 +533,34 @@ export class CheckpointQueue {
         (this.window[i] as TicketRecord).overtakenCount += record.partySize;
       }
       this.window.splice(index, 0, record);
+    }
+  }
+
+  /**
+   * Assesses every waiting ticket under the policy's own parameters and records its class, which
+   * the hysteresis of the next decision uses, every change of class and every reversal of
+   * direction (stability). Only policies that classify (constrained EDF) are tracked.
+   */
+  private reclassify(nowMs: Millis, estimates: CheckpointEstimates): void {
+    const params = this.ownClassification;
+    if (params === null) return;
+    const windowPeople = peopleOn(this.window);
+    let ahead = windowPeople;
+    for (const record of this.waiting) {
+      const { riskClass } = assessTicket(record, ahead, nowMs, estimates, params, windowPeople);
+      const last = record.lastRiskClass;
+      if (last !== undefined && last !== riskClass) {
+        const direction = urgencyRank(riskClass) > urgencyRank(last) ? 1 : -1;
+        record.classChanges++;
+        this.counters.classChanges++;
+        if (record.lastChange === -direction) {
+          record.classReversals++;
+          this.counters.classReversals++;
+        }
+        record.lastChange = direction;
+      }
+      record.lastRiskClass = riskClass;
+      ahead += record.partySize;
     }
   }
 

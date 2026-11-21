@@ -7,6 +7,8 @@ import type {
   FlightCallSelection,
   WaitingTicket,
 } from '../src';
+import { RISK_CLASSES } from '@gateflow/domain';
+import type { RiskClass } from '@gateflow/domain';
 import { assessQueue, assessTicket, priorityCallsInWindow, selectNext } from '../src';
 import type { CheckpointEstimates } from '../src';
 import { MIN } from './fixtures';
@@ -21,6 +23,17 @@ const deadlineArb: fc.Arbitrary<KnownDeadline> = fc.oneof(
     atMs: fc.integer({ min: -30 * MIN, max: 240 * MIN }),
     source: fc.constantFrom<'FEED' | 'RULE'>('FEED', 'RULE'),
   }),
+  // Confirmed some time ago (possibly stale under a maximum data age).
+  fc.record({
+    atMs: fc.integer({ min: -30 * MIN, max: 240 * MIN }),
+    source: fc.constantFrom<'FEED' | 'RULE'>('FEED', 'RULE'),
+    observedAtMs: fc.integer({ min: -60 * MIN, max: 60 * MIN }),
+  }),
+);
+
+const lastClassArb: fc.Arbitrary<RiskClass | undefined> = fc.option(
+  fc.constantFrom(...RISK_CLASSES),
+  { nil: undefined },
 );
 
 const policyArb: fc.Arbitrary<ConstrainedEdfSelection> = fc
@@ -38,6 +51,8 @@ const policyArb: fc.Arbitrary<ConstrainedEdfSelection> = fc
       eligibleSegments: fc.subarray<Segment>(['DEPARTING', 'TRANSFER']),
       latePresentationCutoffMs: fc.option(fc.integer({ min: 0, max: 90 * MIN }), { nil: null }),
       fastTrack: fc.boolean(),
+      maxDeadlineAgeMs: fc.option(fc.integer({ min: 0, max: 30 * MIN }), { nil: null }),
+      hysteresisMs: fc.oneof(fc.constant(0), fc.integer({ min: 0, max: 5 * MIN })),
     }),
   );
 
@@ -80,6 +95,7 @@ function ticketsArb(maxOvertakes: number, maxLength = 30): fc.Arbitrary<WaitingT
             nil: null,
           }),
           lastSeenAtMs: fc.integer({ min: -60 * MIN, max: 60 * MIN }),
+          lastRiskClass: lastClassArb,
         }),
       ),
     ),
@@ -339,7 +355,13 @@ describe('priority engine properties', () => {
           const t = ordered[i]!;
           const aheadOfThis = ahead;
           ahead += people(t);
+          // Stale under the policy's maximum data age: UNVERIFIED, like an unknown deadline.
+          const maxAge = policy.maxDeadlineAgeMs;
+          const observed = t.deadline.observedAtMs;
+          const stale = maxAge !== null && observed !== undefined && inp.nowMs - observed > maxAge;
+          if (stale && t.deadline.atMs !== null) expect(a.riskClass).toBe('UNVERIFIED');
           if (a.latestCallMs === null) return;
+          expect(stale).toBe(false);
           const tail = inp.checkpoint.processMs * people(t) + t.walkEstimateMs;
           const queueJourney = inp.checkpoint.responseMs + tail;
           const boostJourney = boostResponse(t, inp, policy) + tail;
@@ -357,7 +379,19 @@ describe('priority engine properties', () => {
           );
           expect(a.slackNowMs).toBe(latest - inp.nowMs - drain);
           expect(a.feasibilitySlackMs).toBe(feasibility);
-          expect(a.riskClass === 'CRITICAL').toBe(feasibility < 0);
+          // Independent statement of the hysteresis: a threshold already crossed moves by h.
+          const rank = ['NORMAL', 'ATTENTION', 'URGENT', 'CRITICAL'].indexOf(t.lastRiskClass ?? '');
+          const h = policy.hysteresisMs;
+          const slackFifo = a.slackFifoMs!;
+          const expected =
+            feasibility < (rank >= 3 ? h : 0)
+              ? 'CRITICAL'
+              : slackFifo < (rank >= 2 ? h : 0)
+                ? 'URGENT'
+                : slackFifo < policy.attentionThresholdMs + (rank >= 1 ? h : 0)
+                  ? 'ATTENTION'
+                  : 'NORMAL';
+          expect(a.riskClass).toBe(expected);
         });
       }),
       RUNS,
@@ -563,6 +597,132 @@ describe('priority engine properties', () => {
         };
         expect(selectNext({ ...inp, selection: policy })).toEqual(selectNext(s3Input));
       }),
+      RUNS,
+    );
+  });
+
+  it('P18 never boosts a ticket whose deadline is stale under the maximum data age', () => {
+    fc.assert(
+      fc.property(inputArb, (inp) => {
+        const policy = inp.selection as ConstrainedEdfSelection;
+        const selection = selectNext(inp);
+        if (!selection?.priorityCall || policy.maxDeadlineAgeMs === null) return;
+        const t = byFifo(inp.waiting)[selection.positionInFifo]!;
+        const observed = t.deadline.observedAtMs;
+        if (observed !== undefined) {
+          expect(inp.nowMs - observed).toBeLessThanOrEqual(policy.maxDeadlineAgeMs);
+        }
+      }),
+      RUNS,
+    );
+  });
+
+  it('P19 hysteresis only holds a class: never less urgent than the margins, never beyond the previous class', () => {
+    const rank = (c: RiskClass) => ['NORMAL', 'ATTENTION', 'URGENT', 'CRITICAL'].indexOf(c);
+    fc.assert(
+      fc.property(inputArb, (inp) => {
+        const policy = inp.selection as ConstrainedEdfSelection;
+        const withH = assessQueue(inp, policy);
+        const raw = assessQueue(
+          { ...inp, waiting: inp.waiting.map((t) => ({ ...t, lastRiskClass: undefined })) },
+          policy,
+        );
+        const ordered = byFifo(inp.waiting);
+        withH.forEach((a, i) => {
+          const b = raw[i]!;
+          if (a.riskClass === 'UNVERIFIED' || b.riskClass === 'UNVERIFIED') {
+            expect(a.riskClass).toBe(b.riskClass);
+            return;
+          }
+          expect(rank(a.riskClass)).toBeGreaterThanOrEqual(rank(b.riskClass));
+          const last = ordered[i]!.lastRiskClass;
+          if (a.riskClass !== b.riskClass) {
+            expect(last).toBeDefined();
+            expect(rank(a.riskClass)).toBeLessThanOrEqual(rank(last!));
+            expect(a.reasons).toContain('HYSTERESIS_HOLD');
+          }
+        });
+        // Without hysteresis the previous class does not matter at all.
+        const noH = { ...policy, hysteresisMs: 0 };
+        expect(assessQueue(inp, noH).map((a) => a.riskClass)).toEqual(
+          assessQueue(
+            { ...inp, waiting: inp.waiting.map((t) => ({ ...t, lastRiskClass: undefined })) },
+            noH,
+          ).map((a) => a.riskClass),
+        );
+      }),
+      RUNS,
+    );
+  });
+
+  it('P20 limits flapping: margins oscillating within h around a threshold change the class at most once', () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1, max: 5 * MIN }),
+        fc.array(fc.double({ min: -0.99, max: 0.99, noNaN: true }), {
+          minLength: 2,
+          maxLength: 40,
+        }),
+        fc.constantFrom(0, 15 * MIN),
+        (h, swings, threshold) => {
+          // A ticket whose FIFO margin oscillates around the threshold (URGENT/ATTENTION at 0, or
+          // ATTENTION/NORMAL at the attention threshold) by strictly less than h.
+          const policy: ConstrainedEdfSelection = {
+            kind: 'constrained-edf',
+            capWindowCalls: 10,
+            capMaxPriorityCalls: 3,
+            maxOvertakes: 15,
+            attentionThresholdMs: 15 * MIN,
+            safetyBufferMs: 0,
+            feasibilityMarginMs: 0,
+            allowRuleBasedDeadline: true,
+            eligibleSegments: ['DEPARTING', 'TRANSFER'],
+            latePresentationCutoffMs: null,
+            fastTrack: false,
+            maxDeadlineAgeMs: null,
+            hysteresisMs: h,
+          };
+          const checkpoint = { throughputPerHour: 60, processMs: 0, responseMs: 0 };
+          const changes = (hysteresisMs: number) => {
+            let last: RiskClass | undefined;
+            let count = 0;
+            for (const swing of swings) {
+              // Twenty people ahead (20 minutes of FIFO wait), so that the ticket stays feasible;
+              // the deadline sets the FIFO margin.
+              const margin = threshold + Math.trunc(swing * h);
+              const ticket: WaitingTicket = {
+                id: 't',
+                fifoKey: 1,
+                segment: 'DEPARTING',
+                deadline: { atMs: 20 * MIN + margin + 1_000_000, source: 'FEED' },
+                walkEstimateMs: 0,
+                overtakenCount: 0,
+                ...(last === undefined ? {} : { lastRiskClass: last }),
+              };
+              const a = assessTicket(
+                ticket,
+                20,
+                1_000_000,
+                checkpoint,
+                { ...policy, hysteresisMs },
+                0,
+              );
+              if (last !== undefined && a.riskClass !== last) count++;
+              last = a.riskClass;
+            }
+            return count;
+          };
+          expect(changes(h)).toBeLessThanOrEqual(1);
+          // Without hysteresis every crossing of the threshold is a change.
+          let crossings = 0;
+          for (let i = 1; i < swings.length; i++) {
+            const before = threshold + Math.trunc(swings[i - 1]! * h) < threshold;
+            const now = threshold + Math.trunc(swings[i]! * h) < threshold;
+            if (before !== now) crossings++;
+          }
+          expect(changes(0)).toBe(crossings);
+        },
+      ),
       RUNS,
     );
   });

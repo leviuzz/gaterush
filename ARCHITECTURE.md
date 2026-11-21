@@ -1,6 +1,6 @@
 # GateFlow architecture
 
-This document describes the architecture as implemented (slices S1 to S4: priority engine, queue
+This document describes the architecture as implemented (slices S1 to S5: priority engine, queue
 state machine and simulator) and the agreed direction for the operational product. Decisions are
 referenced as ADR-nnn ([DECISIONS.md](DECISIONS.md)).
 
@@ -97,7 +97,7 @@ Verification:
 - byte-identical golden files, run on Node 22 and 24 in CI;
 - an end-to-end `cmp` of two CLI runs in CI.
 
-## 5. Priority engine (engine version 0.4.0)
+## 5. Priority engine (engine version 0.5.0)
 
 Pure functions in `@gateflow/priority-engine`:
 
@@ -127,7 +127,7 @@ Classes:
 
 | Class | Condition |
 |---|---|
-| `UNVERIFIED` | No trusted deadline. |
+| `UNVERIFIED` | No trusted deadline, or a stale one (`DEADLINE_STALE`, see below). |
 | `CRITICAL` | `feasible < 0` (escalate, never boost). |
 | `URGENT` | `slackFifo < 0` and `feasible >= 0` (`INSIDE_SAFETY_MARGIN` when `slackNow < 0`). |
 | `ATTENTION` | `0 <= slackFifo < threshold`. |
@@ -163,6 +163,17 @@ The engine therefore estimates a boosted journey differently from the journey th
 An URGENT head of the waiting list is boosted too. A boost is refused when it would push one of
 the committed people past K (`aheadMaxOvertakenCount`, reason `OVERTAKE_ROOM_EXHAUSTED`).
 
+Data quality (ADR-029, used by `priority-v3`):
+- **Stale data.** A known deadline carries `observedAtMs`, when its source last confirmed it
+  (absent: the source is live). With `maxDeadlineAgeMs`, a deadline confirmed longer ago is not
+  trusted: the ticket is `UNVERIFIED` (`DEADLINE_STALE`), served in FIFO order and never boosted,
+  until the source confirms it again.
+- **Hysteresis.** With `hysteresisMs` h, a ticket escalates at once and returns to a less urgent
+  class only when its margin passes the threshold by h: `feasible >= h` to leave CRITICAL,
+  `slackFifo >= h` to leave URGENT, `slackFifo >= threshold + h` to leave ATTENTION
+  (`HYSTERESIS_HOLD`). The previous class is an input of the ticket (`lastRiskClass`). With
+  h = 0 it has no effect.
+
 Selection `flight-call` models today's staff practice (baseline A', ADR-022): at the last
 announcement `floor(t / I) x I`, the tickets whose deadline is at most `W` away are called first,
 earliest deadline first, with no cap and no overtake bound (`FLIGHT_CALL`).
@@ -183,12 +194,14 @@ Guarantees, verified by property tests with 1,000 generated cases each:
 - the S3 parameters at their defaults reproduce the S2 engine;
 - the flight-call selection matches an independent oracle;
 - under the fast track a boost never pushes a committed person past K, the fast track never
-  makes a ticket less feasible, and without it the new inputs are ignored.
+  makes a ticket less feasible, and without it the new inputs are ignored;
+- a stale ticket is never boosted; the hysteresis only holds a class between the raw class and the
+  previous one, and with h = 0 the previous class is irrelevant; for a margin that oscillates
+  around a threshold the class changes at most once with hysteresis, and at every crossing
+  without it.
 
 Mutation checks (cap and guard off by one, guard disabled, committed window ignored, people counted
 as tickets, rules disabled) are caught by the suite.
-
-Not yet implemented (by design, later slices): hysteresis (S5).
 
 ## 6. Queue state machine (`@gateflow/queue-core`, ADR-016)
 
@@ -223,17 +236,24 @@ States: `QUEUED -> PREPARE -> CALLED -> RECALLED -> NO_SHOW -> EXPIRED`, where:
   fast-track commitments only. The tickets it passes are overtaken by its people.
 - **Last seen.** Each ticket records when the passenger was last at the access point (issue,
   rescan), which shortens the engine's fast-track estimate.
+- **Flight knowledge (S5).** A ticket carries its flight. `updateFlight(flight, knowledge, t,
+  estimates)` gives every live ticket of that flight a new known deadline or walking time (a delay
+  or a gate change from the feed, or a deadline marked stale or fresh again).
+- **Classes and stability (S5).** Whenever a ticket is issued or called, the queue assesses every
+  waiting ticket under the policy's own parameters, records its class (the input of the
+  hysteresis) and counts its changes of class and its reversals of direction (flapping).
 - **Presets.** `fifo` (A, physical), `fifo-manual` (A', physical, staff flight calls),
-  `virtual-fifo`, `priority-v0`, `priority-v1`, `priority-v1-strict` and `priority-v2` (virtual
-  queue).
+  `virtual-fifo`, `priority-v0`, `priority-v1`, `priority-v1-strict`, `priority-v2` and
+  `priority-v3` (virtual queue).
 
 Property tests (1,000 random operation sequences on random policies, 300 for determinism) check,
 independently of the implementation: zero churn, window size at most M, state counters, a single admission per ticket,
 terminal states, chronological events, the cap and the K bound over commitments (with an
-independent overtake model), and determinism. A coverage test guarantees that the sequences reach
+independent overtake model), class changes and reversals against an independent record of the
+observed classes, and determinism. A coverage test guarantees that the sequences reach
 priority commitments, the cap, the guard and reactivations.
 
-## 7. Checkpoint simulation model (model version 0.4.0)
+## 7. Checkpoint simulation model (model version 0.5.0)
 
 `simulateCheckpoint(population, policy, { classification })` is a discrete-event simulation of
 one checkpoint operated by a `CheckpointQueue`:
@@ -255,15 +275,24 @@ one checkpoint operated by a `CheckpointQueue`:
 - **Fast track at the lanes (ADR-027).** A fast-tracked party that validates its ticket goes ahead
   of the parties waiting at the lanes, never ahead of an earlier fast-tracked party, and stops
   behind the first party that would exceed K overtakes. Every party it passes counts the pass.
-- **Lanes.** A planned schedule gives the open lanes over the day. Lanes close from the highest
-  number down, finish the passenger they are screening, and a lane closing at time t takes nobody
-  at t.
-- **Events and order at the same instant:** lane change, end of service, presentation at the
-  access point, timeouts, arrival. With instant calls and no call-ahead or window, this reproduces
-  S1 exactly.
-- **Outcome.** Time to screening, time standing in a queue, calls, no-shows, reactivations and new
-  tickets per passenger; gate arrival = end of service + walking time; the passenger misses the
-  flight if they reach the gate after the true boarding close.
+- **Lanes.** A planned schedule gives the open lanes over the day, minus the lanes out of service
+  during unplanned outages (S5), always at least one. Lanes close from the highest number down,
+  finish the passenger they are screening, and a lane closing at time t takes nobody at t. The
+  engine's throughput estimate follows the open lanes at once.
+- **Ground truth and knowledge (S5, ADR-030).** The system starts the day with the known
+  deadlines and learns of delays and gate changes from the feed messages, at the time the feed
+  sends them. During a feed outage the messages are held until the feed recovers, and every known
+  deadline is marked as confirmed at the start of the outage (so that a policy with a maximum data
+  age stops trusting it). After a gate change, passengers who finish screening from that instant
+  walk to the new gate, their walk scaled by the nominal walking times of the two gates.
+- **Events and order at the same instant:** the feed recovers, the feed goes down, feed messages
+  arrive, lane change, end of service, presentation at the access point, timeouts, arrival. With
+  instant calls and no call-ahead or window, this reproduces S1 exactly.
+- **Outcome.** Time to screening, time standing in a queue, calls, no-shows, reactivations, new
+  tickets, class changes and reversals per passenger; gate arrival = end of service + walking time
+  (after a gate change, to the new gate); the passenger misses the flight if they reach the gate
+  after the true boarding close. The run counts the people boosted while the system's knowledge
+  of their flight differed from the truth.
 - **Run statistics.** Lane busy and staffed time, idle lane time that waiting passengers could
   have used (`min(idle lanes, waiting + walking)`), integrals of tickets waiting for a call and of
   people standing in a queue.
@@ -284,15 +313,23 @@ Validation:
   included, on random and congested populations, with a hand-computed fast-track timeline;
 - hand-computed cases for groups (a family boosted as a whole) and for assisted precedence;
 - mutation checks on the event order, lane accounting, call rule, response rule, party handling
-  and metrics.
+  and metrics;
+- S5: hand-computed cases for lane outages, gate changes, delay notices, messages held during a
+  feed outage, the stale-data rule and the order of feed events at the same instant; properties on
+  random populations with random disruptions (every invariant above, no boost on stale data, the
+  walk after a gate change, misinformed boosts only when the knowledge is wrong); the S4 regression
+  (seeds 1-3, every S4 metric); and the acceptance criterion: with the feed down all day, B gives
+  exactly the outcomes of the same queue in FIFO order, and with calls answered at once those of
+  the physical FIFO queue A.
 
-## 8. Scenarios and population (ADR-003, ADR-009, ADR-018, ADR-026)
+## 8. Scenarios and population (ADR-003, ADR-009, ADR-018, ADR-026, ADR-030)
 
-- A scenario (`schemaVersion: 3`) defines the checkpoint (planned lane schedule, screening
+- A scenario (`schemaVersion: 4`) defines the checkpoint (planned lane schedule, screening
   times), a synthetic hourly design day of departures, the aircraft mix, gate zones, load factors,
   show-up curves per segment, walking variability, how passengers answer calls, party sizes, the
-  assisted share, strategic late arrivals (for stress tests), the boarding-close rule and how the
-  system learns deadlines.
+  assisted share, strategic late arrivals (for stress tests), the boarding-close rule, how the
+  system learns deadlines (`RULE`, `FEED` or `NONE`) and the disruptions (flight delays with their
+  notice, gate changes, lane outages, feed outages).
 - `generateSchedule(scenario)` builds the same flights for every replication (it uses
   `schedule.generatorSeed`).
 - `generatePopulation(scenario, seed)` draws the passengers of one day: load factor per flight,
@@ -301,6 +338,10 @@ Validation:
   takes its leader's attributes and the sum of its members' screening times, and party size,
   assistance and strategic arrival have their own streams. With parties of one person the S2
   population is reproduced exactly.
+- Generator 0.4.0 adds the disruptions of the day, each on streams of its own: delays and their
+  notices, gate changes and their notices, lane outages and feed outages (Poisson processes over
+  the operating day, log-normal durations). Without disruptions the populations of generator
+  0.3.0 are reproduced.
 
 ## 9. Experiments, metrics and reports (ADR-011, ADR-015, ADR-020, ADR-026)
 
@@ -309,7 +350,11 @@ Validation:
   and standing time, prioritised passengers, overtakes, calls, second calls, no-shows,
   reactivations, new tickets, staffed lane-hours, lane utilisation, idle lane time, tickets
   waiting and people standing, risk classes on arrival, groups, assisted passengers, strategic
-  late arrivals, people through the fast track and people passed at the lanes;
+  late arrivals, people through the fast track and people passed at the lanes, class changes,
+  reversals and people whose class flapped, people boosted on wrong information, and misses among
+  passengers of delayed or re-gated flights;
+- the disruptions of the day (delayed flights, gate changes, lane outages, feed outages, feed
+  messages and those held), the same for every policy;
 - paired comparisons for each requested `candidate`/`reference` pair, weighted by party size:
   saved, lost, net, the at-risk cohort, the extra wait of non-prioritised passengers, and the
   change in time to screening and standing time. By default:
@@ -319,7 +364,7 @@ Validation:
     priority policies listed before it.
 
 `buildResults` aggregates over days (mean, P5, P50, P95, min, max, and bootstrap intervals for
-comparisons) into `results.json` (`schema: gateflow.sim.results/4`):
+comparisons) into `results.json` (`schema: gateflow.sim.results/5`):
 - disclaimer;
 - manifest: versions, scenario hash, seeds, policies, comparisons, classification, statistics
   settings, source revision, reproduce command;
@@ -331,7 +376,7 @@ comparisons) into `results.json` (`schema: gateflow.sim.results/4`):
 `renderReport` renders `report.md` from that document only, so the two cannot disagree.
 
 Golden files (`packages/sim-metrics/test/golden`) lock the full results and report of the demo
-scenario for seeds 1-3. To regenerate them after an intentional change, run
+scenario for seeds 1-3, and the report of the disrupted scenario. To regenerate them after an intentional change, run
 `UPDATE_GOLDEN=1 pnpm --filter @gateflow/sim-metrics test` and explain the change in the
 changelog.
 

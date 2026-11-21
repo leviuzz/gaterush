@@ -1,6 +1,6 @@
 import fc from 'fast-check';
-import { MS_PER_MINUTE } from '@gateflow/domain';
-import type { KnownDeadline } from '@gateflow/domain';
+import { MS_PER_MINUTE, RISK_CLASSES } from '@gateflow/domain';
+import type { KnownDeadline, RiskClass } from '@gateflow/domain';
 import type {
   CheckpointEstimates,
   ConstrainedEdfSelection,
@@ -43,6 +43,8 @@ const selectionArb: fc.Arbitrary<SelectionParams> = fc.oneof(
           nil: null,
         }),
         fastTrack: fc.boolean(),
+        maxDeadlineAgeMs: fc.option(fc.integer({ min: 0, max: 10 * MIN }), { nil: null }),
+        hysteresisMs: fc.oneof(fc.constant(0), fc.integer({ min: 0, max: 3 * MIN })),
       }),
     ),
   },
@@ -77,6 +79,14 @@ type Op =
       readonly transfer: boolean;
     }
   | { readonly kind: 'call'; readonly dt: number }
+  /** The flight feed sends a new deadline for one of three flights (maybe confirmed long ago). */
+  | {
+      readonly kind: 'update';
+      readonly flight: number;
+      readonly deadlineMin: number;
+      readonly observedAgoMin: number | null;
+      readonly dt: number;
+    }
   /** A random ticket presents (often too early or unknown to the access point). */
   | { readonly kind: 'present'; readonly pick: number; readonly dt: number }
   /** A called (or no-show) passenger presents. */
@@ -129,6 +139,16 @@ const opArb: fc.Arbitrary<Op> = fc.oneof(
       dt: fc.integer({ min: 0, max: 6 * MIN }),
     }),
   },
+  {
+    weight: 1,
+    arbitrary: fc.record({
+      kind: fc.constant('update' as const),
+      flight: fc.integer({ min: 0, max: 2 }),
+      deadlineMin: fc.integer({ min: 0, max: 30 }),
+      observedAgoMin: fc.option(fc.integer({ min: 0, max: 20 }), { nil: null }),
+      dt: fc.integer({ min: 0, max: MIN }),
+    }),
+  },
 );
 
 // size 'max': fast-check's default size would keep the sequences to a handful of operations.
@@ -146,6 +166,7 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
   const q = new CheckpointQueue(policy, CLASSIFICATION, { listener: (e) => events.push(e) });
   const ids: string[] = [];
   const snapshots: string[] = [];
+  const classHistory = new Map<string, RiskClass[]>();
   const windowSize = policy.queue.kind === 'virtual' ? policy.queue.prepareWindowSize : 0;
   const backOnReactivation =
     policy.queue.kind === 'virtual' && policy.queue.reactivationPosition === 'BACK';
@@ -183,12 +204,29 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
             walkEstimateMs: 0,
             partySize: op.partySize,
             scheduledDepartureMs: departure,
+            flightId: `F${ids.length % 3}`,
           },
           now,
           EST,
         );
         break;
       }
+      case 'update':
+        q.updateFlight(
+          `F${op.flight}`,
+          {
+            deadline: {
+              atMs: now + op.deadlineMin * MIN,
+              source: 'FEED',
+              ...(op.observedAgoMin === null
+                ? {}
+                : { observedAtMs: now - op.observedAgoMin * MIN }),
+            },
+          },
+          now,
+          EST,
+        );
+        break;
       case 'call':
         calledId = q.callNext(now, EST)?.id ?? null;
         break;
@@ -273,12 +311,41 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
     expect(counts.get('NO_SHOW') ?? 0).toBe(q.noShowCount);
     expect(counts.get('ADMITTED') ?? 0).toBe(q.stats().admissions);
     snapshots.push(JSON.stringify([ids.map((id) => q.ticket(id)), q.stats()]));
+
+    // Independent record of each ticket's classes, observed after every operation (an operation
+    // assesses a waiting ticket at most once).
+    for (const id of ids) {
+      const riskClass = q.ticket(id)!.riskClass;
+      if (riskClass === null) continue;
+      const history = classHistory.get(id) ?? [];
+      if (history[history.length - 1] !== riskClass) history.push(riskClass);
+      classHistory.set(id, history);
+    }
   }
 
   // Events are reported in chronological order.
   for (let i = 1; i < events.length; i++) {
     expect(events[i]!.atMs).toBeGreaterThanOrEqual(events[i - 1]!.atMs);
   }
+
+  // Class changes and reversals of direction agree with the observed classes, counted once.
+  let changes = 0;
+  let reversals = 0;
+  for (const id of ids) {
+    const rank = (classHistory.get(id) ?? []).map((c) => RISK_CLASSES.indexOf(c));
+    let expectedReversals = 0;
+    for (let i = 2; i < rank.length; i++) {
+      if (Math.sign(rank[i]! - rank[i - 1]!) !== Math.sign(rank[i - 1]! - rank[i - 2]!)) {
+        expectedReversals++;
+      }
+    }
+    const t = q.ticket(id)!;
+    expect(t.classChanges).toBe(Math.max(0, rank.length - 1));
+    expect(t.classReversals).toBe(expectedReversals);
+    changes += t.classChanges;
+    reversals += t.classReversals;
+  }
+  expect([q.stats().classChanges, q.stats().classReversals]).toEqual([changes, reversals]);
 
   // Single admission per ticket.
   const admissions = new Map<string, number>();
@@ -350,6 +417,8 @@ describe('queue state machine properties', () => {
       expirations: 0,
       admissions: 0,
       fastTrackPasses: 0,
+      classChanges: 0,
+      classReversals: 0,
     };
     for (const [policy, ops] of samples) {
       const { stats, events } = run(policy, ops);
@@ -373,7 +442,18 @@ describe('queue state machine properties', () => {
       if (stats.reactivations > 0) hits.reactivations++;
       if (stats.expirations > 0) hits.expirations++;
       if (stats.admissions > 0) hits.admissions++;
+      if (stats.classChanges > 0) hits.classChanges++;
+      if (stats.classReversals > 0) hits.classReversals++;
     }
-    for (const count of Object.values(hits)) expect(count).toBeGreaterThanOrEqual(25);
+    // Thresholds at about half of the counts observed with this seed.
+    expect(hits.priority).toBeGreaterThanOrEqual(60);
+    expect(hits.cap).toBeGreaterThanOrEqual(30);
+    expect(hits.guard).toBeGreaterThanOrEqual(10);
+    expect(hits.reactivations).toBeGreaterThanOrEqual(80);
+    expect(hits.expirations).toBeGreaterThanOrEqual(150);
+    expect(hits.admissions).toBeGreaterThanOrEqual(150);
+    expect(hits.fastTrackPasses).toBeGreaterThanOrEqual(15);
+    expect(hits.classChanges).toBeGreaterThanOrEqual(50);
+    expect(hits.classReversals).toBeGreaterThanOrEqual(10);
   });
 });

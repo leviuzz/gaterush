@@ -9,7 +9,14 @@ import {
 } from '@gateflow/queue-core';
 import type { Policy, QueueOperation, VirtualQueue } from '@gateflow/queue-core';
 import { exponential, streamFor } from '@gateflow/sim-kernel';
-import type { CheckpointSpec, Population, SimFlight, SimPassenger } from '../src';
+import type {
+  CheckpointSpec,
+  PassengerOutcome,
+  Population,
+  RunResult,
+  SimFlight,
+  SimPassenger,
+} from '../src';
 
 export const MINUTE = 60_000;
 export const FIFO = FIFO_POLICY;
@@ -161,4 +168,17 @@ export function withCallBehaviour(base: Population): Population {
       absenceDelayMs: i % 25 === 7 ? (2 + ((Math.floor(i / 25) * 7) % 25)) * MINUTE : 0,
     })),
   };
+}
+
+/** Outcomes without the selection reasons, which explain the decisions but are not part of them. */
+export function decisions(run: RunResult): Partial<PassengerOutcome>[] {
+  return run.outcomes.map((o) =>
+    Object.fromEntries(Object.entries(o).filter(([key]) => key !== 'selectionReasons')),
+  );
+}
+
+/** The population without its lane outages. */
+export function withoutLaneOutages(population: Population): Population {
+  const { checkpoint, flights, passengers, feedOutages } = population;
+  return { checkpoint, flights, passengers, ...(feedOutages === undefined ? {} : { feedOutages }) };
 }

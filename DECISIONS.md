@@ -604,3 +604,174 @@ founder on 2026-11-21 together with all of its recommendations.
     straight to a lane, so escorts save at most 0.45 flights per day on the main scenarios.
   - Escorts would make the result depend on staff present at the access point.
   - Priority v2 already beats A' without them, which is the simpler and stronger claim.
+
+## ADR-029: Stale-data rule and hysteresis (priority v3)
+
+- **Status:** Accepted (2026-11-21). Engine 0.5.0, queue core 0.4.0, model 0.5.0. Implements the
+  approved S5 proposal ("stale or missing feeds, hysteresis, stability metrics").
+- **Context:**
+  - A product principle of the kickoff: when data is missing or old, GateFlow does not invent. No
+    automatic priority, service in arrival order, recovery when the data is fresh again (FR-15,
+    flow F6, risk RT-04).
+  - Classes flapped. With v2, the calibration days had 134 to 204 class reversals per day on the
+    main scenarios (a reversal is a change back in the opposite direction). Most were NORMAL to
+    ATTENTION and back, and ATTENTION to URGENT and back. The cause is the FIFO estimate: each
+    call shortens the queue ahead by one party, while time passing lengthens it, so a ticket close
+    to a threshold crosses it every few seconds.
+- **Decision:**
+  - **Stale data** (`maxDeadlineAgeMs`):
+    - a known deadline carries `observedAtMs`, the time its source last confirmed it (absent:
+      the source is live);
+    - a deadline confirmed longer ago than the maximum age is stale: the ticket is `UNVERIFIED`
+      (reason `DEADLINE_STALE`), is served in FIFO order and is never boosted;
+    - the ticket recovers by itself when the feed confirms the deadline again.
+  - **Hysteresis** (`hysteresisMs`, h):
+    - a ticket escalates at once;
+    - it returns to a less urgent class only when its margin passes the threshold by h:
+      - CRITICAL: feasible by at least h;
+      - URGENT: FIFO margin of at least h;
+      - ATTENTION: FIFO margin of at least the attention threshold plus h;
+    - the kickoff wrote "slack > threshold + h". The rule uses "at least", as the class boundaries
+      do, so that h = 0 is exactly the classification without hysteresis;
+    - a ticket held URGENT is URGENT, so it can be boosted;
+    - the previous class is the one the queue recorded at its latest assessment of the ticket. The
+      queue assesses every waiting ticket whenever a ticket is issued or called, and counts the
+      changes and reversals (stability metrics).
+  - Preset `priority-v3` 0.1.0: `priority-v2` with a maximum age of 30 minutes and h = 3 minutes.
+    `priority-v1` and `priority-v2` keep both rules off, so they reproduce S4 exactly.
+  - In the simulator, a feed outage marks every known deadline as confirmed at the start of the
+    outage. Messages sent during the outage arrive when it ends, and the knowledge is then live
+    again.
+- **Evidence** (calibration seeds, disjoint from the report seeds 1-200):
+  - Hysteresis, with v2 otherwise unchanged. Missed flights per day, with the class reversals per
+    day in brackets:
+
+    | h | demo, seeds 1001-1020 | disrupted, seeds 1001-1020 | demo, seeds 1001-1200 | staffed, seeds 1001-1200 |
+    |---|---:|---:|---:|---:|
+    | 0 (v2) | 10.40 (162) | 8.50 (138) | 12.05 (172) | 17.10 (204) |
+    | 15 s | 10.40 (50) | 8.65 (41) | | |
+    | 30 s | 10.20 (18) | 8.50 (16) | | |
+    | 1 min | 10.10 (3) | 8.45 (3) | 12.09 (2.7) | 17.09 (3.9) |
+    | 2 min | 10.10 (0) | 8.45 (0.3) | | |
+    | **3 min (v3)** | **10.10 (0)** | **8.45 (0.1)** | **12.05 (0)** | **17.07 (0)** |
+
+    On 20 days the moderate and strategic scenarios agree (reversals from 23 and 134 per day to 0,
+    missed flights 5.25 to 5.25 and 139.05 to 137.95). Over 200 days the hysteresis neither costs
+    nor saves flights: the small gains seen on 20 days were noise.
+  - Maximum data age, with h = 3 min, seeds 1001-1200. Missed flights per day:
+
+    | Maximum age | disrupted (feed down 34 min a day) | feed stress test (feed down 277 min a day) |
+    |---|---:|---:|
+    | none | 10.73 | 10.94 |
+    | 15 min | 10.95 | 15.99 |
+    | **30 min (v3)** | **10.78** | **14.76** |
+    | 45 min | 10.74 | |
+    | 60 min | 10.73 | 12.63 |
+    | 90 min | 10.73 | |
+    | A' (`fifo-manual`), for reference | 12.40 | 12.41 |
+
+    - The average hides bad days. An outage during the morning peak stops the priority calls for
+      as long as the data is stale. On report seed 1 of the disrupted scenario the feed is down
+      from 06:31 to 07:38, and v3 misses 25 flights against 3 for v2. A first calibration on 20
+      days had no such day and suggested no cost at all; 200 days show the real average.
+    - In the stress test, people boosted on wrong information fall from 14.2 per day (no maximum
+      age) to 9.4 (15 min), 10.2 (30 min) and 11.8 (60 min).
+  - The criterion of ADR-025 holds for v3 on all scenarios: on the calibration days at most 0.08%
+    of non-prioritised passengers are delayed by more than 5 minutes against `virtual-fifo`. The
+    largest delays are those of v2 (13.3 min moderate, 10.6 min strategic, both missed calls).
+- **Rationale:**
+  - Hysteresis: 1 minute already removes almost all flapping, because the oscillations last a few
+    seconds. 3 minutes (the kickoff value) also absorbs the jumps of the estimate when a lane opens,
+    closes or fails, and costs nothing.
+  - Maximum age:
+    - The rule is a product principle: nobody is moved ahead of other passengers on data that
+      nobody can vouch for.
+    - The model can measure its price but not its benefit. In the model, stale data can only be
+      wrong because a delay or a gate change has not arrived yet. A delay only moves boarding
+      later, so a stale deadline errs on the safe side.
+    - 30 minutes costs 0.05 flights per day with one feed outage a day of typical length, against
+      0.22 for 15 minutes. 60 minutes costs nothing on average, but trusts data twice as old. The
+      value is a hypothesis for the airport, which sets the freshness target of each source
+      (FR-15).
+- **Consequences:**
+  - Classes shown to staff and passengers are stable: at most 0.2 reversals per day remain on the
+    calibration days.
+  - Stale periods are visible: tickets are `UNVERIFIED` with reason `DEADLINE_STALE`. The console
+    must show a banner while the feed is down (flow F6).
+  - A reliable feed is part of the value. In the stress test, the feed is down for about five
+    hours a day. GateFlow then serves in FIFO order for long periods and misses more flights than
+    A' (14.76 against 12.41 on the calibration days). Staff in A' keep acting on the last times
+    they know.
+  - A softer fallback is possible but is a product decision: during an outage, keep using the
+    deadline from the published schedule and the last known delay. In this model such a deadline
+    is never later than the truth, so its errors are mostly unneeded boosts, bounded by the cap
+    and K; only an unannounced gate change errs the other way. But it is data that nobody has
+    confirmed, which the kickoff rules out. It is not implemented.
+
+## ADR-030: Disruptions as ground truth and knowledge (scenario schema 4, results schema 5)
+
+- **Status:** Accepted (2026-11-21). Population generator 0.4.0, model 0.5.0, metrics 0.5.0,
+  CLI 0.5.0.
+- **Context:** The S5 proposal asked for:
+  - delays with a notification time, gate changes, lane outages and stale or missing feeds;
+  - the ground truth kept separate from what the system knows.
+- **Decision:**
+  - **Population.** The ground truth and the knowledge are separate fields:
+    - ground truth: `boardingCloseMs`, `delayMs`, `gateChange`;
+    - knowledge: `knownDeadline` at the start of the day, then the feed messages in `updates`,
+      each at the time the feed sends it.
+    - Lane outages are ground truth that the system sees at once. Feed outages delay the messages
+      sent during them.
+  - **Scenario schema 4.** A section `disruptions` with four labelled parameters:
+    - `flightDelays`: share of flights, log-normal length, notice sent uniformly between two times
+      before departure;
+    - `gateChanges`: share of flights, time of the change before departure, notice delay. The new
+      gate zone is drawn by the zones' shares among the other zones;
+    - `laneOutages`: a Poisson number per day over the operating day (first arrival to last
+      departure). Each takes one lane out for a log-normal time;
+    - `feedOutages`: drawn the same way, overlapping outages merged.
+    - `operations.deadlineKnowledge` accepts `NONE`: no deadline is known at all.
+    - Files of versions 1 to 3 are rejected with a migration message that gives the values for "no
+      disruptions".
+  - **Population generator 0.4.0.** Every draw has a stream of its own. A seed therefore keeps its
+    passengers, and with all shares and rates at zero the populations of generator 0.3.0 are
+    reproduced. Passengers still arrive for the scheduled departure.
+  - **Model 0.5.0.**
+    - Order at the same instant: the feed recovers, the feed goes down, messages arrive; then
+      lanes change. A message sent at the very start of an outage is held.
+    - Open lanes are the planned lanes minus the lanes out of service, at least one. A lane going
+      out of service finishes its passenger first.
+    - After a gate change, a passenger who finishes screening from that instant walks to the new
+      gate. Their walk scales with the nominal walking times of the two gates. Passengers already
+      screened are not affected.
+    - Tickets carry their flight, so a message updates every live ticket of that flight.
+  - **Results schema 5 and metrics 0.5.0.**
+    - Per policy:
+      - class changes and reversals, and the people whose class flapped;
+      - people boosted on wrong information: the system's knowledge of their flight differed from
+        the truth when they were boosted;
+      - misses among passengers of delayed or re-gated flights.
+    - Per day: the disruptions, the same for every policy.
+    - The report has a section "Disruptions, data quality and stability".
+  - **Scenarios.**
+    - The four S3 scenarios get the section with zeros, so their results are those of S4.
+    - New: `single-checkpoint-disrupted`, the demo day with realistic disruptions.
+    - New: `single-checkpoint-feed-stress`, the same day with the feed down about six times a day
+      (stress test).
+  - **Acceptance criterion of S5.** As approved: "with the flight feed absent, B produces exactly
+    the outcomes of A". Since ADR-015, A is the physical queue, whose mechanics differ from a
+    virtual queue's. The criterion is therefore proved in two forms:
+    - B (`priority-v2` and `priority-v3`) gives exactly the outcomes of the same virtual queue
+      served in FIFO order (`virtual-fifo`), passenger by passenger:
+      - with no deadline knowledge at all, on the demo and disrupted scenarios;
+      - with the feed down all day (`priority-v3`), on the same scenarios;
+      - on random populations with random disruptions.
+    - With calls answered at once, the setting of S1, B with the feed down all day gives exactly
+      the outcomes of the physical FIFO queue A, on random populations.
+- **Consequences:**
+  - Reports show what each policy does with imperfect information, and how often it boosts
+    somebody on wrong information.
+  - A' also uses the feed's information. Its staff learn of a delay when the system does, and keep
+    the last known times during an outage.
+  - The main scenarios have no disruptions. Their S5 numbers differ from S4 only through the
+    priority policy: `priority-v3` replaces `priority-v2` as the default.

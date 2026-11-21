@@ -10,13 +10,13 @@ import {
   collectAssumptions,
 } from '@gateflow/sim-scenarios';
 import type { Assumption } from '@gateflow/sim-scenarios';
-import type { ComparisonDayMetrics, PolicyDayMetrics } from './day-metrics';
+import type { ComparisonDayMetrics, DayDisruptions, PolicyDayMetrics } from './day-metrics';
 import { comparisonKey } from './experiment';
 import type { ExperimentResult, PolicyComparison, SeedResult } from './experiment';
 import { acrossDays, bootstrapMeanInterval } from './stats';
 import type { AcrossDays } from './stats';
 
-export const RESULTS_SCHEMA = 'gateflow.sim.results/4';
+export const RESULTS_SCHEMA = 'gateflow.sim.results/5';
 
 export const DISCLAIMER =
   'SIMULATED RESULTS ON SYNTHETIC OR HYPOTHETICAL DATA. These numbers are model outputs, not ' +
@@ -24,13 +24,14 @@ export const DISCLAIMER =
 
 /** Simplifications of the current model version, reported with every result. */
 export const MODEL_LIMITATIONS: readonly string[] = [
-  'Single checkpoint. Lanes follow a planned schedule: no unplanned outages and no lanes opened in reaction to the queue.',
+  'Single checkpoint. Lanes follow a planned schedule, minus unplanned outages when the scenario has them: a lane going out of service finishes its passenger first, at least one lane always stays open, and the system knows at once. No lanes are opened in reaction to the queue.',
   'Every passenger uses the virtual queue when one is simulated: no opt-outs, no passengers without a phone or a view of the displays.',
   'Response times and absences are drawn per party from assumed distributions. A second call does not make an absent passenger come sooner, the prepare window does not shorten response times, and a passenger who has been at the access point once answers later calls at once.',
   'The access point never becomes a bottleneck, and the walk from the access point to the lanes is part of the response time.',
   'Fast track (priority v2): a fast-tracked party is called next and, once its ticket is validated, goes ahead of the people waiting at the lanes who still have room under K. The fast-track entry never becomes a bottleneck of its own and needs no staff in the model.',
   'CRITICAL passengers are flagged for staff, but staff escorts are not modelled: such passengers wait in the queue order.',
-  "The system's deadline equals the ground truth (boarding close from a fixed rule): no flight delays, gate changes or stale data.",
+  "Before any disruption the system's deadline equals the ground truth (boarding close from a fixed rule). Delays and gate changes, when the scenario has them, are known only once the flight feed announces them, and messages sent while the feed is down arrive when it recovers. Delays only move boarding later; passengers still arrive for the scheduled departure. A gate change affects only passengers who finish screening after it.",
+  "Staff of baseline A' learn of delays when the system does and keep using the last known times while the feed is down (no stale-data rule).",
   'Passengers never abandon the queue, even after their flight has closed.',
   'A group stays together: one ticket, one call, one lane, screened one person after the other. Assisted passengers always get the next free lane and are not assessed by the engine.',
   "Baseline A' (`fifo-manual`) is an idealised staff practice: every five minutes staff call the flights closing within 20 minutes, and every passenger of those flights comes forward at once. Real practice is less systematic, so A' may overstate today's handling where it is informal, or understate it where staff watch individual passengers.",
@@ -104,6 +105,8 @@ export interface ResultsDocument {
   readonly summary: {
     readonly days: number;
     readonly passengersPerDay: AcrossDays;
+    /** Disruptions per day (S5), the same for every policy. */
+    readonly disruptions: Readonly<Record<keyof DayDisruptions, AcrossDays>>;
     readonly policies: Readonly<
       Record<string, Readonly<Record<keyof PolicyDayMetrics, AcrossDays>>>
     >;
@@ -253,6 +256,7 @@ export function buildResults(experiment: ExperimentResult, input: ManifestInput)
     summary: roundNumbers({
       days: perSeed.length,
       passengersPerDay: acrossDays(perSeed.map((s) => s.passengers)),
+      disruptions: summariseRecords(perSeed.map((s) => s.disruptions)),
       policies,
       comparisons,
     }),

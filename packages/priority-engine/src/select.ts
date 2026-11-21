@@ -1,7 +1,9 @@
 import type { ReasonCode } from './reasons';
 import {
   assessTicket,
+  classifyMargins,
   fifoWaitEstimateMs,
+  isDeadlineStale,
   isDeadlineTrusted,
   journeyEstimates,
   partySizeOf,
@@ -161,6 +163,7 @@ function selectConstrainedEdf(
     if (
       deadlineMs !== null &&
       isDeadlineTrusted(ticket.deadline, policy) &&
+      !isDeadlineStale(ticket.deadline, policy, nowMs) &&
       policy.eligibleSegments.includes(ticket.segment) &&
       presentationBlock(ticket, policy) === null
     ) {
@@ -168,17 +171,23 @@ function selectConstrainedEdf(
       // with it the call is made next.
       const journey = journeyEstimates(ticket, nowMs, checkpoint, policy, offset);
       const latest = deadlineMs - journey.boostJourneyMs - policy.safetyBufferMs;
-      const feasible =
+      const feasibilitySlack =
         deadlineMs -
-          journey.boostJourneyMs -
-          policy.feasibilityMarginMs -
-          nowMs -
-          journey.boostDrainMs >=
-        0;
+        journey.boostJourneyMs -
+        policy.feasibilityMarginMs -
+        nowMs -
+        journey.boostDrainMs;
       // The FIFO wait already counts the committed people ahead (the offset).
       const fifoWait = fifoWaitEstimateMs(peopleAhead, throughput);
-      const latestThroughQueue = deadlineMs - journey.queueJourneyMs - policy.safetyBufferMs;
-      if (feasible && latestThroughQueue - nowMs - fifoWait < 0) {
+      const slackFifo =
+        deadlineMs - journey.queueJourneyMs - policy.safetyBufferMs - nowMs - fifoWait;
+      const { riskClass } = classifyMargins(
+        feasibilitySlack,
+        slackFifo,
+        policy,
+        ticket.lastRiskClass,
+      );
+      if (riskClass === 'URGENT') {
         // URGENT and boost-eligible. Groups larger than the cap are counted but never boosted
         // (a single passenger is always a candidate: with a zero cap it meets CAP_REACHED).
         urgentCandidates++;

@@ -5,8 +5,8 @@ import {
   FIFO_POLICY,
   PRIORITY_V0_POLICY,
   PRIORITY_V0_SELECTION,
-  PRIORITY_V1_POLICY,
   PRIORITY_V2_POLICY,
+  PRIORITY_V3_POLICY,
   VIRTUAL_FIFO_POLICY,
   classificationOf,
 } from '@gateflow/queue-core';
@@ -26,25 +26,31 @@ const scenario = parseScenarioText(
   readFileSync(new URL('../../../scenarios/single-checkpoint-demo.yaml', import.meta.url), 'utf8'),
 );
 const scenarioHash = `sha256:${createHash('sha256').update(canonicalJson(scenario)).digest('hex')}`;
-const classification = classificationOf(PRIORITY_V1_POLICY)!;
+const disrupted = parseScenarioText(
+  readFileSync(
+    new URL('../../../scenarios/single-checkpoint-disrupted.yaml', import.meta.url),
+    'utf8',
+  ),
+);
+const classification = classificationOf(PRIORITY_V2_POLICY)!;
 
 /**
  * The comparisons of the published reports: every policy against the status quo, the
- * prioritisation alone, GateFlow against today's manual handling, and v2 against v1 (the fast
- * track alone).
+ * prioritisation alone, GateFlow against today's manual handling, and v3 against v2 (the S5
+ * data-quality rules alone).
  */
 const COMPARISONS: PolicyComparison[] = [
   { candidateId: 'fifo-manual', referenceId: 'fifo' },
   { candidateId: 'virtual-fifo', referenceId: 'fifo' },
-  { candidateId: 'priority-v1', referenceId: 'fifo' },
   { candidateId: 'priority-v2', referenceId: 'fifo' },
-  { candidateId: 'priority-v1', referenceId: 'virtual-fifo' },
-  { candidateId: 'priority-v1', referenceId: 'fifo-manual' },
+  { candidateId: 'priority-v3', referenceId: 'fifo' },
   { candidateId: 'priority-v2', referenceId: 'virtual-fifo' },
   { candidateId: 'priority-v2', referenceId: 'fifo-manual' },
-  { candidateId: 'priority-v2', referenceId: 'priority-v1' },
+  { candidateId: 'priority-v3', referenceId: 'virtual-fifo' },
+  { candidateId: 'priority-v3', referenceId: 'fifo-manual' },
+  { candidateId: 'priority-v3', referenceId: 'priority-v2' },
 ];
-const POLICY_IDS = ['fifo', 'fifo-manual', 'virtual-fifo', 'priority-v1', 'priority-v2'];
+const POLICY_IDS = ['fifo', 'fifo-manual', 'virtual-fifo', 'priority-v2', 'priority-v3'];
 
 function config(overrides: Partial<ExperimentConfig> = {}): ExperimentConfig {
   return {
@@ -54,8 +60,8 @@ function config(overrides: Partial<ExperimentConfig> = {}): ExperimentConfig {
       FIFO_POLICY,
       FIFO_MANUAL_POLICY,
       VIRTUAL_FIFO_POLICY,
-      PRIORITY_V1_POLICY,
       PRIORITY_V2_POLICY,
+      PRIORITY_V3_POLICY,
     ],
     baselinePolicyId: 'fifo',
     comparisons: COMPARISONS,
@@ -157,15 +163,15 @@ describe('results document', () => {
       baselinePolicyId: 'fifo',
       comparisons: COMPARISONS,
       versions: {
-        engine: '0.4.0',
-        queueCore: '0.3.0',
-        model: '0.4.0',
+        engine: '0.5.0',
+        queueCore: '0.4.0',
+        model: '0.5.0',
         kernel: '0.1.0',
-        populationGenerator: '0.3.0',
-        scenarioSchema: 3,
+        populationGenerator: '0.4.0',
+        scenarioSchema: 4,
       },
     });
-    expect(doc.schema).toBe('gateflow.sim.results/4');
+    expect(doc.schema).toBe('gateflow.sim.results/5');
     expect(doc.manifest.reproduce).toContain(`--policies ${POLICY_IDS.join(',')}`);
     expect(doc.manifest.reproduce).toContain(
       `--compare ${COMPARISONS.map((c) => `${c.candidateId}:${c.referenceId}`).join(',')}`,
@@ -207,8 +213,10 @@ describe('report', () => {
     for (const assumption of doc.assumptions) expect(report).toContain(`| ${assumption.path} |`);
     for (const limitation of doc.modelLimitations) expect(report).toContain(limitation);
     expect(report).toContain('Net flights saved');
-    expect(report).toContain('`priority-v1` compared with `fifo-manual`');
-    expect(report).toContain('`priority-v2` compared with `priority-v1`');
+    expect(report).toContain('`priority-v2` compared with `fifo-manual`');
+    expect(report).toContain('`priority-v3` compared with `priority-v2`');
+    expect(report).toContain('Disruptions, data quality and stability');
+    expect(report).toContain('No delays, gate changes, lane outages or feed outages');
     expect(report).toContain('People through the fast track per day');
     expect(report).toContain('Groups, assisted passengers and late arrivals');
     expect(report).toContain('Call mechanics');
@@ -221,9 +229,15 @@ describe('report', () => {
 describe('golden files (regenerate with UPDATE_GOLDEN=1 and explain the change in CHANGELOG.md)', () => {
   const goldenDir = new URL('./golden/', import.meta.url);
   const doc = document();
+  // The disrupted day exercises the S5 section of the report (delays, outages, stability).
+  const disruptedDoc = buildResults(runExperiment(config({ scenario: disrupted })), {
+    ...manifest,
+    scenarioHash: `sha256:${createHash('sha256').update(canonicalJson(disrupted)).digest('hex')}`,
+  });
   const files: [string, string][] = [
     ['demo-seeds-1-3.results.json', stringifyResults(doc)],
     ['demo-seeds-1-3.report.md', renderReport(doc)],
+    ['disrupted-seeds-1-3.report.md', renderReport(disruptedDoc)],
   ];
 
   if (process.env.UPDATE_GOLDEN === '1') {

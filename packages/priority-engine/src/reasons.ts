@@ -28,6 +28,13 @@ export const REASON_CODES = [
   'DEADLINE_FROM_RULE',
   /** No deadline is known: the ticket is UNVERIFIED and never boosted. */
   'DEADLINE_UNKNOWN',
+  /**
+   * The deadline was last confirmed by its source longer ago than the policy allows: the ticket is
+   * UNVERIFIED and served in FIFO order until fresh data arrives.
+   */
+  'DEADLINE_STALE',
+  /** The class stays more urgent than the margins alone would give, because of the hysteresis. */
+  'HYSTERESIS_HOLD',
   /** The policy does not trust rule-based deadlines: the ticket is UNVERIFIED. */
   'RULE_DEADLINE_NOT_ALLOWED',
   /** The passenger's segment is not eligible for automatic boosts. */

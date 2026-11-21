@@ -13,8 +13,8 @@ export type {
   PolicyComparison,
   SeedResult,
 } from './experiment';
-export { comparisonDayMetrics, policyDayMetrics } from './day-metrics';
-export type { ComparisonDayMetrics, PolicyDayMetrics } from './day-metrics';
+export { comparisonDayMetrics, dayDisruptions, policyDayMetrics } from './day-metrics';
+export type { ComparisonDayMetrics, DayDisruptions, PolicyDayMetrics } from './day-metrics';
 export {
   DISCLAIMER,
   MODEL_LIMITATIONS,

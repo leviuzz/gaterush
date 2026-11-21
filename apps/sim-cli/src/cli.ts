@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import type { ClassificationParams } from '@gateflow/priority-engine';
-import { POLICY_PRESETS, PRIORITY_V2_POLICY, classificationOf } from '@gateflow/queue-core';
+import { POLICY_PRESETS, PRIORITY_V3_POLICY, classificationOf } from '@gateflow/queue-core';
 import type { Policy } from '@gateflow/queue-core';
 import {
   DEFAULT_BOOTSTRAP,
@@ -35,7 +35,7 @@ export const EXIT_OK = 0;
 export const EXIT_FAILURE = 1;
 export const EXIT_USAGE = 2;
 
-const DEFAULT_POLICIES = 'fifo,fifo-manual,virtual-fifo,priority-v2';
+const DEFAULT_POLICIES = 'fifo,fifo-manual,virtual-fifo,priority-v3';
 
 const HELP = `${CLI_NAME} ${CLI_VERSION}: GateFlow simulation experiments
 
@@ -80,14 +80,14 @@ function scenarioHash(io: CliIo, scenario: Scenario): string {
   return `sha256:${io.sha256(canonicalJson(scenario))}`;
 }
 
-/** Classification for on-arrival risk classes: the first priority policy's, else priority-v2's. */
+/** Classification for on-arrival risk classes: the first priority policy's, else priority-v3's. */
 function classificationFor(policies: readonly Policy[]): ClassificationParams {
   for (const policy of policies) {
     const classification = classificationOf(policy);
     if (classification !== null) return classification;
   }
-  const fallback = classificationOf(PRIORITY_V2_POLICY);
-  if (fallback === null) throw new Error('priority-v2 must define classification parameters');
+  const fallback = classificationOf(PRIORITY_V3_POLICY);
+  if (fallback === null) throw new Error('priority-v3 must define classification parameters');
   return fallback;
 }
 

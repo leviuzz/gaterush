@@ -32,6 +32,11 @@ export interface WaitingTicket {
    * shortens the fast-track estimate. Unknown: no shortening.
    */
   readonly lastSeenAtMs?: Millis;
+  /**
+   * Risk class at the previous assessment (hysteresis): a ticket returns to a less urgent class
+   * only with a margin of `hysteresisMs`. Unknown: no hysteresis for this ticket.
+   */
+  readonly lastRiskClass?: RiskClass;
 }
 
 /** Operational estimates for the checkpoint at the time of the decision. */
@@ -79,6 +84,16 @@ export interface ClassificationParams {
    * passes, in the window or at the lanes, counts towards the overtake bound K.
    */
   readonly fastTrack: boolean;
+  /**
+   * Stale-data rule (ADR-029): a deadline last confirmed by its source more than this long ago is
+   * not trusted (the ticket is UNVERIFIED and served in FIFO order). `null`: no such rule.
+   */
+  readonly maxDeadlineAgeMs: Millis | null;
+  /**
+   * Hysteresis h (ADR-029): a move to a more urgent class is immediate, a move back to a less
+   * urgent one needs the margin to exceed its threshold by h. 0: no hysteresis.
+   */
+  readonly hysteresisMs: Millis;
 }
 
 /** Plain first-in, first-out order. */

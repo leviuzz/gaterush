@@ -3,6 +3,7 @@ import type { Segment } from '@gateflow/domain';
 import {
   bernoulli,
   categorical,
+  exponential,
   labelCode,
   lognormalFromMeanCv,
   lognormalFromMedian,
@@ -10,12 +11,21 @@ import {
   triangular,
   uniform,
 } from '@gateflow/sim-kernel';
-import type { Population, SimFlight, SimPassenger } from '@gateflow/sim-model';
+import type { KnownDeadline } from '@gateflow/domain';
+import type {
+  FeedOutage,
+  FlightUpdate,
+  GateChange,
+  LaneOutage,
+  Population,
+  SimFlight,
+  SimPassenger,
+} from '@gateflow/sim-model';
 import { clockMinutes } from './schema';
 import type { Scenario } from './schema';
 
 /** Version of the population generator. Bump on any change that can alter generated data. */
-export const GENERATOR_VERSION = '0.3.0';
+export const GENERATOR_VERSION = '0.4.0';
 
 const DOMAIN = labelCode('gateflow.population');
 const KEY = {
@@ -36,6 +46,18 @@ const KEY = {
   assisted: labelCode('pax.assisted'),
   strategic: labelCode('pax.strategic'),
   strategicArrival: labelCode('pax.strategicArrival'),
+  // Added in generator 0.4.0 (disruptions), drawn per replication on streams of their own.
+  delay: labelCode('flight.delay'),
+  delayLength: labelCode('flight.delayLength'),
+  delayNotice: labelCode('flight.delayNotice'),
+  gateChange: labelCode('flight.gateChange'),
+  gateChangeTime: labelCode('flight.gateChangeTime'),
+  gateChangeZone: labelCode('flight.gateChangeZone'),
+  gateChangeNotice: labelCode('flight.gateChangeNotice'),
+  laneOutageGap: labelCode('day.laneOutageGap'),
+  laneOutageLength: labelCode('day.laneOutageLength'),
+  feedOutageGap: labelCode('day.feedOutageGap'),
+  feedOutageLength: labelCode('day.feedOutageLength'),
 } as const;
 
 /** A flight of the design day, with the descriptive attributes used to generate passengers. */
@@ -43,6 +65,11 @@ export interface ScheduledFlight extends SimFlight {
   readonly aircraftCategory: string;
   readonly seats: number;
   readonly walkEstimateMs: number;
+}
+
+/** What the system knows of a boarding close at `atMs` with the scenario's source. */
+function knownDeadlineAt(atMs: number, source: 'RULE' | 'FEED' | 'NONE'): KnownDeadline {
+  return source === 'NONE' ? { atMs: null, source: 'NONE' } : { atMs, source };
 }
 
 function pick<T>(items: readonly T[], index: number): T {
@@ -92,8 +119,8 @@ export function generateSchedule(scenario: Scenario): ScheduledFlight[] {
         id: `F${String(index + 1).padStart(3, '0')}`,
         stdMs,
         boardingCloseMs,
-        // In this generator version the system's knowledge equals the ground truth.
-        knownDeadline: { atMs: boardingCloseMs, source: knowledge },
+        // Before any disruption the system's knowledge equals the ground truth (or is absent).
+        knownDeadline: knownDeadlineAt(boardingCloseMs, knowledge),
         gateZone: zone.id,
         aircraftCategory: aircraft.category,
         seats: aircraft.seats,
@@ -213,6 +240,28 @@ export function generatePopulation(scenario: Scenario, seed: number): Population
     }
   }
 
+  // The operating day for unplanned outages: from the first arrival to the last departure.
+  const dayStartMs = passengers.reduce((min, p) => Math.min(min, p.arrivalMs), Infinity);
+  const dayEndMs = flights.reduce((max, f) => Math.max(max, f.stdMs), -Infinity);
+  const laneOutages = outagesOf(
+    seed,
+    scenario.disruptions.laneOutages.value,
+    dayStartMs,
+    dayEndMs,
+    KEY.laneOutageGap,
+    KEY.laneOutageLength,
+  ).map((o): LaneOutage => ({ ...o, lanes: 1 }));
+  const feedOutages = mergeOutages(
+    outagesOf(
+      seed,
+      scenario.disruptions.feedOutages.value,
+      dayStartMs,
+      dayEndMs,
+      KEY.feedOutageGap,
+      KEY.feedOutageLength,
+    ),
+  );
+
   return {
     checkpoint: {
       laneSchedule: checkpoint.laneSchedule.value.map(({ from, lanes }) => ({
@@ -222,16 +271,131 @@ export function generatePopulation(scenario: Scenario, seed: number): Population
       serviceRatePerLanePerHour: 3600 / checkpoint.serviceTimeMeanSeconds.value,
       processEstimateMs: serviceMeanMs,
     },
-    flights: flights.map(
-      ({ index, id, stdMs, boardingCloseMs, knownDeadline, gateZone }): SimFlight => ({
-        index,
-        id,
-        stdMs,
-        boardingCloseMs,
-        knownDeadline,
-        gateZone,
-      }),
-    ),
+    flights: flights.map((flight) => disrupt(scenario, seed, flight)),
     passengers,
+    ...(laneOutages.length > 0 ? { laneOutages } : {}),
+    ...(feedOutages.length > 0 ? { feedOutages } : {}),
   };
+}
+
+/**
+ * Applies the delay and the gate change of one replication to a flight: the ground truth
+ * (`boardingCloseMs`, `gateChange`) and the feed messages that tell the system (`updates`).
+ * Passengers still arrive for the scheduled departure.
+ */
+function disrupt(scenario: Scenario, seed: number, flight: ScheduledFlight): SimFlight {
+  const { flightDelays, gateChanges } = scenario.disruptions;
+  const zones = scenario.schedule.gateZones.value;
+  const knowledge = scenario.operations.deadlineKnowledge.value;
+  const key = (attribute: number) => streamFor(seed, [DOMAIN, attribute, flight.index]);
+  const updates: FlightUpdate[] = [];
+  let boardingCloseMs = flight.boardingCloseMs;
+  let delayMs = 0;
+  const delays = flightDelays.value;
+  if (delays.share > 0 && bernoulli(key(KEY.delay), delays.share)) {
+    delayMs = minutesToMs(
+      Math.min(
+        delays.maxMinutes,
+        lognormalFromMedian(key(KEY.delayLength), delays.medianMinutes, delays.sigma),
+      ),
+    );
+    if (delayMs > 0) {
+      boardingCloseMs += delayMs;
+      const noticeMin = uniform(
+        key(KEY.delayNotice),
+        delays.noticeMinMinutesBeforeStd,
+        delays.noticeMaxMinutesBeforeStd,
+      );
+      if (knowledge !== 'NONE') {
+        updates.push({
+          atMs: flight.stdMs - minutesToMs(noticeMin),
+          knownDeadline: knownDeadlineAt(boardingCloseMs, knowledge),
+        });
+      }
+    }
+  }
+  let gateChange: GateChange | undefined;
+  const changes = gateChanges.value;
+  const others = zones.filter((z) => z.id !== flight.gateZone);
+  if (changes.share > 0 && others.length > 0 && bernoulli(key(KEY.gateChange), changes.share)) {
+    const zone = pick(
+      others,
+      categorical(
+        key(KEY.gateChangeZone),
+        others.map((z) => z.share),
+      ),
+    );
+    const atMs =
+      flight.stdMs -
+      minutesToMs(
+        uniform(key(KEY.gateChangeTime), changes.minMinutesBeforeStd, changes.maxMinutesBeforeStd),
+      );
+    const walkEstimateMs = minutesToMs(zone.walkMinutes);
+    gateChange = { atMs, gateZone: zone.id, walkEstimateMs };
+    updates.push({
+      atMs:
+        atMs + minutesToMs(uniform(key(KEY.gateChangeNotice), 0, changes.noticeDelayMaxMinutes)),
+      walkEstimateMs,
+    });
+  }
+  updates.sort((a, b) => a.atMs - b.atMs);
+  return {
+    index: flight.index,
+    id: flight.id,
+    stdMs: flight.stdMs,
+    boardingCloseMs,
+    knownDeadline: flight.knownDeadline,
+    gateZone: flight.gateZone,
+    ...(delayMs > 0 ? { delayMs } : {}),
+    ...(gateChange === undefined ? {} : { gateChange }),
+    ...(updates.length > 0 ? { updates } : {}),
+  };
+}
+
+/**
+ * Outages as a Poisson process over the operating day, with log-normal durations. The i-th outage
+ * draws its gap and its duration from streams of its own.
+ */
+function outagesOf(
+  seed: number,
+  spec: { perDay: number; medianMinutes: number; sigma: number; maxMinutes: number },
+  dayStartMs: number,
+  dayEndMs: number,
+  gapKey: number,
+  lengthKey: number,
+): FeedOutage[] {
+  const outages: FeedOutage[] = [];
+  if (spec.perDay <= 0 || !(dayEndMs > dayStartMs)) return outages;
+  const meanGapMs = (dayEndMs - dayStartMs) / spec.perDay;
+  let t = dayStartMs;
+  for (let i = 0; ; i++) {
+    t += exponential(streamFor(seed, [DOMAIN, gapKey, i]), meanGapMs);
+    if (t >= dayEndMs) return outages;
+    const length = minutesToMs(
+      Math.min(
+        spec.maxMinutes,
+        lognormalFromMedian(
+          streamFor(seed, [DOMAIN, lengthKey, i]),
+          spec.medianMinutes,
+          spec.sigma,
+        ),
+      ),
+    );
+    const fromMs = Math.round(t);
+    if (length > 0) outages.push({ fromMs, toMs: fromMs + length });
+  }
+}
+
+/** Sorted, non-overlapping union of `outages` (which come sorted by start). */
+function mergeOutages(outages: readonly FeedOutage[]): FeedOutage[] {
+  const merged: FeedOutage[] = [];
+  for (const outage of outages) {
+    const last = merged[merged.length - 1];
+    if (last !== undefined && outage.fromMs <= last.toMs) {
+      merged[merged.length - 1] = { fromMs: last.fromMs, toMs: Math.max(last.toMs, outage.toMs) };
+    } else {
+      merged.push(outage);
+    }
+  }
+  return merged;
 }

@@ -1,10 +1,10 @@
-# GateFlow simulation scenario (schema version 3).
+# GateFlow simulation scenario (schema version 4).
 #
 # SYNTHETIC DEMONSTRATION SCENARIO. It does not describe any real airport. Every parameter is a
 # labelled assumption (source: SYNTHETIC) chosen to produce a plausible-looking day with a morning
 # peak. Results obtained with it are simulated and must never be presented as operational evidence.
 
-schemaVersion: 3
+schemaVersion: 4
 id: single-checkpoint-demo
 title: Single departure checkpoint, synthetic day with a congested morning peak
 description: >-
@@ -138,4 +138,28 @@ operations:
   deadlineKnowledge:
     value: RULE
     source: SYNTHETIC
-    note: The system applies the closing rule to the schedule; in this slice it matches the ground truth exactly.
+    note: The system applies the closing rule to the schedule; without disruptions it matches the ground truth exactly.
+
+disruptions:
+  flightDelays:
+    value:
+      share: 0
+      medianMinutes: 20
+      sigma: 0.8
+      maxMinutes: 180
+      noticeMinMinutesBeforeStd: 10
+      noticeMaxMinutesBeforeStd: 120
+    source: SYNTHETIC
+    note: No delays in this scenario (see single-checkpoint-disrupted).
+  gateChanges:
+    value: { share: 0, minMinutesBeforeStd: 30, maxMinutesBeforeStd: 70, noticeDelayMaxMinutes: 5 }
+    source: SYNTHETIC
+    note: No gate changes in this scenario.
+  laneOutages:
+    value: { perDay: 0, medianMinutes: 20, sigma: 0.5, maxMinutes: 60 }
+    source: SYNTHETIC
+    note: No unplanned lane outages in this scenario.
+  feedOutages:
+    value: { perDay: 0, medianMinutes: 30, sigma: 0.6, maxMinutes: 120 }
+    source: SYNTHETIC
+    note: The flight feed never goes down in this scenario.

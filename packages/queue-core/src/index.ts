@@ -1,5 +1,5 @@
 /** Version of the queue state machine. Bump on any change that can alter behaviour. */
-export const QUEUE_CORE_VERSION = '0.3.0';
+export const QUEUE_CORE_VERSION = '0.4.0';
 
 export { CheckpointQueue } from './queue';
 export {
@@ -16,6 +16,8 @@ export {
   PRIORITY_V1_STRICT_SELECTION,
   PRIORITY_V2_POLICY,
   PRIORITY_V2_SELECTION,
+  PRIORITY_V3_POLICY,
+  PRIORITY_V3_SELECTION,
   QueueError,
   VIRTUAL_FIFO_POLICY,
   callAheadTarget,
@@ -29,6 +31,7 @@ export {
 } from './policy';
 export { TICKET_STATES } from './types';
 export type {
+  FlightKnowledge,
   PhysicalQueue,
   Policy,
   PresentOutcome,

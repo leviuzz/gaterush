@@ -1,4 +1,5 @@
 import { MS_PER_HOUR, MS_PER_MINUTE } from '@gateflow/domain';
+import { openLanesAt } from '@gateflow/sim-model';
 import type { Population, RunResult } from '@gateflow/sim-model';
 import { mean, quantileSorted, sortedAscending } from './stats';
 
@@ -73,6 +74,34 @@ export interface PolicyDayMetrics {
   readonly strategicPeople: number;
   readonly strategicPrioritized: number;
   readonly strategicMissed: number;
+  /**
+   * Stability (S5): changes of risk class of waiting tickets under the policy's own
+   * classification, reversals of direction (flapping) and the people whose class flapped.
+   */
+  readonly classChanges: number;
+  readonly classReversals: number;
+  readonly flappingPeople: number;
+  /** People boosted while the system's knowledge of their flight differed from the truth. */
+  readonly misinformedPriorityPeople: number;
+  /** People of flights that were delayed or changed gate, and how many of them missed it. */
+  readonly disruptedPeople: number;
+  readonly disruptedMissed: number;
+}
+
+/** The disruptions of one simulated day (the same for every policy). */
+export interface DayDisruptions {
+  readonly delayedFlights: number;
+  /** Mean delay of the delayed flights (0 without delays). */
+  readonly delayMeanMin: number;
+  readonly gateChanges: number;
+  readonly laneOutages: number;
+  /** Lane-minutes out of service, after keeping at least one lane open. */
+  readonly laneOutageLaneMin: number;
+  readonly feedOutages: number;
+  readonly feedOutageMin: number;
+  /** Messages of the flight feed, and those sent while it was down (delivered late). */
+  readonly feedMessages: number;
+  readonly heldFeedMessages: number;
 }
 
 /** Paired comparison of a candidate policy with a reference policy on the same simulated day. */
@@ -143,10 +172,19 @@ export function policyDayMetrics(population: Population, run: RunResult): Policy
   let strategicPeople = 0;
   let strategicPrioritized = 0;
   let strategicMissed = 0;
+  let flappingPeople = 0;
+  let disruptedPeople = 0;
+  let disruptedMissed = 0;
   run.outcomes.forEach((outcome, i) => {
     const passenger = population.passengers[i];
     if (passenger === undefined) throw new RangeError('outcomes do not match the population');
     const n = passenger.partySize;
+    const flight = population.flights[passenger.flightIndex];
+    if ((flight?.delayMs ?? 0) > 0 || flight?.gateChange !== undefined) {
+      disruptedPeople += n;
+      if (outcome.missed) disruptedMissed += n;
+    }
+    if (outcome.classReversals > 0) flappingPeople += n;
     people += n;
     pushTimes(waits, outcome.waitMs, n);
     pushTimes(standing, outcome.standingMs, n);
@@ -229,6 +267,48 @@ export function policyDayMetrics(population: Population, run: RunResult): Policy
     strategicPeople,
     strategicPrioritized,
     strategicMissed,
+    classChanges: stats.classChanges,
+    classReversals: stats.classReversals,
+    flappingPeople,
+    misinformedPriorityPeople: stats.misinformedPriorityPeople,
+    disruptedPeople,
+    disruptedMissed,
+  };
+}
+
+/** The disruptions of a simulated day, from its population. */
+export function dayDisruptions(population: Population): DayDisruptions {
+  const delays = population.flights.map((f) => f.delayMs ?? 0).filter((d) => d > 0);
+  const laneOutages = population.laneOutages ?? [];
+  const feedOutages = population.feedOutages ?? [];
+  // Lane time lost: planned lanes minus open lanes, piecewise constant between change points.
+  const points = new Set<number>();
+  for (const entry of population.checkpoint.laneSchedule) points.add(entry.fromMs);
+  for (const o of laneOutages) points.add(o.fromMs).add(o.toMs);
+  const sorted = [...points].sort((a, b) => a - b);
+  let lostLaneMs = 0;
+  for (let i = 0; i + 1 < sorted.length; i++) {
+    const from = sorted[i] ?? 0;
+    const to = sorted[i + 1] ?? from;
+    const lost =
+      openLanesAt(population.checkpoint, [], from) -
+      openLanesAt(population.checkpoint, laneOutages, from);
+    lostLaneMs += lost * (to - from);
+  }
+  const messages = population.flights.flatMap((f) => f.updates ?? []);
+  const held = messages.filter((m) =>
+    feedOutages.some((o) => m.atMs >= o.fromMs && m.atMs < o.toMs),
+  );
+  return {
+    delayedFlights: delays.length,
+    delayMeanMin: delays.length === 0 ? 0 : toMinutes(mean(delays)),
+    gateChanges: population.flights.filter((f) => f.gateChange !== undefined).length,
+    laneOutages: laneOutages.length,
+    laneOutageLaneMin: toMinutes(lostLaneMs),
+    feedOutages: feedOutages.length,
+    feedOutageMin: toMinutes(feedOutages.reduce((sum, o) => sum + (o.toMs - o.fromMs), 0)),
+    feedMessages: messages.length,
+    heldFeedMessages: held.length,
   };
 }
 

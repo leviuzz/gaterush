@@ -1,5 +1,5 @@
-import { SEGMENTS } from '@gateflow/domain';
-import type { RiskClass } from '@gateflow/domain';
+import { DEADLINE_SOURCES, SEGMENTS } from '@gateflow/domain';
+import type { KnownDeadline, RiskClass } from '@gateflow/domain';
 import type { CheckpointEstimates } from '@gateflow/priority-engine';
 import {
   CheckpointQueue,
@@ -11,20 +11,27 @@ import type { Policy, QueueEvent } from '@gateflow/queue-core';
 import { DiscreteEventSimulation } from '@gateflow/sim-kernel';
 import type {
   CheckpointSpec,
+  LaneOutage,
   PassengerOutcome,
   Population,
   RunResult,
+  SimFlight,
   SimPassenger,
   SimulationOptions,
 } from './types';
 
 /**
- * Order of events at the same instant: lanes open or close first (a lane closing at t takes
+ * Order of events at the same instant: the flight feed comes first, so that every decision at t
+ * uses what is known at t (the feed recovers, then goes down, then its messages arrive: a message
+ * sent when the feed goes down is held). Then lanes open or close (a lane closing at t takes
  * nobody at t); then lanes are freed; then passengers present at the access point; then timeouts
  * are applied (so presenting exactly at a deadline is on time); arrivals come last. With a
  * physical queue (or a virtual queue whose calls are answered instantly) this reproduces the S1
  * model exactly.
  */
+const FEED_UP = -3;
+const FEED_DOWN = -2;
+const FLIGHT_UPDATE = -1;
 const LANE_CHANGE = 0;
 const SERVICE_END = 1;
 const PRESENT = 2;
@@ -38,6 +45,9 @@ const ARRIVAL = 4;
 const MAX_TICKETS_PER_PASSENGER = 100;
 
 type ModelEvent =
+  | { readonly kind: typeof FEED_UP }
+  | { readonly kind: typeof FEED_DOWN; readonly fromMs: number }
+  | { readonly kind: typeof FLIGHT_UPDATE; readonly flight: number; readonly update: number }
   | { readonly kind: typeof SERVICE_END; readonly lane: number; readonly passenger: number }
   | { readonly kind: typeof LANE_CHANGE; readonly lanes: number }
   | { readonly kind: typeof PRESENT; readonly passenger: number }
@@ -63,6 +73,19 @@ interface PassengerState {
   prioritized: boolean;
   /** Most overtakes suffered by an expired ticket of this passenger. */
   maxOvertakenExpired: number;
+  /** Class changes and reversals of the passenger's expired tickets. */
+  classChangesExpired: number;
+  classReversalsExpired: number;
+}
+
+/** What the system currently knows about a flight (S5: it changes with the flight feed). */
+interface FlightKnowledgeState {
+  deadline: KnownDeadline;
+  /** Nominal walking time to the gate, once the feed has announced a gate; null before. */
+  walkEstimateMs: number | null;
+  /** Messages sent while the feed is down, merged: they arrive when it recovers. */
+  heldDeadline: KnownDeadline | null;
+  heldWalkEstimateMs: number | null;
 }
 
 /** Thrown when a population violates the model's preconditions. */
@@ -99,15 +122,84 @@ function validateCheckpointSpec(spec: CheckpointSpec): void {
   requireInteger(spec.processEstimateMs, 'checkpoint.processEstimateMs', 0);
 }
 
+function validateKnownDeadline(deadline: KnownDeadline, what: string): void {
+  // Widened: callers may pass untyped data.
+  const source: string = deadline.source;
+  if (!(DEADLINE_SOURCES as readonly string[]).includes(source)) {
+    throw new PopulationError(`${what} has unknown source ${source}`);
+  }
+  if (deadline.atMs === null) {
+    if (source !== 'NONE') throw new PopulationError(`${what} has no time but source ${source}`);
+  } else {
+    if (source === 'NONE') throw new PopulationError(`${what} has a time but source NONE`);
+    requireInteger(deadline.atMs, `${what}.atMs`);
+  }
+  if (deadline.observedAtMs !== undefined) {
+    requireInteger(deadline.observedAtMs, `${what}.observedAtMs`);
+  }
+}
+
+function validateFlight(flight: SimFlight): void {
+  const id = flight.id;
+  requireInteger(flight.stdMs, `stdMs of ${id}`);
+  requireInteger(flight.boardingCloseMs, `boardingCloseMs of ${id}`);
+  validateKnownDeadline(flight.knownDeadline, `knownDeadline of ${id}`);
+  if (flight.delayMs !== undefined) requireInteger(flight.delayMs, `delayMs of ${id}`, 0);
+  const change = flight.gateChange;
+  if (change !== undefined) {
+    requireInteger(change.atMs, `gateChange.atMs of ${id}`);
+    requireInteger(change.walkEstimateMs, `gateChange.walkEstimateMs of ${id}`, 0);
+  }
+  let previousMs = -Infinity;
+  (flight.updates ?? []).forEach((update, i) => {
+    const what = `updates[${i}] of ${id}`;
+    requireInteger(update.atMs, `${what}.atMs`);
+    if (update.atMs < previousMs) throw new PopulationError(`updates of ${id} must be sorted`);
+    previousMs = update.atMs;
+    if (update.knownDeadline === undefined && update.walkEstimateMs === undefined) {
+      throw new PopulationError(`${what} carries no knowledge`);
+    }
+    if (update.knownDeadline !== undefined) {
+      validateKnownDeadline(update.knownDeadline, `${what}.knownDeadline`);
+      if (update.knownDeadline.observedAtMs !== undefined) {
+        throw new PopulationError(`${what}.knownDeadline must not carry observedAtMs`);
+      }
+    }
+    if (update.walkEstimateMs !== undefined) {
+      requireInteger(update.walkEstimateMs, `${what}.walkEstimateMs`, 0);
+    }
+  });
+}
+
+function validateOutages(population: Population): void {
+  (population.laneOutages ?? []).forEach((outage, i) => {
+    requireInteger(outage.fromMs, `laneOutages[${i}].fromMs`);
+    requireInteger(outage.toMs, `laneOutages[${i}].toMs`, outage.fromMs + 1);
+    requireInteger(outage.lanes, `laneOutages[${i}].lanes`, 1);
+  });
+  let previousEndMs = -Infinity;
+  (population.feedOutages ?? []).forEach((outage, i) => {
+    requireInteger(outage.fromMs, `feedOutages[${i}].fromMs`);
+    requireInteger(outage.toMs, `feedOutages[${i}].toMs`, outage.fromMs + 1);
+    if (outage.fromMs <= previousEndMs) {
+      throw new PopulationError('feedOutages must be sorted and separated (merge touching ones)');
+    }
+    previousEndMs = outage.toMs;
+  });
+}
+
 export function validatePopulation(population: Population): void {
   const { checkpoint, flights, passengers } = population;
   validateCheckpointSpec(checkpoint);
   flights.forEach((flight, i) => {
     if (flight.index !== i)
       throw new PopulationError(`flight ${flight.id} has index ${flight.index}, expected ${i}`);
-    requireInteger(flight.stdMs, `stdMs of ${flight.id}`);
-    requireInteger(flight.boardingCloseMs, `boardingCloseMs of ${flight.id}`);
+    validateFlight(flight);
   });
+  if (new Set(flights.map((f) => f.id)).size !== flights.length) {
+    throw new PopulationError('flight ids must be unique');
+  }
+  validateOutages(population);
   const ids = new Set<string>();
   passengers.forEach((p, i) => {
     if (p.index !== i)
@@ -150,6 +242,39 @@ export function validatePopulation(population: Population): void {
 export function firstCallDelayMs(passenger: SimPassenger, sinceTicketMs: number): number {
   if (sinceTicketMs < passenger.callResponseMs) return Math.max(0, sinceTicketMs);
   return passenger.callResponseMs + passenger.absenceDelayMs;
+}
+
+/**
+ * Lanes open at `t`: the planned lanes minus those out of service (S5), never fewer than one.
+ * The first entry of the schedule also applies before 0.
+ */
+export function openLanesAt(
+  spec: CheckpointSpec,
+  outages: readonly LaneOutage[],
+  t: number,
+): number {
+  let planned = 0;
+  for (const entry of spec.laneSchedule) {
+    if (entry.fromMs <= t || planned === 0) planned = entry.lanes;
+  }
+  let out = 0;
+  for (const outage of outages) if (outage.fromMs <= t && t < outage.toMs) out += outage.lanes;
+  return Math.max(1, planned - out);
+}
+
+/**
+ * Walking time of a passenger who finished screening at `serviceEndMs` (ground truth): after a
+ * gate change, the walk scales with the nominal walking time of the new gate.
+ */
+export function trueWalkMs(
+  passenger: SimPassenger,
+  flight: SimFlight,
+  serviceEndMs: number,
+): number {
+  const change = flight.gateChange;
+  if (change === undefined || serviceEndMs < change.atMs) return passenger.walkMs;
+  if (passenger.walkEstimateMs === 0) return change.walkEstimateMs;
+  return Math.round((passenger.walkMs * change.walkEstimateMs) / passenger.walkEstimateMs);
 }
 
 function at<T>(items: readonly T[], index: number, what: string): T {
@@ -211,7 +336,28 @@ export function simulateCheckpoint(
     reactivations: 0,
     prioritized: false,
     maxOvertakenExpired: 0,
+    classChangesExpired: 0,
+    classReversalsExpired: 0,
   }));
+  const knowledge: FlightKnowledgeState[] = flights.map((f) => ({
+    deadline: f.knownDeadline,
+    walkEstimateMs: null,
+    heldDeadline: null,
+    heldWalkEstimateMs: null,
+  }));
+  /**
+   * True when what the system knows about the passenger's flight differs from the ground truth at
+   * `now`: the deadline, or the walking time estimated for the passenger after a gate change.
+   */
+  const misinformed = (passenger: SimPassenger, now: number): boolean => {
+    const flight = at(flights, passenger.flightIndex, 'flight');
+    const known = at(knowledge, flight.index, 'flight');
+    if (known.deadline.atMs !== null && known.deadline.atMs !== flight.boardingCloseMs) return true;
+    const change = flight.gateChange;
+    if (change === undefined || now < change.atMs) return false;
+    return (known.walkEstimateMs ?? passenger.walkEstimateMs) !== change.walkEstimateMs;
+  };
+  let misinformedPriorityPeople = 0;
   const ticketOwner = new Map<string, number>();
   const ownerOf = (ticketId: string): PassengerState => {
     const index = ticketOwner.get(ticketId);
@@ -222,7 +368,13 @@ export function simulateCheckpoint(
   const onQueueEvent = (event: QueueEvent): void => {
     switch (event.type) {
       case 'COMMITTED':
-        if (event.priority) ownerOf(event.ticketId).prioritized = true;
+        if (event.priority) {
+          const index = ticketOwner.get(event.ticketId);
+          if (index === undefined) throw new Error(`unknown ticket ${event.ticketId}`);
+          at(state, index, 'passenger').prioritized = true;
+          const passenger = at(passengers, index, 'passenger');
+          if (misinformed(passenger, event.atMs)) misinformedPriorityPeople += passenger.partySize;
+        }
         break;
       case 'CALLED': {
         const s = ownerOf(event.ticketId);
@@ -243,15 +395,44 @@ export function simulateCheckpoint(
         break;
     }
   };
-  const queue = new CheckpointQueue(policy, options.classification, { listener: onQueueEvent });
+  const observe = options.listener;
+  const queue = new CheckpointQueue(policy, options.classification, {
+    listener:
+      observe === undefined
+        ? onQueueEvent
+        : (event) => {
+            onQueueEvent(event);
+            observe(event);
+          },
+  });
 
-  const sim = new DiscreteEventSimulation<ModelEvent>(
-    passengers.reduce((min, p) => Math.min(min, p.arrivalMs), 0),
-  );
+  const laneOutages = population.laneOutages ?? [];
+  const feedOutages = population.feedOutages ?? [];
+  // The day starts with the first event: an arrival, a feed message or an outage (0 at the latest).
+  let startMs = 0;
+  for (const p of passengers) startMs = Math.min(startMs, p.arrivalMs);
+  for (const f of flights) for (const u of f.updates ?? []) startMs = Math.min(startMs, u.atMs);
+  for (const o of [...laneOutages, ...feedOutages]) startMs = Math.min(startMs, o.fromMs);
+  const sim = new DiscreteEventSimulation<ModelEvent>(startMs);
   for (const p of passengers)
     sim.scheduleAt(p.arrivalMs, ARRIVAL, { kind: ARRIVAL, passenger: p.index });
-  for (const entry of schedule.slice(1)) {
-    sim.scheduleAt(entry.fromMs, LANE_CHANGE, { kind: LANE_CHANGE, lanes: entry.lanes });
+  // Lanes change at every planned change and at every start and end of a lane outage.
+  const laneChanges = new Set(schedule.slice(1).map((entry) => entry.fromMs));
+  for (const o of laneOutages) laneChanges.add(o.fromMs).add(o.toMs);
+  for (const t of [...laneChanges].sort((a, b) => a - b)) {
+    sim.scheduleAt(t, LANE_CHANGE, {
+      kind: LANE_CHANGE,
+      lanes: openLanesAt(checkpoint, laneOutages, t),
+    });
+  }
+  for (const o of feedOutages) {
+    sim.scheduleAt(o.fromMs, FEED_DOWN, { kind: FEED_DOWN, fromMs: o.fromMs });
+    sim.scheduleAt(o.toMs, FEED_UP, { kind: FEED_UP });
+  }
+  for (const f of flights) {
+    (f.updates ?? []).forEach((u, update) => {
+      sim.scheduleAt(u.atMs, FLIGHT_UPDATE, { kind: FLIGHT_UPDATE, flight: f.index, update });
+    });
   }
 
   let open = at(schedule, 0, 'lane schedule entry').lanes;
@@ -278,6 +459,7 @@ export function simulateCheckpoint(
   const assisted: number[] = [];
   let assistedPeople = 0;
   const scheduledTimeouts = new Set<number>();
+  let feedDown = false;
 
   let busyMs = 0;
   let firstArrivalMs = 0;
@@ -331,21 +513,85 @@ export function simulateCheckpoint(
     s.ticketId = s.tickets === 1 ? passenger.id : `${passenger.id}#${s.tickets}`;
     ticketOwner.set(s.ticketId, passengerIndex);
     const flight = at(flights, passenger.flightIndex, 'flight');
+    const known = at(knowledge, flight.index, 'flight');
     const view = queue.issue(
       {
         id: s.ticketId,
         segment: passenger.segment,
-        deadline: flight.knownDeadline,
-        walkEstimateMs: passenger.walkEstimateMs,
+        deadline: known.deadline,
+        walkEstimateMs: known.walkEstimateMs ?? passenger.walkEstimateMs,
         partySize: passenger.partySize,
         // A new ticket after an expiry keeps the first presentation at the checkpoint.
         presentedAtMs: passenger.arrivalMs,
-        scheduledDepartureMs: flight.knownDeadline.atMs === null ? null : flight.stdMs,
+        scheduledDepartureMs: known.deadline.atMs === null ? null : flight.stdMs,
+        flightId: flight.id,
       },
       now,
       estimates,
     );
     s.classAtArrival ??= view.classAtIssue;
+  };
+
+  /** Tells the queue what is now known about a flight. */
+  const publish = (flight: SimFlight, now: number): void => {
+    const known = at(knowledge, flight.index, 'flight');
+    queue.updateFlight(
+      flight.id,
+      {
+        deadline: known.deadline,
+        ...(known.walkEstimateMs === null ? {} : { walkEstimateMs: known.walkEstimateMs }),
+      },
+      now,
+      estimates,
+    );
+  };
+
+  /** A message of the flight feed: delivered now, or held until the feed recovers. */
+  const receive = (flightIndex: number, updateIndex: number, now: number): void => {
+    const flight = at(flights, flightIndex, 'flight');
+    const update = at(flight.updates ?? [], updateIndex, 'flight update');
+    const known = at(knowledge, flightIndex, 'flight');
+    if (feedDown) {
+      if (update.knownDeadline !== undefined) known.heldDeadline = update.knownDeadline;
+      if (update.walkEstimateMs !== undefined) known.heldWalkEstimateMs = update.walkEstimateMs;
+      return;
+    }
+    if (update.knownDeadline !== undefined) known.deadline = update.knownDeadline;
+    if (update.walkEstimateMs !== undefined) known.walkEstimateMs = update.walkEstimateMs;
+    publish(flight, now);
+  };
+
+  /**
+   * The feed goes down: what is known stays, but is now as old as the outage, so policies with a
+   * maximum data age stop trusting it once that age is exceeded (ADR-029).
+   */
+  const feedGoesDown = (fromMs: number, now: number): void => {
+    feedDown = true;
+    for (const flight of flights) {
+      const known = at(knowledge, flight.index, 'flight');
+      if (known.deadline.atMs === null) continue;
+      known.deadline = { ...known.deadline, observedAtMs: fromMs };
+      publish(flight, now);
+    }
+  };
+
+  /** The feed recovers: the held messages arrive and the knowledge is live again. */
+  const feedComesBack = (now: number): void => {
+    feedDown = false;
+    for (const flight of flights) {
+      const known = at(knowledge, flight.index, 'flight');
+      const { observedAtMs, ...live } = known.heldDeadline ?? known.deadline;
+      const changed =
+        observedAtMs !== undefined ||
+        known.heldDeadline !== null ||
+        known.heldWalkEstimateMs !== null;
+      if (!changed) continue;
+      known.deadline = live;
+      if (known.heldWalkEstimateMs !== null) known.walkEstimateMs = known.heldWalkEstimateMs;
+      known.heldDeadline = null;
+      known.heldWalkEstimateMs = null;
+      publish(flight, now);
+    }
   };
 
   const startServices = (now: number): void => {
@@ -437,6 +683,8 @@ export function simulateCheckpoint(
       case 'EXPIRED': {
         const expired = queue.ticket(s.ticketId);
         s.maxOvertakenExpired = Math.max(s.maxOvertakenExpired, expired?.overtakenCount ?? 0);
+        s.classChangesExpired += expired?.classChanges ?? 0;
+        s.classReversalsExpired += expired?.classReversals ?? 0;
         issueTicket(passengerIndex, now);
         break;
       }
@@ -479,6 +727,15 @@ export function simulateCheckpoint(
     const payload = event.payload;
     accumulate(now);
     switch (payload.kind) {
+      case FEED_UP:
+        feedComesBack(now);
+        break;
+      case FEED_DOWN:
+        feedGoesDown(payload.fromMs, now);
+        break;
+      case FLIGHT_UPDATE:
+        receive(payload.flight, payload.update, now);
+        break;
       case ARRIVAL:
         if (!integrating) {
           integrating = true;
@@ -530,7 +787,7 @@ export function simulateCheckpoint(
       throw new Error(`passenger ${passenger.id} was not served (conservation violated)`);
     }
     const flight = at(flights, passenger.flightIndex, 'flight');
-    const gateArrivalMs = s.serviceEndMs + passenger.walkMs;
+    const gateArrivalMs = s.serviceEndMs + trueWalkMs(passenger, flight, s.serviceEndMs);
     return {
       firstCalledAtMs: s.firstCalledAtMs,
       serviceStartMs: s.serviceStartMs,
@@ -553,6 +810,8 @@ export function simulateCheckpoint(
       noShows: s.noShows,
       reactivations: s.reactivations,
       reissuedTickets: Math.max(0, s.tickets - 1),
+      classChanges: s.classChangesExpired + (ticket?.classChanges ?? 0),
+      classReversals: s.classReversalsExpired + (ticket?.classReversals ?? 0),
     } satisfies PassengerOutcome;
   });
 
@@ -571,6 +830,9 @@ export function simulateCheckpoint(
       reactivations: q.reactivations,
       fastTrackPeople,
       lanePassedPeople,
+      classChanges: q.classChanges,
+      classReversals: q.classReversals,
+      misinformedPriorityPeople,
       // Every queue party holds one ticket, plus one per expiry; assisted parties hold none.
       reissuedTickets: q.issued - passengers.filter((p) => p.path === 'QUEUE').length,
       firstArrivalMs,

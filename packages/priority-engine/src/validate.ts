@@ -1,4 +1,4 @@
-import { SEGMENTS } from '@gateflow/domain';
+import { RISK_CLASSES, SEGMENTS } from '@gateflow/domain';
 import type {
   CheckpointEstimates,
   ClassificationParams,
@@ -63,6 +63,14 @@ export function validateClassificationParams(params: ClassificationParams): void
   // Widened: callers may pass untyped data (e.g. parsed JSON).
   const fastTrack: unknown = params.fastTrack;
   if (typeof fastTrack !== 'boolean') throw new EngineInputError('fastTrack must be a boolean');
+  const maxAge: unknown = params.maxDeadlineAgeMs;
+  if (maxAge !== null) {
+    if (typeof maxAge !== 'number') {
+      throw new EngineInputError('maxDeadlineAgeMs must be a number or null');
+    }
+    requireSafeInteger(maxAge, 'maxDeadlineAgeMs', 0);
+  }
+  requireSafeInteger(params.hysteresisMs, 'hysteresisMs', 0);
   const seen = new Set<string>();
   for (const segment of params.eligibleSegments) {
     if (!(SEGMENTS as readonly string[]).includes(segment)) {
@@ -119,6 +127,15 @@ export function validateTicket(ticket: WaitingTicket): void {
   }
   if (ticket.lastSeenAtMs !== undefined) {
     requireSafeInteger(ticket.lastSeenAtMs, `lastSeenAtMs of ${ticket.id}`);
+  }
+  if (
+    ticket.lastRiskClass !== undefined &&
+    !(RISK_CLASSES as readonly string[]).includes(ticket.lastRiskClass)
+  ) {
+    throw new EngineInputError(`unknown lastRiskClass of ${ticket.id}: ${ticket.lastRiskClass}`);
+  }
+  if (ticket.deadline.observedAtMs !== undefined) {
+    requireSafeInteger(ticket.deadline.observedAtMs, `observedAtMs of ${ticket.id}`);
   }
   if (!(SEGMENTS as readonly string[]).includes(ticket.segment)) {
     throw new EngineInputError(`unknown segment of ${ticket.id}: ${ticket.segment}`);

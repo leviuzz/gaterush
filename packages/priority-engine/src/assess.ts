@@ -34,6 +34,73 @@ export function isDeadlineTrusted(
 }
 
 /**
+ * The stale-data rule: true when the policy has a maximum data age and the deadline was last
+ * confirmed by its source longer ago than that (a value without an observation time is live).
+ */
+export function isDeadlineStale(
+  deadline: KnownDeadline,
+  params: Pick<ClassificationParams, 'maxDeadlineAgeMs'>,
+  nowMs: Millis,
+): boolean {
+  const maxAge = params.maxDeadlineAgeMs;
+  const observedAt = deadline.observedAtMs;
+  return maxAge !== null && observedAt !== undefined && nowMs - observedAt > maxAge;
+}
+
+/** Urgency order of the verified classes, used by the hysteresis. */
+const URGENCY: Readonly<Record<RiskClass, number>> = {
+  UNVERIFIED: -1,
+  NORMAL: 0,
+  ATTENTION: 1,
+  URGENT: 2,
+  CRITICAL: 3,
+};
+
+/**
+ * The class given by the two margins, with hysteresis: a threshold that the ticket has already
+ * crossed towards urgency (its previous class is at least as urgent) is moved by h, so that the
+ * ticket goes back only once the margin exceeds the threshold by h.
+ * - CRITICAL: feasibility margin < 0 (+ h if it was CRITICAL);
+ * - URGENT: FIFO margin < 0 (+ h if it was URGENT or CRITICAL);
+ * - ATTENTION: FIFO margin < attention threshold (+ h if it was ATTENTION or more urgent);
+ * - NORMAL otherwise.
+ * `held` tells whether the hysteresis kept a more urgent class than the margins alone.
+ */
+export function classifyMargins(
+  feasibilitySlackMs: Millis,
+  slackFifoMs: Millis,
+  params: Pick<ClassificationParams, 'attentionThresholdMs' | 'hysteresisMs'>,
+  lastRiskClass?: RiskClass,
+): { readonly riskClass: RiskClass; readonly held: boolean } {
+  const level = lastRiskClass === undefined ? -1 : URGENCY[lastRiskClass];
+  const h = params.hysteresisMs;
+  const raw = classAt(feasibilitySlackMs, slackFifoMs, params.attentionThresholdMs, 0, 0, 0);
+  const riskClass = classAt(
+    feasibilitySlackMs,
+    slackFifoMs,
+    params.attentionThresholdMs,
+    level >= 3 ? h : 0,
+    level >= 2 ? h : 0,
+    level >= 1 ? h : 0,
+  );
+  return { riskClass, held: riskClass !== raw };
+}
+
+function classAt(
+  feasibility: Millis,
+  slackFifo: Millis,
+  attention: Millis,
+  hCritical: Millis,
+  hUrgent: Millis,
+  hAttention: Millis,
+): RiskClass {
+  if (feasibility < hCritical) return 'CRITICAL';
+  if (slackFifo < hUrgent) return 'URGENT';
+  if (slackFifo < attention + hAttention) return 'ATTENTION';
+  return 'NORMAL';
+}
+
+/**
  * The presentation rule (anti-abuse): a departing passenger may be boosted automatically only if
  * they presented at the checkpoint at least `latePresentationCutoffMs` before the scheduled
  * departure. Returns the reason that blocks the boost, or `null` when the rule does not apply or
@@ -138,6 +205,12 @@ export function assessTicket(
     if (presentation !== null) reasons.push(presentation);
     return unverified(ticket.id, aheadInFifo, fifoWait, reasons);
   }
+  if (isDeadlineStale(deadline, params, nowMs)) {
+    reasons.push('DEADLINE_STALE');
+    if (!segmentEligible) reasons.push('SEGMENT_NOT_ELIGIBLE');
+    if (presentation !== null) reasons.push(presentation);
+    return unverified(ticket.id, aheadInFifo, fifoWait, reasons);
+  }
 
   const journey = journeyEstimates(ticket, nowMs, checkpoint, params, committedAhead);
   const latestCallMs = deadline.atMs - (journey.boostJourneyMs + params.safetyBufferMs);
@@ -150,18 +223,15 @@ export function assessTicket(
     (journey.boostJourneyMs + params.feasibilityMarginMs) -
     nowMs -
     journey.boostDrainMs;
-  let riskClass: RiskClass;
-  if (feasibilitySlackMs < 0) {
-    riskClass = 'CRITICAL';
-    reasons.push('CRITICAL_ESCALATION');
-  } else if (slackFifoMs < 0) {
-    riskClass = 'URGENT';
-    if (slackNowMs < 0) reasons.push('INSIDE_SAFETY_MARGIN');
-  } else if (slackFifoMs < params.attentionThresholdMs) {
-    riskClass = 'ATTENTION';
-  } else {
-    riskClass = 'NORMAL';
-  }
+  const { riskClass, held } = classifyMargins(
+    feasibilitySlackMs,
+    slackFifoMs,
+    params,
+    ticket.lastRiskClass,
+  );
+  if (riskClass === 'CRITICAL') reasons.push('CRITICAL_ESCALATION');
+  if (riskClass === 'URGENT' && slackNowMs < 0) reasons.push('INSIDE_SAFETY_MARGIN');
+  if (held) reasons.push('HYSTERESIS_HOLD');
   if (!segmentEligible) reasons.push('SEGMENT_NOT_ELIGIBLE');
   if (presentation !== null) reasons.push(presentation);
   return {

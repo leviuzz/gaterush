@@ -1,10 +1,12 @@
 /** Version of the priority engine. Bump on any change that can alter a decision. */
-export const ENGINE_VERSION = '0.4.0';
+export const ENGINE_VERSION = '0.5.0';
 
 export {
   assessQueue,
   assessTicket,
+  classifyMargins,
   fifoWaitEstimateMs,
+  isDeadlineStale,
   isDeadlineTrusted,
   journeyEstimates,
   partySizeOf,

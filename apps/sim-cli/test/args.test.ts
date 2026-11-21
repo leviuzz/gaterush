@@ -120,6 +120,18 @@ describe('comparisons', () => {
       'priority-v2:fifo-manual',
       'priority-v2:priority-v1',
     ]);
+    // v3 adds the S5 data-quality rules to v2 on the same queue: compared version against version.
+    expect(
+      defaultCompare(parsePolicies('fifo,fifo-manual,virtual-fifo,priority-v2,priority-v3'), 'fifo')
+        .slice(4)
+        .map((c) => `${c.candidateId}:${c.referenceId}`),
+    ).toEqual([
+      'priority-v2:virtual-fifo',
+      'priority-v2:fifo-manual',
+      'priority-v3:virtual-fifo',
+      'priority-v3:fifo-manual',
+      'priority-v3:priority-v2',
+    ]);
   });
 });
 

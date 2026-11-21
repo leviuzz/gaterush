@@ -62,9 +62,9 @@ describe('gateflow-sim run', () => {
     for (const key of [
       'fifo-manual vs fifo',
       'virtual-fifo vs fifo',
-      'priority-v2 vs fifo',
-      'priority-v2 vs virtual-fifo',
-      'priority-v2 vs fifo-manual',
+      'priority-v3 vs fifo',
+      'priority-v3 vs virtual-fifo',
+      'priority-v3 vs fifo-manual',
     ]) {
       expect(a.stdout).toContain(`${key}: net flights saved per day`);
     }
@@ -110,7 +110,7 @@ describe('gateflow-sim validate, policies, help', () => {
     expect(result.code).toBe(EXIT_OK);
     expect(result.stdout).toContain('valid scenario single-checkpoint-demo');
     expect(result.stdout).toContain('flights        40 on the design day');
-    expect(result.stdout).toContain('assumptions    17 labelled parameters');
+    expect(result.stdout).toContain('assumptions    21 labelled parameters');
   });
 
   it('reports invalid scenarios with exit code 1', () => {
@@ -119,7 +119,7 @@ describe('gateflow-sim validate, policies, help', () => {
     const result = cli(['validate', '--scenario', bad]);
     expect(result.code).toBe(EXIT_FAILURE);
     expect(result.stderr).toContain('invalid scenario');
-    expect(result.stderr).toContain('migrated to version 3');
+    expect(result.stderr).toContain('migrated to version 4');
   });
 
   it('lists the policy presets as JSON', () => {
@@ -133,6 +133,7 @@ describe('gateflow-sim validate, policies, help', () => {
       'priority-v1',
       'priority-v1-strict',
       'priority-v2',
+      'priority-v3',
     ]);
   });
 
@@ -154,7 +155,7 @@ describe('gateflow-sim validate, policies, help', () => {
 
   it('prints help and version', () => {
     expect(cli(['--help']).stdout).toContain('Usage:');
-    expect(cli(['--version']).stdout.trim()).toBe('0.4.0');
+    expect(cli(['--version']).stdout.trim()).toBe('0.5.0');
   });
 });
 

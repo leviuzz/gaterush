@@ -22,6 +22,8 @@ export const EDF: ConstrainedEdfSelection = {
   eligibleSegments: ['DEPARTING', 'TRANSFER'],
   latePresentationCutoffMs: null,
   fastTrack: false,
+  maxDeadlineAgeMs: null,
+  hysteresisMs: 0,
 };
 
 /** 180 pax/h: one person every 20 s, so `ahead` tickets wait ahead * 20 s. */
@@ -48,6 +50,7 @@ export function ticket(
       ? {}
       : { scheduledDepartureMs: overrides.scheduledDepartureMs }),
     ...(overrides.lastSeenAtMs === undefined ? {} : { lastSeenAtMs: overrides.lastSeenAtMs }),
+    ...(overrides.lastRiskClass === undefined ? {} : { lastRiskClass: overrides.lastRiskClass }),
   };
 }
 

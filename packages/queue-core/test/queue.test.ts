@@ -401,6 +401,169 @@ describe('groups', () => {
   });
 });
 
+describe('flight knowledge and risk classes (S5)', () => {
+  const edf = virtual(
+    {},
+    { ...PRIORITY_V0_SELECTION, safetyBufferMs: 0, feasibilityMarginMs: 0, hysteresisMs: 2 * MIN },
+  );
+  const onFlight = (id: string, deadlineMin: number, flightId: string): TicketInput => ({
+    ...ticket(id, deadlineMin),
+    flightId,
+  });
+
+  it('updates the knowledge of every live ticket of a flight, and only those', () => {
+    const q = new CheckpointQueue(edf, CLASSIFICATION);
+    q.issue(onFlight('a', 600, 'F1'), 0, EST);
+    q.issue(onFlight('b', 600, 'F1'), 0, EST);
+    q.issue(onFlight('c', 600, 'F2'), 0, EST);
+    q.callNext(0, EST);
+    q.present('a', 0, EST); // admitted: its knowledge no longer matters
+    q.updateFlight(
+      'F1',
+      { deadline: { atMs: 650 * MIN, source: 'FEED' }, walkEstimateMs: MIN },
+      1,
+      EST,
+    );
+    expect(q.ticket('b')).toMatchObject({ deadline: { atMs: 650 * MIN }, walkEstimateMs: MIN });
+    expect(q.ticket('a')?.deadline.atMs).toBe(600 * MIN);
+    expect(q.ticket('c')?.deadline.atMs).toBe(600 * MIN);
+    // Unknown flights are ignored; invalid knowledge is rejected; time never goes back.
+    q.updateFlight('F9', { walkEstimateMs: MIN }, 2, EST);
+    expect(() => {
+      q.updateFlight('F1', { walkEstimateMs: -1 }, 2, EST);
+    }).toThrow(QueueError);
+    expect(() => {
+      q.updateFlight('F1', {}, 0, EST);
+    }).toThrow(QueueError);
+  });
+
+  it('stops boosting a flight whose deadline went stale, and resumes when it is fresh again', () => {
+    const stalePolicy = virtual(
+      {},
+      {
+        ...PRIORITY_V0_SELECTION,
+        safetyBufferMs: 0,
+        feasibilityMarginMs: 0,
+        maxDeadlineAgeMs: 5 * MIN,
+      },
+    );
+    const run = (observedAtMs: number | undefined) => {
+      const q = new CheckpointQueue(stalePolicy, CLASSIFICATION);
+      for (const id of ['a', 'b', 'c']) q.issue(onFlight(id, 600, 'F1'), 10 * MIN, EST);
+      q.issue(onFlight('late', 12, 'F2'), 10 * MIN, EST);
+      q.updateFlight(
+        'F2',
+        {
+          deadline: {
+            atMs: 12 * MIN,
+            source: 'FEED',
+            ...(observedAtMs === undefined ? {} : { observedAtMs }),
+          },
+        },
+        10 * MIN,
+        EST,
+      );
+      return q.callNext(10 * MIN, EST)?.id;
+    };
+    // 3 people ahead at one per minute, deadline 2 minutes away: URGENT when the data is fresh.
+    expect(run(undefined)).toBe('late');
+    expect(run(9 * MIN)).toBe('late');
+    expect(run(4 * MIN)).toBe('a'); // confirmed 6 minutes ago: stale, FIFO
+  });
+
+  it('records the class of each waiting ticket and counts its changes, with hysteresis', () => {
+    // No boosts (cap 0), so x keeps waiting while the queue ahead of it is called.
+    const track = (hysteresisMs: number) => {
+      const q = new CheckpointQueue(
+        virtual(
+          {},
+          {
+            ...PRIORITY_V0_SELECTION,
+            safetyBufferMs: 0,
+            feasibilityMarginMs: 0,
+            capMaxPriorityCalls: 0,
+            hysteresisMs,
+          },
+        ),
+        CLASSIFICATION,
+      );
+      for (const id of ['a', 'b', 'c', 'd']) q.issue(onFlight(id, 600, 'F1'), 0, EST);
+      // x: 4 people ahead (4 minutes), deadline 3.5 minutes away: URGENT at once.
+      q.issue(onFlight('x', 3.5, 'F2'), 0, EST);
+      const classes = [q.ticket('x')?.riskClass];
+      for (let i = 0; i < 3; i++) {
+        q.callNext(0, EST); // one person less ahead: the FIFO margin grows by a minute
+        classes.push(q.ticket('x')?.riskClass);
+      }
+      return { classes, changes: q.ticket('x')?.classChanges, total: q.stats().classChanges };
+    };
+    // Margins -0.5, +0.5, +1.5, +2.5 min. With h = 2 min x leaves URGENT only at +2.5 min.
+    expect(track(2 * MIN)).toMatchObject({
+      classes: ['URGENT', 'URGENT', 'URGENT', 'ATTENTION'],
+      changes: 1,
+    });
+    // Without hysteresis it is ATTENTION as soon as the margin is positive.
+    expect(track(0)).toMatchObject({
+      classes: ['URGENT', 'ATTENTION', 'ATTENTION', 'ATTENTION'],
+      changes: 1,
+    });
+    // Policies that do not classify keep no class.
+    const fifo = new CheckpointQueue(virtual(), CLASSIFICATION);
+    fifo.issue(ticket('y', 5), 0, EST);
+    expect(fifo.ticket('y')).toMatchObject({ riskClass: null, classChanges: 0 });
+  });
+
+  it('counts reversals of direction (flapping), which the hysteresis suppresses', () => {
+    // The feed moves x's deadline back and forth by a minute around the URGENT threshold; every
+    // new ticket triggers an assessment.
+    const flap = (hysteresisMs: number) => {
+      const q = new CheckpointQueue(
+        virtual(
+          {},
+          {
+            ...PRIORITY_V0_SELECTION,
+            safetyBufferMs: 0,
+            feasibilityMarginMs: 0,
+            capMaxPriorityCalls: 0,
+            hysteresisMs,
+          },
+        ),
+        CLASSIFICATION,
+      );
+      for (const id of ['a', 'b', 'c', 'd']) q.issue(onFlight(id, 600, 'F1'), 0, EST);
+      // 4 people ahead (4 minutes), deadline 4.5 minutes away: ATTENTION.
+      q.issue(onFlight('x', 4.5, 'F2'), 0, EST);
+      const classes = [q.ticket('x')?.riskClass];
+      [3.5, 4.5, 3.5].forEach((deadlineMin, i) => {
+        q.updateFlight('F2', { deadline: { atMs: deadlineMin * MIN, source: 'FEED' } }, 0, EST);
+        q.issue(onFlight(`n${i}`, 600, 'F1'), 0, EST);
+        classes.push(q.ticket('x')?.riskClass);
+      });
+      const x = q.ticket('x');
+      const stats = q.stats();
+      return {
+        classes,
+        changes: x?.classChanges,
+        reversals: x?.classReversals,
+        total: [stats.classChanges, stats.classReversals],
+      };
+    };
+    expect(flap(0)).toEqual({
+      classes: ['ATTENTION', 'URGENT', 'ATTENTION', 'URGENT'],
+      changes: 3,
+      reversals: 2,
+      total: [3, 2],
+    });
+    // With h = 2 minutes a margin of +0.5 minutes does not take x out of URGENT.
+    expect(flap(2 * MIN)).toEqual({
+      classes: ['ATTENTION', 'URGENT', 'URGENT', 'URGENT'],
+      changes: 1,
+      reversals: 0,
+      total: [1, 0],
+    });
+  });
+});
+
 describe('policies and helpers', () => {
   it('exposes the presets', () => {
     expect(findPolicyPreset('fifo')?.queue.kind).toBe('physical');
@@ -430,7 +593,14 @@ describe('policies and helpers', () => {
       'priority-v1',
       'priority-v1-strict',
       'priority-v2',
+      'priority-v3',
     ]);
+    // v3 differs from v2 only by the S5 data-quality rules (ADR-029).
+    expect(findPolicyPreset('priority-v3')?.selection).toEqual({
+      ...findPolicyPreset('priority-v2')?.selection,
+      maxDeadlineAgeMs: 30 * MIN,
+      hysteresisMs: 3 * MIN,
+    });
     // v2 differs from v1 only by the fast track.
     expect(findPolicyPreset('priority-v2')?.selection).toEqual({
       ...findPolicyPreset('priority-v1')?.selection,

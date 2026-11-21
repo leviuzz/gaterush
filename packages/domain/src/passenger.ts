@@ -30,4 +30,10 @@ export interface KnownDeadline {
   /** Cut-off instant, or `null` when the source is `NONE`. */
   readonly atMs: Millis | null;
   readonly source: DeadlineSource;
+  /**
+   * When the source last confirmed this value. Absent: the source is live and confirms it
+   * continuously. A stale value (confirmed too long ago) is not trusted by policies with a
+   * maximum data age.
+   */
+  readonly observedAtMs?: Millis;
 }

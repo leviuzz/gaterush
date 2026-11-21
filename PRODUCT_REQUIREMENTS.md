@@ -144,7 +144,11 @@ These must be checked with counsel; nothing below is legal advice.
 
 1. Which checkpoint can actually be authorised, measured and controlled, and who has authority
    over the lane order?
-2. Which flight, gate and boarding-close feeds exist, with what latency?
+2. Which flight, gate and boarding-close feeds exist, with what latency, and how often are they
+   down? Policy v3 stops prioritising on a deadline the feed has not confirmed for 30 minutes
+   (ADR-029). In simulation that costs nothing with one short outage a day, but with a feed down
+   for hours a day GateFlow falls back to FIFO and loses its advantage over today's practice. The
+   freshness target of each source is the operator's decision (FR-15).
 3. Which Fast Track and PRM rights exist, and how are they respected?
 4. Which fairness bounds (k/N, K) and late-arrival eligibility rule does the operator accept?
    Policy v1 uses K = 30 people and at most 10 priority people among any 20 called, with no
@@ -181,6 +185,8 @@ These must be checked with counsel; nothing below is legal advice.
   if called now (CRITICAL), separate from the safety buffer used to detect risk (ADR-023).
 - **Group (party):** passengers travelling together on one ticket, called together; every count
   and bound treats them as their number of people (ADR-021).
+- **Hysteresis (h):** a ticket escalates at once but returns to a less urgent class only when its
+  margin passes the threshold by h, so that classes do not flap (ADR-029).
 - **Late-presentation rule:** optional anti-abuse rule: departing passengers who present later
   than a set time before departure are not boosted automatically (ADR-025).
 - **Latest call time (L):** the latest moment a passenger can be called and still make it.
@@ -194,5 +200,7 @@ These must be checked with counsel; nothing below is legal advice.
 - **Prepare window:** the next M tickets, committed and shown on displays as "prepare"; they are
   called in that order and never removed (no churn).
 - **Shadow mode:** decisions are computed and logged but not applied physically.
+- **Stale data:** a deadline that its source has not confirmed for longer than the maximum age;
+  the ticket is UNVERIFIED and served in FIFO order until the source confirms it again (ADR-029).
 - **Virtual queue:** GateFlow's operation: passengers hold a ticket, wait anywhere and are called
   on displays.

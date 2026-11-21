@@ -151,6 +151,45 @@ const StrategicSchema = z
     message: 'maxMinutesBeforeStd must not be smaller than minMinutesBeforeStd',
   });
 
+const DelaysSchema = z
+  .strictObject({
+    /** Share of flights that are delayed. */
+    share: z.number().min(0).max(1),
+    /** Log-normal delay: median and sigma, capped at the maximum. */
+    medianMinutes: z.number().min(0).max(600),
+    sigma: z.number().min(0).max(3),
+    maxMinutes: z.number().min(0).max(720),
+    /** The delay is announced uniformly between these many minutes before the scheduled departure. */
+    noticeMinMinutesBeforeStd: z.number().min(0).max(600),
+    noticeMaxMinutesBeforeStd: z.number().min(0).max(600),
+  })
+  .refine((d) => d.noticeMaxMinutesBeforeStd >= d.noticeMinMinutesBeforeStd, {
+    message: 'noticeMaxMinutesBeforeStd must not be smaller than noticeMinMinutesBeforeStd',
+  });
+
+const GateChangesSchema = z
+  .strictObject({
+    /** Share of flights whose gate changes. */
+    share: z.number().min(0).max(1),
+    /** The change happens uniformly between these many minutes before the scheduled departure. */
+    minMinutesBeforeStd: z.number().min(0).max(600),
+    maxMinutesBeforeStd: z.number().min(0).max(600),
+    /** The feed reports it uniformly between 0 and this many minutes later. */
+    noticeDelayMaxMinutes: z.number().min(0).max(120),
+  })
+  .refine((g) => g.maxMinutesBeforeStd >= g.minMinutesBeforeStd, {
+    message: 'maxMinutesBeforeStd must not be smaller than minMinutesBeforeStd',
+  });
+
+const OutagesSchema = z.strictObject({
+  /** Mean number of outages per day (Poisson process over the operating day). */
+  perDay: z.number().min(0).max(50),
+  /** Log-normal duration: median and sigma, capped at the maximum. */
+  medianMinutes: z.number().min(0).max(600),
+  sigma: z.number().min(0).max(3),
+  maxMinutes: z.number().min(0).max(1440),
+});
+
 const SyntheticHourlyScheduleSchema = z.strictObject({
   kind: z.literal('synthetic-hourly'),
   /** Seed of the schedule generator: the design day is the same for every replication. */
@@ -162,7 +201,7 @@ const SyntheticHourlyScheduleSchema = z.strictObject({
 
 export const ScenarioSchema = z
   .strictObject({
-    schemaVersion: z.literal(3),
+    schemaVersion: z.literal(4),
     id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/, 'lowercase letters, digits and dashes'),
     title: z.string().min(1),
     description: z.string().min(1),
@@ -208,8 +247,20 @@ export const ScenarioSchema = z
     }),
     operations: z.strictObject({
       boardingCloseMinutesBeforeStd: param(z.number().int().min(0).max(180)),
-      /** How the system learns the deadline. In this version ground truth equals the rule. */
-      deadlineKnowledge: param(z.enum(['RULE', 'FEED'])),
+      /**
+       * How the system learns the deadline: from the feed, from the closing rule applied to the
+       * schedule the feed provides, or not at all (no flight feed).
+       */
+      deadlineKnowledge: param(z.enum(['RULE', 'FEED', 'NONE'])),
+    }),
+    /** Disruptions and data quality (ground truth vs what the system knows). */
+    disruptions: z.strictObject({
+      flightDelays: param(DelaysSchema),
+      gateChanges: param(GateChangesSchema),
+      /** Unplanned outages of one lane each. */
+      laneOutages: param(OutagesSchema),
+      /** Outages of the flight feed: the system's knowledge freezes until it recovers. */
+      feedOutages: param(OutagesSchema),
     }),
   })
   .superRefine((scenario, ctx) => {

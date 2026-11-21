@@ -122,6 +122,8 @@ export const PRIORITY_V0_SELECTION: ConstrainedEdfSelection = {
   eligibleSegments: ['DEPARTING', 'TRANSFER'],
   latePresentationCutoffMs: null,
   fastTrack: false,
+  maxDeadlineAgeMs: null,
+  hysteresisMs: 0,
 };
 
 /**
@@ -154,6 +156,21 @@ export const PRIORITY_V1_SELECTION: ConstrainedEdfSelection = {
 export const PRIORITY_V2_SELECTION: ConstrainedEdfSelection = {
   ...PRIORITY_V1_SELECTION,
   fastTrack: true,
+};
+
+/**
+ * Selection of policy B, version 3 (ADR-029): v2 with the S5 data-quality rules, calibrated on
+ * seeds 1001-1020:
+ * - stale data: a deadline the flight feed has not confirmed for more than 30 minutes is not
+ *   trusted (the ticket is UNVERIFIED and served in FIFO order) until the feed recovers;
+ * - hysteresis of 3 minutes: a ticket escalates at once and returns to a less urgent class only
+ *   when its margin exceeds the threshold by 3 minutes, so classes no longer flap with the
+ *   seconds-long oscillations of the FIFO estimate.
+ */
+export const PRIORITY_V3_SELECTION: ConstrainedEdfSelection = {
+  ...PRIORITY_V2_SELECTION,
+  maxDeadlineAgeMs: 30 * MS_PER_MINUTE,
+  hysteresisMs: 3 * MS_PER_MINUTE,
 };
 
 /**
@@ -247,6 +264,19 @@ export const PRIORITY_V2_POLICY: Policy = {
   queue: DEFAULT_VIRTUAL_QUEUE,
 };
 
+/**
+ * Policy B, version 3: priority v2 that distrusts stale flight data and holds risk classes with
+ * hysteresis (ADR-029).
+ */
+export const PRIORITY_V3_POLICY: Policy = {
+  id: 'priority-v3',
+  version: '0.1.0',
+  title:
+    'GateFlow virtual queue with constrained EDF priority v3: fast track, stale-data rule and hysteresis (policy B)',
+  selection: PRIORITY_V3_SELECTION,
+  queue: DEFAULT_VIRTUAL_QUEUE,
+};
+
 /** Policy B v1 with the late-presentation rule (anti-abuse). */
 export const PRIORITY_V1_STRICT_POLICY: Policy = {
   id: 'priority-v1-strict',
@@ -264,6 +294,7 @@ export const POLICY_PRESETS: readonly Policy[] = [
   PRIORITY_V1_POLICY,
   PRIORITY_V1_STRICT_POLICY,
   PRIORITY_V2_POLICY,
+  PRIORITY_V3_POLICY,
 ];
 
 export function findPolicyPreset(id: string): Policy | undefined {
@@ -282,5 +313,7 @@ export function classificationOf(policy: Policy): ClassificationParams | null {
     eligibleSegments: selection.eligibleSegments,
     latePresentationCutoffMs: selection.latePresentationCutoffMs,
     fastTrack: selection.fastTrack,
+    maxDeadlineAgeMs: selection.maxDeadlineAgeMs,
+    hysteresisMs: selection.hysteresisMs,
   };
 }

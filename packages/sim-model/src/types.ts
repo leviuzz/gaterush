@@ -1,5 +1,6 @@
 import type { KnownDeadline, Millis, RiskClass, Segment } from '@gateflow/domain';
 import type { ClassificationParams, ReasonCode } from '@gateflow/priority-engine';
+import type { QueueEvent } from '@gateflow/queue-core';
 
 /** A departing flight in a simulated service day. Times are ms since the start of the day. */
 export interface SimFlight {
@@ -10,9 +11,57 @@ export interface SimFlight {
   readonly stdMs: Millis;
   /** Ground truth: when boarding actually closes. Outcomes are judged against this. */
   readonly boardingCloseMs: Millis;
-  /** What the system knows about the deadline (may differ from the ground truth). */
+  /**
+   * What the system knows about the deadline at the start of the day (may differ from the ground
+   * truth). Later knowledge arrives through `updates`.
+   */
   readonly knownDeadline: KnownDeadline;
   readonly gateZone: string;
+  /** How much the flight is delayed (ground truth, already included in `boardingCloseMs`). */
+  readonly delayMs?: Millis;
+  /** Gate change (ground truth): from `atMs` the flight boards at another gate. */
+  readonly gateChange?: GateChange;
+  /** Knowledge the flight feed sends during the day, in time order. */
+  readonly updates?: readonly FlightUpdate[];
+}
+
+/** A gate change of a flight (ground truth). */
+export interface GateChange {
+  /** From this instant, passengers who finish screening walk to the new gate. */
+  readonly atMs: Millis;
+  readonly gateZone: string;
+  /**
+   * Nominal walking time to the new gate. A passenger's walk scales with it: walk x (new nominal /
+   * the passenger's nominal walking time).
+   */
+  readonly walkEstimateMs: Millis;
+}
+
+/** A message of the flight feed: new knowledge about one flight. */
+export interface FlightUpdate {
+  /**
+   * When the feed sends it. During a feed outage it reaches the system only when the feed
+   * recovers.
+   */
+  readonly atMs: Millis;
+  /** New known deadline (e.g. a delay is announced). */
+  readonly knownDeadline?: KnownDeadline;
+  /** New nominal walking time to the gate (e.g. a gate change is announced). */
+  readonly walkEstimateMs?: Millis;
+}
+
+/** An unplanned outage of lanes (the system sees it at once). */
+export interface LaneOutage {
+  readonly fromMs: Millis;
+  readonly toMs: Millis;
+  /** Lanes out of service. At least one planned lane always stays open. */
+  readonly lanes: number;
+}
+
+/** A period during which the flight feed sends nothing. */
+export interface FeedOutage {
+  readonly fromMs: Millis;
+  readonly toMs: Millis;
 }
 
 /** How a party crosses the checkpoint. */
@@ -92,6 +141,10 @@ export interface Population {
   readonly checkpoint: CheckpointSpec;
   readonly flights: readonly SimFlight[];
   readonly passengers: readonly SimPassenger[];
+  /** Unplanned lane outages of the day (none when absent). */
+  readonly laneOutages?: readonly LaneOutage[];
+  /** Outages of the flight feed (none when absent), sorted and not overlapping. */
+  readonly feedOutages?: readonly FeedOutage[];
 }
 
 /** What happened to one passenger in one run. */
@@ -133,6 +186,13 @@ export interface PassengerOutcome {
   readonly reactivations: number;
   /** Tickets issued again because the previous one expired. */
   readonly reissuedTickets: number;
+  /**
+   * Changes of risk class of the passenger's tickets while they waited, under the policy's own
+   * classification (0 for policies that do not classify, and for assisted passengers).
+   */
+  readonly classChanges: number;
+  /** Changes of class opposite in direction to the previous change (flapping). */
+  readonly classReversals: number;
 }
 
 export interface RunStats {
@@ -152,6 +212,15 @@ export interface RunStats {
   readonly fastTrackPeople: number;
   /** People waiting at the lanes who were passed by a fast-tracked party, counted once per pass. */
   readonly lanePassedPeople: number;
+  /** Changes of risk class of waiting tickets (stability, S5). */
+  readonly classChanges: number;
+  /** Class changes that reverse the ticket's previous change (flapping). */
+  readonly classReversals: number;
+  /**
+   * People on priority commitments made while the system's knowledge of their flight differed
+   * from the ground truth (a delay or a gate change not yet known).
+   */
+  readonly misinformedPriorityPeople: number;
   readonly reissuedTickets: number;
   readonly firstArrivalMs: Millis;
   readonly lastServiceEndMs: Millis;
@@ -186,4 +255,6 @@ export interface SimulationOptions {
    * for every policy keeps cohorts comparable across policies.
    */
   readonly classification: ClassificationParams;
+  /** Observer of the queue's events, for tests and diagnostics (it must not change the run). */
+  readonly listener?: (event: QueueEvent) => void;
 }

@@ -8,4 +8,4 @@ export { GENERATOR_VERSION, generatePopulation, generateSchedule } from './gener
 export type { ScheduledFlight } from './generate';
 
 /** Version of the scenario schema understood by this package. */
-export const SCENARIO_SCHEMA_VERSION = 3;
+export const SCENARIO_SCHEMA_VERSION = 4;

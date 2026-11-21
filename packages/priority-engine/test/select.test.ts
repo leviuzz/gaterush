@@ -159,6 +159,41 @@ describe('aheadOfWaiting', () => {
     });
   });
 
+  it('counts the committed tickets once: in the FIFO wait, not again in the FIFO slack', () => {
+    // L = 12 min; 25 committed tickets and 20 waiting ahead: FIFO wait = 45 people = 15 min, so
+    // slackFifo = 12 - 15 = -3 min; selected now, the ticket waits for the 25 committed ones only:
+    // slackNow = 12 min - 8.33 min.
+    const t = ticket(20, { deadline: { atMs: 17 * MIN, source: 'FEED' } });
+    const assessed = assessQueue(
+      {
+        nowMs: 0,
+        checkpoint: CHECKPOINT,
+        waiting: [...Array.from({ length: 20 }, (_, i) => ticket(i)), t],
+        aheadOfWaiting: 25,
+      },
+      EDF,
+    )[20]!;
+    const drain = Math.floor((25 * 60 * MIN) / 180);
+    expect(assessed).toMatchObject({
+      aheadInFifo: 45,
+      fifoWaitEstimateMs: 15 * MIN,
+      latestCallMs: 12 * MIN,
+      slackFifoMs: -3 * MIN,
+      slackNowMs: 12 * MIN - drain,
+    });
+  });
+
+  it('does not treat a ticket as urgent because of the committed tickets alone', () => {
+    // FIFO wait 45 people = 15 min, L = 16 min: one minute to spare under FIFO, so not URGENT,
+    // although L - now - (committed drain + FIFO wait) would be negative.
+    const waiting = Array.from({ length: 40 }, (_, i) =>
+      i === 20 ? ticket(i, { deadline: { atMs: 21 * MIN, source: 'FEED' } }) : ticket(i),
+    );
+    const selection = selectNext(input(waiting, { aheadOfWaiting: 25 }));
+    expect(selection?.ticketId).toBe('t0');
+    expect(selection?.urgentCandidates).toBe(0);
+  });
+
   it('rejects negative or fractional offsets', () => {
     expect(() => selectNext(input([ticket(1)], { aheadOfWaiting: -1 }))).toThrow(EngineInputError);
     expect(() => selectNext(input([ticket(1)], { aheadOfWaiting: 1.5 }))).toThrow(EngineInputError);

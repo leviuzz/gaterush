@@ -6,6 +6,27 @@ must be listed, together with the component versions it bumps.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-21: engine fix
+
+### Fixed
+
+- `@gateflow/priority-engine` 0.2.1 (engine version 0.2.1): with a prepare window, the FIFO slack
+  subtracted the time to call the committed tickets twice (once inside the FIFO wait, once more on
+  top), so tickets looked about a minute more at risk than they were (ten committed tickets at 540
+  passengers per hour). Found while preparing slice S3. A property test now checks both margins
+  against their definitions, and another one checks that selection and assessment agree on the
+  boost-eligible tickets.
+- Effect on the S2 reports (200 simulated days), all within the confidence intervals:
+
+  | Scenario | `priority-v0` missed flights per day | Net flights saved vs `fifo` | Net saved vs `virtual-fifo` |
+  |---|---:|---:|---:|
+  | demo | 29.7 -> 29.6 | 19.1 -> 19.1 | 19.6 -> 19.6 |
+  | moderate | 10.1 -> 10.2 | 1.8 -> 1.7 | 2.3 -> 2.1 |
+  | staffed | 37.0 -> 36.6 | 21.9 -> 22.3 | 22.5 -> 22.9 |
+
+  S1 results, physical and virtual FIFO, and everything without a prepare window are unaffected.
+  Golden files regenerated.
+
 ## [0.2.0] - 2026-11-21: Slice S2
 
 Realistic call mechanics: the status quo is now a physical queue, and GateFlow policies run a

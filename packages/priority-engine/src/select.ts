@@ -84,8 +84,9 @@ function selectConstrainedEdf(
     const latest = deadlineMs - fixedMs - ticket.walkEstimateMs;
     const slackNow = latest - nowMs - committedDrainMs;
     if (slackNow < 0) continue; // CRITICAL: escalate, never boost automatically
+    // The FIFO wait already counts the committed tickets ahead (the offset).
     const fifoWait = fifoWaitEstimateMs(offset + i, checkpoint.throughputPerHour);
-    if (slackNow - fifoWait >= 0) continue; // fine in FIFO
+    if (latest - nowMs - fifoWait >= 0) continue; // fine in FIFO
     urgentCandidates++;
     if (latest < urgentLatest) {
       urgentLatest = latest;

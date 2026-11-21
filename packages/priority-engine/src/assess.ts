@@ -71,7 +71,8 @@ export function assessTicket(
     (checkpoint.responseMs + checkpoint.processMs + ticket.walkEstimateMs + params.safetyBufferMs);
   const slackNowMs =
     latestCallMs - nowMs - fifoWaitEstimateMs(committedAhead, checkpoint.throughputPerHour);
-  const slackFifoMs = slackNowMs - fifoWait;
+  // The FIFO wait already counts the committed tickets ahead: they must not be subtracted twice.
+  const slackFifoMs = latestCallMs - nowMs - fifoWait;
   let riskClass: RiskClass;
   if (slackNowMs < 0) {
     riskClass = 'CRITICAL';

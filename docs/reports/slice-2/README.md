@@ -10,6 +10,11 @@ assumptions**, not measurements, and must not be presented as evidence of operat
 | `single-checkpoint-moderate`: moderate morning peak, six lanes all day | [report.md](single-checkpoint-moderate/report.md) | [results.json](single-checkpoint-moderate/results.json) |
 | `single-checkpoint-staffed`: the demo day with a lane schedule that follows demand | [report.md](single-checkpoint-staffed/report.md) | [results.json](single-checkpoint-staffed/results.json) |
 
+> **Correction (engine 0.2.1).** These reports were produced with engine 0.2.0, which counted the
+> committed prepare window twice in the FIFO slack of `priority-v0`. With the fix the headline
+> numbers move by less than their confidence intervals (net flights saved vs `fifo`: demo 19.1,
+> moderate 1.7, staffed 22.3); see the changelog, version 0.2.1. The reports are kept as produced.
+
 Three policies run on exactly the same passengers:
 - `fifo`: today's physical queue, the status quo;
 - `virtual-fifo`: the GateFlow virtual queue served in FIFO order;

@@ -140,7 +140,7 @@ describe('results document', () => {
       baselinePolicyId: 'fifo',
       comparisons: COMPARISONS,
       versions: {
-        engine: '0.2.0',
+        engine: '0.2.1',
         queueCore: '0.1.0',
         model: '0.2.0',
         kernel: '0.1.0',

@@ -260,6 +260,50 @@ describe('priority engine properties', () => {
     );
   });
 
+  it('P10 computes the margins from their definitions (independent oracle)', () => {
+    fc.assert(
+      fc.property(inputArb, (inp) => {
+        const policy = inp.selection as ConstrainedEdfSelection;
+        const offset = inp.aheadOfWaiting ?? 0;
+        const hour = 3_600_000;
+        const wait = (people: number) =>
+          Math.floor((people * hour) / inp.checkpoint.throughputPerHour);
+        const ordered = byFifo(inp.waiting);
+        assessQueue(inp, policy).forEach((a, i) => {
+          const t = ordered[i]!;
+          if (a.latestCallMs === null) return;
+          const latest =
+            t.deadline.atMs! -
+            (inp.checkpoint.responseMs +
+              inp.checkpoint.processMs +
+              t.walkEstimateMs +
+              policy.safetyBufferMs);
+          expect(a.latestCallMs).toBe(latest);
+          expect(a.slackFifoMs).toBe(latest - inp.nowMs - wait(offset + i));
+          expect(a.slackNowMs).toBe(latest - inp.nowMs - wait(offset));
+        });
+      }),
+      RUNS,
+    );
+  });
+
+  it('P11 selection and assessment agree on which tickets are boost-eligible URGENT', () => {
+    fc.assert(
+      fc.property(inputArb, (inp) => {
+        const selection = selectNext(inp);
+        if (selection === null) return;
+        const eligible = assessQueue(inp, inp.selection as ConstrainedEdfSelection).filter(
+          (a) => a.boostEligible,
+        );
+        expect(selection.urgentCandidates).toBe(eligible.length);
+        if (selection.priorityCall) {
+          expect(eligible.map((a) => a.ticketId)).toContain(selection.ticketId);
+        }
+      }),
+      RUNS,
+    );
+  });
+
   it('P9 over a sequence of calls: every window of N calls has at most k priority calls and no ticket is overtaken more than K times', () => {
     const scenarioArb = policyArb.chain((policy) =>
       fc.record({

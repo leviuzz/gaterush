@@ -1,5 +1,5 @@
 /** Version of the priority engine. Bump on any change that can alter a decision. */
-export const ENGINE_VERSION = '0.2.0';
+export const ENGINE_VERSION = '0.2.1';
 
 export { assessQueue, assessTicket, fifoWaitEstimateMs, isDeadlineTrusted } from './assess';
 export type { QueueSnapshot } from './assess';

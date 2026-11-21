@@ -167,9 +167,11 @@ an explicit time, and time may never go backwards.
 | `present(id, t, estimates)` | Validation at the access point: `ADMITTED`, `REACTIVATED` (a no-show rescanning in time), `EXPIRED`, or a refusal (`NOT_CALLED`, `ALREADY_ADMITTED`, `UNKNOWN_TICKET`). |
 | `advance(t)` / `nextDueMs()` | Applies the timeouts due by `t` / tells when the next one is due. |
 
-States: `QUEUED -> PREPARE -> CALLED -> RECALLED -> NO_SHOW -> EXPIRED`, with `ADMITTED`
-reachable from `CALLED` and `RECALLED`, and `NO_SHOW -> QUEUED` on reactivation (at the original
-place or at the back, at most `r` times).
+States: `QUEUED -> PREPARE -> CALLED -> RECALLED -> NO_SHOW -> EXPIRED`, where:
+- `PREPARE` is skipped when there is no prepare window (M = 0);
+- `ADMITTED` is reachable from `CALLED` and `RECALLED`;
+- `NO_SHOW -> QUEUED` on reactivation (at the original place or at the back, at most `r` times);
+- a no-show that may not be reactivated again expires at once.
 
 - **Prepare window (M tickets).** Tickets are committed to the window by the engine and shown on
   displays; a committed ticket leaves the window only by being called (no churn).
@@ -179,8 +181,8 @@ place or at the back, at most `r` times).
 - **Events.** Every transition is reported to a listener in chronological order (the audit log in
   production, metrics in simulation).
 
-Property tests (1,000 random operation sequences on random policies) check, independently of the
-implementation: zero churn, window size at most M, state counters, a single admission per ticket,
+Property tests (1,000 random operation sequences on random policies, 300 for determinism) check,
+independently of the implementation: zero churn, window size at most M, state counters, a single admission per ticket,
 terminal states, chronological events, the cap and the K bound over commitments (with an
 independent overtake model), and determinism. A coverage test guarantees that the sequences reach
 priority commitments, the cap, the guard and reactivations.

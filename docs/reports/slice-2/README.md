@@ -53,8 +53,8 @@ Means per simulated day; brackets give 95% confidence intervals of the mean.
   flights per day on the demo scenario and 5.0 on the moderate one. With response times, the
   prepare window and a 3-minute call-to-screening estimate, priority v0 saves 19.1 and 1.8. This
   is the expected effect of a more realistic model, not a regression.
-- **A missed call can cost a passenger dearly.** The longest time to screening rises from about
-  30 minutes to about 110. A passenger who misses the call and comes back after the reactivation
+- **A missed call can cost a passenger dearly.** The longest time to screening over 200 days rises
+  from 20-34 minutes with the physical queue to 108-115 minutes with the virtual queue. A passenger who misses the call and comes back after the reactivation
   window (20 minutes after the call) needs a new ticket at the back of the queue, and on a peak
   day that is a long wait. The rule is a policy choice for the airport (ADR-017).
 - **Leaner staffing.** The staffed plan runs about 88 staffed lane-hours per day instead of 113,

@@ -1,10 +1,10 @@
-# GateFlow simulation scenario (schema version 4).
+# GateFlow simulation scenario (schema version 5).
 #
 # SYNTHETIC DEMONSTRATION SCENARIO. It does not describe any real airport. Every parameter is a
 # labelled assumption (source: SYNTHETIC) chosen to produce a plausible-looking day with a morning
 # peak. Results obtained with it are simulated and must never be presented as operational evidence.
 
-schemaVersion: 4
+schemaVersion: 5
 id: single-checkpoint-strategic
 title: Single departure checkpoint, congested morning peak with strategic late arrivals
 description: >-
@@ -14,6 +14,12 @@ description: >-
   priority-v1-strict (departing passengers must present at least 45 minutes before departure to
   be boosted automatically).
 dataClassification: SYNTHETIC
+dataSources:
+  - id: gateflow-synthetic
+    title: Synthetic assumptions of this scenario
+    kind: SYNTHETIC
+    provider: GateFlow
+    licence: Created for GateFlow; contains no third-party data.
 timeZone: Europe/Rome
 
 checkpoint:

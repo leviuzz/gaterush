@@ -6,17 +6,49 @@ export type SourceLabel = (typeof SOURCE_LABELS)[number];
 
 const SourceSchema = z.enum(SOURCE_LABELS);
 
+const ID = /^[a-z0-9][a-z0-9-]*$/;
+const ID_MESSAGE = 'lowercase letters, digits and dashes';
+
 /**
  * Every model parameter is wrapped with its provenance, so that no number can enter a report
  * without saying whether it is synthetic, from the literature, provided by an airport or measured.
+ * `ref` names the entry of `dataSources` the value comes from, when there is one.
  */
 function param<T extends z.ZodType>(value: T) {
   return z.strictObject({
     value,
     source: SourceSchema,
+    ref: z.string().regex(ID, ID_MESSAGE).optional(),
     note: z.string().min(1).optional(),
   });
 }
+
+/**
+ * Where the data of a scenario comes from, with its licence or terms of use. Every scenario lists
+ * at least one source, so that every report can say what its numbers rest on and under which
+ * terms they may be used.
+ */
+const DataSourceSchema = z.strictObject({
+  id: z.string().regex(ID, ID_MESSAGE),
+  title: z.string().min(1),
+  /** Nature of the data, with the same labels as parameters. */
+  kind: SourceSchema,
+  /** Who publishes or provides the data. */
+  provider: z.string().min(1),
+  /** Licence or terms of use, including any restriction such as "non-commercial use only". */
+  licence: z.string().min(1),
+  url: z
+    .string()
+    .regex(/^https:\/\/\S+$/, 'expected an https URL')
+    .optional(),
+  /** Day the data was retrieved or received, YYYY-MM-DD. */
+  retrieved: z
+    .string()
+    .regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, 'expected a date YYYY-MM-DD')
+    .optional(),
+  note: z.string().min(1).optional(),
+});
+export type DataSource = z.infer<typeof DataSourceSchema>;
 
 const ShowUpSchema = z
   .strictObject({
@@ -199,14 +231,182 @@ const SyntheticHourlyScheduleSchema = z.strictObject({
   gateZones: param(GateZonesSchema),
 });
 
+/**
+ * One departure of a flight list (format `gateflow.flights/1`). Only the flight and its scheduled
+ * departure are required. The number of passengers is `passengers` when given; otherwise it is
+ * drawn as seats x load factor, with the seats of the row or of the aircraft type.
+ */
+export const FlightRowSchema = z.strictObject({
+  /** Identifier of the flight, unique in the list (e.g. a flight number). */
+  flight: z.string().min(1).max(32).regex(/^\S+$/, 'flight identifiers must not contain spaces'),
+  /** Scheduled departure, local time of the service day, HH:MM. */
+  std: z.string().regex(CLOCK, 'expected a clock time HH:MM between 00:00 and 23:59'),
+  /** Aircraft type, ideally the ICAO type designator (e.g. A320, B738). */
+  aircraft: z.string().min(1).max(40).optional(),
+  seats: z.number().int().min(1).max(1000).optional(),
+  /** Expected passengers through the checkpoint, when the airport knows them. */
+  passengers: z.number().int().min(0).max(1000).optional(),
+  /** Gate zone of the departure; drawn from the zone shares when absent. */
+  gateZone: z.string().min(1).optional(),
+  /** Destination (informative). */
+  destination: z.string().min(1).max(64).optional(),
+});
+export type FlightRow = z.infer<typeof FlightRowSchema>;
+
+const SeatsSchema = z
+  .array(
+    z.strictObject({
+      aircraft: z.string().min(1).max(40),
+      seats: z.number().int().min(1).max(1000),
+    }),
+  )
+  .min(1)
+  .refine((rows) => new Set(rows.map((r) => r.aircraft)).size === rows.length, {
+    message: 'each aircraft type may appear only once',
+  });
+
+const FlightListScheduleSchema = z.strictObject({
+  kind: z.literal('flight-list'),
+  /** Seed of the draws that complete the list (gate zones not given): fixed for the design day. */
+  generatorSeed: z.number().int().min(0).max(0xffffffff),
+  flights: z.strictObject({
+    /** The entry of `dataSources` the flight list comes from. */
+    source: z.string().regex(ID, ID_MESSAGE),
+    /** CSV file the rows were read from, relative to the scenario file (informative once read). */
+    file: z.string().min(1).optional(),
+    /** SHA-256 of the CSV file as read. */
+    sha256: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/, 'expected a hexadecimal SHA-256')
+      .optional(),
+    rows: z.array(FlightRowSchema).min(1).max(5000),
+  }),
+  /** Seats by aircraft type, for rows without seats or passengers. */
+  seats: param(SeatsSchema).optional(),
+  gateZones: param(GateZonesSchema),
+});
+
+/** The part of a refinement context used by the checks below. */
+interface IssueSink {
+  addIssue(issue: { code: 'custom'; path: (string | number)[]; message: string }): void;
+}
+
+/** Data source ids are unique, and every reference names one of them. */
+function checkDataSources(
+  scenario: {
+    readonly dataSources: readonly { readonly id: string }[];
+    readonly schedule: { readonly kind: string };
+  },
+  ctx: IssueSink,
+): void {
+  const ids = new Set<string>();
+  scenario.dataSources.forEach((source, i) => {
+    if (ids.has(source.id)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['dataSources', i, 'id'],
+        message: `duplicate data source id "${source.id}"`,
+      });
+    }
+    ids.add(source.id);
+  });
+  const known = [...ids].join(', ');
+  const visit = (node: unknown, path: (string | number)[]): void => {
+    if (typeof node !== 'object' || node === null) return;
+    if (Array.isArray(node)) {
+      node.forEach((child: unknown, i) => {
+        visit(child, [...path, i]);
+      });
+      return;
+    }
+    const record = node as Record<string, unknown>;
+    const isParam =
+      'value' in record &&
+      typeof record.source === 'string' &&
+      (SOURCE_LABELS as readonly string[]).includes(record.source);
+    if (isParam) {
+      if (typeof record.ref === 'string' && !ids.has(record.ref)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [...path, 'ref'],
+          message: `unknown data source "${record.ref}" (known: ${known})`,
+        });
+      }
+      return;
+    }
+    for (const [key, child] of Object.entries(record)) {
+      if (key !== 'dataSources') visit(child, [...path, key]);
+    }
+  };
+  visit(scenario, []);
+  const schedule = scenario.schedule as { kind: string; flights?: { source?: unknown } };
+  const source = schedule.flights?.source;
+  if (schedule.kind === 'flight-list' && typeof source === 'string' && !ids.has(source)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['schedule', 'flights', 'source'],
+      message: `unknown data source "${source}" (known: ${known})`,
+    });
+  }
+}
+
+/**
+ * A flight list must be usable as it is: unique flights, known gate zones, and for every flight
+ * a number of passengers, or seats from the row or from the aircraft type.
+ */
+function checkFlightList(schedule: z.infer<typeof FlightListScheduleSchema>, ctx: IssueSink): void {
+  const zones = new Set(schedule.gateZones.value.map((z) => z.id));
+  const seatsByType = new Map((schedule.seats?.value ?? []).map((s) => [s.aircraft, s.seats]));
+  const seen = new Set<string>();
+  schedule.flights.rows.forEach((row, i) => {
+    const path = (...rest: string[]) => ['schedule', 'flights', 'rows', i, ...rest];
+    if (seen.has(row.flight)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: path('flight'),
+        message: `duplicate flight ${row.flight}`,
+      });
+    }
+    seen.add(row.flight);
+    if (row.gateZone !== undefined && !zones.has(row.gateZone)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: path('gateZone'),
+        message: `flight ${row.flight}: unknown gate zone "${row.gateZone}" (known: ${[...zones].join(', ')})`,
+      });
+    }
+    const seats =
+      row.seats ?? (row.aircraft === undefined ? undefined : seatsByType.get(row.aircraft));
+    if (row.passengers === undefined && seats === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: path(),
+        message:
+          row.aircraft === undefined
+            ? `flight ${row.flight}: give passengers, seats or an aircraft type`
+            : `flight ${row.flight}: no seats for aircraft type "${row.aircraft}" (give seats in the file or add the type to schedule.seats)`,
+      });
+    }
+    if (row.passengers !== undefined && seats !== undefined && row.passengers > seats) {
+      ctx.addIssue({
+        code: 'custom',
+        path: path('passengers'),
+        message: `flight ${row.flight}: ${row.passengers} passengers exceed the ${seats} seats`,
+      });
+    }
+  });
+}
+
 export const ScenarioSchema = z
   .strictObject({
-    schemaVersion: z.literal(4),
-    id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/, 'lowercase letters, digits and dashes'),
+    schemaVersion: z.literal(5),
+    id: z.string().regex(ID, ID_MESSAGE),
     title: z.string().min(1),
     description: z.string().min(1),
     /** Overall nature of the data. Reports are always labelled as simulated. */
     dataClassification: z.enum(['SYNTHETIC', 'MIXED', 'AIRPORT_PROVIDED']),
+    /** Where the data comes from and under which terms it may be used. */
+    dataSources: z.array(DataSourceSchema).min(1),
     /** IANA time zone of the service day (informative in this version). */
     timeZone: z.string().min(1),
     checkpoint: z.strictObject({
@@ -217,7 +417,10 @@ export const ScenarioSchema = z
       serviceTimeMeanSeconds: param(z.number().positive().max(3600)),
       serviceTimeCv: param(z.number().min(0).max(3)),
     }),
-    schedule: z.discriminatedUnion('kind', [SyntheticHourlyScheduleSchema]),
+    schedule: z.discriminatedUnion('kind', [
+      SyntheticHourlyScheduleSchema,
+      FlightListScheduleSchema,
+    ]),
     passengers: z.strictObject({
       loadFactor: param(
         z
@@ -264,6 +467,8 @@ export const ScenarioSchema = z
     }),
   })
   .superRefine((scenario, ctx) => {
+    checkDataSources(scenario, ctx);
+    if (scenario.schedule.kind === 'flight-list') checkFlightList(scenario.schedule, ctx);
     const close = scenario.operations.boardingCloseMinutesBeforeStd.value;
     if (scenario.passengers.strategicLateArrival.value.minMinutesBeforeStd < close) {
       ctx.addIssue({

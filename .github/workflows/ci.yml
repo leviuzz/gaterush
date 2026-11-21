@@ -46,9 +46,16 @@ jobs:
           node apps/sim-cli/dist/gateflow-sim.mjs sweep --spec sweeps/data-quality-disrupted.yaml --seeds 1-3 --out out/sb --quiet --workers 4
           cmp out/sa/sweep.json out/sb/sweep.json
           cmp out/sa/sweep.html out/sb/sweep.html
+          # A scenario whose flights come from a CSV file (S7).
+          node apps/sim-cli/dist/gateflow-sim.mjs run --scenario scenarios/vce-like-peak-day.yaml --seeds 1-10 --out out/fa --quiet --workers 1
+          node apps/sim-cli/dist/gateflow-sim.mjs run --scenario scenarios/vce-like-peak-day.yaml --seeds 1-10 --out out/fb --quiet --workers 4
+          cmp out/fa/results.json out/fb/results.json
+          cmp out/fa/report.html out/fb/report.html
+      - name: The library flight lists are up to date
+        run: node scenarios/flights/make-library-flights.mjs --check
 
   demo-reports:
-    name: Demo reports (200 simulated days)
+    name: Scenario reports (200 simulated days)
     needs: check
     runs-on: ubuntu-latest
     steps:
@@ -60,10 +67,11 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - name: Simulate the demo scenarios
+      - name: Simulate the demo scenarios and the scenario library
         run: |
           # Priority v2 is included so that every report also shows the effect of the S5 rules.
-          for scenario in single-checkpoint-demo single-checkpoint-moderate single-checkpoint-staffed single-checkpoint-strategic single-checkpoint-disrupted single-checkpoint-feed-stress; do
+          for scenario in single-checkpoint-demo single-checkpoint-moderate single-checkpoint-staffed single-checkpoint-strategic single-checkpoint-disrupted single-checkpoint-feed-stress \
+            vce-like-normal-day vce-like-peak-day vce-like-disrupted-day tsf-like-peak-day mx-like-transfer-hub; do
             node apps/sim-cli/dist/gateflow-sim.mjs run --scenario "scenarios/$scenario.yaml" --seeds 1-200 \
               --policies fifo,fifo-manual,virtual-fifo,priority-v2,priority-v3 --out "out/$scenario"
           done

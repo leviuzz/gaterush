@@ -1,4 +1,5 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -116,8 +117,11 @@ describe('gateflow-sim validate, policies, help', () => {
     const result = await cli(['validate', '--scenario', DEMO]);
     expect(result.code).toBe(EXIT_OK);
     expect(result.stdout).toContain('valid scenario single-checkpoint-demo');
-    expect(result.stdout).toContain('flights        40 on the design day');
+    expect(result.stdout).toContain('flights        40 on the design day (hourly profile)');
     expect(result.stdout).toContain('assumptions    21 labelled parameters');
+    expect(result.stdout).toContain(
+      'data sources   gateflow-synthetic (SYNTHETIC): Created for GateFlow; contains no third-party data.',
+    );
   });
 
   it('reports invalid scenarios with exit code 1', async () => {
@@ -126,7 +130,7 @@ describe('gateflow-sim validate, policies, help', () => {
     const result = await cli(['validate', '--scenario', bad]);
     expect(result.code).toBe(EXIT_FAILURE);
     expect(result.stderr).toContain('invalid scenario');
-    expect(result.stderr).toContain('migrated to version 4');
+    expect(result.stderr).toContain('migrated to version 5');
   });
 
   it('lists the policy presets as JSON', async () => {
@@ -163,7 +167,116 @@ describe('gateflow-sim validate, policies, help', () => {
 
   it('prints help and version', async () => {
     expect((await cli(['--help'])).stdout).toContain('Usage:');
-    expect((await cli(['--version'])).stdout.trim()).toBe('0.6.0');
+    expect((await cli(['--version'])).stdout.trim()).toBe('0.7.0');
+  });
+});
+
+describe('gateflow-sim flights and flight list scenarios', () => {
+  const dir = join(workDir, 'flight-list');
+  const csv = join(dir, 'flights', 'demo.csv');
+  const scenarioFile = join(dir, 'demo-from-file.yaml');
+
+  beforeAll(async () => {
+    mkdirSync(join(dir, 'flights'), { recursive: true });
+    const exported = await cli(['flights', '--scenario', DEMO, '--out', csv]);
+    expect(exported.code).toBe(EXIT_OK);
+    expect(exported.stdout).toContain('(40 flights)');
+    const yaml = readFileSync(DEMO, 'utf8')
+      .replace('id: single-checkpoint-demo', 'id: demo-from-file')
+      .replace(
+        /^schedule:\n(?: .*\n|\n)*?(?=^passengers:)/m,
+        [
+          'schedule:',
+          '  kind: flight-list',
+          '  generatorSeed: 20261121',
+          '  flights:',
+          '    source: gateflow-synthetic',
+          '    file: flights/demo.csv',
+          '  gateZones:',
+          '    value:',
+          '      - { id: A, walkMinutes: 4, share: 0.4 }',
+          '      - { id: B, walkMinutes: 8, share: 0.4 }',
+          '      - { id: C, walkMinutes: 14, share: 0.2 }',
+          '    source: SYNTHETIC',
+          '',
+        ].join('\n'),
+      );
+    writeFileSync(scenarioFile, yaml);
+  });
+
+  it('writes the design day as CSV, to standard output by default', async () => {
+    const text = readFileSync(csv, 'utf8');
+    expect(text.split('\n')[0]).toBe(
+      '# gateflow.flights/1: design day of scenario single-checkpoint-demo (SYNTHETIC data)',
+    );
+    expect(text).toContain(
+      'flight,std,aircraft,seats,passengers,gate_zone,destination\nF001,06:06,',
+    );
+    expect((await cli(['flights', '--scenario', DEMO])).stdout).toBe(text);
+  });
+
+  it('simulates a scenario whose flights come from a file exactly like the original', async () => {
+    const validated = await cli(['validate', '--scenario', scenarioFile]);
+    expect(validated.stdout).toContain(
+      'flights        40 on the design day (flight list flights/demo.csv, source gateflow-synthetic)',
+    );
+    const run = async (scenario: string, out: string) => {
+      const result = await cli([
+        'run',
+        '--scenario',
+        scenario,
+        '--seeds',
+        '1-2',
+        '--out',
+        join(dir, out),
+        '--bootstrap-resamples',
+        '100',
+        '--quiet',
+      ]);
+      expect(result.code).toBe(EXIT_OK);
+      return {
+        doc: JSON.parse(readFileSync(join(dir, out, 'results.json'), 'utf8')) as {
+          manifest: { scenario: { schedule: { sha256: string | null; file: string | null } } };
+          summary: unknown;
+          perSeed: unknown;
+        },
+        report: readFileSync(join(dir, out, 'report.md'), 'utf8'),
+      };
+    };
+    const original = await run(DEMO, 'original');
+    const fromFile = await run(scenarioFile, 'from-file');
+    expect(fromFile.doc.summary).toEqual(original.doc.summary);
+    expect(fromFile.doc.perSeed).toEqual(original.doc.perSeed);
+    const sha = createHash('sha256').update(readFileSync(csv, 'utf8'), 'utf8').digest('hex');
+    expect(fromFile.doc.manifest.scenario.schedule).toMatchObject({
+      file: 'flights/demo.csv',
+      sha256: sha,
+    });
+    expect(fromFile.report).toContain(
+      `Design day: 40 departures from the flight list \`flights/demo.csv\` (SHA-256 \`${sha}\`), source \`gateflow-synthetic\`.`,
+    );
+  });
+
+  it('reports a missing or broken flight list as an invalid scenario', async () => {
+    const missing = join(dir, 'missing-file.yaml');
+    writeFileSync(
+      missing,
+      readFileSync(scenarioFile, 'utf8').replace('flights/demo.csv', 'flights/none.csv'),
+    );
+    const result = await cli(['validate', '--scenario', missing]);
+    expect(result.code).toBe(EXIT_FAILURE);
+    expect(result.stderr).toContain('schedule.flights.file: cannot read flights/none.csv');
+    const broken = join(dir, 'broken.yaml');
+    writeFileSync(join(dir, 'flights', 'broken.csv'), 'flight,std\nX1,6:00\n');
+    writeFileSync(
+      broken,
+      readFileSync(scenarioFile, 'utf8').replace('flights/demo.csv', 'flights/broken.csv'),
+    );
+    const brokenResult = await cli(['validate', '--scenario', broken]);
+    expect(brokenResult.code).toBe(EXIT_FAILURE);
+    expect(brokenResult.stderr).toContain(
+      'flight list flights/broken.csv, line 2: std: expected a clock time HH:MM',
+    );
   });
 });
 
@@ -220,7 +333,7 @@ describe('gateflow-sim sweep', () => {
       manifest: { commit: string; reproduce: string; simulatedDays: number };
       dimensions: { points: { label: string }[] }[];
     };
-    expect(doc.schema).toBe('gateflow.sim.sweep/1');
+    expect(doc.schema).toBe('gateflow.sim.sweep/2');
     expect(doc.manifest.commit).toBe('test-commit');
     expect(doc.manifest.reproduce).toBe(
       'gateflow-sim sweep --spec sweeps/test-sweep.yaml --seeds 1-2 --bootstrap-resamples 50',

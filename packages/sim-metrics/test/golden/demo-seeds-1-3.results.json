@@ -1,5 +1,5 @@
 {
-  "schema": "gateflow.sim.results/5",
+  "schema": "gateflow.sim.results/6",
   "disclaimer": "SIMULATED RESULTS ON SYNTHETIC OR HYPOTHETICAL DATA. These numbers are model outputs, not measurements, and must not be presented as evidence of operational performance.",
   "manifest": {
     "generator": {
@@ -12,15 +12,31 @@
       "queueCore": "0.5.0",
       "model": "0.5.0",
       "kernel": "0.1.0",
-      "populationGenerator": "0.4.0",
-      "scenarioSchema": 4
+      "populationGenerator": "0.5.0",
+      "scenarioSchema": 5
     },
     "scenario": {
       "id": "single-checkpoint-demo",
       "title": "Single departure checkpoint, synthetic day with a congested morning peak",
-      "hash": "sha256:9ccf37cfba384e844c1d47723edd82513efca0120c1edb1d1ce81e073d2e2991",
+      "hash": "sha256:25ef984b088cdc721b971fbab531aff7beddbd636f43a9dee5c00297a8fadceb",
       "dataClassification": "SYNTHETIC",
-      "timeZone": "Europe/Rome"
+      "timeZone": "Europe/Rome",
+      "dataSources": [
+        {
+          "id": "gateflow-synthetic",
+          "title": "Synthetic assumptions of this scenario",
+          "kind": "SYNTHETIC",
+          "provider": "GateFlow",
+          "licence": "Created for GateFlow; contains no third-party data."
+        }
+      ],
+      "schedule": {
+        "kind": "synthetic-hourly",
+        "flights": 40,
+        "file": null,
+        "sha256": null,
+        "source": null
+      }
     },
     "seeds": {
       "count": 3,
@@ -210,18 +226,21 @@
         }
       ],
       "source": "SYNTHETIC",
+      "ref": null,
       "note": "Six lanes open all day, as in slice S1, so that results remain comparable."
     },
     {
       "path": "checkpoint.serviceTimeMeanSeconds",
       "value": 40,
       "source": "SYNTHETIC",
+      "ref": null,
       "note": "About 90 passengers per hour per lane."
     },
     {
       "path": "checkpoint.serviceTimeCv",
       "value": 0.6,
       "source": "SYNTHETIC",
+      "ref": null,
       "note": null
     },
     {
@@ -293,6 +312,7 @@
         }
       ],
       "source": "SYNTHETIC",
+      "ref": null,
       "note": "Design day with a morning bank of departures, typical of low-cost bases."
     },
     {
@@ -320,6 +340,7 @@
         }
       ],
       "source": "SYNTHETIC",
+      "ref": null,
       "note": null
     },
     {
@@ -342,6 +363,7 @@
         }
       ],
       "source": "SYNTHETIC",
+      "ref": null,
       "note": "Nominal walking time from the checkpoint exit to the gate zone."
     },
     {
@@ -352,12 +374,14 @@
         "max": 0.98
       },
       "source": "SYNTHETIC",
+      "ref": null,
       "note": "Triangular distribution, drawn per flight and replication."
     },
     {
       "path": "passengers.transferShare",
       "value": 0.05,
       "source": "SYNTHETIC",
+      "ref": null,
       "note": "Connecting passengers who cross this checkpoint. Not an official statistic."
     },
     {
@@ -369,6 +393,7 @@
         "maxMinutesBeforeStd": 240
       },
       "source": "SYNTHETIC",
+      "ref": null,
       "note": "Arrival at the checkpoint = STD minus (25 min + log-normal with median 70 min)."
     },
     {
@@ -380,12 +405,14 @@
         "maxMinutesBeforeStd": 180
       },
       "source": "SYNTHETIC",
+      "ref": null,
       "note": "Connecting passengers arrive later, after their inbound flight."
     },
     {
       "path": "passengers.walkSpeedSigma",
       "value": 0.2,
       "source": "SYNTHETIC",
+      "ref": null,
       "note": "Individual walking time = nominal zone time x log-normal(median 1, sigma)."
     },
     {
@@ -398,6 +425,7 @@
         "absentExtraSigma": 0.8
       },
       "source": "SYNTHETIC",
+      "ref": null,
       "note": "Virtual queue only. Time from a call to presenting at the access point is log-normal with a median of 75 s (passengers wait near the checkpoint); 4% do not notice the first call and present later by a log-normal extra delay with a median of 4 minutes. Hypotheses to measure in a pilot."
     },
     {
@@ -427,12 +455,14 @@
         ]
       },
       "source": "SYNTHETIC",
+      "ref": null,
       "note": "Shares over parties: about 40% of passengers travel with others. A party holds one ticket, is called together and is screened on one lane, one person after the other."
     },
     {
       "path": "passengers.assistedShare",
       "value": 0.007,
       "source": "SYNTHETIC",
+      "ref": null,
       "note": "Parties taking the assisted path (PRM and similar): staff take them to the next free lane, ahead of the queue, under every policy. The reason is never recorded."
     },
     {
@@ -443,18 +473,21 @@
         "maxMinutesBeforeStd": 35
       },
       "source": "SYNTHETIC",
+      "ref": null,
       "note": "Nobody arrives late on purpose in this scenario."
     },
     {
       "path": "operations.boardingCloseMinutesBeforeStd",
       "value": 20,
       "source": "SYNTHETIC",
+      "ref": null,
       "note": "Boarding closes 20 minutes before the scheduled departure, for every flight."
     },
     {
       "path": "operations.deadlineKnowledge",
       "value": "RULE",
       "source": "SYNTHETIC",
+      "ref": null,
       "note": "The system applies the closing rule to the schedule; without disruptions it matches the ground truth exactly."
     },
     {
@@ -468,6 +501,7 @@
         "noticeMaxMinutesBeforeStd": 120
       },
       "source": "SYNTHETIC",
+      "ref": null,
       "note": "No delays in this scenario (see single-checkpoint-disrupted)."
     },
     {
@@ -479,6 +513,7 @@
         "noticeDelayMaxMinutes": 5
       },
       "source": "SYNTHETIC",
+      "ref": null,
       "note": "No gate changes in this scenario."
     },
     {
@@ -490,6 +525,7 @@
         "maxMinutes": 60
       },
       "source": "SYNTHETIC",
+      "ref": null,
       "note": "No unplanned lane outages in this scenario."
     },
     {
@@ -501,6 +537,7 @@
         "maxMinutes": 120
       },
       "source": "SYNTHETIC",
+      "ref": null,
       "note": "The flight feed never goes down in this scenario."
     }
   ],

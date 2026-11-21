@@ -1,0 +1,182 @@
+# GateFlow simulation scenario (schema version 5).
+#
+# SYNTHETIC LIBRARY SCENARIO. "TSF-like" means sized like Treviso Canova from its public annual
+# traffic. It is not a model of the real airport, of its checkpoint or of its schedule: flights,
+# times, aircraft, lanes and passenger behaviour are assumptions. Results obtained with it are
+# simulated and must never be presented as operational evidence.
+
+schemaVersion: 5
+id: tsf-like-peak-day
+title: TSF-like low-cost base, summer peak day (synthetic)
+description: >-
+  The departures security checkpoint of a TSF-like airport, a low-cost base, on a summer peak day:
+  34 departures of single-class 737s and A320-family aircraft and about 6,000 departing passengers.
+  Seven based aircraft leave in the first hour of the day, so the checkpoint has its peak before
+  06:00. No connecting passengers. Lanes follow an hourly plan made with the rule of the VCE-like
+  days, within the 5 lanes of the checkpoint.
+dataClassification: SYNTHETIC
+dataSources:
+  - id: gateflow-synthetic
+    title: Synthetic assumptions of this scenario
+    kind: SYNTHETIC
+    provider: GateFlow
+    licence: Created for GateFlow; contains no third-party data.
+  - id: library-flights
+    title: Synthetic flight list of the scenario library
+    kind: SYNTHETIC
+    provider: GateFlow (scenarios/flights/make-library-flights.mjs)
+    licence: Created for GateFlow; contains no third-party schedule data.
+  - id: save-traffic-2025
+    title: Treviso Canova traffic in 2025 (3.2 million passengers)
+    kind: LITERATURE
+    provider: SAVE S.p.A., annual figure as reported in the business plan and in the press
+    licence: Published aggregate figure, cited with attribution. Used only to size the synthetic day.
+    retrieved: '2026-11-21'
+    note: >-
+      3,200,130 passengers in 2025 according to the business plan (marked verified there); press
+      coverage of SAVE's results gives over 3.2 million. Not re-verified against SAVE's own
+      publication, whose website refused automated access.
+timeZone: Europe/Rome
+
+checkpoint:
+  id: CP-TSF-LIKE
+  kind: DEPARTURE_SECURITY
+  laneSchedule:
+    value:
+      - { from: '00:00', lanes: 1 }
+      - { from: '03:00', lanes: 2 }
+      - { from: '04:00', lanes: 5 }
+      - { from: '06:00', lanes: 3 }
+      - { from: '07:00', lanes: 4 }
+      - { from: '08:00', lanes: 5 }
+      - { from: '09:00', lanes: 4 }
+      - { from: '13:00', lanes: 5 }
+      - { from: '15:00', lanes: 4 }
+      - { from: '16:00', lanes: 3 }
+      - { from: '17:00', lanes: 2 }
+      - { from: '19:00', lanes: 1 }
+    source: SYNTHETIC
+    note: >-
+      Planned from the expected arrivals of the day: in every hour, enough lanes to screen the
+      passengers arriving in it at 90% utilisation, at least 1 and at most 5 (the lanes the
+      checkpoint has). 69.0 lane-hours. Assumed planning rule, not the airport's.
+  serviceTimeMeanSeconds:
+    value: 30
+    source: SYNTHETIC
+    note: About 120 passengers per hour per lane (assumed conventional lanes of a smaller airport).
+  serviceTimeCv:
+    value: 0.6
+    source: SYNTHETIC
+
+schedule:
+  kind: flight-list
+  generatorSeed: 20261121
+  flights:
+    source: library-flights
+    file: flights/tsf-like-peak-day.csv
+  seats:
+    value:
+      - { aircraft: A320, seats: 180 }
+      - { aircraft: A21N, seats: 239 }
+      - { aircraft: B738, seats: 189 }
+      - { aircraft: B38M, seats: 197 }
+    source: SYNTHETIC
+    note: >-
+      Assumed single-class high-density configurations by ICAO type designator, not airline data.
+      Replace with the airport's seat data.
+  gateZones:
+    value:
+      - { id: A, walkMinutes: 4, share: 0.85 }
+      - { id: B, walkMinutes: 8, share: 0.15 }
+    source: SYNTHETIC
+    note: Nominal walk from the checkpoint exit; B are non-Schengen gates after passport control (its queue is not modelled).
+
+passengers:
+  loadFactor:
+    value: { min: 0.8, mode: 0.94, max: 1 }
+    source: SYNTHETIC
+    ref: save-traffic-2025
+    note: >-
+      Summer load factors of a low-cost base, drawn per flight and day. With the flight list the day
+      has about 6,000 departing passengers, about 1.35 times the average day of 2025 (3.2 million
+      passengers, half of them departing, over 365 days): assumed peak-day factor.
+  transferShare:
+    value: 0
+    source: SYNTHETIC
+    note: A point-to-point low-cost airport; no connecting passengers.
+  showUp:
+    departing:
+      value:
+        { minMinutesBeforeStd: 25, medianExtraMinutes: 70, sigma: 0.55, maxMinutesBeforeStd: 240 }
+      source: SYNTHETIC
+      note: Arrival at the checkpoint = STD minus (25 min + log-normal with median 70 min), as in the demo scenario.
+    transfer:
+      value:
+        { minMinutesBeforeStd: 24, medianExtraMinutes: 25, sigma: 0.5, maxMinutesBeforeStd: 180 }
+      source: SYNTHETIC
+      note: Connecting passengers arrive later, after their inbound flight.
+  walkSpeedSigma:
+    value: 0.2
+    source: SYNTHETIC
+    note: Individual walking time = nominal zone time x log-normal(median 1, sigma).
+  callResponse:
+    value:
+      medianSeconds: 75
+      sigma: 0.5
+      absentProbability: 0.04
+      absentExtraMedianMinutes: 4
+      absentExtraSigma: 0.8
+    source: SYNTHETIC
+    note: Virtual queue only. As in the demo scenario; to be measured in a pilot.
+  groups:
+    value:
+      partySizes:
+        - { size: 1, share: 0.7 }
+        - { size: 2, share: 0.2 }
+        - { size: 3, share: 0.05 }
+        - { size: 4, share: 0.04 }
+        - { size: 5, share: 0.01 }
+    source: SYNTHETIC
+    note: More couples and families than on a normal day (leisure season).
+  assistedShare:
+    value: 0.007
+    source: SYNTHETIC
+    note: Parties taking the assisted path (PRM and similar), as in the demo scenario.
+  strategicLateArrival:
+    value: { share: 0, minMinutesBeforeStd: 25, maxMinutesBeforeStd: 35 }
+    source: SYNTHETIC
+    note: Nobody arrives late on purpose in this scenario.
+
+operations:
+  boardingCloseMinutesBeforeStd:
+    value: 20
+    source: SYNTHETIC
+    note: Boarding closes 20 minutes before the scheduled departure, for every flight.
+  deadlineKnowledge:
+    value: RULE
+    source: SYNTHETIC
+    note: The system applies the closing rule to the schedule; without disruptions it matches the ground truth exactly.
+
+disruptions:
+  flightDelays:
+    value:
+      share: 0
+      medianMinutes: 20
+      sigma: 0.8
+      maxMinutes: 180
+      noticeMinMinutesBeforeStd: 10
+      noticeMaxMinutesBeforeStd: 120
+    source: SYNTHETIC
+    note: No delays in this scenario.
+  gateChanges:
+    value: { share: 0, minMinutesBeforeStd: 30, maxMinutesBeforeStd: 70, noticeDelayMaxMinutes: 5 }
+    source: SYNTHETIC
+    note: No gate changes in this scenario.
+  laneOutages:
+    value: { perDay: 0, medianMinutes: 20, sigma: 0.5, maxMinutes: 60 }
+    source: SYNTHETIC
+    note: No unplanned lane outages in this scenario.
+  feedOutages:
+    value: { perDay: 0, medianMinutes: 30, sigma: 0.6, maxMinutes: 120 }
+    source: SYNTHETIC
+    note: The flight feed never goes down in this scenario.

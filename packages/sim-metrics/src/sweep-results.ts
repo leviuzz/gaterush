@@ -26,8 +26,10 @@ import type {
   SweepSetting,
   SweepValue,
 } from './sweep';
+import { scenarioProvenance } from './provenance';
+import type { ScenarioProvenance } from './provenance';
 
-export const SWEEP_SCHEMA = 'gateflow.sim.sweep/1';
+export const SWEEP_SCHEMA = 'gateflow.sim.sweep/2';
 
 /** Policy metrics reported at every point of a sweep. */
 export const SWEEP_POLICY_METRICS = [
@@ -116,7 +118,7 @@ export interface SweepDocument {
       readonly hash: string;
       readonly dataClassification: string;
       readonly timeZone: string;
-    };
+    } & ScenarioProvenance;
     readonly seeds: { readonly count: number; readonly ranges: string };
     readonly baselinePolicyId: string;
     readonly candidateId: string;
@@ -169,6 +171,8 @@ function currentValue(
       return 0;
     case 'loadFactorScale':
       return 1;
+    case 'serviceTimeMeanSeconds':
+      return scenario.checkpoint.serviceTimeMeanSeconds.value;
     case 'callResponseMedianSeconds':
       return scenario.passengers.callResponse.value.medianSeconds;
     case 'absentProbability':
@@ -294,6 +298,7 @@ export function buildSweepResults(sweep: SweepResult, input: SweepManifestInput)
         hash: input.scenarioHash,
         dataClassification: config.scenario.dataClassification,
         timeZone: config.scenario.timeZone,
+        ...scenarioProvenance(config.scenario),
       },
       seeds: { count: plan.seeds.length, ranges },
       baselinePolicyId: config.baselinePolicyId,

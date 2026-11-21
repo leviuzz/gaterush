@@ -25,7 +25,7 @@ import { clockMinutes } from './schema';
 import type { Scenario } from './schema';
 
 /** Version of the population generator. Bump on any change that can alter generated data. */
-export const GENERATOR_VERSION = '0.4.0';
+export const GENERATOR_VERSION = '0.5.0';
 
 const DOMAIN = labelCode('gateflow.population');
 const KEY = {
@@ -65,6 +65,9 @@ export interface ScheduledFlight extends SimFlight {
   readonly aircraftCategory: string;
   readonly seats: number;
   readonly walkEstimateMs: number;
+  /** Passengers of the flight when the flight list gives them (no load factor is drawn). */
+  readonly passengers?: number;
+  readonly destination?: string;
 }
 
 /** What the system knows of a boarding close at `atMs` with the scenario's source. */
@@ -84,7 +87,81 @@ function pick<T>(items: readonly T[], index: number): T {
  * day with different passengers.
  */
 export function generateSchedule(scenario: Scenario): ScheduledFlight[] {
-  const { schedule, operations } = scenario;
+  return scenario.schedule.kind === 'flight-list'
+    ? flightListSchedule(scenario, scenario.schedule)
+    : syntheticHourlySchedule(scenario, scenario.schedule);
+}
+
+type ScheduleOf<K extends Scenario['schedule']['kind']> = Extract<
+  Scenario['schedule'],
+  { kind: K }
+>;
+
+/** The gate zone of the flight at `index`, drawn from the zone shares of the design day. */
+function drawZone(
+  genSeed: number,
+  zones: ScheduleOf<'flight-list'>['gateZones']['value'],
+  index: number,
+) {
+  return pick(
+    zones,
+    categorical(
+      streamFor(genSeed, [DOMAIN, KEY.gateZone, index]),
+      zones.map((z) => z.share),
+    ),
+  );
+}
+
+/**
+ * The flights of a flight list, in order of departure (rows departing at the same minute keep
+ * the order of the list). Gate zones missing from the list are drawn with the generator seed.
+ */
+function flightListSchedule(
+  scenario: Scenario,
+  schedule: ScheduleOf<'flight-list'>,
+): ScheduledFlight[] {
+  const zones = schedule.gateZones.value;
+  const seatsByType = new Map((schedule.seats?.value ?? []).map((s) => [s.aircraft, s.seats]));
+  const closeOffsetMs = minutesToMs(scenario.operations.boardingCloseMinutesBeforeStd.value);
+  const knowledge = scenario.operations.deadlineKnowledge.value;
+  const rows = schedule.flights.rows
+    .map((row, order) => ({ row, order, minute: clockMinutes(row.std) }))
+    .sort((a, b) => a.minute - b.minute || a.order - b.order);
+  return rows.map(({ row, minute }, index): ScheduledFlight => {
+    const stdMs = minutesToMs(minute);
+    const zone =
+      row.gateZone === undefined
+        ? drawZone(schedule.generatorSeed, zones, index)
+        : zones.find((z) => z.id === row.gateZone);
+    if (zone === undefined) throw new RangeError(`unknown gate zone ${String(row.gateZone)}`);
+    const seats =
+      row.seats ??
+      (row.aircraft === undefined ? undefined : seatsByType.get(row.aircraft)) ??
+      row.passengers;
+    if (seats === undefined) throw new RangeError(`no seats for flight ${row.flight}`);
+    const boardingCloseMs = stdMs - closeOffsetMs;
+    return {
+      index,
+      id: row.flight,
+      stdMs,
+      boardingCloseMs,
+      knownDeadline: knownDeadlineAt(boardingCloseMs, knowledge),
+      gateZone: zone.id,
+      aircraftCategory: row.aircraft ?? 'unspecified',
+      seats,
+      walkEstimateMs: minutesToMs(zone.walkMinutes),
+      ...(row.passengers === undefined ? {} : { passengers: row.passengers }),
+      ...(row.destination === undefined ? {} : { destination: row.destination }),
+    };
+  });
+}
+
+/** The design day of an hourly profile: departures spread evenly within each hour. */
+function syntheticHourlySchedule(
+  scenario: Scenario,
+  schedule: ScheduleOf<'synthetic-hourly'>,
+): ScheduledFlight[] {
+  const { operations } = scenario;
   const genSeed = schedule.generatorSeed;
   const mix = schedule.aircraftMix.value;
   const zones = schedule.gateZones.value;
@@ -106,13 +183,7 @@ export function generateSchedule(scenario: Scenario): ScheduledFlight[] {
           mix.map((m) => m.share),
         ),
       );
-      const zone = pick(
-        zones,
-        categorical(
-          streamFor(genSeed, [DOMAIN, KEY.gateZone, index]),
-          zones.map((z) => z.share),
-        ),
-      );
+      const zone = drawZone(genSeed, zones, index);
       const boardingCloseMs = stdMs - closeOffsetMs;
       flights.push({
         index,
@@ -158,13 +229,17 @@ export function generatePopulation(scenario: Scenario, seed: number): Population
 
   const passengers: SimPassenger[] = [];
   for (const flight of flights) {
-    const loadFactor = triangular(
-      streamFor(seed, [DOMAIN, KEY.loadFactor, flight.index]),
-      lf.min,
-      lf.mode,
-      lf.max,
-    );
-    const count = Math.round(flight.seats * loadFactor);
+    const count =
+      flight.passengers ??
+      Math.round(
+        flight.seats *
+          triangular(
+            streamFor(seed, [DOMAIN, KEY.loadFactor, flight.index]),
+            lf.min,
+            lf.mode,
+            lf.max,
+          ),
+      );
     let j = 0;
     while (j < count) {
       const slot = j;

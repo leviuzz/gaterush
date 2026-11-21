@@ -1,0 +1,31 @@
+# GateFlow sensitivity sweep (schema version 1).
+#
+# SYNTHETIC: every number comes from the synthetic library scenario vce-like-peak-day. Results are
+# simulated and must never be presented as operational evidence.
+
+schemaVersion: 1
+id: vce-like-peak-capacity
+title: Priority v3 on the VCE-like peak day, as capacity and arrivals vary
+description: >-
+  Where does a VCE-like checkpoint have to sit for GateFlow to matter? Each curve varies one
+  assumption of the peak day around its base, all else equal: the lanes of the hourly plan, the
+  mean screening time per person (the throughput of a lane), and when passengers arrive.
+scenario: ../scenarios/vce-like-peak-day.yaml
+seeds: 1-200
+policies: [fifo, fifo-manual, virtual-fifo, priority-v3]
+baseline: fifo
+candidate: priority-v3
+compare: [priority-v3:fifo-manual, priority-v3:virtual-fifo, priority-v3:fifo]
+dimensions:
+  - id: lanes
+    title: Lanes of the plan
+    parameter: lanesDelta
+    values: [-1, 0, 1, 2]
+  - id: screening-time
+    title: Mean screening time per person
+    parameter: serviceTimeMeanSeconds
+    values: [22, 24, 25, 26, 27]
+  - id: arrival-shift
+    title: When passengers arrive
+    parameter: showUpShiftMinutes
+    values: [-15, -10, 0, 10]

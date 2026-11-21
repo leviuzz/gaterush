@@ -91,3 +91,5 @@ export type { IntervalRow, LineChartOptions, LineSeries, RangeBar } from './html
 export { renderHtmlReport, renderSweepHtml } from './report-html';
 export { acrossDays, bootstrapMeanInterval, mean, quantileSorted, sortedAscending } from './stats';
 export type { AcrossDays, BootstrapOptions } from './stats';
+export { renderDataSources, scenarioProvenance, sourceLabel } from './provenance';
+export type { ScenarioProvenance, ScheduleSummary } from './provenance';

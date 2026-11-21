@@ -1,10 +1,10 @@
-# GateFlow simulation scenario (schema version 4).
+# GateFlow simulation scenario (schema version 5).
 #
 # SYNTHETIC DEMONSTRATION SCENARIO. It does not describe any real airport. Every parameter is a
 # labelled assumption (source: SYNTHETIC) chosen to produce a plausible-looking day with a morning
 # peak. Results obtained with it are simulated and must never be presented as operational evidence.
 
-schemaVersion: 4
+schemaVersion: 5
 id: single-checkpoint-feed-stress
 title: Single departure checkpoint, disruptions with an unreliable flight feed (stress test)
 description: >-
@@ -13,6 +13,12 @@ description: >-
   several hours, often while the checkpoint is busy. The system decides on what the feed has told
   it; outcomes are judged on the ground truth.
 dataClassification: SYNTHETIC
+dataSources:
+  - id: gateflow-synthetic
+    title: Synthetic assumptions of this scenario
+    kind: SYNTHETIC
+    provider: GateFlow
+    licence: Created for GateFlow; contains no third-party data.
 timeZone: Europe/Rome
 
 checkpoint:

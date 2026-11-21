@@ -13,10 +13,12 @@ import type { Assumption } from '@gateflow/sim-scenarios';
 import type { ComparisonDayMetrics, DayDisruptions, PolicyDayMetrics } from './day-metrics';
 import { comparisonKey } from './experiment';
 import type { ExperimentResult, PolicyComparison, SeedResult } from './experiment';
+import { scenarioProvenance } from './provenance';
+import type { ScenarioProvenance } from './provenance';
 import { acrossDays, bootstrapMeanInterval } from './stats';
 import type { AcrossDays } from './stats';
 
-export const RESULTS_SCHEMA = 'gateflow.sim.results/5';
+export const RESULTS_SCHEMA = 'gateflow.sim.results/6';
 
 export const DISCLAIMER =
   'SIMULATED RESULTS ON SYNTHETIC OR HYPOTHETICAL DATA. These numbers are model outputs, not ' +
@@ -86,7 +88,7 @@ export interface ResultsDocument {
       readonly hash: string;
       readonly dataClassification: string;
       readonly timeZone: string;
-    };
+    } & ScenarioProvenance;
     readonly seeds: { readonly count: number; readonly ranges: string };
     readonly baselinePolicyId: string;
     readonly policies: readonly Policy[];
@@ -233,6 +235,7 @@ export function buildResults(experiment: ExperimentResult, input: ManifestInput)
         hash: input.scenarioHash,
         dataClassification: scenario.dataClassification,
         timeZone: scenario.timeZone,
+        ...scenarioProvenance(scenario),
       },
       seeds: { count: seeds.length, ranges },
       baselinePolicyId: config.baselinePolicyId,

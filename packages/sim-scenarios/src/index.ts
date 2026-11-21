@@ -1,11 +1,20 @@
-export { ScenarioSchema, SOURCE_LABELS, clockMinutes } from './schema';
-export type { Scenario, SourceLabel } from './schema';
-export { ScenarioValidationError, parseScenario, parseScenarioText } from './parse';
+export { FlightRowSchema, ScenarioSchema, SOURCE_LABELS, clockMinutes } from './schema';
+export type { DataSource, FlightRow, Scenario, SourceLabel } from './schema';
+export { ScenarioValidationError } from './errors';
+export { parseScenario, parseScenarioText } from './parse';
+export type { ScenarioFiles } from './parse';
 export { canonicalJson } from './canonical';
 export { collectAssumptions } from './assumptions';
 export type { Assumption } from './assumptions';
 export { GENERATOR_VERSION, generatePopulation, generateSchedule } from './generate';
 export type { ScheduledFlight } from './generate';
+export {
+  FLIGHTS_FORMAT,
+  FLIGHT_COLUMNS,
+  designDayRows,
+  formatFlightCsv,
+  parseFlightCsv,
+} from './flights-csv';
 
 /** Version of the scenario schema understood by this package. */
-export const SCENARIO_SCHEMA_VERSION = 4;
+export const SCENARIO_SCHEMA_VERSION = 5;

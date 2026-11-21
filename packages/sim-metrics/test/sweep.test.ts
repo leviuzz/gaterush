@@ -116,6 +116,9 @@ describe('sweep settings', () => {
       medianSeconds: 120,
       absentProbability: 0.04,
     });
+    const service = apply('serviceTimeMeanSeconds', 48).scenario.checkpoint.serviceTimeMeanSeconds;
+    expect(service).toEqual({ ...demo.checkpoint.serviceTimeMeanSeconds, value: 48 });
+    expect(() => apply('serviceTimeMeanSeconds', 0)).toThrow(/must be positive/);
     const feed = applySetting(
       { scenario: disrupted, policies: POLICIES },
       { parameter: 'feedOutagesPerDay', value: 4 },

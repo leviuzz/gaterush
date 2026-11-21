@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import type { ClassificationParams } from '@gateflow/priority-engine';
 import { POLICY_PRESETS, PRIORITY_V3_POLICY, classificationOf } from '@gateflow/queue-core';
@@ -35,6 +35,8 @@ import {
   ScenarioValidationError,
   canonicalJson,
   collectAssumptions,
+  designDayRows,
+  formatFlightCsv,
   generateSchedule,
   parseScenarioText,
 } from '@gateflow/sim-scenarios';
@@ -63,6 +65,8 @@ Usage:
   ${CLI_NAME} run --scenario <file> [options]   Run an experiment: results.json, report.md, report.html
   ${CLI_NAME} sweep --spec <file> [options]     Run a sensitivity sweep: sweep.json, sweep.md, sweep.html
   ${CLI_NAME} validate --scenario <file>        Validate a scenario file
+  ${CLI_NAME} flights --scenario <file> [--out <file>]
+                                                Write the design day as a flight list (CSV)
   ${CLI_NAME} policies                          List the available policy presets
   ${CLI_NAME} --help | --version
 
@@ -89,6 +93,9 @@ the FIFO policy that runs the same virtual queue (this isolates the prioritisati
 practice with manual handling (fifo-manual) and with the priority policies listed before it.
 Risk classes on arrival use the parameters of the first priority policy listed.
 
+A scenario can take its flights from a CSV file (format gateflow.flights/1: columns flight, std,
+aircraft, seats, passengers, gate_zone, destination); "flights" writes one for any scenario.
+
 All results are SIMULATED on the assumptions of the scenario and are not operational evidence.
 `;
 
@@ -102,9 +109,13 @@ function readText(io: CliIo, file: string, what: string): string {
   }
 }
 
+/** Loads a scenario, with the flight list file it names (relative to the scenario file). */
 function loadScenario(io: CliIo, file: string): Scenario {
   const text = readText(io, file, 'scenario');
-  return parseScenarioText(text, file.toLowerCase().endsWith('.json') ? 'json' : 'yaml');
+  return parseScenarioText(text, file.toLowerCase().endsWith('.json') ? 'json' : 'yaml', {
+    read: (path) => io.readFile(isAbsolute(path) ? path : join(dirname(file), path)),
+    sha256: (content) => io.sha256(content),
+  });
 }
 
 function experimentDays(results: readonly TaskResult[]): SeedResult[] {
@@ -420,16 +431,50 @@ function commandValidate(argv: string[], io: CliIo): number {
   });
   if (values.scenario === undefined) throw new UsageError('--scenario is required');
   const scenario = loadScenario(io, values.scenario);
+  const { schedule } = scenario;
+  const from =
+    schedule.kind === 'flight-list'
+      ? `flight list ${schedule.flights.file ?? '(inline)'}, source ${schedule.flights.source}`
+      : 'hourly profile';
   io.stdout(
     [
       `valid scenario ${scenario.id}: ${scenario.title}`,
       `hash           ${scenarioHash(io, scenario)}`,
       `data           ${scenario.dataClassification}`,
-      `flights        ${generateSchedule(scenario).length} on the design day`,
+      `flights        ${generateSchedule(scenario).length} on the design day (${from})`,
       `assumptions    ${collectAssumptions(scenario).length} labelled parameters`,
+      ...scenario.dataSources.map(
+        (source, i) =>
+          `${i === 0 ? 'data sources  ' : '              '} ${source.id} (${source.kind}): ${source.licence}`,
+      ),
       '',
     ].join('\n'),
   );
+  return EXIT_OK;
+}
+
+/** Writes the design day of a scenario as a flight list, to a file or to standard output. */
+function commandFlights(argv: string[], io: CliIo): number {
+  const { values } = parseArgs({
+    args: argv,
+    options: { scenario: { type: 'string' }, out: { type: 'string' } },
+    strict: true,
+    allowPositionals: false,
+  });
+  if (values.scenario === undefined) throw new UsageError('--scenario is required');
+  const scenario = loadScenario(io, values.scenario);
+  const csv = formatFlightCsv(designDayRows(scenario), [
+    `gateflow.flights/1: design day of scenario ${scenario.id} (${scenario.dataClassification} data)`,
+    `Scheduled departures in local time (${scenario.timeZone}). Sources: ${scenario.dataSources
+      .map((s) => `${s.id} (${s.licence})`)
+      .join('; ')}`,
+  ]);
+  if (values.out === undefined) {
+    io.stdout(csv);
+  } else {
+    io.writeFile(values.out, csv);
+    io.stdout(`written    ${values.out} (${generateSchedule(scenario).length} flights)\n`);
+  }
   return EXIT_OK;
 }
 
@@ -449,6 +494,8 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
         return await commandSweep(rest, io);
       case 'validate':
         return commandValidate(rest, io);
+      case 'flights':
+        return commandFlights(rest, io);
       case 'policies':
         return commandPolicies(io);
       case '--version':

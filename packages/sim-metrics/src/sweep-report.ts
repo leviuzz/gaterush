@@ -3,6 +3,7 @@ import type { ComparisonMetricSummary } from './results';
 import type { SweepParameter } from './sweep';
 import type { SweepDimensionSummary, SweepDocument } from './sweep-results';
 import { sweepValueLabel } from './sweep-results';
+import { renderDataSources, sourceLabel } from './provenance';
 
 /** How each sweep parameter is named in reports. */
 export const SWEEP_PARAMETER_LABELS: Readonly<Record<SweepParameter, string>> = {
@@ -15,6 +16,7 @@ export const SWEEP_PARAMETER_LABELS: Readonly<Record<SweepParameter, string>> = 
   callAheadSeconds: 'Call-ahead of the virtual queue (s)',
   responseEstimateSeconds: "Engine's estimate of the call response (s)",
   lanesDelta: 'Lanes added to every period of the schedule',
+  serviceTimeMeanSeconds: 'Mean screening time per person (s)',
   loadFactorScale: 'Load factor (multiple of the base)',
   showUpShiftMinutes: 'Arrival shift (min; positive = earlier)',
   callResponseMedianSeconds: 'Median call response (s)',
@@ -156,13 +158,24 @@ export function renderSweepReport(doc: SweepDocument): string {
   push('', 'Full parameters are in the `manifest` of `sweep.json`.', '');
 
   push(
+    ...renderDataSources(
+      `## ${section}. Data sources and licences`,
+      manifest.scenario,
+      doc.assumptions,
+    ),
+  );
+  section++;
+
+  push(
     `## ${section}. Assumptions of the base scenario`,
     '',
     '| Parameter | Source | Note |',
     '|---|---|---|',
   );
   section++;
-  for (const a of doc.assumptions) push(`| ${a.path} | ${a.source} | ${cell(a.note ?? '')} |`);
+  for (const a of doc.assumptions) {
+    push(`| ${a.path} | ${sourceLabel(a)} | ${cell(a.note ?? '')} |`);
+  }
   push('');
 
   push(`## ${section}. Limitations of this model version`, '');

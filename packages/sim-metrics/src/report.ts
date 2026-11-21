@@ -1,4 +1,5 @@
 import type { Policy } from '@gateflow/queue-core';
+import { renderDataSources, sourceLabel } from './provenance';
 import type { ComparisonMetricSummary, ComparisonSummary, ResultsDocument } from './results';
 import type { AcrossDays } from './stats';
 
@@ -337,6 +338,15 @@ export function renderReport(doc: ResultsDocument): string {
   }
 
   push(
+    ...renderDataSources(
+      `## ${section}. Data sources and licences`,
+      manifest.scenario,
+      doc.assumptions,
+    ),
+  );
+  section++;
+
+  push(
     `## ${section}. Assumptions`,
     '',
     'Every model parameter, with its source. SYNTHETIC values are illustrative assumptions.',
@@ -346,7 +356,9 @@ export function renderReport(doc: ResultsDocument): string {
   );
   section++;
   for (const a of doc.assumptions) {
-    push(`| ${a.path} | ${cell(formatValue(a.value))} | ${a.source} | ${cell(a.note ?? '')} |`);
+    push(
+      `| ${a.path} | ${cell(formatValue(a.value))} | ${sourceLabel(a)} | ${cell(a.note ?? '')} |`,
+    );
   }
   push('');
 

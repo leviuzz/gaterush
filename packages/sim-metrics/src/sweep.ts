@@ -25,6 +25,7 @@ export const SWEEP_PARAMETERS = [
   'callAheadSeconds',
   'responseEstimateSeconds',
   'lanesDelta',
+  'serviceTimeMeanSeconds',
   'loadFactorScale',
   'showUpShiftMinutes',
   'callResponseMedianSeconds',
@@ -199,6 +200,18 @@ export function applySetting(
           ...entry,
           lanes: Math.max(1, entry.lanes + delta),
         }));
+      });
+    }
+    case 'serviceTimeMeanSeconds': {
+      const seconds = requireNumber(parameter, value);
+      if (seconds <= 0) {
+        throw new SweepConfigError(`serviceTimeMeanSeconds must be positive, got ${seconds}`);
+      }
+      return days((copy) => {
+        copy.checkpoint.serviceTimeMeanSeconds = {
+          ...copy.checkpoint.serviceTimeMeanSeconds,
+          value: seconds,
+        };
       });
     }
     case 'loadFactorScale': {

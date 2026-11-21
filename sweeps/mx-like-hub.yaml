@@ -1,0 +1,40 @@
+# GateFlow sensitivity sweep (schema version 1).
+#
+# SYNTHETIC: every number comes from the synthetic library scenario mx-like-transfer-hub. Results
+# are simulated and must never be presented as operational evidence.
+
+schemaVersion: 1
+id: mx-like-hub
+title: Priority v3 at the MX-like transfer checkpoint, one assumption at a time
+description: >-
+  How robust is the advantage of GateFlow at a transfer checkpoint fed by tight connections? Each
+  curve varies one assumption of the hub day around its base, all else equal: the lanes of the
+  hourly plan, the mean screening time per person, how much time connecting passengers have left
+  when they reach the checkpoint, how fast they answer a call, and the overtake bound K.
+scenario: ../scenarios/mx-like-transfer-hub.yaml
+seeds: 1-200
+policies: [fifo, fifo-manual, virtual-fifo, priority-v3]
+baseline: fifo
+candidate: priority-v3
+compare: [priority-v3:fifo-manual, priority-v3:virtual-fifo, priority-v3:fifo]
+dimensions:
+  - id: lanes
+    title: Lanes added to the plan
+    parameter: lanesDelta
+    values: [0, 1, 2]
+  - id: screening-time
+    title: Mean screening time per person
+    parameter: serviceTimeMeanSeconds
+    values: [24, 30, 36, 42]
+  - id: connection-time
+    title: Time left when connecting passengers reach the checkpoint
+    parameter: showUpShiftMinutes
+    values: [-10, 0, 10, 20]
+  - id: call-response
+    title: How fast passengers answer a call
+    parameter: callResponseMedianSeconds
+    values: [45, 75, 120, 180]
+  - id: overtake-bound
+    title: Overtake bound K
+    parameter: maxOvertakes
+    values: [15, 30, 60, 120]

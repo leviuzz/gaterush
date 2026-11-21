@@ -7,10 +7,14 @@ export interface Assumption {
   readonly path: string;
   readonly value: unknown;
   readonly source: SourceLabel;
+  /** The entry of the scenario's data sources the value comes from, if any. */
+  readonly ref: string | null;
   readonly note: string | null;
 }
 
-function isParam(node: unknown): node is { value: unknown; source: SourceLabel; note?: string } {
+function isParam(
+  node: unknown,
+): node is { value: unknown; source: SourceLabel; ref?: string; note?: string } {
   if (typeof node !== 'object' || node === null || Array.isArray(node)) return false;
   const record = node as Record<string, unknown>;
   return (
@@ -29,6 +33,7 @@ export function collectAssumptions(scenario: Scenario): Assumption[] {
         path: path.join('.'),
         value: node.value,
         source: node.source,
+        ref: node.ref ?? null,
         note: node.note ?? null,
       });
       return;

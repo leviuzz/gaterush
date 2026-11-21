@@ -128,18 +128,63 @@ describe('parseScenario validation', () => {
     expect(responseIssues({ absentExtraMedianMinutes: 0 })).toMatch(/absentExtraMedianMinutes/);
   });
 
-  it('explains how to migrate scenarios of schema versions 1 to 3', () => {
+  it('explains how to migrate scenarios of schema versions 1 to 4', () => {
     const v1 = issuesOf(withChange((d) => (d.schemaVersion = 1)));
     expect(v1).toHaveLength(1);
-    expect(v1[0]).toMatch(/migrated to version 4.*laneSchedule.*callResponse.*groups.*disruptions/);
+    expect(v1[0]).toMatch(
+      /migrated to version 5.*laneSchedule.*callResponse.*groups.*disruptions.*dataSources/,
+    );
     const v2 = issuesOf(withChange((d) => (d.schemaVersion = 2)));
     expect(v2).toHaveLength(1);
     expect(v2[0]).toMatch(
-      /migrated to version 4.*groups.*assistedShare.*strategicLateArrival.*disruptions/,
+      /migrated to version 5.*groups.*assistedShare.*strategicLateArrival.*disruptions.*dataSources/,
     );
     const v3 = issuesOf(withChange((d) => (d.schemaVersion = 3)));
     expect(v3).toHaveLength(1);
-    expect(v3[0]).toMatch(/migrated to version 4.*disruptions.*flightDelays.*feedOutages/);
+    expect(v3[0]).toMatch(
+      /migrated to version 5.*disruptions.*flightDelays.*feedOutages.*dataSources/,
+    );
+    const v4 = issuesOf(withChange((d) => (d.schemaVersion = 4)));
+    expect(v4).toHaveLength(1);
+    expect(v4[0]).toMatch(/migrated to version 5.*dataSources.*licence/);
+  });
+
+  it('requires data sources with unique ids, and references to known sources', () => {
+    expect(issuesOf(withChange((d) => delete d.dataSources)).join('\n')).toMatch(/dataSources/);
+    expect(issuesOf(withChange((d) => (d.dataSources = []))).join('\n')).toMatch(/dataSources/);
+    const twice = issuesOf(
+      withChange((d) => {
+        const sources = d.dataSources as unknown[];
+        sources.push(sources[0]);
+      }),
+    );
+    expect(twice.join('\n')).toMatch(
+      /dataSources\.1\.id: duplicate data source id "gateflow-synthetic"/,
+    );
+    const unknownRef = issuesOf(
+      withChange((d) => {
+        (d.passengers as { transferShare: Record<string, unknown> }).transferShare.ref = 'nowhere';
+      }),
+    );
+    expect(unknownRef).toEqual([
+      'passengers.transferShare.ref: unknown data source "nowhere" (known: gateflow-synthetic)',
+    ]);
+    const knownRef = parseScenario(
+      withChange((d) => {
+        (d.passengers as { transferShare: Record<string, unknown> }).transferShare.ref =
+          'gateflow-synthetic';
+      }),
+    );
+    expect(
+      collectAssumptions(knownRef).find((a) => a.path === 'passengers.transferShare')?.ref,
+    ).toBe('gateflow-synthetic');
+    expect(
+      issuesOf(
+        withChange((d) => {
+          (d.dataSources as Record<string, unknown>[])[0]!.retrieved = '2026-13-01';
+        }),
+      ).join('\n'),
+    ).toMatch(/retrieved: expected a date/);
   });
 
   it('validates groups and strategic late arrivals', () => {

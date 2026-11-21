@@ -180,6 +180,14 @@ describe('results document', () => {
         id: 'single-checkpoint-demo',
         hash: scenarioHash,
         dataClassification: 'SYNTHETIC',
+        dataSources: scenario.dataSources,
+        schedule: {
+          kind: 'synthetic-hourly',
+          flights: 40,
+          file: null,
+          sha256: null,
+          source: null,
+        },
       },
       seeds: { count: 3, ranges: '1-3' },
       baselinePolicyId: 'fifo',
@@ -189,11 +197,11 @@ describe('results document', () => {
         queueCore: '0.5.0',
         model: '0.5.0',
         kernel: '0.1.0',
-        populationGenerator: '0.4.0',
-        scenarioSchema: 4,
+        populationGenerator: '0.5.0',
+        scenarioSchema: 5,
       },
     });
-    expect(doc.schema).toBe('gateflow.sim.results/5');
+    expect(doc.schema).toBe('gateflow.sim.results/6');
     expect(doc.manifest.reproduce).toContain(`--policies ${POLICY_IDS.join(',')}`);
     expect(doc.manifest.reproduce).toContain(
       `--compare ${COMPARISONS.map((c) => `${c.candidateId}:${c.referenceId}`).join(',')}`,

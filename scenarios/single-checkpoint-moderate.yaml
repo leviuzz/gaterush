@@ -1,10 +1,10 @@
-# GateFlow simulation scenario (schema version 1).
+# GateFlow simulation scenario (schema version 2).
 #
 # SYNTHETIC DEMONSTRATION SCENARIO. It does not describe any real airport. Every parameter is a
 # labelled assumption (source: SYNTHETIC) chosen to produce a plausible-looking day with a morning
 # peak. Results obtained with it are simulated and must never be presented as operational evidence.
 
-schemaVersion: 1
+schemaVersion: 2
 id: single-checkpoint-moderate
 title: Single departure checkpoint, synthetic day with a moderate morning peak
 description: >-
@@ -20,10 +20,11 @@ timeZone: Europe/Rome
 checkpoint:
   id: CP-DEMO
   kind: DEPARTURE_SECURITY
-  lanes:
-    value: 6
+  laneSchedule:
+    value:
+      - { from: '00:00', lanes: 6 }
     source: SYNTHETIC
-    note: All lanes open all day; planned lane schedules arrive in a later slice.
+    note: Six lanes open all day, as in slice S1, so that results remain comparable.
   serviceTimeMeanSeconds:
     value: 40
     source: SYNTHETIC
@@ -94,6 +95,19 @@ passengers:
     value: 0.2
     source: SYNTHETIC
     note: Individual walking time = nominal zone time x log-normal(median 1, sigma).
+  callResponse:
+    value:
+      medianSeconds: 75
+      sigma: 0.5
+      absentProbability: 0.04
+      absentExtraMedianMinutes: 4
+      absentExtraSigma: 0.8
+    source: SYNTHETIC
+    note: >-
+      Virtual queue only. Time from a call to presenting at the access point is log-normal with a
+      median of 75 s (passengers wait near the checkpoint); 4% do not notice the first call and
+      present later by a log-normal extra delay with a median of 4 minutes. Hypotheses to measure
+      in a pilot.
 
 operations:
   boardingCloseMinutesBeforeStd:

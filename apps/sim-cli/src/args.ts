@@ -1,5 +1,6 @@
-import { findPolicyPreset } from '@gateflow/priority-engine';
-import type { Policy } from '@gateflow/priority-engine';
+import { findPolicyPreset } from '@gateflow/queue-core';
+import type { Policy } from '@gateflow/queue-core';
+import type { PolicyComparison } from '@gateflow/sim-metrics';
 
 /** Thrown for invalid command-line usage (exit code 2). */
 export class UsageError extends Error {
@@ -62,6 +63,35 @@ export function parsePolicies(list: string): Policy[] {
     }
     return policy;
   });
+}
+
+/**
+ * Parses comparisons written as `candidate:reference` pairs, e.g.
+ * `priority-v0:fifo,priority-v0:virtual-fifo`. Both policies must be among `policies`.
+ */
+export function parseComparisons(spec: string, policies: readonly Policy[]): PolicyComparison[] {
+  const ids = new Set(policies.map((p) => p.id));
+  const pairs: PolicyComparison[] = [];
+  const seen = new Set<string>();
+  for (const part of spec.split(',')) {
+    const match = /^\s*([^:\s]+)\s*:\s*([^:\s]+)\s*$/.exec(part);
+    if (match === null) {
+      throw new UsageError(`invalid comparison "${part.trim()}": expected candidate:reference`);
+    }
+    const [candidateId, referenceId] = [match[1] ?? '', match[2] ?? ''];
+    for (const id of [candidateId, referenceId]) {
+      if (!ids.has(id))
+        throw new UsageError(`comparison "${part.trim()}": "${id}" is not in --policies`);
+    }
+    if (candidateId === referenceId) {
+      throw new UsageError(`comparison "${part.trim()}" compares a policy with itself`);
+    }
+    const key = `${candidateId}:${referenceId}`;
+    if (seen.has(key)) throw new UsageError(`duplicate comparison "${key}"`);
+    seen.add(key);
+    pairs.push({ candidateId, referenceId });
+  }
+  return pairs;
 }
 
 export function parsePositiveInteger(text: string, what: string): number {

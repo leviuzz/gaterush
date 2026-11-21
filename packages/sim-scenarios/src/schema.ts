@@ -68,6 +68,64 @@ const GateZonesSchema = z
     message: 'gate zone ids must be unique',
   });
 
+const CLOCK = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/** Minutes since midnight of a `HH:MM` clock time (validated by the schema). */
+export function clockMinutes(clock: string): number {
+  const match = CLOCK.exec(clock);
+  if (match === null) throw new RangeError(`not a HH:MM clock time: ${clock}`);
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+const LaneScheduleSchema = z
+  .array(
+    z.strictObject({
+      /** Local clock time from which `lanes` lanes are open, `HH:MM`. */
+      from: z.string().regex(CLOCK, 'expected a clock time HH:MM between 00:00 and 23:59'),
+      lanes: z.number().int().min(1).max(64),
+    }),
+  )
+  .min(1)
+  .superRefine((rows, ctx) => {
+    if (rows[0]?.from !== '00:00') {
+      ctx.addIssue({
+        code: 'custom',
+        path: [0, 'from'],
+        message: 'the first entry must start at 00:00',
+      });
+    }
+    for (let i = 1; i < rows.length; i++) {
+      const previous = rows[i - 1];
+      const row = rows[i];
+      if (
+        previous === undefined ||
+        row === undefined ||
+        !CLOCK.test(row.from) ||
+        !CLOCK.test(previous.from)
+      )
+        continue;
+      if (clockMinutes(row.from) <= clockMinutes(previous.from)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [i, 'from'],
+          message: 'entries must be in strictly increasing time order',
+        });
+      }
+    }
+  });
+
+const CallResponseSchema = z.strictObject({
+  /** Median time from a call to presenting at the access point, for an attentive passenger. */
+  medianSeconds: z.number().min(0).max(1800),
+  /** Standard deviation of the underlying normal of the log-normal response time. */
+  sigma: z.number().min(0).max(3),
+  /** Probability that a passenger does not notice the first call. */
+  absentProbability: z.number().min(0).max(1),
+  /** Median of the extra delay of a passenger who did not notice the first call. */
+  absentExtraMedianMinutes: z.number().positive().max(240),
+  absentExtraSigma: z.number().min(0).max(3),
+});
+
 const SyntheticHourlyScheduleSchema = z.strictObject({
   kind: z.literal('synthetic-hourly'),
   /** Seed of the schedule generator: the design day is the same for every replication. */
@@ -79,7 +137,7 @@ const SyntheticHourlyScheduleSchema = z.strictObject({
 
 export const ScenarioSchema = z
   .strictObject({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.literal(2),
     id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/, 'lowercase letters, digits and dashes'),
     title: z.string().min(1),
     description: z.string().min(1),
@@ -90,7 +148,8 @@ export const ScenarioSchema = z
     checkpoint: z.strictObject({
       id: z.string().min(1),
       kind: z.enum(['DEPARTURE_SECURITY', 'TRANSFER_SECURITY']),
-      lanes: param(z.number().int().min(1).max(64)),
+      /** Planned open lanes over the day (lanes close from the highest number down). */
+      laneSchedule: param(LaneScheduleSchema),
       serviceTimeMeanSeconds: param(z.number().positive().max(3600)),
       serviceTimeCv: param(z.number().min(0).max(3)),
     }),
@@ -113,6 +172,8 @@ export const ScenarioSchema = z
         transfer: param(ShowUpSchema),
       }),
       walkSpeedSigma: param(z.number().min(0).max(2)),
+      /** How passengers answer calls of a virtual queue (ignored by the physical queue). */
+      callResponse: param(CallResponseSchema),
     }),
     operations: z.strictObject({
       boardingCloseMinutesBeforeStd: param(z.number().int().min(0).max(180)),

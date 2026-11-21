@@ -6,6 +6,66 @@ must be listed, together with the component versions it bumps.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-21: Slice S2
+
+Realistic call mechanics: the status quo is now a physical queue, and GateFlow policies run a
+virtual queue with call-ahead, response times, missed calls, recalls, reactivation, a committed
+prepare window and planned lane schedules.
+
+### Simulated numbers change
+
+- The headline numbers of S1 are not comparable with those of S2. The baseline is now a physical
+  FIFO queue (ADR-015) and GateFlow policies pay for their call mechanics. The S2 reports compare
+  `virtual-fifo` with the status quo (the call mechanics alone) and `priority-v0` with
+  `virtual-fifo` (the prioritisation alone).
+- With no response time, no absences, no call-ahead and no prepare window, the S2 model
+  reproduces every S1 metric exactly (regression test against a fixture saved from S1, seeds 1-3).
+- Golden files regenerated: three policies and three comparisons, new metrics and report
+  sections.
+
+### Added
+
+- `@gateflow/queue-core` 0.1.0 (ADR-016):
+  - `CheckpointQueue`, the deterministic queue state machine: tickets, prepare window, calls,
+    second calls, no-shows, reactivation, expiry, chronological event listener;
+  - policies as `selection` + `queue` operation, presets `fifo` 1.1.0 (physical queue),
+    `virtual-fifo` 0.1.0 and `priority-v0` 0.2.0 (virtual queue, ADR-017 defaults);
+  - unit tests, property tests with an independent overtake model, and a coverage test that keeps
+    the properties from becoming vacuous.
+- Scenario `single-checkpoint-staffed`: the demo day with a lane schedule that follows demand
+  (93 lane-hours instead of 144).
+- CLI option `--compare candidate:reference,...`.
+- Property tests of the checkpoint model on random populations, lane schedules and policies.
+- ADR-015 to ADR-020.
+
+### Changed
+
+- `@gateflow/priority-engine` 0.2.0 (engine version 0.2.0):
+  - `EngineInput.selection` replaces `policy`; policies and presets moved to `queue-core`;
+  - `aheadOfWaiting`: tickets committed ahead of the waiting list count in the FIFO wait, and
+    CRITICAL means "cannot make it even if selected now, behind them" (ADR-019);
+  - `validateNow` is exported.
+- `@gateflow/sim-model` 0.2.0 (model version 0.2.0):
+  - physical or virtual queue driven by `CheckpointQueue`, call-ahead, passenger response rule
+    (ADR-018), recalls, no-shows, reactivation and new tickets;
+  - planned lane schedules (closing lanes finish their passenger);
+  - new outcomes (time to screening, call wait, standing time, calls, no-shows, reactivations,
+    new tickets) and statistics (staffed lane time, idle lane time, standing queue);
+  - event order at the same instant: lane change, end of service, presentation, timeout,
+    arrival (ADR-020).
+- `@gateflow/sim-scenarios` 0.2.0 (scenario schema 2, population generator 0.2.0):
+  `checkpoint.laneSchedule` replaces `checkpoint.lanes`, `passengers.callResponse` is new, and
+  version 1 files are rejected with a migration message. Existing random attributes are
+  unchanged.
+- `@gateflow/sim-metrics` 0.2.0 (results schema `gateflow.sim.results/2`, ADR-020): explicit
+  comparison pairs, new call-mechanics and standing metrics, report sections "Call mechanics" and
+  "Checkpoint operations", updated model limitations.
+- `@gateflow/sim-cli` 0.2.0: default policies `fifo,virtual-fifo,priority-v0`; default
+  comparisons add each priority policy against the FIFO policy with the same virtual queue.
+- Scenarios `single-checkpoint-demo` and `single-checkpoint-moderate` migrated to schema 2 with
+  six lanes all day (unchanged world).
+- CI publishes 200-day reports for the three scenarios.
+
 ## [0.1.0] - 2026-11-21: Slice S1
 
 First reproducible FIFO vs priority comparison, plus the repository foundations.

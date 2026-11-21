@@ -1,6 +1,6 @@
 {
   "name": "@gateflow/sim-cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Command-line interface for GateFlow simulation experiments (gateflow-sim).",
   "type": "module",
@@ -16,6 +16,7 @@
   "dependencies": {
     "@gateflow/domain": "workspace:*",
     "@gateflow/priority-engine": "workspace:*",
+    "@gateflow/queue-core": "workspace:*",
     "@gateflow/sim-kernel": "workspace:*",
     "@gateflow/sim-metrics": "workspace:*",
     "@gateflow/sim-model": "workspace:*",

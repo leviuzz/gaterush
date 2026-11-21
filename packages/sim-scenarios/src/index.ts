@@ -1,4 +1,4 @@
-export { ScenarioSchema, SOURCE_LABELS } from './schema';
+export { ScenarioSchema, SOURCE_LABELS, clockMinutes } from './schema';
 export type { Scenario, SourceLabel } from './schema';
 export { ScenarioValidationError, parseScenario, parseScenarioText } from './parse';
 export { canonicalJson } from './canonical';
@@ -8,4 +8,4 @@ export { GENERATOR_VERSION, generatePopulation, generateSchedule } from './gener
 export type { ScheduledFlight } from './generate';
 
 /** Version of the scenario schema understood by this package. */
-export const SCENARIO_SCHEMA_VERSION = 1;
+export const SCENARIO_SCHEMA_VERSION = 2;

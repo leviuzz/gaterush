@@ -10,10 +10,11 @@ import {
   triangular,
 } from '@gateflow/sim-kernel';
 import type { Population, SimFlight, SimPassenger } from '@gateflow/sim-model';
+import { clockMinutes } from './schema';
 import type { Scenario } from './schema';
 
 /** Version of the population generator. Bump on any change that can alter generated data. */
-export const GENERATOR_VERSION = '0.1.0';
+export const GENERATOR_VERSION = '0.2.0';
 
 const DOMAIN = labelCode('gateflow.population');
 const KEY = {
@@ -24,6 +25,11 @@ const KEY = {
   arrival: labelCode('pax.arrival'),
   service: labelCode('pax.service'),
   walk: labelCode('pax.walk'),
+  // Added in generator 0.2.0. Every attribute has its own stream, so the attributes above are
+  // generated exactly as in 0.1.0.
+  response: labelCode('pax.response'),
+  absent: labelCode('pax.absent'),
+  absentExtra: labelCode('pax.absentExtra'),
 } as const;
 
 /** A flight of the design day, with the descriptive attributes used to generate passengers. */
@@ -106,6 +112,7 @@ export function generatePopulation(scenario: Scenario, seed: number): Population
   const walkSigma = spec.walkSpeedSigma.value;
   const serviceMeanMs = secondsToMs(checkpoint.serviceTimeMeanSeconds.value);
   const serviceCv = checkpoint.serviceTimeCv.value;
+  const response = spec.callResponse.value;
 
   const passengers: SimPassenger[] = [];
   for (const flight of flights) {
@@ -135,6 +142,25 @@ export function generatePopulation(scenario: Scenario, seed: number): Population
       const walkMs = Math.round(
         flight.walkEstimateMs * lognormalFromMedian(key(KEY.walk), 1, walkSigma),
       );
+      const callResponseMs =
+        response.medianSeconds === 0
+          ? 0
+          : Math.round(
+              lognormalFromMedian(
+                key(KEY.response),
+                secondsToMs(response.medianSeconds),
+                response.sigma,
+              ),
+            );
+      const absenceDelayMs = bernoulli(key(KEY.absent), response.absentProbability)
+        ? Math.round(
+            lognormalFromMedian(
+              key(KEY.absentExtra),
+              minutesToMs(response.absentExtraMedianMinutes),
+              response.absentExtraSigma,
+            ),
+          )
+        : 0;
       passengers.push({
         index: passengers.length,
         id: `${flight.id}-${String(j + 1).padStart(3, '0')}`,
@@ -144,19 +170,20 @@ export function generatePopulation(scenario: Scenario, seed: number): Population
         serviceMs,
         walkMs,
         walkEstimateMs: flight.walkEstimateMs,
+        callResponseMs,
+        absenceDelayMs,
       });
     }
   }
 
-  const lanes = checkpoint.lanes.value;
   return {
     checkpoint: {
-      lanes,
-      estimates: {
-        throughputPerHour: (lanes * 3600) / checkpoint.serviceTimeMeanSeconds.value,
-        processMs: serviceMeanMs,
-        responseMs: 0, // no call latency in this model version
-      },
+      laneSchedule: checkpoint.laneSchedule.value.map(({ from, lanes }) => ({
+        fromMs: minutesToMs(clockMinutes(from)),
+        lanes,
+      })),
+      serviceRatePerLanePerHour: 3600 / checkpoint.serviceTimeMeanSeconds.value,
+      processEstimateMs: serviceMeanMs,
     },
     flights: flights.map(
       ({ index, id, stdMs, boardingCloseMs, knownDeadline, gateZone }): SimFlight => ({

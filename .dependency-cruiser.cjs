@@ -71,7 +71,8 @@ module.exports = {
     onlyAllowed('domain', []),
     onlyAllowed('sim-kernel', []),
     onlyAllowed('priority-engine', ['domain']),
-    onlyAllowed('sim-model', ['domain', 'priority-engine', 'sim-kernel']),
+    onlyAllowed('queue-core', ['domain', 'priority-engine']),
+    onlyAllowed('sim-model', ['domain', 'priority-engine', 'queue-core', 'sim-kernel']),
     onlyAllowed(
       'sim-scenarios',
       ['domain', 'priority-engine', 'sim-kernel', 'sim-model'],
@@ -80,6 +81,7 @@ module.exports = {
     onlyAllowed('sim-metrics', [
       'domain',
       'priority-engine',
+      'queue-core',
       'sim-kernel',
       'sim-model',
       'sim-scenarios',

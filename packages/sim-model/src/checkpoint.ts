@@ -1,14 +1,11 @@
 import { SEGMENTS } from '@gateflow/domain';
 import type { RiskClass } from '@gateflow/domain';
-import {
-  assessTicket,
-  selectNext,
-  validateClassificationParams,
-  validatePolicyParams,
-} from '@gateflow/priority-engine';
-import type { Policy, ReasonCode, WaitingTicket } from '@gateflow/priority-engine';
+import type { CheckpointEstimates } from '@gateflow/priority-engine';
+import { CheckpointQueue, callAheadTarget, responseEstimateMs } from '@gateflow/queue-core';
+import type { Policy, QueueEvent } from '@gateflow/queue-core';
 import { DiscreteEventSimulation } from '@gateflow/sim-kernel';
 import type {
+  CheckpointSpec,
   PassengerOutcome,
   Population,
   RunResult,
@@ -16,34 +13,51 @@ import type {
   SimulationOptions,
 } from './types';
 
-/** Service ends are processed before arrivals at the same instant, so a freed lane is reused. */
-const SERVICE_END = 0;
-const ARRIVAL = 1;
+/**
+ * Order of events at the same instant: lanes open or close first (a lane closing at t takes
+ * nobody at t); then lanes are freed; then passengers present at the access point; then timeouts
+ * are applied (so presenting exactly at a deadline is on time); arrivals come last. With a
+ * physical queue (or a virtual queue whose calls are answered instantly) this reproduces the S1
+ * model exactly.
+ */
+const LANE_CHANGE = 0;
+const SERVICE_END = 1;
+const PRESENT = 2;
+const TIMEOUT = 3;
+const ARRIVAL = 4;
 
-interface ArrivalEvent {
-  readonly kind: typeof ARRIVAL;
-  readonly passenger: number;
-}
+/**
+ * A passenger answers every call after the first one at once, so they need at most two tickets.
+ * The bound turns a modelling error into an exception instead of an endless loop.
+ */
+const MAX_TICKETS_PER_PASSENGER = 100;
 
-interface ServiceEndEvent {
-  readonly kind: typeof SERVICE_END;
-  readonly passenger: number;
-}
+type ModelEvent =
+  | { readonly kind: typeof SERVICE_END; readonly lane: number; readonly passenger: number }
+  | { readonly kind: typeof LANE_CHANGE; readonly lanes: number }
+  | { readonly kind: typeof PRESENT; readonly passenger: number }
+  | { readonly kind: typeof TIMEOUT }
+  | { readonly kind: typeof ARRIVAL; readonly passenger: number };
 
-type ModelEvent = ArrivalEvent | ServiceEndEvent;
-
-/** A waiting ticket plus the bookkeeping the model needs. */
-interface QueueEntry extends Omit<WaitingTicket, 'overtakenCount'> {
-  overtakenCount: number;
-  readonly passenger: number;
-}
-
-interface CallRecord {
-  readonly calledAtMs: number;
-  readonly laneIndex: number;
-  readonly priorityCall: boolean;
-  readonly overtakenCount: number;
-  readonly reasons: readonly ReasonCode[];
+/** Mutable bookkeeping of one passenger during a run. */
+interface PassengerState {
+  /** Current ticket (a new one is issued when the previous one expires). */
+  ticketId: string;
+  tickets: number;
+  /** True once the passenger has been at the access point: later calls are answered at once. */
+  presented: boolean;
+  classAtArrival: RiskClass | null;
+  firstCalledAtMs: number;
+  admittedAtMs: number;
+  serviceStartMs: number;
+  serviceEndMs: number;
+  lane: number;
+  calls: number;
+  noShows: number;
+  reactivations: number;
+  prioritized: boolean;
+  /** Most overtakes suffered by an expired ticket of this passenger. */
+  maxOvertakenExpired: number;
 }
 
 /** Thrown when a population violates the model's preconditions. */
@@ -60,9 +74,29 @@ function requireInteger(value: number, what: string, min = Number.MIN_SAFE_INTEG
   }
 }
 
+function validateCheckpointSpec(spec: CheckpointSpec): void {
+  const schedule = spec.laneSchedule;
+  if (schedule.length === 0) throw new PopulationError('checkpoint.laneSchedule must not be empty');
+  schedule.forEach((entry, i) => {
+    requireInteger(entry.fromMs, `laneSchedule[${i}].fromMs`, 0);
+    requireInteger(entry.lanes, `laneSchedule[${i}].lanes`, 1);
+    const previous = schedule[i - 1];
+    if (previous === undefined) {
+      if (entry.fromMs !== 0) throw new PopulationError('laneSchedule must start at 0');
+    } else if (entry.fromMs <= previous.fromMs) {
+      throw new PopulationError('laneSchedule must be sorted by strictly increasing fromMs');
+    }
+  });
+  const rate = spec.serviceRatePerLanePerHour;
+  if (!Number.isFinite(rate) || rate <= 0) {
+    throw new PopulationError(`serviceRatePerLanePerHour must be positive, got ${rate}`);
+  }
+  requireInteger(spec.processEstimateMs, 'checkpoint.processEstimateMs', 0);
+}
+
 export function validatePopulation(population: Population): void {
   const { checkpoint, flights, passengers } = population;
-  requireInteger(checkpoint.lanes, 'checkpoint.lanes', 1);
+  validateCheckpointSpec(checkpoint);
   flights.forEach((flight, i) => {
     if (flight.index !== i)
       throw new PopulationError(`flight ${flight.id} has index ${flight.index}, expected ${i}`);
@@ -73,6 +107,9 @@ export function validatePopulation(population: Population): void {
   passengers.forEach((p, i) => {
     if (p.index !== i)
       throw new PopulationError(`passenger ${p.id} has index ${p.index}, expected ${i}`);
+    if (p.id.length === 0 || p.id.includes('#')) {
+      throw new PopulationError(`passenger id ${JSON.stringify(p.id)} must be non-empty without #`);
+    }
     if (ids.has(p.id)) throw new PopulationError(`duplicate passenger id ${p.id}`);
     ids.add(p.id);
     if (p.flightIndex < 0 || p.flightIndex >= flights.length || !Number.isInteger(p.flightIndex)) {
@@ -85,17 +122,38 @@ export function validatePopulation(population: Population): void {
     requireInteger(p.serviceMs, `serviceMs of ${p.id}`, 0);
     requireInteger(p.walkMs, `walkMs of ${p.id}`, 0);
     requireInteger(p.walkEstimateMs, `walkEstimateMs of ${p.id}`, 0);
+    requireInteger(p.callResponseMs, `callResponseMs of ${p.id}`, 0);
+    requireInteger(p.absenceDelayMs, `absenceDelayMs of ${p.id}`, 0);
   });
 }
 
 /**
- * Simulates one service day at a checkpoint operated as a virtual queue.
+ * Delay between the first call and the passenger presenting at the access point. After taking the
+ * ticket the passenger walks away for at most `callResponseMs` and walks back when called, so a
+ * call that comes sooner is answered sooner; a passenger who has not yet left cannot miss it.
+ */
+export function firstCallDelayMs(passenger: SimPassenger, sinceTicketMs: number): number {
+  if (sinceTicketMs < passenger.callResponseMs) return Math.max(0, sinceTicketMs);
+  return passenger.callResponseMs + passenger.absenceDelayMs;
+}
+
+function at<T>(items: readonly T[], index: number, what: string): T {
+  const item = items[index];
+  if (item === undefined) throw new RangeError(`${what} ${index} does not exist`);
+  return item;
+}
+
+/**
+ * Simulates one service day at a checkpoint operated under `policy`.
  *
- * Each passenger receives a ticket on arrival and waits in the waiting area. Whenever a lane is
- * free and somebody is waiting, the policy (through the priority engine) chooses who to call; the
- * call is answered immediately (no call latency, no no-shows in this model version), the passenger
- * is screened for `serviceMs` and then walks to the gate. A passenger misses the flight when they
- * reach the gate after boarding closed.
+ * Each passenger receives a ticket on arrival. With a physical queue (today's operation) the
+ * passenger stands in line and steps forward as soon as a lane is free. With a GateFlow virtual
+ * queue the passenger waits anywhere; the queue calls tickets so as to keep the free lanes plus a
+ * call-ahead buffer supplied, the passenger presents at the access point after their response time
+ * (later if they miss the call), queues briefly at the lanes and is screened. Late passengers are
+ * recalled, become no-shows, can be reactivated, and get a new ticket once theirs has expired.
+ * After screening the passenger walks to the gate and misses the flight when they arrive after
+ * boarding closed.
  *
  * The run is deterministic: it consumes no randomness, so all variability comes from the
  * population (common random numbers across policies).
@@ -106,173 +164,317 @@ export function simulateCheckpoint(
   options: SimulationOptions,
 ): RunResult {
   validatePopulation(population);
-  validatePolicyParams(policy.params);
-  validateClassificationParams(options.classification);
-
   const { checkpoint, flights, passengers } = population;
-  const estimates = checkpoint.estimates;
-  const laneCount = checkpoint.lanes;
-  const historyLimit = policy.params.kind === 'constrained-edf' ? policy.params.capWindowCalls : 1;
+  const physical = policy.queue.kind === 'physical';
+  const schedule = checkpoint.laneSchedule;
+  const laneCount = schedule.reduce((max, entry) => Math.max(max, entry.lanes), 0);
+  const rate = checkpoint.serviceRatePerLanePerHour;
+  const responseMs = responseEstimateMs(policy.queue);
+  const estimatesFor = (lanes: number): CheckpointEstimates => ({
+    throughputPerHour: lanes * rate,
+    processMs: checkpoint.processEstimateMs,
+    responseMs,
+  });
+
+  const state: PassengerState[] = passengers.map((p) => ({
+    ticketId: p.id,
+    tickets: 0,
+    presented: false,
+    classAtArrival: null,
+    firstCalledAtMs: -1,
+    admittedAtMs: -1,
+    serviceStartMs: -1,
+    serviceEndMs: -1,
+    lane: -1,
+    calls: 0,
+    noShows: 0,
+    reactivations: 0,
+    prioritized: false,
+    maxOvertakenExpired: 0,
+  }));
+  const ticketOwner = new Map<string, number>();
+  const ownerOf = (ticketId: string): PassengerState => {
+    const index = ticketOwner.get(ticketId);
+    if (index === undefined) throw new Error(`unknown ticket ${ticketId}`);
+    return at(state, index, 'passenger');
+  };
+
+  const onQueueEvent = (event: QueueEvent): void => {
+    switch (event.type) {
+      case 'COMMITTED':
+        if (event.priority) ownerOf(event.ticketId).prioritized = true;
+        break;
+      case 'CALLED': {
+        const s = ownerOf(event.ticketId);
+        s.calls++;
+        if (s.firstCalledAtMs < 0) s.firstCalledAtMs = event.atMs;
+        break;
+      }
+      case 'NO_SHOW':
+        ownerOf(event.ticketId).noShows++;
+        break;
+      case 'REACTIVATED':
+        ownerOf(event.ticketId).reactivations++;
+        break;
+      case 'ISSUED':
+      case 'RECALLED':
+      case 'ADMITTED':
+      case 'EXPIRED':
+        break;
+    }
+  };
+  const queue = new CheckpointQueue(policy, options.classification, { listener: onQueueEvent });
 
   const sim = new DiscreteEventSimulation<ModelEvent>(
     passengers.reduce((min, p) => Math.min(min, p.arrivalMs), 0),
   );
   for (const p of passengers)
     sim.scheduleAt(p.arrivalMs, ARRIVAL, { kind: ARRIVAL, passenger: p.index });
+  for (const entry of schedule.slice(1)) {
+    sim.scheduleAt(entry.fromMs, LANE_CHANGE, { kind: LANE_CHANGE, lanes: entry.lanes });
+  }
 
-  const laneFree: boolean[] = Array.from({ length: laneCount }, () => true);
-  const waiting: QueueEntry[] = [];
-  const recentPriorityCalls: boolean[] = [];
-  const classAtArrival: RiskClass[] = new Array<RiskClass>(passengers.length);
-  const calls: (CallRecord | undefined)[] = new Array<CallRecord | undefined>(passengers.length);
-  const serviceEnds: number[] = new Array<number>(passengers.length).fill(-1);
+  let open = at(schedule, 0, 'lane schedule entry').lanes;
+  let estimates = estimatesFor(open);
+  const busy: boolean[] = new Array<boolean>(laneCount).fill(false);
+  /** Open lanes that are idle. */
+  let freeOpen = open;
+  /** Busy lanes that are closing (index >= open): they finish their passenger, then close. */
+  let busyClosing = 0;
+  /** Passengers who validated their ticket and wait for a lane, in order of validation. */
+  const buffer: number[] = [];
+  const scheduledTimeouts = new Set<number>();
 
-  let nextFifoKey = 0;
-  let callCount = 0;
-  let priorityCalls = 0;
-  let capReachedCalls = 0;
-  let overtakeGuardCalls = 0;
   let busyMs = 0;
+  let firstArrivalMs = 0;
+  let lastServiceEndMs = 0;
+  let integrating = false;
+  let lastMs = sim.nowMs;
   let waitingAreaMs = 0;
-  let lastWaitingChangeMs = sim.nowMs;
+  let standingAreaMs = 0;
+  let staffedMs = 0;
+  let idleWithDemandMs = 0;
+  let staffedAtLastServiceEnd = 0;
+  let idleWithDemandAtLastServiceEnd = 0;
   let maxWaiting = 0;
-  let firstArrivalMs = Number.POSITIVE_INFINITY;
-  let lastServiceEndMs = Number.NEGATIVE_INFINITY;
+  let maxStanding = 0;
 
-  /** Integrates the waiting count up to `now`; call before changing the queue length. */
-  const accumulateWaiting = (now: number): void => {
-    waitingAreaMs += waiting.length * (now - lastWaitingChangeMs);
-    lastWaitingChangeMs = now;
+  const uncalled = (): number => queue.waitingCount + queue.windowCount;
+  const standing = (): number => (physical ? uncalled() : 0) + buffer.length;
+
+  /** Integrates the piecewise-constant counts up to `now` (call before changing any of them). */
+  const accumulate = (now: number): void => {
+    const dt = now - lastMs;
+    if (dt <= 0) return;
+    if (integrating) {
+      const waiting = uncalled();
+      waitingAreaMs += waiting * dt;
+      standingAreaMs += standing() * dt;
+      staffedMs += (open + busyClosing) * dt;
+      // Idle lanes that the passengers waiting for or answering a call could have used.
+      idleWithDemandMs += Math.min(freeOpen, waiting + queue.outstandingCount) * dt;
+    }
+    lastMs = now;
   };
 
-  const dispatch = (now: number): void => {
-    for (let lane = 0; lane < laneCount && waiting.length > 0; lane++) {
-      if (!laneFree[lane]) continue;
-      const selection = selectNext({
-        nowMs: now,
-        checkpoint: estimates,
-        waiting,
-        recentPriorityCalls,
-        policy: policy.params,
-      });
-      if (selection === null) break;
-      const position = selection.positionInFifo;
-      const entry = waiting[position];
-      if (entry?.id !== selection.ticketId) {
-        throw new Error(
-          `engine selected ${selection.ticketId} at an unexpected position ${position}`,
-        );
-      }
-      for (let i = 0; i < position; i++) (waiting[i] as QueueEntry).overtakenCount++;
-      accumulateWaiting(now);
-      waiting.splice(position, 1);
+  const noteMaxima = (): void => {
+    maxWaiting = Math.max(maxWaiting, uncalled());
+    maxStanding = Math.max(maxStanding, standing());
+  };
 
-      recentPriorityCalls.push(selection.priorityCall);
-      if (recentPriorityCalls.length > 2 * historyLimit + 64) {
-        recentPriorityCalls.splice(0, recentPriorityCalls.length - historyLimit);
-      }
-      callCount++;
-      if (selection.priorityCall) priorityCalls++;
-      if (selection.reasons.includes('CAP_REACHED')) capReachedCalls++;
-      if (selection.reasons.includes('OVERTAKE_LIMIT_GUARD')) overtakeGuardCalls++;
+  const issueTicket = (passengerIndex: number, now: number): void => {
+    const passenger = at(passengers, passengerIndex, 'passenger');
+    const s = at(state, passengerIndex, 'passenger');
+    s.tickets++;
+    if (s.tickets > MAX_TICKETS_PER_PASSENGER) {
+      throw new Error(
+        `passenger ${passenger.id} needed more than ${MAX_TICKETS_PER_PASSENGER} tickets`,
+      );
+    }
+    s.ticketId = s.tickets === 1 ? passenger.id : `${passenger.id}#${s.tickets}`;
+    ticketOwner.set(s.ticketId, passengerIndex);
+    const view = queue.issue(
+      {
+        id: s.ticketId,
+        segment: passenger.segment,
+        deadline: at(flights, passenger.flightIndex, 'flight').knownDeadline,
+        walkEstimateMs: passenger.walkEstimateMs,
+      },
+      now,
+      estimates,
+    );
+    s.classAtArrival ??= view.classAtIssue;
+  };
 
-      const passenger = passengers[entry.passenger] as SimPassenger;
-      calls[entry.passenger] = {
-        calledAtMs: now,
-        laneIndex: lane,
-        priorityCall: selection.priorityCall,
-        overtakenCount: entry.overtakenCount,
-        reasons: selection.reasons,
-      };
-      laneFree[lane] = false;
+  const startServices = (now: number): void => {
+    while (buffer.length > 0 && freeOpen > 0) {
+      const passengerIndex = buffer.shift() as number;
+      let lane = 0;
+      while (lane < open && busy[lane] === true) lane++;
+      if (lane >= open) throw new Error('no free open lane although one was counted');
+      const passenger = at(passengers, passengerIndex, 'passenger');
+      const s = at(state, passengerIndex, 'passenger');
+      busy[lane] = true;
+      freeOpen--;
+      s.serviceStartMs = now;
+      s.lane = lane;
       busyMs += passenger.serviceMs;
       sim.scheduleAt(now + passenger.serviceMs, SERVICE_END, {
         kind: SERVICE_END,
-        passenger: entry.passenger,
+        lane,
+        passenger: passengerIndex,
       });
     }
+  };
+
+  /** Calls tickets while the pipeline (called + at the lanes) is below free lanes + call-ahead. */
+  const callTickets = (now: number): void => {
+    const target = callAheadTarget(policy.queue, open, rate);
+    while (uncalled() > 0 && buffer.length + queue.outstandingCount < freeOpen + target) {
+      const view = queue.callNext(now, estimates);
+      if (view === null) break;
+      const passengerIndex = ticketOwner.get(view.id);
+      if (passengerIndex === undefined) throw new Error(`unknown ticket ${view.id}`);
+      const passenger: SimPassenger = at(passengers, passengerIndex, 'passenger');
+      const s = at(state, passengerIndex, 'passenger');
+      const delay =
+        physical || s.presented ? 0 : firstCallDelayMs(passenger, now - passenger.arrivalMs);
+      sim.scheduleAt(now + delay, PRESENT, { kind: PRESENT, passenger: passengerIndex });
+    }
+  };
+
+  const present = (passengerIndex: number, now: number): void => {
+    const s = at(state, passengerIndex, 'passenger');
+    s.presented = true;
+    const outcome = queue.present(s.ticketId, now, estimates);
+    switch (outcome) {
+      case 'ADMITTED':
+        s.admittedAtMs = now;
+        buffer.push(passengerIndex);
+        startServices(now);
+        break;
+      case 'REACTIVATED':
+        break;
+      case 'EXPIRED': {
+        const expired = queue.ticket(s.ticketId);
+        s.maxOvertakenExpired = Math.max(s.maxOvertakenExpired, expired?.overtakenCount ?? 0);
+        issueTicket(passengerIndex, now);
+        break;
+      }
+      case 'NOT_CALLED':
+      case 'ALREADY_ADMITTED':
+      case 'UNKNOWN_TICKET':
+        throw new Error(`unexpected presentation outcome ${outcome} for ticket ${s.ticketId}`);
+    }
+    noteMaxima();
+  };
+
+  const changeLanes = (lanes: number): void => {
+    for (let i = Math.min(open, lanes); i < Math.max(open, lanes); i++) {
+      const opening = lanes > open;
+      if (busy[i] === true) busyClosing += opening ? -1 : 1;
+      else freeOpen += opening ? 1 : -1;
+    }
+    open = lanes;
+    estimates = estimatesFor(open);
   };
 
   sim.run((event) => {
     const now = event.timeMs;
     const payload = event.payload;
-    if (payload.kind === ARRIVAL) {
-      const passenger = passengers[payload.passenger] as SimPassenger;
-      const flight = flights[passenger.flightIndex];
-      if (flight === undefined) throw new PopulationError(`unknown flight for ${passenger.id}`);
-      const entry: QueueEntry = {
-        id: passenger.id,
-        fifoKey: nextFifoKey++,
-        segment: passenger.segment,
-        deadline: flight.knownDeadline,
-        walkEstimateMs: passenger.walkEstimateMs,
-        overtakenCount: 0,
-        passenger: passenger.index,
-      };
-      classAtArrival[passenger.index] = assessTicket(
-        entry,
-        waiting.length,
-        now,
-        estimates,
-        options.classification,
-      ).riskClass;
-      firstArrivalMs = Math.min(firstArrivalMs, now);
-      accumulateWaiting(now);
-      waiting.push(entry);
-      maxWaiting = Math.max(maxWaiting, waiting.length);
-    } else {
-      const call = calls[payload.passenger];
-      if (call === undefined)
-        throw new Error(`service ended for uncalled passenger ${payload.passenger}`);
-      laneFree[call.laneIndex] = true;
-      serviceEnds[payload.passenger] = now;
-      lastServiceEndMs = Math.max(lastServiceEndMs, now);
+    accumulate(now);
+    switch (payload.kind) {
+      case ARRIVAL:
+        if (!integrating) {
+          integrating = true;
+          firstArrivalMs = now;
+        }
+        issueTicket(payload.passenger, now);
+        noteMaxima();
+        break;
+      case SERVICE_END: {
+        busy[payload.lane] = false;
+        if (payload.lane < open) freeOpen++;
+        else busyClosing--;
+        at(state, payload.passenger, 'passenger').serviceEndMs = now;
+        lastServiceEndMs = now;
+        staffedAtLastServiceEnd = staffedMs;
+        idleWithDemandAtLastServiceEnd = idleWithDemandMs;
+        startServices(now);
+        break;
+      }
+      case LANE_CHANGE:
+        changeLanes(payload.lanes);
+        startServices(now);
+        break;
+      case PRESENT:
+        present(payload.passenger, now);
+        break;
+      case TIMEOUT:
+        scheduledTimeouts.delete(now);
+        queue.advance(now);
+        break;
     }
-    dispatch(now);
+    callTickets(now);
+    const due = queue.nextDueMs();
+    if (due !== null && !scheduledTimeouts.has(due)) {
+      scheduledTimeouts.add(due);
+      sim.scheduleAt(due, TIMEOUT, { kind: TIMEOUT });
+    }
   });
 
   const outcomes: PassengerOutcome[] = passengers.map((passenger) => {
-    const call = calls[passenger.index];
-    const serviceEndMs = serviceEnds[passenger.index] ?? -1;
-    const arrivalClass = classAtArrival[passenger.index];
-    const flight = flights[passenger.flightIndex];
-    if (
-      call === undefined ||
-      serviceEndMs < 0 ||
-      arrivalClass === undefined ||
-      flight === undefined
-    ) {
+    const s = at(state, passenger.index, 'passenger');
+    const ticket = queue.ticket(s.ticketId);
+    if (s.serviceEndMs < 0 || s.classAtArrival === null || ticket?.state !== 'ADMITTED') {
       throw new Error(`passenger ${passenger.id} was not served (conservation violated)`);
     }
-    const gateArrivalMs = serviceEndMs + passenger.walkMs;
+    const flight = at(flights, passenger.flightIndex, 'flight');
+    const gateArrivalMs = s.serviceEndMs + passenger.walkMs;
     return {
-      calledAtMs: call.calledAtMs,
-      serviceEndMs,
+      firstCalledAtMs: s.firstCalledAtMs,
+      serviceStartMs: s.serviceStartMs,
+      serviceEndMs: s.serviceEndMs,
       gateArrivalMs,
-      waitMs: call.calledAtMs - passenger.arrivalMs,
+      waitMs: s.serviceStartMs - passenger.arrivalMs,
+      callWaitMs: s.firstCalledAtMs - passenger.arrivalMs,
+      standingMs: s.serviceStartMs - (physical ? passenger.arrivalMs : s.admittedAtMs),
       missed: gateArrivalMs > flight.boardingCloseMs,
-      priorityCall: call.priorityCall,
-      overtakenCount: call.overtakenCount,
-      selectionReasons: call.reasons,
-      classAtArrival: arrivalClass,
-      laneIndex: call.laneIndex,
-    };
+      priorityCall: s.prioritized,
+      overtakenCount: Math.max(s.maxOvertakenExpired, ticket.overtakenCount),
+      selectionReasons: ticket.selectionReasons,
+      classAtArrival: s.classAtArrival,
+      laneIndex: s.lane,
+      calls: s.calls,
+      noShows: s.noShows,
+      reactivations: s.reactivations,
+      reissuedTickets: s.tickets - 1,
+    } satisfies PassengerOutcome;
   });
 
-  const empty = passengers.length === 0;
+  const q = queue.stats();
   return {
     policyId: policy.id,
     outcomes,
     stats: {
-      calls: callCount,
-      priorityCalls,
-      capReachedCalls,
-      overtakeGuardCalls,
-      firstArrivalMs: empty ? 0 : firstArrivalMs,
-      lastServiceEndMs: empty ? 0 : lastServiceEndMs,
+      calls: q.calls,
+      commitments: q.commitments,
+      priorityCalls: q.priorityCommitments,
+      capReachedCalls: q.capReached,
+      overtakeGuardCalls: q.overtakeGuard,
+      recalls: q.recalls,
+      noShows: q.noShows,
+      reactivations: q.reactivations,
+      reissuedTickets: q.issued - passengers.length,
+      firstArrivalMs,
+      lastServiceEndMs,
       busyMs,
+      staffedLaneMs: staffedAtLastServiceEnd,
+      idleLaneWithDemandMs: idleWithDemandAtLastServiceEnd,
       waitingAreaMs,
       maxWaiting,
+      standingAreaMs,
+      maxStanding,
     },
   };
 }

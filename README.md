@@ -9,9 +9,14 @@ engine** brings forward passengers who would miss their flight under FIFO but ca
 It does so within **declared, measurable fairness bounds**. GateFlow never changes security or
 border procedures: it organises the flow before they start.
 
-> **Status: slice S1 done.** This repository contains the simulation foundations: the priority
-> engine, a reproducible discrete-event simulator and a CLI that compares FIFO with the priority
-> policy. There is no operational system, API or user interface yet. See
+> **Status: slices S1 and S2 done.** This repository contains the simulation foundations:
+> - the priority engine;
+> - the queue state machine that the operational product will share;
+> - a reproducible discrete-event simulator of a checkpoint, run either as today's physical queue
+>   or as a GateFlow virtual queue with realistic call mechanics;
+> - a CLI that compares policies on the same simulated passengers.
+>
+> There is no operational system, API or user interface yet. See
 > [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 > **All results in this repository are SIMULATED on synthetic assumptions.** They are not
@@ -34,13 +39,20 @@ pnpm check
 pnpm sim run --scenario scenarios/single-checkpoint-demo.yaml --seeds 1-200
 ```
 
-The last command simulates 200 days with the FIFO baseline and priority policy v0, then writes
-`out/single-checkpoint-demo/results.json` and `out/single-checkpoint-demo/report.md`.
+The last command simulates 200 days with three policies, then writes
+`out/single-checkpoint-demo/results.json` and `out/single-checkpoint-demo/report.md`:
+- `fifo`: today's physical queue, the status quo;
+- `virtual-fifo`: the GateFlow virtual queue served in FIFO order;
+- `priority-v0`: the GateFlow virtual queue with priority policy v0.
 
 Other commands:
 
 ```bash
-pnpm sim validate --scenario scenarios/single-checkpoint-moderate.yaml
+pnpm sim validate --scenario scenarios/single-checkpoint-staffed.yaml
+```
+
+```bash
+pnpm sim run --scenario scenarios/single-checkpoint-demo.yaml --seeds 1-50 --policies fifo,priority-v0 --compare priority-v0:fifo
 ```
 
 ```bash
@@ -53,17 +65,10 @@ pnpm sim --help
 
 ## What the simulator shows today
 
-| Scenario (200 simulated days, SYNTHETIC) | Missed flights per day, FIFO | Missed flights per day, priority v0 | Net flights saved per day [95% CI] |
-|---|---:|---:|---:|
-| `single-checkpoint-demo` (congested morning peak) | 48.7 | 23.6 | 25.1 [23.6, 26.7] |
-| `single-checkpoint-moderate` | 11.9 | 6.9 | 5.0 [4.3, 5.7] |
-
-How to read these numbers:
-- The benefit depends heavily on congestion.
-- It is overstated in this first model version: calls are answered instantly, there are no
-  no-shows, and the baseline does not include today's manual handling of urgent passengers.
-- The full reports, with every assumption and limitation, are in
-  [docs/reports/slice-1](docs/reports/slice-1).
+The slice S2 reports (200 simulated days for each of three synthetic scenarios, with every
+assumption and limitation) are in [docs/reports/slice-2](docs/reports/slice-2). The S1 reports,
+which ignored call mechanics, remain in [docs/reports/slice-1](docs/reports/slice-1) for
+reference.
 
 ## Repository layout
 
@@ -71,8 +76,9 @@ How to read these numbers:
 |---|---|
 | `packages/domain` | Shared domain types and units |
 | `packages/priority-engine` | Deterministic priority engine (pure) |
+| `packages/queue-core` | Queue state machine and policies, shared by simulator and product (pure) |
 | `packages/sim-kernel` | Seeded RNG streams, deterministic math, distributions, event calendar (pure) |
-| `packages/sim-model` | Checkpoint simulation driven by the engine (pure) |
+| `packages/sim-model` | Checkpoint simulation: physical or virtual queue, calls, lane schedules (pure) |
 | `packages/sim-scenarios` | Scenario schema, assumptions registry, synthetic population (pure) |
 | `packages/sim-metrics` | Experiments, paired metrics, statistics, results and report (pure) |
 | `apps/sim-cli` | `gateflow-sim` command-line interface |

@@ -1,5 +1,7 @@
 import { ENGINE_VERSION } from '@gateflow/priority-engine';
-import type { ClassificationParams, Policy } from '@gateflow/priority-engine';
+import type { ClassificationParams } from '@gateflow/priority-engine';
+import { QUEUE_CORE_VERSION } from '@gateflow/queue-core';
+import type { Policy } from '@gateflow/queue-core';
 import { KERNEL_VERSION } from '@gateflow/sim-kernel';
 import { MODEL_VERSION } from '@gateflow/sim-model';
 import {
@@ -9,11 +11,12 @@ import {
 } from '@gateflow/sim-scenarios';
 import type { Assumption } from '@gateflow/sim-scenarios';
 import type { ComparisonDayMetrics, PolicyDayMetrics } from './day-metrics';
-import type { ExperimentResult, SeedResult } from './experiment';
+import { comparisonKey } from './experiment';
+import type { ExperimentResult, PolicyComparison, SeedResult } from './experiment';
 import { acrossDays, bootstrapMeanInterval } from './stats';
 import type { AcrossDays } from './stats';
 
-export const RESULTS_SCHEMA = 'gateflow.sim.results/1';
+export const RESULTS_SCHEMA = 'gateflow.sim.results/2';
 
 export const DISCLAIMER =
   'SIMULATED RESULTS ON SYNTHETIC OR HYPOTHETICAL DATA. These numbers are model outputs, not ' +
@@ -21,14 +24,16 @@ export const DISCLAIMER =
 
 /** Simplifications of the current model version, reported with every result. */
 export const MODEL_LIMITATIONS: readonly string[] = [
-  'Single checkpoint with all lanes open all day: no lane schedules, outages or extra lanes.',
-  'Calls are answered instantly: no call latency, no no-shows and no recalls.',
+  'Single checkpoint. Lanes follow a planned schedule: no unplanned outages and no lanes opened in reaction to the queue.',
+  'Every passenger uses the virtual queue when one is simulated: no opt-outs, no passengers without a phone or a view of the displays.',
+  'Response times and absences are drawn per passenger from assumed distributions. A second call does not make an absent passenger come sooner, the prepare window does not shorten response times, and a passenger who has been at the access point once answers later calls at once.',
+  'The access point never becomes a bottleneck, and the walk from the access point to the lanes is part of the response time.',
   "The system's deadline equals the ground truth (boarding close from a fixed rule): no flight delays, gate changes or stale data.",
   'Passengers never abandon the queue, even after their flight has closed.',
   'No groups, families or assisted passengers: everyone is served individually.',
-  "The baseline is pure FIFO. Today's manual handling of urgent passengers is not modelled, so the benefit of prioritisation is likely overstated.",
+  "The status quo is a physical FIFO queue without staff intervention. Today's manual handling of urgent passengers is not modelled, so the benefit of prioritisation is likely overstated.",
   'Tickets are issued on arrival with no kiosk or scanning delay.',
-  'The engine estimates processing time as the mean screening time and walking time as the nominal time of the gate zone.',
+  'The engine estimates processing time as the mean screening time, walking time as the nominal time of the gate zone, and the time from call to screening as the larger of the response estimate and the call-ahead time.',
 ];
 
 export interface ManifestInput {
@@ -46,12 +51,14 @@ export interface ComparisonMetricSummary extends AcrossDays {
 }
 
 export interface ComparisonSummary {
+  readonly candidateId: string;
+  readonly referenceId: string;
   readonly metrics: Readonly<Record<keyof ComparisonDayMetrics, ComparisonMetricSummary>>;
   /** Share of simulated days on which the candidate saved more flights than it lost. */
   readonly shareDaysNetPositive: number;
   readonly shareDaysNetNegative: number;
   /** Pooled over days: at-risk passengers who reached the gate in time / at-risk passengers. */
-  readonly atRiskReachedShareBaseline: number;
+  readonly atRiskReachedShareReference: number;
   readonly atRiskReachedShareCandidate: number;
 }
 
@@ -63,6 +70,7 @@ export interface ResultsDocument {
     readonly commit: string;
     readonly versions: {
       readonly engine: string;
+      readonly queueCore: string;
       readonly model: string;
       readonly kernel: string;
       readonly populationGenerator: string;
@@ -78,6 +86,7 @@ export interface ResultsDocument {
     readonly seeds: { readonly count: number; readonly ranges: string };
     readonly baselinePolicyId: string;
     readonly policies: readonly Policy[];
+    readonly comparisons: readonly PolicyComparison[];
     readonly classification: ClassificationParams;
     readonly statistics: {
       readonly bootstrapResamples: number;
@@ -166,29 +175,28 @@ export function buildResults(experiment: ExperimentResult, input: ManifestInput)
   }
 
   const comparisons: Record<string, ComparisonSummary> = {};
-  for (const policy of config.policies) {
-    if (policy.id === config.baselinePolicyId) continue;
+  for (const comparison of experiment.comparisons) {
+    const key = comparisonKey(comparison);
     const rows = perSeed.map((s) => {
-      const metrics = s.comparisons[policy.id];
-      if (metrics === undefined) throw new RangeError(`missing comparison for ${policy.id}`);
+      const metrics = s.comparisons[key];
+      if (metrics === undefined) throw new RangeError(`missing comparison ${key}`);
       return metrics;
     });
     const metrics = {} as Record<keyof ComparisonDayMetrics, ComparisonMetricSummary>;
-    for (const key of Object.keys(rows[0] ?? {}) as (keyof ComparisonDayMetrics)[]) {
-      const values = rows.map((r) => r[key]);
-      const interval = bootstrapMeanInterval(values, {
-        ...bootstrap,
-        key: `${policy.id}:${key}`,
-      });
-      metrics[key] = { ...acrossDays(values), ciLower: interval.lower, ciUpper: interval.upper };
+    for (const metric of Object.keys(rows[0] ?? {}) as (keyof ComparisonDayMetrics)[]) {
+      const values = rows.map((r) => r[metric]);
+      const interval = bootstrapMeanInterval(values, { ...bootstrap, key: `${key}:${metric}` });
+      metrics[metric] = { ...acrossDays(values), ciLower: interval.lower, ciUpper: interval.upper };
     }
     const cohort = rows.reduce((a, r) => a + r.atRiskCohort, 0);
-    comparisons[policy.id] = {
+    comparisons[key] = {
+      candidateId: comparison.candidateId,
+      referenceId: comparison.referenceId,
       metrics,
       shareDaysNetPositive: rows.filter((r) => r.net > 0).length / rows.length,
       shareDaysNetNegative: rows.filter((r) => r.net < 0).length / rows.length,
-      atRiskReachedShareBaseline:
-        cohort === 0 ? 0 : rows.reduce((a, r) => a + r.atRiskReachedBaseline, 0) / cohort,
+      atRiskReachedShareReference:
+        cohort === 0 ? 0 : rows.reduce((a, r) => a + r.atRiskReachedReference, 0) / cohort,
       atRiskReachedShareCandidate:
         cohort === 0 ? 0 : rows.reduce((a, r) => a + r.atRiskReachedCandidate, 0) / cohort,
     };
@@ -196,6 +204,9 @@ export function buildResults(experiment: ExperimentResult, input: ManifestInput)
 
   const ranges = formatSeedRanges(seeds);
   const policyIds = config.policies.map((p) => p.id).join(',');
+  const comparePairs = experiment.comparisons
+    .map((c) => `${c.candidateId}:${c.referenceId}`)
+    .join(',');
   return {
     schema: RESULTS_SCHEMA,
     disclaimer: DISCLAIMER,
@@ -204,6 +215,7 @@ export function buildResults(experiment: ExperimentResult, input: ManifestInput)
       commit: input.commit,
       versions: {
         engine: ENGINE_VERSION,
+        queueCore: QUEUE_CORE_VERSION,
         model: MODEL_VERSION,
         kernel: KERNEL_VERSION,
         populationGenerator: GENERATOR_VERSION,
@@ -219,6 +231,7 @@ export function buildResults(experiment: ExperimentResult, input: ManifestInput)
       seeds: { count: seeds.length, ranges },
       baselinePolicyId: config.baselinePolicyId,
       policies: config.policies,
+      comparisons: experiment.comparisons,
       classification: config.classification,
       statistics: {
         bootstrapResamples: bootstrap.resamples,
@@ -229,6 +242,7 @@ export function buildResults(experiment: ExperimentResult, input: ManifestInput)
       reproduce:
         `gateflow-sim run --scenario scenarios/${scenario.id}.yaml --seeds ${ranges} ` +
         `--policies ${policyIds} --baseline ${config.baselinePolicyId} ` +
+        (comparePairs === '' ? '' : `--compare ${comparePairs} `) +
         `--bootstrap-resamples ${bootstrap.resamples}`,
     },
     assumptions: collectAssumptions(scenario),

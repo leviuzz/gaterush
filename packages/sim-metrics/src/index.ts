@@ -1,6 +1,8 @@
 export {
   DEFAULT_BOOTSTRAP,
   ExperimentConfigError,
+  comparisonKey,
+  defaultComparisons,
   normaliseSeeds,
   runExperiment,
 } from './experiment';
@@ -8,6 +10,7 @@ export type {
   BootstrapSettings,
   ExperimentConfig,
   ExperimentResult,
+  PolicyComparison,
   SeedResult,
 } from './experiment';
 export { comparisonDayMetrics, policyDayMetrics } from './day-metrics';

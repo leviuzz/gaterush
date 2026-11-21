@@ -1,7 +1,13 @@
 import type { ReasonCode } from './reasons';
 import { assessTicket, fifoWaitEstimateMs, isDeadlineTrusted } from './assess';
-import type { ConstrainedEdfPolicyParams, EngineInput, Selection, WaitingTicket } from './types';
-import { toFifoOrder, validateCheckpoint, validateNow, validatePolicyParams } from './validate';
+import type { ConstrainedEdfSelection, EngineInput, Selection, WaitingTicket } from './types';
+import {
+  toFifoOrder,
+  validateAheadOfWaiting,
+  validateCheckpoint,
+  validateNow,
+  validateSelectionParams,
+} from './validate';
 
 /**
  * Number of priority calls among the last `capWindowCalls - 1` calls. A new priority call is
@@ -33,13 +39,14 @@ export function priorityCallsInWindow(
 export function selectNext(input: EngineInput): Selection | null {
   validateNow(input.nowMs);
   validateCheckpoint(input.checkpoint);
-  validatePolicyParams(input.policy);
+  validateSelectionParams(input.selection);
+  validateAheadOfWaiting(input.aheadOfWaiting ?? 0);
   const waiting = toFifoOrder(input.waiting);
   const head = waiting[0];
   if (head === undefined) return null;
 
-  const policy = input.policy;
-  if (policy.kind === 'fifo') {
+  const selection = input.selection;
+  if (selection.kind === 'fifo') {
     return {
       ticketId: head.id,
       fifoKey: head.fifoKey,
@@ -50,16 +57,19 @@ export function selectNext(input: EngineInput): Selection | null {
       assessment: null,
     };
   }
-  return selectConstrainedEdf(input, waiting, policy);
+  return selectConstrainedEdf(input, waiting, selection);
 }
 
 function selectConstrainedEdf(
   input: EngineInput,
   waiting: readonly WaitingTicket[],
-  policy: ConstrainedEdfPolicyParams,
+  policy: ConstrainedEdfSelection,
 ): Selection {
   const { nowMs, checkpoint } = input;
+  const offset = input.aheadOfWaiting ?? 0;
   const fixedMs = checkpoint.responseMs + checkpoint.processMs + policy.safetyBufferMs;
+  // Time to call the committed tickets ahead of the waiting list: nobody can be called earlier.
+  const committedDrainMs = fifoWaitEstimateMs(offset, checkpoint.throughputPerHour);
   let guardIndex = -1;
   let urgentIndex = -1;
   let urgentLatest = Infinity;
@@ -72,9 +82,10 @@ function selectConstrainedEdf(
     if (deadlineMs === null || !isDeadlineTrusted(ticket.deadline, policy)) continue;
     if (!policy.eligibleSegments.includes(ticket.segment)) continue;
     const latest = deadlineMs - fixedMs - ticket.walkEstimateMs;
-    const slackNow = latest - nowMs;
+    const slackNow = latest - nowMs - committedDrainMs;
     if (slackNow < 0) continue; // CRITICAL: escalate, never boost automatically
-    if (slackNow - fifoWaitEstimateMs(i, checkpoint.throughputPerHour) >= 0) continue; // fine in FIFO
+    const fifoWait = fifoWaitEstimateMs(offset + i, checkpoint.throughputPerHour);
+    if (slackNow - fifoWait >= 0) continue; // fine in FIFO
     urgentCandidates++;
     if (latest < urgentLatest) {
       urgentLatest = latest;
@@ -108,14 +119,15 @@ function selectConstrainedEdf(
     }
     return build(input, waiting, policy, 0, false, ['CAP_REACHED'], urgentCandidates);
   }
-  // The head of the queue can never be URGENT (its FIFO wait is zero), so urgentIndex is -1 here.
+  // Without tickets ahead of the waiting list the head can never be URGENT (its FIFO wait is zero);
+  // with a committed window ahead it can, and it is simply called in FIFO order.
   return build(input, waiting, policy, 0, false, ['FIFO'], urgentCandidates);
 }
 
 function build(
   input: EngineInput,
   waiting: readonly WaitingTicket[],
-  policy: ConstrainedEdfPolicyParams,
+  policy: ConstrainedEdfSelection,
   index: number,
   priorityCall: boolean,
   reasons: ReasonCode[],
@@ -129,6 +141,13 @@ function build(
     priorityCall,
     reasons,
     urgentCandidates,
-    assessment: assessTicket(ticket, index, input.nowMs, input.checkpoint, policy),
+    assessment: assessTicket(
+      ticket,
+      (input.aheadOfWaiting ?? 0) + index,
+      input.nowMs,
+      input.checkpoint,
+      policy,
+      input.aheadOfWaiting ?? 0,
+    ),
   };
 }

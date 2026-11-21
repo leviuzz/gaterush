@@ -47,7 +47,7 @@ founder on 2026-11-21 together with all of its recommendations.
 
 ## ADR-004: Semantics of priority policy v0
 
-- **Status:** Accepted (2026-11-21)
+- **Status:** Accepted (2026-11-21); `slackNow` amended by ADR-019
 - **Decision:**
   - The engine compares each ticket with what would happen under plain FIFO (the *FIFO
     counterfactual*), which removes the circularity of the slack definition in the business plan.
@@ -147,7 +147,7 @@ founder on 2026-11-21 together with all of its recommendations.
 
 ## ADR-010: Policies as versioned parameters, not a DSL
 
-- **Status:** Accepted (2026-11-21)
+- **Status:** Accepted (2026-11-21); policy structure amended by ADR-016
 - **Decision:** A policy is `{ id, version, title, params }`, where `params` selects an implemented
   and tested strategy (`fifo` or `constrained-edf`). The business plan's "policy DSL" is not built.
 - **Consequences:** Policies are easy to review, approve, compare and simulate. A rule language
@@ -155,7 +155,7 @@ founder on 2026-11-21 together with all of its recommendations.
 
 ## ADR-011: Paired experimental design and statistics
 
-- **Status:** Accepted (2026-11-21)
+- **Status:** Accepted (2026-11-21); generalised to explicit comparison pairs by ADR-015
 - **Decision:**
   - Each seed is one simulated day, and all policies see the same passengers (common random
     numbers).
@@ -212,3 +212,125 @@ founder on 2026-11-21 together with all of its recommendations.
   **including new untracked files**.
 - **Consequences:** A report can never claim a revision that did not produce it. Reports committed
   to the repository are generated from a clean checkout of the referenced commit.
+
+## ADR-015: Physical FIFO is the status quo; GateFlow policies run a virtual queue
+
+- **Status:** Accepted (2026-11-21)
+- **Context:** In S1 every policy, the FIFO baseline included, was a virtual queue whose calls
+  were answered instantly. The baseline was therefore an idealised GateFlow queue, not today's
+  operation, and the cost of the call mechanics (response times, missed calls) was invisible.
+- **Decision:**
+  - A policy has two parts: `selection` (who is called next: `fifo` or `constrained-edf`) and
+    `queue` (how the queue is operated: `physical`, or `virtual` with its parameters).
+  - The status quo, policy A (`fifo` 1.1.0), is a physical FIFO queue: passengers stand in line
+    and step forward as soon as a lane is free.
+  - GateFlow policies run a virtual queue (`virtual-fifo` 0.1.0, `priority-v0` 0.2.0).
+  - Comparisons are explicit `candidate`/`reference` pairs, each analysed as in ADR-011. By
+    default every policy is compared with the status quo, and each priority policy with the FIFO
+    policy that operates the same virtual queue (`priority-v0` vs `virtual-fifo`).
+- **Consequences:**
+  - The headline separates the effect of the call mechanics (`virtual-fifo` vs `fifo`) from the
+    effect of the prioritisation (`priority-v0` vs `virtual-fifo`).
+  - A physical queue with priority selection (idealised manual expediting) is expressible and is
+    a candidate for baseline A' in S3.
+
+## ADR-016: The queue state machine lives in `@gateflow/queue-core`
+
+- **Status:** Accepted (2026-11-21). Amends ADR-010: a policy is now
+  `{ id, version, title, selection, queue }`.
+- **Decision:**
+  - A new pure package owns tickets, the prepare window, calls, second calls, no-shows,
+    reactivations and expiries (`CheckpointQueue`). It performs no I/O and reads no clock: times
+    are arguments and may never decrease. Every transition is reported to a listener in
+    chronological order.
+  - The priority engine remains a pure selection function, asked for each commitment.
+  - The policy presets moved from the engine to `queue-core`.
+- **Consequences:**
+  - The simulator and the future operational API (M3) share one implementation of the queue
+    rules, which makes the M3 criterion "the live system calls passengers in the same order as the
+    offline simulator" achievable by construction.
+  - The invariants (no churn in the prepare window, a single admission, terminal states, cap and
+    K over commitments, chronological events) are property-tested on the class itself.
+
+## ADR-017: Defaults of the GateFlow virtual queue
+
+- **Status:** Accepted (2026-11-21). The values are hypotheses to be measured and calibrated in a
+  pilot.
+- **Decision:**
+  - Call-ahead 180 s: tickets are called while the passengers called but not yet screened are
+    fewer than the free lanes plus `ceil(call-ahead x open lanes x lane rate)`.
+  - Response estimate 90 s. The engine's R (call to start of screening) is
+    `max(response estimate, call-ahead)`.
+  - Prepare window M = 10 tickets (about one minute of notice at nine calls per minute).
+  - Second call after T1 = 3 min, no-show after T2 = 2 more minutes, reactivation within
+    15 min, at most r = 1 reactivation, at the original place.
+- **Rationale** (scenario `single-checkpoint-demo`, 5 to 8 seeds, response model of ADR-018):
+  - With 120 s of call-ahead the lanes run dry during the peak: virtual FIFO missed about 7 more
+    flights per day than the physical queue.
+  - With 180 s virtual FIFO matches the physical queue (missed flights and mean time to
+    screening equal within noise), with 0.6 min of mean standing time instead of 3.5.
+  - Beyond 180 s nothing improves, and every extra minute of call-ahead adds about 0.25 min of
+    mean standing time.
+  - Under `priority-v0`, M = 10 costs about 2 missed flights per day relative to M = 0, because
+    commitments are made about a minute earlier. The benefit of the window (passengers moving
+    closer when they see "prepare") is not modelled yet, so M stays at the smallest value that
+    gives useful notice.
+- **Consequences:** The call-ahead must be re-dimensioned with measured response times. The S5
+  sensitivity sweeps cover call-ahead and M.
+
+## ADR-018: Passenger call behaviour and scenario schema 2
+
+- **Status:** Accepted (2026-11-21)
+- **Decision:**
+  - Scenario schema 2 replaces `checkpoint.lanes` with `checkpoint.laneSchedule` (`HH:MM` clock
+    times from `00:00`, strictly increasing, 1 to 64 lanes) and adds `passengers.callResponse`
+    (log-normal response time; probability and log-normal extra delay of missing the first call).
+    Version 1 files are rejected with a migration message.
+  - Population generator 0.2.0 draws the new attributes on new streams (`pax.response`,
+    `pax.absent`, `pax.absentExtra`). Existing attributes are unchanged, so S1 populations are
+    reproduced exactly.
+  - Response rule: after taking the ticket the passenger walks away for at most their response
+    time and walks back when called. A call that comes sooner is answered sooner, and a passenger
+    who has not left cannot miss it. After the first presentation the passenger stays at the
+    access point and answers later calls at once.
+  - Lanes close from the highest number down and finish the passenger they are screening; a lane
+    closing at time t takes nobody at t.
+- **Consequences:**
+  - Without the response rule every passenger called on arrival (most of the off-peak day) would
+    pay the full response time. On the demo scenario (5 seeds) virtual FIFO then missed about 13
+    more flights per day than the physical queue with 180 s of call-ahead (27 more with 120 s);
+    with the rule it misses about as many as the physical queue.
+  - The rule, the response distribution and the absence probability are assumptions to validate
+    in a pilot.
+
+## ADR-019: CRITICAL accounts for the committed prepare window (engine 0.2.0)
+
+- **Status:** Accepted (2026-11-21). Amends ADR-004.
+- **Decision:** The engine receives `aheadOfWaiting`, the tickets committed ahead of the waiting
+  list. The FIFO wait counts them, and `slackNow = L - now - C`, where C is the FIFO estimate of
+  the time to call them. A ticket that cannot make it even if selected now is CRITICAL and is never
+  boosted.
+- **Consequences:** Without a window (as in S1) C = 0 and nothing changes. With a window, priority
+  commitments are not spent on passengers whom the window has already made hopeless.
+
+## ADR-020: Results schema 2, metric definitions and event order
+
+- **Status:** Accepted (2026-11-21)
+- **Decision:**
+  - `gateflow.sim.results/2`:
+    - comparisons are keyed `"<candidate> vs <reference>"` and carry `candidateId` and
+      `referenceId`; the fields named `...Baseline` are now `...Reference`;
+    - new per-policy metrics: standing time and standing queue, calls, second calls, no-shows
+      (missed-call rate), reactivations, new tickets, staffed lane-hours, idle lane time;
+    - the manifest lists the comparisons and the queue-core version.
+  - Time to screening: from arrival to the start of screening (S1's time to call, generalised).
+    Standing time: the whole wait in a physical queue; the wait at the lanes after validating the
+    ticket in a virtual queue.
+  - Lane utilisation: busy time over staffed lane time, i.e. open lanes plus closing lanes still
+    screening, between the first arrival and the last end of service.
+  - Idle lane time: the integral of `min(idle open lanes, tickets not yet called + called
+    passengers on their way)`, i.e. lane capacity that waiting passengers could have used.
+  - Events at the same instant are ordered: lane changes, ends of service, presentations at the
+    access point, timeouts, arrivals.
+- **Consequences:** With no response time, no absences, no call-ahead and no window, every S1
+  metric is reproduced exactly on seeds 1-3 (a regression test against a fixture saved from S1).

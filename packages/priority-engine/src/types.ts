@@ -41,16 +41,16 @@ export interface ClassificationParams {
   readonly eligibleSegments: readonly Segment[];
 }
 
-/** Plain first-in, first-out (policy A). */
-export interface FifoPolicyParams {
+/** Plain first-in, first-out order. */
+export interface FifoSelection {
   readonly kind: 'fifo';
 }
 
 /**
- * Constrained earliest-deadline-first (policy B): boosts `URGENT` tickets in order of their latest
- * useful call time, subject to a cap on priority calls and a bound on overtakes per ticket.
+ * Constrained earliest-deadline-first: boosts `URGENT` tickets in order of their latest useful call
+ * time, subject to a cap on priority calls and a bound on overtakes per ticket.
  */
-export interface ConstrainedEdfPolicyParams extends ClassificationParams {
+export interface ConstrainedEdfSelection extends ClassificationParams {
   readonly kind: 'constrained-edf';
   /** Size N of the sliding window of calls used by the cap. */
   readonly capWindowCalls: number;
@@ -60,15 +60,8 @@ export interface ConstrainedEdfPolicyParams extends ClassificationParams {
   readonly maxOvertakes: number;
 }
 
-export type PolicyParams = FifoPolicyParams | ConstrainedEdfPolicyParams;
-
-/** A named, versioned policy. Versions are immutable: any change to `params` needs a new version. */
-export interface Policy {
-  readonly id: string;
-  readonly version: string;
-  readonly title: string;
-  readonly params: PolicyParams;
-}
+/** How the next ticket is chosen. Combined with queue operation rules into a policy by queue-core. */
+export type SelectionParams = FifoSelection | ConstrainedEdfSelection;
 
 /** Everything the engine needs to decide the next call. */
 export interface EngineInput {
@@ -81,14 +74,19 @@ export interface EngineInput {
    * Only the last N - 1 entries are used.
    */
   readonly recentPriorityCalls: readonly boolean[];
-  readonly policy: PolicyParams;
+  readonly selection: SelectionParams;
+  /**
+   * Tickets already committed to be called before every waiting ticket (e.g. the "prepare"
+   * window shown on displays). They count as people ahead in FIFO wait estimates. Default 0.
+   */
+  readonly aheadOfWaiting?: number;
 }
 
 /** The engine's explanation of a ticket's situation. */
 export interface Assessment {
   readonly ticketId: string;
   readonly riskClass: RiskClass;
-  /** Number of waiting tickets ahead of this one in FIFO order. */
+  /** Number of tickets ahead of this one in FIFO order (committed tickets included). */
   readonly aheadInFifo: number;
   /** Estimated wait until the call if served in FIFO order. */
   readonly fifoWaitEstimateMs: Millis;
@@ -96,7 +94,10 @@ export interface Assessment {
   readonly latestCallMs: Millis | null;
   /** Margin if served in FIFO order: L - (now + FIFO wait). */
   readonly slackFifoMs: Millis | null;
-  /** Margin if called now: L - now. */
+  /**
+   * Margin if selected now: L - now - D, where D is the time to call the committed tickets that
+   * cannot be overtaken (zero without a prepare window). Negative means CRITICAL.
+   */
   readonly slackNowMs: Millis | null;
   /** True when the ticket may be boosted automatically (URGENT and eligible). */
   readonly boostEligible: boolean;

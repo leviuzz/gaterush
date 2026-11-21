@@ -1,7 +1,7 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import type { KnownDeadline, Segment } from '@gateflow/domain';
-import type { ConstrainedEdfPolicyParams, EngineInput, WaitingTicket } from '../src';
+import type { ConstrainedEdfSelection, EngineInput, WaitingTicket } from '../src';
 import { assessQueue, assessTicket, priorityCallsInWindow, selectNext } from '../src';
 import { MIN } from './fixtures';
 
@@ -17,7 +17,7 @@ const deadlineArb: fc.Arbitrary<KnownDeadline> = fc.oneof(
   }),
 );
 
-const policyArb: fc.Arbitrary<ConstrainedEdfPolicyParams> = fc
+const policyArb: fc.Arbitrary<ConstrainedEdfSelection> = fc
   .integer({ min: 1, max: 12 })
   .chain((n) =>
     fc.record({
@@ -61,7 +61,8 @@ const inputArb: fc.Arbitrary<EngineInput> = policyArb.chain((policy) =>
     checkpoint: checkpointArb,
     waiting: ticketsArb(policy.maxOvertakes),
     recentPriorityCalls: fc.array(fc.boolean(), { maxLength: 15 }),
-    policy: fc.constant(policy),
+    aheadOfWaiting: fc.integer({ min: 0, max: 20 }),
+    selection: fc.constant(policy),
   }),
 );
 
@@ -92,13 +93,13 @@ describe('priority engine properties', () => {
     );
   });
 
-  it('P2 assesses every waiting ticket exactly once, in FIFO order', () => {
+  it('P2 assesses every waiting ticket exactly once, in FIFO order, after the committed tickets', () => {
     fc.assert(
       fc.property(inputArb, (inp) => {
-        const assessments = assessQueue(inp, inp.policy as ConstrainedEdfPolicyParams);
+        const assessments = assessQueue(inp, inp.selection as ConstrainedEdfSelection);
         expect(assessments.map((a) => a.ticketId)).toEqual(byFifo(inp.waiting).map((t) => t.id));
         assessments.forEach((a, i) => {
-          expect(a.aheadInFifo).toBe(i);
+          expect(a.aheadInFifo).toBe((inp.aheadOfWaiting ?? 0) + i);
         });
       }),
       RUNS,
@@ -146,7 +147,7 @@ describe('priority engine properties', () => {
   it('P5 gives the overtake guard precedence: the oldest ticket at the limit is called', () => {
     fc.assert(
       fc.property(inputArb, (inp) => {
-        const policy = inp.policy as ConstrainedEdfPolicyParams;
+        const policy = inp.selection as ConstrainedEdfSelection;
         const atLimit = byFifo(inp.waiting).find((t) => t.overtakenCount >= policy.maxOvertakes);
         const selection = selectNext(inp);
         if (atLimit !== undefined) {
@@ -161,7 +162,7 @@ describe('priority engine properties', () => {
   it('P6 never exceeds the cap within a single decision', () => {
     fc.assert(
       fc.property(inputArb, (inp) => {
-        const policy = inp.policy as ConstrainedEdfPolicyParams;
+        const policy = inp.selection as ConstrainedEdfSelection;
         const used = priorityCallsInWindow(inp.recentPriorityCalls, policy.capWindowCalls);
         const selection = selectNext(inp);
         if (used >= policy.capMaxPriorityCalls)
@@ -201,7 +202,7 @@ describe('priority engine properties', () => {
             checkpoint,
             waiting,
             recentPriorityCalls,
-            policy,
+            selection: policy,
           });
           expect(selection?.urgentCandidates).toBe(1);
           expect(selection?.priorityCall).toBe(used < policy.capMaxPriorityCalls);
@@ -217,10 +218,10 @@ describe('priority engine properties', () => {
   it('P7 reduces to FIFO when the cap is zero and nobody reached the overtake limit', () => {
     fc.assert(
       fc.property(inputArb, (inp) => {
-        const policy = { ...(inp.policy as ConstrainedEdfPolicyParams), capMaxPriorityCalls: 0 };
+        const policy = { ...(inp.selection as ConstrainedEdfSelection), capMaxPriorityCalls: 0 };
         const waiting = inp.waiting.map((t) => ({ ...t, overtakenCount: 0 }));
         fc.pre(policy.maxOvertakes > 0);
-        const selection = selectNext({ ...inp, policy, waiting });
+        const selection = selectNext({ ...inp, selection: policy, waiting });
         if (waiting.length > 0) expect(selection?.ticketId).toBe(byFifo(waiting)[0]!.id);
       }),
       RUNS,
@@ -230,7 +231,7 @@ describe('priority engine properties', () => {
   it('P8 is monotone: an earlier (still feasible) deadline never stops a selected ticket from being selected', () => {
     fc.assert(
       fc.property(inputArb, fc.integer({ min: 1, max: 60 * MIN }), (inp, delta) => {
-        const policy = inp.policy as ConstrainedEdfPolicyParams;
+        const policy = inp.selection as ConstrainedEdfSelection;
         const selection = selectNext(inp);
         fc.pre(selection !== null);
         const ordered = byFifo(inp.waiting);
@@ -241,12 +242,14 @@ describe('priority engine properties', () => {
           ...chosen,
           deadline: { ...chosen.deadline, atMs: deadlineMs - delta },
         };
+        const offset = inp.aheadOfWaiting ?? 0;
         const after = assessTicket(
           earlier,
-          selection.positionInFifo,
+          offset + selection.positionInFifo,
           inp.nowMs,
           inp.checkpoint,
           policy,
+          offset,
         );
         // Only meaningful while the ticket stays feasible (CRITICAL tickets are escalated instead).
         fc.pre(after.slackNowMs === null || after.slackNowMs >= 0);
@@ -283,7 +286,7 @@ describe('priority engine properties', () => {
               checkpoint,
               waiting,
               recentPriorityCalls: calls,
-              policy,
+              selection: policy,
             });
             if (selection === null) break;
             waiting = waiting

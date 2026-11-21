@@ -2,8 +2,8 @@ import { SEGMENTS } from '@gateflow/domain';
 import type {
   CheckpointEstimates,
   ClassificationParams,
-  ConstrainedEdfPolicyParams,
-  PolicyParams,
+  ConstrainedEdfSelection,
+  SelectionParams,
   WaitingTicket,
 } from './types';
 
@@ -21,12 +21,12 @@ function requireSafeInteger(value: number, what: string, min = Number.MIN_SAFE_I
   }
 }
 
-export function validatePolicyParams(input: PolicyParams): void {
+export function validateSelectionParams(input: SelectionParams): void {
   // Widened to string: callers may pass untyped data (e.g. parsed JSON).
   const kind: string = input.kind;
   if (kind === 'fifo') return;
-  if (kind !== 'constrained-edf') throw new EngineInputError(`unknown policy kind: ${kind}`);
-  const params = input as ConstrainedEdfPolicyParams;
+  if (kind !== 'constrained-edf') throw new EngineInputError(`unknown selection kind: ${kind}`);
+  const params = input as ConstrainedEdfSelection;
   requireSafeInteger(params.capWindowCalls, 'capWindowCalls', 1);
   requireSafeInteger(params.capMaxPriorityCalls, 'capMaxPriorityCalls', 0);
   if (params.capMaxPriorityCalls > params.capWindowCalls) {
@@ -66,6 +66,10 @@ export function validateCheckpoint(checkpoint: CheckpointEstimates): void {
 
 export function validateNow(nowMs: number): void {
   requireSafeInteger(nowMs, 'nowMs');
+}
+
+export function validateAheadOfWaiting(aheadOfWaiting: number): void {
+  requireSafeInteger(aheadOfWaiting, 'aheadOfWaiting', 0);
 }
 
 export function validateTicket(ticket: WaitingTicket): void {

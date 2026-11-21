@@ -55,10 +55,11 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - name: Simulate both demo scenarios
+      - name: Simulate the demo scenarios
         run: |
-          node apps/sim-cli/dist/gateflow-sim.mjs run --scenario scenarios/single-checkpoint-demo.yaml --seeds 1-200 --out out/single-checkpoint-demo
-          node apps/sim-cli/dist/gateflow-sim.mjs run --scenario scenarios/single-checkpoint-moderate.yaml --seeds 1-200 --out out/single-checkpoint-moderate
+          for scenario in single-checkpoint-demo single-checkpoint-moderate single-checkpoint-staffed; do
+            node apps/sim-cli/dist/gateflow-sim.mjs run --scenario "scenarios/$scenario.yaml" --seeds 1-200 --out "out/$scenario"
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: simulation-reports

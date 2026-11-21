@@ -1,6 +1,6 @@
 {
   "name": "@gateflow/sim-metrics",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Experiment runner, paired metrics, statistics, results document and Markdown report (pure).",
   "type": "module",
@@ -16,6 +16,7 @@
   "dependencies": {
     "@gateflow/domain": "workspace:*",
     "@gateflow/priority-engine": "workspace:*",
+    "@gateflow/queue-core": "workspace:*",
     "@gateflow/sim-kernel": "workspace:*",
     "@gateflow/sim-model": "workspace:*",
     "@gateflow/sim-scenarios": "workspace:*"

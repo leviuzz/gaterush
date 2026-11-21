@@ -35,10 +35,30 @@ function issuesOf(data: unknown): readonly string[] {
 }
 
 describe('scenario files', () => {
-  it.each(['single-checkpoint-demo', 'single-checkpoint-moderate'])('%s is valid', (name) => {
-    const scenario = parseScenarioText(scenarioFile(name));
-    expect(scenario.id).toBe(name);
-    expect(scenario.dataClassification).toBe('SYNTHETIC');
+  it.each(['single-checkpoint-demo', 'single-checkpoint-moderate', 'single-checkpoint-staffed'])(
+    '%s is valid',
+    (name) => {
+      const scenario = parseScenarioText(scenarioFile(name));
+      expect(scenario.id).toBe(name);
+      expect(scenario.dataClassification).toBe('SYNTHETIC');
+    },
+  );
+});
+
+describe('single-checkpoint-staffed', () => {
+  it('has the passengers of the demo scenario and only a different lane schedule', () => {
+    const staffed = parseScenarioText(scenarioFile('single-checkpoint-staffed'));
+    const a = generatePopulation(staffed, 3);
+    const b = generatePopulation(demo, 3);
+    expect(a.passengers).toEqual(b.passengers);
+    expect(a.flights).toEqual(b.flights);
+    const schedule = a.checkpoint.laneSchedule;
+    const laneHours = schedule.reduce((sum, entry, i) => {
+      const until = schedule[i + 1]?.fromMs ?? 24 * 3_600_000;
+      return sum + (entry.lanes * (until - entry.fromMs)) / 3_600_000;
+    }, 0);
+    expect(laneHours).toBe(93);
+    expect(Math.max(...schedule.map((e) => e.lanes))).toBe(6);
   });
 });
 
@@ -51,10 +71,63 @@ describe('parseScenario validation', () => {
   it('requires a source label on every parameter', () => {
     const issues = issuesOf(
       withChange((d) => {
-        (d.checkpoint as { lanes: unknown }).lanes = { value: 5 };
+        (d.checkpoint as { laneSchedule: unknown }).laneSchedule = {
+          value: [{ from: '00:00', lanes: 5 }],
+        };
       }),
     );
-    expect(issues.join('\n')).toMatch(/checkpoint\.lanes\.source/);
+    expect(issues.join('\n')).toMatch(/checkpoint\.laneSchedule\.source/);
+  });
+
+  it('validates lane schedules: HH:MM times from 00:00, strictly increasing, 1 to 64 lanes', () => {
+    const scheduleIssues = (value: unknown) =>
+      issuesOf(
+        withChange((d) => {
+          (d.checkpoint as { laneSchedule: unknown }).laneSchedule = { value, source: 'SYNTHETIC' };
+        }),
+      ).join('\n');
+    expect(
+      scheduleIssues([
+        { from: '00:00', lanes: 2 },
+        { from: '05:30', lanes: 6 },
+      ]),
+    ).toBe('');
+    expect(scheduleIssues([{ from: '04:00', lanes: 2 }])).toMatch(/must start at 00:00/);
+    expect(
+      scheduleIssues([
+        { from: '00:00', lanes: 2 },
+        { from: '06:00', lanes: 6 },
+        { from: '06:00', lanes: 4 },
+      ]),
+    ).toMatch(/strictly increasing/);
+    expect(
+      scheduleIssues([
+        { from: '00:00', lanes: 2 },
+        { from: '24:00', lanes: 6 },
+      ]),
+    ).toMatch(/HH:MM/);
+    expect(scheduleIssues([{ from: '00:00', lanes: 0 }])).toMatch(/lanes/);
+    expect(scheduleIssues([])).not.toBe('');
+  });
+
+  it('validates the call response parameters', () => {
+    const responseIssues = (change: Record<string, number>) =>
+      issuesOf(
+        withChange((d) => {
+          const p = d.passengers as { callResponse: { value: Record<string, number> } };
+          Object.assign(p.callResponse.value, change);
+        }),
+      ).join('\n');
+    expect(responseIssues({ medianSeconds: 0 })).toBe('');
+    expect(responseIssues({ medianSeconds: -1 })).toMatch(/medianSeconds/);
+    expect(responseIssues({ absentProbability: 1.5 })).toMatch(/absentProbability/);
+    expect(responseIssues({ absentExtraMedianMinutes: 0 })).toMatch(/absentExtraMedianMinutes/);
+  });
+
+  it('explains how to migrate a schema version 1 scenario', () => {
+    const issues = issuesOf(withChange((d) => (d.schemaVersion = 1)));
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatch(/migrated to version 2.*laneSchedule.*callResponse/);
   });
 
   it('rejects passengers arriving after boarding closes', () => {
@@ -133,7 +206,7 @@ describe('collectAssumptions', () => {
   it('lists every labelled parameter with its source', () => {
     const assumptions = collectAssumptions(demo);
     expect(assumptions.map((a) => a.path)).toEqual([
-      'checkpoint.lanes',
+      'checkpoint.laneSchedule',
       'checkpoint.serviceTimeMeanSeconds',
       'checkpoint.serviceTimeCv',
       'schedule.departuresPerHour',
@@ -144,6 +217,7 @@ describe('collectAssumptions', () => {
       'passengers.showUp.departing',
       'passengers.showUp.transfer',
       'passengers.walkSpeedSigma',
+      'passengers.callResponse',
       'operations.boardingCloseMinutesBeforeStd',
       'operations.deadlineKnowledge',
     ]);
@@ -213,8 +287,9 @@ describe('generatePopulation', () => {
       validatePopulation(population);
     }).not.toThrow();
     expect(population.checkpoint).toEqual({
-      lanes: 6,
-      estimates: { throughputPerHour: 540, processMs: 40_000, responseMs: 0 },
+      laneSchedule: [{ fromMs: 0, lanes: 6 }],
+      serviceRatePerLanePerHour: 90,
+      processEstimateMs: 40_000,
     });
   });
 
@@ -278,5 +353,63 @@ describe('generatePopulation', () => {
     expect(changed.passengers.map((p) => p.serviceMs)).not.toEqual(
       population.passengers.map((p) => p.serviceMs),
     );
+  });
+
+  it('converts the lane schedule to milliseconds since midnight', () => {
+    const staffed: Scenario = {
+      ...demo,
+      checkpoint: {
+        ...demo.checkpoint,
+        laneSchedule: {
+          value: [
+            { from: '00:00', lanes: 2 },
+            { from: '05:30', lanes: 6 },
+            { from: '21:15', lanes: 3 },
+          ],
+          source: 'SYNTHETIC',
+        },
+      },
+    };
+    expect(generatePopulation(staffed, 7).checkpoint.laneSchedule).toEqual([
+      { fromMs: 0, lanes: 2 },
+      { fromMs: 330 * 60_000, lanes: 6 },
+      { fromMs: (21 * 60 + 15) * 60_000, lanes: 3 },
+    ]);
+  });
+
+  it('draws call responses with the configured median and absences with the configured share', () => {
+    const responses: number[] = [];
+    let absent = 0;
+    for (const p of population.passengers) {
+      responses.push(p.callResponseMs);
+      if (p.absenceDelayMs > 0) absent++;
+    }
+    responses.sort((a, b) => a - b);
+    const median = responses[Math.floor(responses.length / 2)]!;
+    expect(median).toBeGreaterThan(70_000);
+    expect(median).toBeLessThan(80_000);
+    const share = absent / population.passengers.length;
+    expect(share).toBeGreaterThan(0.03);
+    expect(share).toBeLessThan(0.05);
+  });
+
+  it('adds the call behaviour without moving the attributes of generator 0.1.0', () => {
+    const instant: Scenario = {
+      ...demo,
+      passengers: {
+        ...demo.passengers,
+        callResponse: {
+          value: { ...demo.passengers.callResponse.value, medianSeconds: 0, absentProbability: 0 },
+          source: 'SYNTHETIC',
+        },
+      },
+    };
+    const changed = generatePopulation(instant, 7);
+    expect(changed.passengers.every((p) => p.callResponseMs === 0 && p.absenceDelayMs === 0)).toBe(
+      true,
+    );
+    const strip = (pop: typeof population) =>
+      pop.passengers.map((p) => ({ ...p, callResponseMs: 0, absenceDelayMs: 0 }));
+    expect(strip(changed)).toEqual(strip(population));
   });
 });

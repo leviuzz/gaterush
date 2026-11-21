@@ -1,0 +1,129 @@
+# GateFlow simulation scenario (schema version 2).
+#
+# SYNTHETIC DEMONSTRATION SCENARIO. It does not describe any real airport. Every parameter is a
+# labelled assumption (source: SYNTHETIC) chosen to produce a plausible-looking day with a morning
+# peak. Results obtained with it are simulated and must never be presented as operational evidence.
+
+schemaVersion: 2
+id: single-checkpoint-staffed
+title: Single departure checkpoint, synthetic day with a lane schedule that follows demand
+description: >-
+  Identical to single-checkpoint-demo (same flights and passengers) except for the lanes: instead
+  of six lanes all day, a planned schedule opens lanes as demand builds up before the morning bank
+  and closes them in the quiet hours, for about 93 lane-hours instead of 144. The morning peak is
+  still served by the six lanes of the checkpoint. Use it with single-checkpoint-demo to see the
+  effect of a leaner staffing plan.
+dataClassification: SYNTHETIC
+timeZone: Europe/Rome
+
+checkpoint:
+  id: CP-DEMO
+  kind: DEPARTURE_SECURITY
+  laneSchedule:
+    value:
+      - { from: '00:00', lanes: 1 }
+      - { from: '03:00', lanes: 2 }
+      - { from: '04:00', lanes: 6 }
+      - { from: '07:00', lanes: 5 }
+      - { from: '15:00', lanes: 6 }
+      - { from: '18:00', lanes: 4 }
+      - { from: '19:00', lanes: 3 }
+      - { from: '20:00', lanes: 2 }
+      - { from: '21:00', lanes: 1 }
+    source: SYNTHETIC
+    note: >-
+      Planned staffing sized on the mean hourly arrivals of the design day at about 85% lane
+      utilisation (90 passengers per lane per hour), capped at the six lanes of the checkpoint.
+  serviceTimeMeanSeconds:
+    value: 40
+    source: SYNTHETIC
+    note: About 90 passengers per hour per lane.
+  serviceTimeCv:
+    value: 0.6
+    source: SYNTHETIC
+
+schedule:
+  kind: synthetic-hourly
+  generatorSeed: 20261121
+  departuresPerHour:
+    value:
+      - { hour: 6, departures: 5 }
+      - { hour: 7, departures: 5 }
+      - { hour: 8, departures: 3 }
+      - { hour: 9, departures: 2 }
+      - { hour: 10, departures: 2 }
+      - { hour: 11, departures: 2 }
+      - { hour: 12, departures: 2 }
+      - { hour: 13, departures: 2 }
+      - { hour: 14, departures: 2 }
+      - { hour: 15, departures: 2 }
+      - { hour: 16, departures: 2 }
+      - { hour: 17, departures: 3 }
+      - { hour: 18, departures: 3 }
+      - { hour: 19, departures: 2 }
+      - { hour: 20, departures: 2 }
+      - { hour: 21, departures: 1 }
+    source: SYNTHETIC
+    note: Design day with a morning bank of departures, typical of low-cost bases.
+  aircraftMix:
+    value:
+      - { category: regional-jet, seats: 100, share: 0.15 }
+      - { category: narrow-body, seats: 180, share: 0.6 }
+      - { category: narrow-body-large, seats: 220, share: 0.2 }
+      - { category: wide-body, seats: 300, share: 0.05 }
+    source: SYNTHETIC
+  gateZones:
+    value:
+      - { id: A, walkMinutes: 4, share: 0.4 }
+      - { id: B, walkMinutes: 8, share: 0.4 }
+      - { id: C, walkMinutes: 14, share: 0.2 }
+    source: SYNTHETIC
+    note: Nominal walking time from the checkpoint exit to the gate zone.
+
+passengers:
+  loadFactor:
+    value: { min: 0.6, mode: 0.85, max: 0.98 }
+    source: SYNTHETIC
+    note: Triangular distribution, drawn per flight and replication.
+  transferShare:
+    value: 0.05
+    source: SYNTHETIC
+    note: Connecting passengers who cross this checkpoint. Not an official statistic.
+  showUp:
+    departing:
+      value:
+        { minMinutesBeforeStd: 25, medianExtraMinutes: 70, sigma: 0.55, maxMinutesBeforeStd: 240 }
+      source: SYNTHETIC
+      note: Arrival at the checkpoint = STD minus (25 min + log-normal with median 70 min).
+    transfer:
+      value:
+        { minMinutesBeforeStd: 24, medianExtraMinutes: 25, sigma: 0.5, maxMinutesBeforeStd: 180 }
+      source: SYNTHETIC
+      note: Connecting passengers arrive later, after their inbound flight.
+  walkSpeedSigma:
+    value: 0.2
+    source: SYNTHETIC
+    note: Individual walking time = nominal zone time x log-normal(median 1, sigma).
+  callResponse:
+    value:
+      medianSeconds: 75
+      sigma: 0.5
+      absentProbability: 0.04
+      absentExtraMedianMinutes: 4
+      absentExtraSigma: 0.8
+    source: SYNTHETIC
+    note: >-
+      Virtual queue only. Time from a call to presenting at the access point is log-normal with a
+      median of 75 s (passengers wait near the checkpoint); 4% do not notice the first call and
+      present later by a log-normal extra delay with a median of 4 minutes. Hypotheses to measure
+      in a pilot.
+
+operations:
+  boardingCloseMinutesBeforeStd:
+    value: 20
+    source: SYNTHETIC
+    note: Boarding closes 20 minutes before the scheduled departure, for every flight.
+  deadlineKnowledge:
+    value: RULE
+    source: SYNTHETIC
+    note: The system applies the closing rule to the schedule; in this slice it matches the ground truth exactly.

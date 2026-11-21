@@ -10,7 +10,7 @@ Status legend: **Done**, **Next**, **Planned**, **Gated** (needs a business deci
 
 | Milestone | Business plan stage | Status |
 |---|---|---|
-| M1: Simulator core and priority engine | R1 | In progress (S1 done) |
+| M1: Simulator core and priority engine | R1 | In progress (S1 and S2 done) |
 | M2: Simulator Studio (web, runs in the browser) | R1-R2 | Planned |
 | M3: Priority end-to-end in the browser, digital twin | R2 | Planned |
 | M4: Operations console and Predict preview (pitch-ready) | R2 | Planned |
@@ -23,8 +23,8 @@ Status legend: **Done**, **Next**, **Planned**, **Gated** (needs a business deci
 | Slice | Content | Status |
 |---|---|---|
 | **S1** | First reproducible FIFO vs priority comparison (CLI) + repository foundations | **Done** |
-| S2 | Realistic calls: access buffer target, call latency, no-shows, recalls, recovery, committed "prepare" window, planned lane schedules | **Next** |
-| S3 | Baseline A' (FIFO + manual handling of urgent passengers), groups and families, assisted path, eligibility and anti-abuse rules | Planned |
+| **S2** | Realistic calls: access buffer target, call latency, no-shows, recalls, recovery, committed "prepare" window, planned lane schedules | **Done** |
+| S3 | Baseline A' (FIFO + manual handling of urgent passengers), groups and families, assisted path, eligibility and anti-abuse rules | **Next** |
 | S4 | Disruptions and data quality: delays with notification time, gate changes, lane outages, stale or missing feeds, ground truth vs knowledge, hysteresis, stability metrics | Planned |
 | S5 | Parallel batches (worker threads), sensitivity sweeps (k/N, K, lanes, load factor, show-up), HTML report with charts | Planned |
 | S6 | Real schedules (OPDI import for VCE/TSF, seats mapping) and scenario library: normal, peak, disrupted, Mexico-like transfer hub | Planned (check data licences first) |
@@ -74,20 +74,50 @@ call latency or no-show yet, and the baseline is pure FIFO with no manual handli
 passengers. Slices S2 to S4 remove these simplifications. Full reports:
 [docs/reports/slice-1](docs/reports/slice-1).
 
-## S2 (next): realistic call mechanics
+## S2: acceptance criteria and evidence
 
-Scope:
-- access point and physical buffer between the access point and the lanes, with a target size;
-- call when the buffer is below target, with response time drawn per passenger;
-- no-shows (patience), second call, recovery window, reactivation limit `r`;
-- committed "prepare" window of size `M`;
-- planned lane schedules.
+Scope delivered:
+- **Queue state machine.** A new pure package, `@gateflow/queue-core` (ADR-016), shared with the
+  future operational API.
+- **Status quo.** The physical FIFO queue is the baseline (ADR-015). GateFlow policies run a
+  virtual queue with:
+  - a call-ahead buffer target (ADR-017);
+  - per-passenger response times and missed calls (ADR-018);
+  - second call, no-show timeout, recovery window and reactivation limit `r`;
+  - a committed "prepare" window of size `M`.
+- **Lanes.** Planned lane schedules in scenario schema 2, plus a third scenario,
+  `single-checkpoint-staffed`, whose schedule follows demand.
 
-Acceptance criteria:
-- With zero latency and no no-shows, outcomes equal S1 (regression).
-- "Prepare" window churn is zero (property test).
-- The report adds lanes idle while people are queueing, the missed-call rate and recalls.
-- Golden files are regenerated and the change is explained in the changelog.
+| # | Criterion | Evidence |
+|---|---|---|
+| 1 | With zero latency and no no-shows, outcomes equal S1 (regression) | `packages/sim-metrics/test/s1-regression.test.ts`: every S1 metric of both S1 policies is reproduced exactly on seeds 1-3, against a fixture saved from the S1 commit. Moving the engine's urgency threshold by one minute makes it fail. The property "a virtual queue answered instantly behaves exactly like the physical queue" holds on random populations (`packages/sim-model/test/properties.test.ts`). |
+| 2 | "Prepare" window churn is zero (property test) | `packages/queue-core/test/properties.test.ts`: over 1,000 random operation sequences on random policies, a committed ticket leaves the window only by being called, the remaining order is preserved, and the window never exceeds M. A mutation that lets priority tickets jump into the window is caught. |
+| 3 | The report adds lanes idle while people are queueing, the missed-call rate and recalls | Report section "Call mechanics" (second calls, no-shows as the missed-call rate, reactivations, new tickets, idle lane time) and "Checkpoint operations" (staffed lane-hours, utilisation, people standing). Covered by `experiment.test.ts` and the golden files. |
+| 4 | Golden files regenerated and the change explained in the changelog | `packages/sim-metrics/test/golden`; CHANGELOG 0.2.0, "Simulated numbers change". |
+
+Verification beyond the criteria:
+- **Hand-computed timelines** for call latency, call-ahead, recalls, no-shows, reactivation,
+  expiry with a new ticket, deadline boundaries and lane closures.
+- **Property tests of the checkpoint model** on random populations, lane schedules and policies:
+  - the fate of every first call follows from the passenger's delay alone (checked
+    independently);
+  - one passenger per lane at a time;
+  - work conservation of the physical queue.
+- **Coverage tests** that fail if the random cases stop reaching priority calls, the cap, the
+  guard, lane closures, no-shows, reactivations or new tickets.
+- **Mutation checks.** Ten deliberate defects in the queue and the engine are caught, and thirteen
+  in the simulator (event order, lane accounting, call rule, response rule, metrics).
+
+Findings that changed the design during the slice:
+- **Response rule (ADR-018).** The first S2 results charged the full response time to passengers
+  called on arrival, as if they had already walked away. On the demo scenario that alone made the
+  virtual queue miss 13 to 27 more flights per day than the physical queue, an artefact of the
+  model. Now a passenger called before walking away answers sooner and cannot miss the call.
+- **Call-ahead (ADR-017).** The default rose from 120 s to 180 s after a sensitivity check: at
+  120 s the lanes run dry during the peak.
+- **CRITICAL (ADR-019).** The class now accounts for the committed prepare window, so priority
+  commitments are not spent on passengers the window has made hopeless.
+- **Idle lane time** counts only the capacity that waiting passengers could have used.
 
 ## Later milestones (summary)
 

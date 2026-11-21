@@ -60,6 +60,8 @@ describe('gateflow-sim run', () => {
     expect(a.stderr).toBe('');
     expect(a.stdout).toContain('SIMULATED RESULTS');
     expect(a.stdout).toContain('priority-v0 vs fifo: net flights saved per day');
+    expect(a.stdout).toContain('virtual-fifo vs fifo: net flights saved per day');
+    expect(a.stdout).toContain('priority-v0 vs virtual-fifo: net flights saved per day');
     const doc = JSON.parse(a.results) as {
       manifest: { commit: string; seeds: { ranges: string } };
     };
@@ -102,7 +104,7 @@ describe('gateflow-sim validate, policies, help', () => {
     expect(result.code).toBe(EXIT_OK);
     expect(result.stdout).toContain('valid scenario single-checkpoint-demo');
     expect(result.stdout).toContain('flights        40 on the design day');
-    expect(result.stdout).toContain('assumptions    13 labelled parameters');
+    expect(result.stdout).toContain('assumptions    14 labelled parameters');
   });
 
   it('reports invalid scenarios with exit code 1', () => {
@@ -111,6 +113,7 @@ describe('gateflow-sim validate, policies, help', () => {
     const result = cli(['validate', '--scenario', bad]);
     expect(result.code).toBe(EXIT_FAILURE);
     expect(result.stderr).toContain('invalid scenario');
+    expect(result.stderr).toContain('migrated to version 2');
   });
 
   it('lists the policy presets as JSON', () => {
@@ -118,6 +121,7 @@ describe('gateflow-sim validate, policies, help', () => {
     expect(result.code).toBe(EXIT_OK);
     expect((JSON.parse(result.stdout) as { id: string }[]).map((p) => p.id)).toEqual([
       'fifo',
+      'virtual-fifo',
       'priority-v0',
     ]);
   });
@@ -129,6 +133,8 @@ describe('gateflow-sim validate, policies, help', () => {
     [['run', '--scenario', DEMO, '--seeds', 'x']],
     [['run', '--scenario', DEMO, '--policies', 'nope']],
     [['run', '--scenario', DEMO, '--baseline', 'priority-v0', '--policies', 'fifo']],
+    [['run', '--scenario', DEMO, '--compare', 'priority-v0:nope']],
+    [['run', '--scenario', DEMO, '--compare', 'priority-v0']],
     [['run', '--scenario', DEMO, '--unknown-option']],
     [['run', '--scenario', join(workDir, 'missing.yaml')]],
   ])('exits with the usage code for %j', (argv) => {
@@ -137,7 +143,7 @@ describe('gateflow-sim validate, policies, help', () => {
 
   it('prints help and version', () => {
     expect(cli(['--help']).stdout).toContain('Usage:');
-    expect(cli(['--version']).stdout.trim()).toBe('0.1.0');
+    expect(cli(['--version']).stdout.trim()).toBe('0.2.0');
   });
 });
 

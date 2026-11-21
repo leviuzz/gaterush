@@ -1,6 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { UsageError, parsePolicies, parsePositiveInteger, parseSeeds } from '../src/args';
+import { findPolicyPreset } from '@gateflow/queue-core';
+import {
+  UsageError,
+  parseComparisons,
+  parsePolicies,
+  parsePositiveInteger,
+  parseSeeds,
+} from '../src/args';
+import { defaultCompare } from '../src/cli';
 import { CLI_VERSION } from '../src/version';
 
 describe('parseSeeds', () => {
@@ -29,6 +37,44 @@ describe('parsePolicies', () => {
     expect(() => parsePolicies('fifo,nope')).toThrow(UsageError);
     expect(() => parsePolicies('fifo,fifo')).toThrow(UsageError);
     expect(() => parsePolicies(' , ')).toThrow(UsageError);
+  });
+});
+
+describe('comparisons', () => {
+  const policies = parsePolicies('fifo,virtual-fifo,priority-v0');
+
+  it('parses candidate:reference pairs', () => {
+    expect(parseComparisons('priority-v0:fifo, priority-v0 : virtual-fifo', policies)).toEqual([
+      { candidateId: 'priority-v0', referenceId: 'fifo' },
+      { candidateId: 'priority-v0', referenceId: 'virtual-fifo' },
+    ]);
+  });
+
+  it.each([
+    'priority-v0',
+    'priority-v0:nope',
+    'fifo:fifo',
+    'priority-v0:fifo,priority-v0:fifo',
+    '',
+  ])('rejects "%s"', (spec) => {
+    expect(() => parseComparisons(spec, policies)).toThrow(UsageError);
+  });
+
+  it('compares with the baseline, and each priority policy with the FIFO policy of the same queue', () => {
+    expect(defaultCompare(policies, 'fifo')).toEqual([
+      { candidateId: 'virtual-fifo', referenceId: 'fifo' },
+      { candidateId: 'priority-v0', referenceId: 'fifo' },
+      { candidateId: 'priority-v0', referenceId: 'virtual-fifo' },
+    ]);
+    expect(defaultCompare(policies, 'virtual-fifo')).toEqual([
+      { candidateId: 'fifo', referenceId: 'virtual-fifo' },
+      { candidateId: 'priority-v0', referenceId: 'virtual-fifo' },
+    ]);
+    // The physical FIFO queue does not operate the same queue as priority-v0.
+    const physicalOnly = [findPolicyPreset('fifo')!, findPolicyPreset('priority-v0')!];
+    expect(defaultCompare(physicalOnly, 'fifo')).toEqual([
+      { candidateId: 'priority-v0', referenceId: 'fifo' },
+    ]);
   });
 });
 

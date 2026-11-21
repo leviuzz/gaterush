@@ -149,14 +149,28 @@ These must be checked with counsel; nothing below is legal advice.
 4. Which fairness bounds (k/N, K) and late-arrival eligibility rule does the operator accept?
 5. How is the baseline measured today (FIFO plus manual handling of urgent passengers)?
 6. Cloud (EU or Mexico region) or on-premises?
+7. How quickly do passengers answer a call at the target checkpoint, and how many miss it? These
+   values size the call-ahead buffer and the timeouts (ADR-017, ADR-018), and must be measured,
+   for instance in shadow mode.
 
 ## 10. Glossary
 
 - **Checkpoint:** a controlled point (e.g. a departure security filter) with its own logical queue.
 - **Lane:** a service unit of the checkpoint, with a throughput.
 - **Access point:** where tickets are validated before the physical buffer. It is not the screening.
+- **Call-ahead buffer:** passengers called in advance so that lanes are not left waiting for
+  people walking back; sized in seconds of lane work (ADR-017).
 - **Cut-off (deadline):** boarding close of the passenger's flight.
 - **Latest call time (L):** the latest moment a passenger can be called and still make it.
+- **No-show:** a called ticket not validated after the second call; it can be reactivated by a
+  rescan within a limited window, after which the passenger needs a new ticket.
 - **Overtake:** a younger ticket called before an older one.
-- **Policy:** a versioned, approved set of engine parameters.
+- **Physical queue:** today's operation: passengers stand in line and step forward when a lane is
+  free. It is the status-quo baseline of every comparison (ADR-015).
+- **Policy:** a versioned, approved set of parameters: how the next ticket is selected and how the
+  queue is operated (ADR-016).
+- **Prepare window:** the next M tickets, committed and shown on displays as "prepare"; they are
+  called in that order and never removed (no churn).
 - **Shadow mode:** decisions are computed and logged but not applied physically.
+- **Virtual queue:** GateFlow's operation: passengers hold a ticket, wait anywhere and are called
+  on displays.

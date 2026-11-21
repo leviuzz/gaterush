@@ -1,0 +1,20 @@
+{
+  "name": "@gateflow/queue-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Checkpoint queue state machine: tickets, prepare window, calls, recalls, no-shows, reactivation (pure).",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.src.json && tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run --testTimeout=60000"
+  },
+  "dependencies": {
+    "@gateflow/domain": "workspace:*",
+    "@gateflow/priority-engine": "workspace:*"
+  }
+}

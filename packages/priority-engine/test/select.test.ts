@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  EngineInputError,
-  FIFO_POLICY,
-  findPolicyPreset,
-  priorityCallsInWindow,
-  selectNext,
-} from '../src';
-import { EDF, MIN, input, ticket } from './fixtures';
+import { EngineInputError, assessQueue, priorityCallsInWindow, selectNext } from '../src';
+import { CHECKPOINT, EDF, MIN, input, ticket } from './fixtures';
 
 /** A queue of 40 relaxed tickets with one urgent ticket at position 30 (10 min FIFO wait). */
 function queueWithUrgentAt30() {
@@ -24,7 +18,7 @@ describe('selectNext', () => {
 
   it('calls the oldest ticket under the FIFO policy', () => {
     const selection = selectNext(
-      input([ticket(5), ticket(2), ticket(9)], { policy: FIFO_POLICY.params }),
+      input([ticket(5), ticket(2), ticket(9)], { selection: { kind: 'fifo' } }),
     );
     expect(selection).toMatchObject({
       ticketId: 't2',
@@ -117,7 +111,7 @@ describe('selectNext', () => {
       ),
     ).toThrow(EngineInputError);
     expect(() =>
-      selectNext(input([ticket(1)], { policy: { ...EDF, capMaxPriorityCalls: 11 } })),
+      selectNext(input([ticket(1)], { selection: { ...EDF, capMaxPriorityCalls: 11 } })),
     ).toThrow(EngineInputError);
     expect(() => selectNext(input([ticket(1)], { nowMs: 0.5 }))).toThrow(EngineInputError);
   });
@@ -132,10 +126,41 @@ describe('priorityCallsInWindow', () => {
   });
 });
 
-describe('presets', () => {
-  it('exposes the FIFO and priority-v0 presets', () => {
-    expect(findPolicyPreset('fifo')?.params.kind).toBe('fifo');
-    expect(findPolicyPreset('priority-v0')?.params.kind).toBe('constrained-edf');
-    expect(findPolicyPreset('nope')).toBeUndefined();
+describe('aheadOfWaiting', () => {
+  it('counts committed tickets ahead of the waiting list in the FIFO wait estimate', () => {
+    // 40 relaxed tickets, the one at position 20 has L = 12 min: fine with nobody ahead
+    // (20 ahead = 6.7 min) but URGENT when 25 committed tickets are ahead (45 ahead = 15 min).
+    const waiting = Array.from({ length: 40 }, (_, i) =>
+      i === 20 ? ticket(i, { deadline: { atMs: 17 * MIN, source: 'FEED' } }) : ticket(i),
+    );
+    expect(selectNext(input(waiting))?.ticketId).toBe('t0');
+    const withWindow = selectNext(input(waiting, { aheadOfWaiting: 25 }));
+    expect(withWindow?.ticketId).toBe('t20');
+    expect(withWindow?.assessment?.aheadInFifo).toBe(45);
+    expect(withWindow?.assessment?.fifoWaitEstimateMs).toBe(15 * MIN);
+  });
+
+  it('does not boost a ticket that can no longer make it behind the committed tickets', () => {
+    // L = 8 min. At position 30 (10 min of FIFO wait) the ticket is URGENT and boosted; with 25
+    // committed tickets ahead (8.3 min to call them) it cannot make it even if selected now: it is
+    // CRITICAL and escalated instead.
+    const waiting = Array.from({ length: 40 }, (_, i) =>
+      i === 30 ? ticket(i, { deadline: { atMs: 13 * MIN, source: 'FEED' } }) : ticket(i),
+    );
+    expect(selectNext(input(waiting))?.ticketId).toBe('t30');
+    expect(selectNext(input(waiting, { aheadOfWaiting: 25 }))?.ticketId).toBe('t0');
+    const assessed = assessQueue(
+      { nowMs: 0, checkpoint: CHECKPOINT, waiting, aheadOfWaiting: 25 },
+      EDF,
+    );
+    expect(assessed[30]).toMatchObject({
+      riskClass: 'CRITICAL',
+      slackNowMs: 8 * MIN - Math.floor((25 * 60 * MIN) / 180),
+    });
+  });
+
+  it('rejects negative or fractional offsets', () => {
+    expect(() => selectNext(input([ticket(1)], { aheadOfWaiting: -1 }))).toThrow(EngineInputError);
+    expect(() => selectNext(input([ticket(1)], { aheadOfWaiting: 1.5 }))).toThrow(EngineInputError);
   });
 });

@@ -13,8 +13,21 @@ export class ScenarioValidationError extends Error {
   }
 }
 
+/** Explains how to migrate a scenario written for an older schema version. */
+const MIGRATIONS: Readonly<Record<number, string>> = {
+  1:
+    'schemaVersion: version 1 scenarios must be migrated to version 2: set schemaVersion to 2, ' +
+    'replace checkpoint.lanes with checkpoint.laneSchedule (e.g. value: [{ from: "00:00", lanes: 6 }]) ' +
+    'and add passengers.callResponse (see scenarios/single-checkpoint-demo.yaml)',
+};
+
 /** Validates already-parsed data against the scenario schema. */
 export function parseScenario(data: unknown): Scenario {
+  if (typeof data === 'object' && data !== null && 'schemaVersion' in data) {
+    const version = data.schemaVersion;
+    const migration = typeof version === 'number' ? MIGRATIONS[version] : undefined;
+    if (migration !== undefined) throw new ScenarioValidationError([migration]);
+  }
   const result = ScenarioSchema.safeParse(data);
   if (!result.success) {
     throw new ScenarioValidationError(

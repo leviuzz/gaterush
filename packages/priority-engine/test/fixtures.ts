@@ -2,15 +2,24 @@ import type { KnownDeadline, Segment } from '@gateflow/domain';
 import { MS_PER_MINUTE } from '@gateflow/domain';
 import type {
   CheckpointEstimates,
-  ConstrainedEdfPolicyParams,
+  ConstrainedEdfSelection,
   EngineInput,
   WaitingTicket,
 } from '../src';
-import { PRIORITY_V0_POLICY } from '../src';
 
 export const MIN = MS_PER_MINUTE;
 
-export const EDF = PRIORITY_V0_POLICY.params as ConstrainedEdfPolicyParams;
+/** Same values as the priority-v0 preset (defined in @gateflow/queue-core). */
+export const EDF: ConstrainedEdfSelection = {
+  kind: 'constrained-edf',
+  capWindowCalls: 10,
+  capMaxPriorityCalls: 3,
+  maxOvertakes: 15,
+  attentionThresholdMs: 15 * MIN,
+  safetyBufferMs: 5 * MIN,
+  allowRuleBasedDeadline: true,
+  eligibleSegments: ['DEPARTING', 'TRANSFER'],
+};
 
 /** 180 pax/h: one person every 20 s, so `ahead` tickets wait ahead * 20 s. */
 export const CHECKPOINT: CheckpointEstimates = {
@@ -42,6 +51,7 @@ export function input(
     checkpoint: overrides.checkpoint ?? CHECKPOINT,
     waiting,
     recentPriorityCalls: overrides.recentPriorityCalls ?? [],
-    policy: overrides.policy ?? EDF,
+    selection: overrides.selection ?? EDF,
+    ...(overrides.aheadOfWaiting === undefined ? {} : { aheadOfWaiting: overrides.aheadOfWaiting }),
   };
 }

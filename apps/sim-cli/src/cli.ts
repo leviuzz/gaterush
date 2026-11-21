@@ -1,15 +1,17 @@
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { POLICY_PRESETS, PRIORITY_V0_POLICY, classificationOf } from '@gateflow/priority-engine';
-import type { ClassificationParams, Policy } from '@gateflow/priority-engine';
+import type { ClassificationParams } from '@gateflow/priority-engine';
+import { POLICY_PRESETS, PRIORITY_V0_POLICY, classificationOf } from '@gateflow/queue-core';
+import type { Policy } from '@gateflow/queue-core';
 import {
   DEFAULT_BOOTSTRAP,
   buildResults,
+  defaultComparisons,
   renderReport,
   runExperiment,
   stringifyResults,
 } from '@gateflow/sim-metrics';
-import type { ResultsDocument } from '@gateflow/sim-metrics';
+import type { PolicyComparison, ResultsDocument } from '@gateflow/sim-metrics';
 import {
   ScenarioValidationError,
   canonicalJson,
@@ -18,7 +20,13 @@ import {
   parseScenarioText,
 } from '@gateflow/sim-scenarios';
 import type { Scenario } from '@gateflow/sim-scenarios';
-import { UsageError, parsePolicies, parsePositiveInteger, parseSeeds } from './args';
+import {
+  UsageError,
+  parseComparisons,
+  parsePolicies,
+  parsePositiveInteger,
+  parseSeeds,
+} from './args';
 import type { CliIo } from './io';
 import { CLI_NAME, CLI_VERSION } from './version';
 
@@ -37,12 +45,16 @@ Usage:
 Options for "run":
   --scenario <file>              Scenario file (YAML or JSON)            (required)
   --seeds <spec>                 Seeds, e.g. 1-200 or 1-10,42            (default 1-200)
-  --policies <ids>               Comma-separated policy presets          (default fifo,priority-v0)
-  --baseline <id>                Baseline policy for paired comparisons  (default: first policy)
+  --policies <ids>               Comma-separated policy presets          (default fifo,virtual-fifo,priority-v0)
+  --baseline <id>                Status-quo policy, listed first         (default: first policy)
+  --compare <pairs>              Paired comparisons candidate:reference  (default: see below)
   --out <dir>                    Output directory                        (default out/<scenario id>)
   --bootstrap-resamples <n>      Bootstrap resamples for intervals       (default ${DEFAULT_BOOTSTRAP.resamples})
   --commit <rev>                 Source revision recorded in the manifest (default: detected)
   --quiet                        Do not print progress
+
+By default every policy is compared with the baseline, and every priority policy also with the
+FIFO policy that runs the same virtual queue (this isolates the effect of the prioritisation).
 
 All results are SIMULATED on the assumptions of the scenario and are not operational evidence.
 `;
@@ -74,6 +86,26 @@ function classificationFor(policies: readonly Policy[]): ClassificationParams {
   return fallback;
 }
 
+/**
+ * Every policy against the baseline, plus each priority policy against the FIFO policy that
+ * operates exactly the same queue (the difference is then the prioritisation alone).
+ */
+export function defaultCompare(
+  policies: readonly Policy[],
+  baselineId: string,
+): PolicyComparison[] {
+  const pairs = defaultComparisons(policies, baselineId);
+  for (const candidate of policies) {
+    if (candidate.selection.kind === 'fifo' || candidate.id === baselineId) continue;
+    for (const reference of policies) {
+      if (reference.selection.kind !== 'fifo' || reference.id === baselineId) continue;
+      if (canonicalJson(reference.queue) !== canonicalJson(candidate.queue)) continue;
+      pairs.push({ candidateId: candidate.id, referenceId: reference.id });
+    }
+  }
+  return pairs;
+}
+
 function summaryLines(doc: ResultsDocument): string[] {
   const lines: string[] = [];
   const pad = (text: string, width: number) => text.padEnd(width);
@@ -91,10 +123,10 @@ function summaryLines(doc: ResultsDocument): string[] {
     );
   }
   lines.push('');
-  for (const [id, comparison] of Object.entries(doc.summary.comparisons)) {
+  for (const [key, comparison] of Object.entries(doc.summary.comparisons)) {
     const { net, saved, harmed } = comparison.metrics;
     lines.push(
-      `${id} vs ${doc.manifest.baselinePolicyId}: net flights saved per day ${net.mean.toFixed(1)} ` +
+      `${key}: net flights saved per day ${net.mean.toFixed(1)} ` +
         `[${net.ciLower.toFixed(1)}, ${net.ciUpper.toFixed(1)}] (saved ${saved.mean.toFixed(1)}, lost ${harmed.mean.toFixed(1)})`,
     );
   }
@@ -107,8 +139,9 @@ function commandRun(argv: string[], io: CliIo): number {
     options: {
       scenario: { type: 'string' },
       seeds: { type: 'string', default: '1-200' },
-      policies: { type: 'string', default: 'fifo,priority-v0' },
+      policies: { type: 'string', default: 'fifo,virtual-fifo,priority-v0' },
       baseline: { type: 'string' },
+      compare: { type: 'string' },
       out: { type: 'string' },
       'bootstrap-resamples': { type: 'string', default: String(DEFAULT_BOOTSTRAP.resamples) },
       commit: { type: 'string' },
@@ -124,6 +157,10 @@ function commandRun(argv: string[], io: CliIo): number {
   if (!policies.some((p) => p.id === baselinePolicyId)) {
     throw new UsageError(`baseline "${baselinePolicyId}" must be one of --policies`);
   }
+  const comparisons =
+    values.compare === undefined
+      ? defaultCompare(policies, baselinePolicyId)
+      : parseComparisons(values.compare, policies);
   const resamples = parsePositiveInteger(values['bootstrap-resamples'], '--bootstrap-resamples');
 
   const scenario = loadScenario(io, values.scenario);
@@ -138,6 +175,7 @@ function commandRun(argv: string[], io: CliIo): number {
       seeds,
       policies,
       baselinePolicyId,
+      comparisons,
       classification: classificationFor(policies),
       bootstrap: { ...DEFAULT_BOOTSTRAP, resamples },
     },

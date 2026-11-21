@@ -50,6 +50,9 @@ importers:
       '@gateflow/priority-engine':
         specifier: workspace:*
         version: link:../../packages/priority-engine
+      '@gateflow/queue-core':
+        specifier: workspace:*
+        version: link:../../packages/queue-core
       '@gateflow/sim-kernel':
         specifier: workspace:*
         version: link:../../packages/sim-kernel
@@ -75,6 +78,15 @@ importers:
         specifier: workspace:*
         version: link:../domain
 
+  packages/queue-core:
+    dependencies:
+      '@gateflow/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@gateflow/priority-engine':
+        specifier: workspace:*
+        version: link:../priority-engine
+
   packages/sim-kernel: {}
 
   packages/sim-metrics:
@@ -85,6 +97,9 @@ importers:
       '@gateflow/priority-engine':
         specifier: workspace:*
         version: link:../priority-engine
+      '@gateflow/queue-core':
+        specifier: workspace:*
+        version: link:../queue-core
       '@gateflow/sim-kernel':
         specifier: workspace:*
         version: link:../sim-kernel
@@ -103,6 +118,9 @@ importers:
       '@gateflow/priority-engine':
         specifier: workspace:*
         version: link:../priority-engine
+      '@gateflow/queue-core':
+        specifier: workspace:*
+        version: link:../queue-core
       '@gateflow/sim-kernel':
         specifier: workspace:*
         version: link:../sim-kernel

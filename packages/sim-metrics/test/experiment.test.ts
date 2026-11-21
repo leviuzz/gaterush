@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import {
+  FIFO_MANUAL_POLICY,
   FIFO_POLICY,
   PRIORITY_V0_POLICY,
   PRIORITY_V0_SELECTION,
+  PRIORITY_V1_POLICY,
   VIRTUAL_FIFO_POLICY,
   classificationOf,
 } from '@gateflow/queue-core';
@@ -23,20 +25,25 @@ const scenario = parseScenarioText(
   readFileSync(new URL('../../../scenarios/single-checkpoint-demo.yaml', import.meta.url), 'utf8'),
 );
 const scenarioHash = `sha256:${createHash('sha256').update(canonicalJson(scenario)).digest('hex')}`;
-const classification = classificationOf(PRIORITY_V0_POLICY)!;
+const classification = classificationOf(PRIORITY_V1_POLICY)!;
 
-/** The comparisons of the published reports: each GateFlow policy against the status quo, and the prioritisation alone. */
+/**
+ * The comparisons of the published reports: every policy against the status quo, the
+ * prioritisation alone, and GateFlow against today's manual handling.
+ */
 const COMPARISONS: PolicyComparison[] = [
+  { candidateId: 'fifo-manual', referenceId: 'fifo' },
   { candidateId: 'virtual-fifo', referenceId: 'fifo' },
-  { candidateId: 'priority-v0', referenceId: 'fifo' },
-  { candidateId: 'priority-v0', referenceId: 'virtual-fifo' },
+  { candidateId: 'priority-v1', referenceId: 'fifo' },
+  { candidateId: 'priority-v1', referenceId: 'virtual-fifo' },
+  { candidateId: 'priority-v1', referenceId: 'fifo-manual' },
 ];
 
 function config(overrides: Partial<ExperimentConfig> = {}): ExperimentConfig {
   return {
     scenario,
     seeds: [1, 2, 3],
-    policies: [FIFO_POLICY, VIRTUAL_FIFO_POLICY, PRIORITY_V0_POLICY],
+    policies: [FIFO_POLICY, FIFO_MANUAL_POLICY, VIRTUAL_FIFO_POLICY, PRIORITY_V1_POLICY],
     baselinePolicyId: 'fifo',
     comparisons: COMPARISONS,
     classification,
@@ -57,11 +64,18 @@ describe('runExperiment', () => {
     expect(result.seeds).toEqual([1, 2, 3]);
     expect(result.perSeed.map((s) => s.seed)).toEqual([1, 2, 3]);
     for (const day of result.perSeed) {
-      expect(Object.keys(day.policies)).toEqual(['fifo', 'virtual-fifo', 'priority-v0']);
+      expect(Object.keys(day.policies)).toEqual([
+        'fifo',
+        'fifo-manual',
+        'virtual-fifo',
+        'priority-v1',
+      ]);
       expect(Object.keys(day.comparisons)).toEqual([
+        'fifo-manual vs fifo',
         'virtual-fifo vs fifo',
-        'priority-v0 vs fifo',
-        'priority-v0 vs virtual-fifo',
+        'priority-v1 vs fifo',
+        'priority-v1 vs virtual-fifo',
+        'priority-v1 vs fifo-manual',
       ]);
       for (const c of COMPARISONS) {
         const metrics = day.comparisons[`${c.candidateId} vs ${c.referenceId}`]!;
@@ -75,8 +89,9 @@ describe('runExperiment', () => {
   it('compares every policy with the baseline by default', () => {
     const result = runExperiment(config({ comparisons: undefined, seeds: [1] }));
     expect(result.comparisons).toEqual([
+      { candidateId: 'fifo-manual', referenceId: 'fifo' },
       { candidateId: 'virtual-fifo', referenceId: 'fifo' },
-      { candidateId: 'priority-v0', referenceId: 'fifo' },
+      { candidateId: 'priority-v1', referenceId: 'fifo' },
     ]);
   });
 
@@ -140,17 +155,17 @@ describe('results document', () => {
       baselinePolicyId: 'fifo',
       comparisons: COMPARISONS,
       versions: {
-        engine: '0.2.1',
-        queueCore: '0.1.0',
-        model: '0.2.0',
+        engine: '0.3.0',
+        queueCore: '0.2.0',
+        model: '0.3.0',
         kernel: '0.1.0',
-        populationGenerator: '0.2.0',
-        scenarioSchema: 2,
+        populationGenerator: '0.3.0',
+        scenarioSchema: 3,
       },
     });
-    expect(doc.schema).toBe('gateflow.sim.results/2');
+    expect(doc.schema).toBe('gateflow.sim.results/3');
     expect(doc.manifest.reproduce).toContain(
-      '--compare virtual-fifo:fifo,priority-v0:fifo,priority-v0:virtual-fifo',
+      '--compare fifo-manual:fifo,virtual-fifo:fifo,priority-v1:fifo,priority-v1:virtual-fifo,priority-v1:fifo-manual',
     );
     expect(doc.assumptions).toEqual(collectAssumptions(scenario));
     expect(doc.modelLimitations.length).toBeGreaterThan(0);
@@ -189,7 +204,8 @@ describe('report', () => {
     for (const assumption of doc.assumptions) expect(report).toContain(`| ${assumption.path} |`);
     for (const limitation of doc.modelLimitations) expect(report).toContain(limitation);
     expect(report).toContain('Net flights saved');
-    expect(report).toContain('`priority-v0` compared with `virtual-fifo`');
+    expect(report).toContain('`priority-v1` compared with `fifo-manual`');
+    expect(report).toContain('Groups, assisted passengers and late arrivals');
     expect(report).toContain('Call mechanics');
     expect(report).toContain('No-shows (missed-call rate)');
     expect(report).toContain('Idle lane time');

@@ -25,8 +25,9 @@ function cell(text: string): string {
 
 /** Compact, human-readable rendering of a parameter value (objects and arrays included). */
 function formatValue(value: unknown): string {
+  if (value === null) return 'none';
   if (Array.isArray(value)) return value.map(formatValue).join('; ');
-  if (typeof value === 'object' && value !== null) {
+  if (typeof value === 'object') {
     return Object.entries(value)
       .map(([k, v]) => `${k} ${formatValue(v)}`)
       .join(', ');
@@ -145,8 +146,13 @@ export function renderReport(doc: ResultsDocument): string {
   let section = 3;
   for (const c of comparisons) {
     const candidate = policyById(c.candidateId);
-    if (candidate.selection.kind !== 'constrained-edf') continue;
+    const selection = candidate.selection;
+    if (selection.kind === 'fifo') continue;
     const m = policyMetrics(candidate.id);
+    const bound =
+      selection.kind === 'constrained-edf'
+        ? `bound K = ${selection.maxOvertakes}`
+        : 'no bound for staff flight calls';
     push(
       `## ${section}. Cost for passengers not prioritised by \`${candidate.id}\` (compared with \`${c.referenceId}\`)`,
       '',
@@ -154,16 +160,20 @@ export function renderReport(doc: ResultsDocument): string {
       '',
       `| Metric | Value [${confidence} CI] |`,
       '|---|---:|',
-      `| Passengers prioritised per day | ${withRange(m.prioritized)} (${pct(m.priorityCallShare.mean, 2)} of calls) |`,
+      `| Passengers prioritised per day | ${withRange(m.prioritized)} (${pct(m.priorityCallShare.mean, 2)} of tickets called) |`,
       `| Mean extra wait of non-prioritised passengers (min) | ${withCi(c.metrics.nonPriorityExtraWaitMeanMin, 2)} |`,
       `| P90 extra wait of non-prioritised passengers (min) | ${withCi(c.metrics.nonPriorityExtraWaitP90Min, 2)} |`,
       `| Largest extra wait of any non-prioritised passenger, worst day (min) | ${num(c.metrics.nonPriorityExtraWaitMaxMin.max)} |`,
       `| Share of non-prioritised passengers delayed by more than 5 min | ${pct(c.metrics.nonPriorityDelayedOver5MinShare.mean, 2)} |`,
-      `| Most overtakes suffered by one ticket, worst day (bound K = ${candidate.selection.maxOvertakes}) | ${num(m.maxOvertakes.max, 0)} |`,
-      `| Calls where the cap blocked a priority call, per day | ${num(m.capReachedCalls.mean)} |`,
-      `| Calls where the overtake guard took precedence (a ticket had reached K overtakes), per day | ${num(m.overtakeGuardCalls.mean)} |`,
-      '',
+      `| Most people who overtook one ticket, worst day (${bound}) | ${num(m.maxOvertakes.max, 0)} |`,
     );
+    if (selection.kind === 'constrained-edf') {
+      push(
+        `| Calls where the cap blocked a priority call, per day | ${num(m.capReachedCalls.mean)} |`,
+        `| Calls where the overtake guard took precedence (a ticket had reached K overtakes), per day | ${num(m.overtakeGuardCalls.mean)} |`,
+      );
+    }
+    push('');
     section++;
   }
 
@@ -193,6 +203,27 @@ export function renderReport(doc: ResultsDocument): string {
   }
 
   push(
+    `## ${section}. Groups, assisted passengers and late arrivals`,
+    '',
+    'Means per day. A group (two people or more) holds one ticket and counts as its people in every other table, in the priority cap and in the overtake bound. Assisted passengers are taken to the next free lane under every policy.',
+    '',
+    '| Policy | Groups (people in groups) | Groups prioritised | Assisted passengers: people, mean time to screening (min), missed | Late on purpose: people, prioritised, missed |',
+    '|---|---:|---:|---:|---:|',
+  );
+  section++;
+  for (const policy of manifest.policies) {
+    const m = policyMetrics(policy.id);
+    const strategic =
+      m.strategicPeople.mean === 0
+        ? 'none in this scenario'
+        : `${num(m.strategicPeople.mean)}, ${num(m.strategicPrioritized.mean)}, ${num(m.strategicMissed.mean)}`;
+    push(
+      `| \`${policy.id}\` | ${num(m.groups.mean)} (${num(m.peopleInGroups.mean)}) | ${num(m.groupsPrioritized.mean)} | ${num(m.assistedPeople.mean)}, ${num(m.assistedWaitMeanMin.mean, 2)}, ${num(m.assistedMissed.mean)} | ${strategic} |`,
+    );
+  }
+  push('');
+
+  push(
     `## ${section}. Checkpoint operations`,
     '',
     'Means per day; "longest" is the largest value over all simulated days.',
@@ -214,6 +245,8 @@ export function renderReport(doc: ResultsDocument): string {
     '',
     '- Each seed is one simulated day of the same design day (same flights), with different passengers.',
     '- All policies are run on exactly the same passengers (common random numbers), so each comparison is paired passenger by passenger: a flight is *saved* when the passenger misses it with the reference and catches it with the candidate, and *lost* in the opposite case.',
+    "- `fifo-manual` (A') adds today's manual handling to the physical queue: staff periodically call the flights closing soon and their passengers are taken first. Comparing GateFlow with A' estimates the benefit over today's real practice.",
+    '- Passengers are counted as people: a party of three that misses its flight counts as three, in every table and comparison.',
     '- The status quo is a physical FIFO queue. GateFlow policies run a virtual queue: tickets are called so as to keep the free lanes plus a call-ahead buffer supplied; each passenger presents after their own response time (later when they miss the call), validates the ticket at the access point and queues briefly at the lanes. Comparing `virtual-fifo` with the status quo isolates the cost or benefit of the call mechanics; comparing a priority policy with `virtual-fifo` isolates the prioritisation.',
     '- A passenger misses the flight when they reach the gate after boarding closes (ground truth).',
     `- Confidence intervals: percentile bootstrap of the mean over days (${manifest.statistics.bootstrapResamples} resamples, seed ${manifest.statistics.bootstrapSeed}). Quantiles: ${manifest.statistics.quantileMethod}.`,

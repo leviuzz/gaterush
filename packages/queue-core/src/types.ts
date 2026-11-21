@@ -69,6 +69,15 @@ export interface TicketInput {
   readonly segment: Segment;
   readonly deadline: KnownDeadline;
   readonly walkEstimateMs: Millis;
+  /** People on the ticket, called together (a group or family scanned together). Default 1. */
+  readonly partySize?: number;
+  /**
+   * When the passenger first presented at the checkpoint. Default: the issue time. A new ticket
+   * issued after an expiry keeps the first presentation time.
+   */
+  readonly presentedAtMs?: Millis;
+  /** Scheduled departure of the flight as known by the system (for the presentation rule). */
+  readonly scheduledDepartureMs?: Millis | null;
 }
 
 /** Read-only snapshot of a ticket. */
@@ -76,9 +85,12 @@ export interface TicketView {
   readonly id: string;
   readonly fifoKey: number;
   readonly state: TicketState;
+  readonly partySize: number;
+  readonly presentedAtMs: Millis;
   readonly issuedAtMs: Millis;
   /** Risk class when the ticket was issued. */
   readonly classAtIssue: RiskClass;
+  /** People who overtook this ticket while it waited. */
   readonly overtakenCount: number;
   /** Number of times the ticket was called (second calls excluded). */
   readonly calls: number;
@@ -122,6 +134,8 @@ export interface QueueStats {
   readonly issued: number;
   readonly commitments: number;
   readonly priorityCommitments: number;
+  /** People on the priority commitments. */
+  readonly priorityPeople: number;
   /** Commitments made while URGENT tickets existed but the cap was full. */
   readonly capReached: number;
   /** Commitments forced by the overtake guard. */

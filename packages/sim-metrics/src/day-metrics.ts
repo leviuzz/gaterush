@@ -2,7 +2,10 @@ import { MS_PER_HOUR, MS_PER_MINUTE } from '@gateflow/domain';
 import type { Population, RunResult } from '@gateflow/sim-model';
 import { mean, quantileSorted, sortedAscending } from './stats';
 
-/** Metrics of one policy on one simulated day (one seed). */
+/**
+ * Metrics of one policy on one simulated day (one seed). Passenger counts are people: a party of
+ * three that misses its flight counts as three missed passengers.
+ */
 export interface PolicyDayMetrics {
   readonly passengers: number;
   readonly missed: number;
@@ -52,6 +55,20 @@ export interface PolicyDayMetrics {
   readonly maxStandingQueue: number;
   readonly urgentOnArrival: number;
   readonly criticalOnArrival: number;
+  /** Parties (tickets or assisted parties) and groups of two or more people. */
+  readonly parties: number;
+  readonly groups: number;
+  readonly peopleInGroups: number;
+  /** Groups whose ticket was committed through a priority call. */
+  readonly groupsPrioritized: number;
+  /** People who took the assisted path, their mean time to screening and their misses. */
+  readonly assistedPeople: number;
+  readonly assistedWaitMeanMin: number;
+  readonly assistedMissed: number;
+  /** People who arrived late on purpose (ground truth), how many were prioritised or missed. */
+  readonly strategicPeople: number;
+  readonly strategicPrioritized: number;
+  readonly strategicMissed: number;
 }
 
 /** Paired comparison of a candidate policy with a reference policy on the same simulated day. */
@@ -96,10 +113,15 @@ function durationSummary(values: readonly number[]): { mean: number; p90: number
   };
 }
 
+/** Pushes `value` `times` times (per-person statistics of a party). */
+function pushTimes(list: number[], value: number, times: number): void {
+  for (let i = 0; i < times; i++) list.push(value);
+}
+
 export function policyDayMetrics(population: Population, run: RunResult): PolicyDayMetrics {
-  const n = population.passengers.length;
   const waits: number[] = [];
   const standing: number[] = [];
+  let people = 0;
   let missed = 0;
   let missedDeparting = 0;
   let missedTransfer = 0;
@@ -108,37 +130,63 @@ export function policyDayMetrics(population: Population, run: RunResult): Policy
   let maxOvertakes = 0;
   let urgentOnArrival = 0;
   let criticalOnArrival = 0;
+  let groups = 0;
+  let peopleInGroups = 0;
+  let groupsPrioritized = 0;
+  let assistedPeople = 0;
+  let assistedWaitSum = 0;
+  let assistedMissed = 0;
+  let strategicPeople = 0;
+  let strategicPrioritized = 0;
+  let strategicMissed = 0;
   run.outcomes.forEach((outcome, i) => {
     const passenger = population.passengers[i];
     if (passenger === undefined) throw new RangeError('outcomes do not match the population');
-    waits.push(outcome.waitMs);
-    standing.push(outcome.standingMs);
+    const n = passenger.partySize;
+    people += n;
+    pushTimes(waits, outcome.waitMs, n);
+    pushTimes(standing, outcome.standingMs, n);
     if (outcome.missed) {
-      missed++;
-      if (passenger.segment === 'TRANSFER') missedTransfer++;
-      else missedDeparting++;
+      missed += n;
+      if (passenger.segment === 'TRANSFER') missedTransfer += n;
+      else missedDeparting += n;
     }
-    if (outcome.priorityCall) prioritized++;
-    if (outcome.overtakenCount > 0) passengersOvertaken++;
+    if (outcome.priorityCall) prioritized += n;
+    if (outcome.overtakenCount > 0) passengersOvertaken += n;
     maxOvertakes = Math.max(maxOvertakes, outcome.overtakenCount);
-    if (outcome.classAtArrival === 'URGENT') urgentOnArrival++;
-    if (outcome.classAtArrival === 'CRITICAL') criticalOnArrival++;
+    if (outcome.classAtArrival === 'URGENT') urgentOnArrival += n;
+    if (outcome.classAtArrival === 'CRITICAL') criticalOnArrival += n;
+    if (n > 1) {
+      groups++;
+      peopleInGroups += n;
+      if (outcome.priorityCall) groupsPrioritized++;
+    }
+    if (passenger.path === 'ASSISTED') {
+      assistedPeople += n;
+      assistedWaitSum += n * outcome.waitMs;
+      if (outcome.missed) assistedMissed += n;
+    }
+    if (passenger.strategic) {
+      strategicPeople += n;
+      if (outcome.priorityCall) strategicPrioritized += n;
+      if (outcome.missed) strategicMissed += n;
+    }
   });
   const sorted = sortedAscending(waits);
   const standingSummary = durationSummary(standing);
   const { stats } = run;
   const horizon = stats.lastServiceEndMs - stats.firstArrivalMs;
   return {
-    passengers: n,
+    passengers: people,
     missed,
     missedDeparting,
     missedTransfer,
-    missedPer1000: n === 0 ? 0 : (1000 * missed) / n,
+    missedPer1000: people === 0 ? 0 : (1000 * missed) / people,
     waitMeanMin: toMinutes(mean(waits)),
-    waitP50Min: n === 0 ? 0 : toMinutes(quantileSorted(sorted, 0.5)),
-    waitP90Min: n === 0 ? 0 : toMinutes(quantileSorted(sorted, 0.9)),
-    waitP99Min: n === 0 ? 0 : toMinutes(quantileSorted(sorted, 0.99)),
-    waitMaxMin: n === 0 ? 0 : toMinutes(sorted[n - 1] ?? 0),
+    waitP50Min: people === 0 ? 0 : toMinutes(quantileSorted(sorted, 0.5)),
+    waitP90Min: people === 0 ? 0 : toMinutes(quantileSorted(sorted, 0.9)),
+    waitP99Min: people === 0 ? 0 : toMinutes(quantileSorted(sorted, 0.99)),
+    waitMaxMin: people === 0 ? 0 : toMinutes(sorted[people - 1] ?? 0),
     standingMeanMin: standingSummary.mean,
     standingP90Min: standingSummary.p90,
     standingMaxMin: standingSummary.max,
@@ -165,14 +213,27 @@ export function policyDayMetrics(population: Population, run: RunResult): Policy
     maxStandingQueue: stats.maxStanding,
     urgentOnArrival,
     criticalOnArrival,
+    parties: run.outcomes.length,
+    groups,
+    peopleInGroups,
+    groupsPrioritized,
+    assistedPeople,
+    assistedWaitMeanMin: assistedPeople === 0 ? 0 : toMinutes(assistedWaitSum / assistedPeople),
+    assistedMissed,
+    strategicPeople,
+    strategicPrioritized,
+    strategicMissed,
   };
 }
 
+/** Paired comparison of two runs on the same population, counted in people. */
 export function comparisonDayMetrics(
+  population: Population,
   reference: RunResult,
   candidate: RunResult,
 ): ComparisonDayMetrics {
-  if (reference.outcomes.length !== candidate.outcomes.length) {
+  const parties = population.passengers.length;
+  if (reference.outcomes.length !== parties || candidate.outcomes.length !== parties) {
     throw new RangeError('paired runs must cover the same passengers');
   }
   let saved = 0;
@@ -180,29 +241,34 @@ export function comparisonDayMetrics(
   let atRiskCohort = 0;
   let atRiskReachedReference = 0;
   let atRiskReachedCandidate = 0;
+  let people = 0;
   let deltaSum = 0;
   let standingDeltaSum = 0;
   const extraWaits: number[] = [];
   let delayedOver5 = 0;
   reference.outcomes.forEach((r, i) => {
     const c = candidate.outcomes[i];
-    if (c === undefined) throw new RangeError('paired runs must cover the same passengers');
-    if (r.missed && !c.missed) saved++;
-    if (!r.missed && c.missed) harmed++;
-    if (r.classAtArrival === 'URGENT') {
-      atRiskCohort++;
-      if (!r.missed) atRiskReachedReference++;
-      if (!c.missed) atRiskReachedCandidate++;
+    const passenger = population.passengers[i];
+    if (c === undefined || passenger === undefined) {
+      throw new RangeError('paired runs must cover the same passengers');
     }
-    deltaSum += c.waitMs - r.waitMs;
-    standingDeltaSum += c.standingMs - r.standingMs;
+    const n = passenger.partySize;
+    people += n;
+    if (r.missed && !c.missed) saved += n;
+    if (!r.missed && c.missed) harmed += n;
+    if (r.classAtArrival === 'URGENT') {
+      atRiskCohort += n;
+      if (!r.missed) atRiskReachedReference += n;
+      if (!c.missed) atRiskReachedCandidate += n;
+    }
+    deltaSum += n * (c.waitMs - r.waitMs);
+    standingDeltaSum += n * (c.standingMs - r.standingMs);
     if (!c.priorityCall) {
       const extra = c.waitMs - r.waitMs;
-      extraWaits.push(extra);
-      if (extra > 5 * MS_PER_MINUTE) delayedOver5++;
+      pushTimes(extraWaits, extra, n);
+      if (extra > 5 * MS_PER_MINUTE) delayedOver5 += n;
     }
   });
-  const n = reference.outcomes.length;
   const extra = durationSummary(extraWaits);
   return {
     saved,
@@ -216,7 +282,7 @@ export function comparisonDayMetrics(
     nonPriorityExtraWaitP90Min: extra.p90,
     nonPriorityExtraWaitMaxMin: extra.max,
     nonPriorityDelayedOver5MinShare: share(delayedOver5, extraWaits.length),
-    waitMeanDeltaMin: n === 0 ? 0 : toMinutes(deltaSum / n),
-    standingMeanDeltaMin: n === 0 ? 0 : toMinutes(standingDeltaSum / n),
+    waitMeanDeltaMin: people === 0 ? 0 : toMinutes(deltaSum / people),
+    standingMeanDeltaMin: people === 0 ? 0 : toMinutes(standingDeltaSum / people),
   };
 }

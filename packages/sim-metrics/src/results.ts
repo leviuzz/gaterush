@@ -16,7 +16,7 @@ import type { ExperimentResult, PolicyComparison, SeedResult } from './experimen
 import { acrossDays, bootstrapMeanInterval } from './stats';
 import type { AcrossDays } from './stats';
 
-export const RESULTS_SCHEMA = 'gateflow.sim.results/2';
+export const RESULTS_SCHEMA = 'gateflow.sim.results/3';
 
 export const DISCLAIMER =
   'SIMULATED RESULTS ON SYNTHETIC OR HYPOTHETICAL DATA. These numbers are model outputs, not ' +
@@ -26,14 +26,15 @@ export const DISCLAIMER =
 export const MODEL_LIMITATIONS: readonly string[] = [
   'Single checkpoint. Lanes follow a planned schedule: no unplanned outages and no lanes opened in reaction to the queue.',
   'Every passenger uses the virtual queue when one is simulated: no opt-outs, no passengers without a phone or a view of the displays.',
-  'Response times and absences are drawn per passenger from assumed distributions. A second call does not make an absent passenger come sooner, the prepare window does not shorten response times, and a passenger who has been at the access point once answers later calls at once.',
+  'Response times and absences are drawn per party from assumed distributions. A second call does not make an absent passenger come sooner, the prepare window does not shorten response times, and a passenger who has been at the access point once answers later calls at once.',
   'The access point never becomes a bottleneck, and the walk from the access point to the lanes is part of the response time.',
   "The system's deadline equals the ground truth (boarding close from a fixed rule): no flight delays, gate changes or stale data.",
   'Passengers never abandon the queue, even after their flight has closed.',
-  'No groups, families or assisted passengers: everyone is served individually.',
-  "The status quo is a physical FIFO queue without staff intervention. Today's manual handling of urgent passengers is not modelled, so the benefit of prioritisation is likely overstated.",
+  'A group stays together: one ticket, one call, one lane, screened one person after the other. Assisted passengers always get the next free lane and are not assessed by the engine.',
+  "Baseline A' (`fifo-manual`) is an idealised staff practice: every five minutes staff call the flights closing within 20 minutes, and every passenger of those flights comes forward at once. Real practice is less systematic, so A' may overstate today's handling where it is informal, or understate it where staff watch individual passengers.",
+  'Strategic late arrivals are a fixed share in a stress-test scenario, not a behavioural response to the policy.',
   'Tickets are issued on arrival with no kiosk or scanning delay.',
-  'The engine estimates processing time as the mean screening time, walking time as the nominal time of the gate zone, and the time from call to screening as the larger of the response estimate and the call-ahead time.',
+  'The engine estimates screening time as the mean screening time per person, walking time as the nominal time of the gate zone, and the time from call to screening as the larger of the response estimate and the call-ahead time.',
 ];
 
 export interface ManifestInput {

@@ -1,13 +1,19 @@
 /** Version of the queue state machine. Bump on any change that can alter behaviour. */
-export const QUEUE_CORE_VERSION = '0.1.0';
+export const QUEUE_CORE_VERSION = '0.2.0';
 
 export { CheckpointQueue } from './queue';
 export {
   DEFAULT_VIRTUAL_QUEUE,
+  FIFO_MANUAL_POLICY,
   FIFO_POLICY,
+  FLIGHT_CALL_SELECTION,
   POLICY_PRESETS,
   PRIORITY_V0_POLICY,
   PRIORITY_V0_SELECTION,
+  PRIORITY_V1_POLICY,
+  PRIORITY_V1_SELECTION,
+  PRIORITY_V1_STRICT_POLICY,
+  PRIORITY_V1_STRICT_SELECTION,
   QueueError,
   VIRTUAL_FIFO_POLICY,
   callAheadTarget,

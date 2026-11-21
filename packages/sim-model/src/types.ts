@@ -15,17 +15,39 @@ export interface SimFlight {
   readonly gateZone: string;
 }
 
-/** A passenger crossing the checkpoint. Durations are ground truth unless named "estimate". */
+/** How a party crosses the checkpoint. */
+export type PassengerPath =
+  /** Through the queue (physical or virtual) like everybody else. */
+  | 'QUEUE'
+  /**
+   * Assisted passengers (PRM and similar): staff take them to the next free lane, ahead of the
+   * queue, under every policy. They never hold a ticket and are never assessed by the engine.
+   */
+  | 'ASSISTED';
+
+/**
+ * A party crossing the checkpoint: one passenger, or a group travelling together (one ticket,
+ * one call, screened one after the other on the same lane). Durations are ground truth unless
+ * named "estimate".
+ */
 export interface SimPassenger {
-  /** Position of the passenger in `Population.passengers`. */
+  /** Position of the party in `Population.passengers`. */
   readonly index: number;
   /** Unique; must not contain `#` (reserved for re-issued tickets). */
   readonly id: string;
   readonly flightIndex: number;
   readonly segment: Segment;
+  /** People in the party (1 for a single passenger). */
+  readonly partySize: number;
+  readonly path: PassengerPath;
+  /**
+   * Ground truth for metrics only: the party arrived late on purpose (to exploit priority). The
+   * system never sees it.
+   */
+  readonly strategic: boolean;
   /** Arrival at the checkpoint, which is also when the ticket is issued (no scan delay). */
   readonly arrivalMs: Millis;
-  /** Screening duration at the lane. */
+  /** Screening duration of the whole party at the lane. */
   readonly serviceMs: Millis;
   /** Walking time from the checkpoint exit to the gate. */
   readonly walkMs: Millis;
@@ -96,7 +118,10 @@ export interface PassengerOutcome {
   readonly overtakenCount: number;
   /** Reasons of the latest commitment of the ticket that was admitted. */
   readonly selectionReasons: readonly ReasonCode[];
-  /** Risk class when the first ticket was issued (same classification for every policy). */
+  /**
+   * Risk class when the first ticket was issued (same classification for every policy).
+   * `UNVERIFIED` for assisted passengers, who are not assessed.
+   */
   readonly classAtArrival: RiskClass;
   readonly laneIndex: number;
   /** Calls received (second calls excluded). */
@@ -129,12 +154,12 @@ export interface RunStats {
   readonly staffedLaneMs: number;
   /**
    * Lane time open and idle that passengers waiting for or answering a call could have used:
-   * the integral of min(idle open lanes, tickets not yet called + called passengers on their way).
+   * the integral of min(idle open lanes, people not yet called + called people on their way).
    */
   readonly idleLaneWithDemandMs: number;
-  /** Integral of the number of tickets not yet called over time (person-milliseconds). */
+  /** Integral of the number of people waiting for their call over time (person-milliseconds). */
   readonly waitingAreaMs: number;
-  /** Largest number of tickets not yet called. */
+  /** Largest number of people waiting for their call. */
   readonly maxWaiting: number;
   /** Integral of the number of people standing in a queue over time (person-milliseconds). */
   readonly standingAreaMs: number;

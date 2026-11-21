@@ -38,7 +38,12 @@ describe('assessTicket', () => {
   });
 
   it('classifies NORMAL, ATTENTION, URGENT and CRITICAL by slack', () => {
-    const params = { ...EDF, safetyBufferMs: 0, attentionThresholdMs: 15 * MIN };
+    const params = {
+      ...EDF,
+      safetyBufferMs: 0,
+      feasibilityMarginMs: 0,
+      attentionThresholdMs: 15 * MIN,
+    };
     const at = (deadlineMin: number, ahead: number) =>
       assessTicket(
         ticket(ahead, { deadline: { atMs: deadlineMin * MIN, source: 'RULE' } }),

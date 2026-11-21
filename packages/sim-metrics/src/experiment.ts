@@ -149,7 +149,7 @@ export function runExperiment(
       if (reference === undefined || candidate === undefined) {
         throw new ExperimentConfigError(`missing run for ${comparisonKey(comparison)}`);
       }
-      pairs[comparisonKey(comparison)] = comparisonDayMetrics(reference, candidate);
+      pairs[comparisonKey(comparison)] = comparisonDayMetrics(population, reference, candidate);
     }
     perSeed.push({
       seed,

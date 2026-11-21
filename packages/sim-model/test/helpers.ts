@@ -78,6 +78,9 @@ export function passenger(
     walkEstimateMs: 0,
     callResponseMs: 0,
     absenceDelayMs: 0,
+    partySize: 1,
+    path: 'QUEUE',
+    strategic: false,
     ...overrides,
   };
 }

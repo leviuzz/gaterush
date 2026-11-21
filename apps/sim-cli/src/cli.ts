@@ -1,11 +1,12 @@
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import type { ClassificationParams } from '@gateflow/priority-engine';
-import { POLICY_PRESETS, PRIORITY_V0_POLICY, classificationOf } from '@gateflow/queue-core';
+import { POLICY_PRESETS, PRIORITY_V1_POLICY, classificationOf } from '@gateflow/queue-core';
 import type { Policy } from '@gateflow/queue-core';
 import {
   DEFAULT_BOOTSTRAP,
   buildResults,
+  comparisonKey,
   defaultComparisons,
   renderReport,
   runExperiment,
@@ -34,6 +35,8 @@ export const EXIT_OK = 0;
 export const EXIT_FAILURE = 1;
 export const EXIT_USAGE = 2;
 
+const DEFAULT_POLICIES = 'fifo,fifo-manual,virtual-fifo,priority-v1';
+
 const HELP = `${CLI_NAME} ${CLI_VERSION}: GateFlow simulation experiments
 
 Usage:
@@ -45,7 +48,7 @@ Usage:
 Options for "run":
   --scenario <file>              Scenario file (YAML or JSON)            (required)
   --seeds <spec>                 Seeds, e.g. 1-200 or 1-10,42            (default 1-200)
-  --policies <ids>               Comma-separated policy presets          (default fifo,virtual-fifo,priority-v0)
+  --policies <ids>               Comma-separated policy presets          (default ${DEFAULT_POLICIES})
   --baseline <id>                Status-quo policy, listed first         (default: first policy)
   --compare <pairs>              Paired comparisons candidate:reference  (default: see below)
   --out <dir>                    Output directory                        (default out/<scenario id>)
@@ -53,8 +56,10 @@ Options for "run":
   --commit <rev>                 Source revision recorded in the manifest (default: detected)
   --quiet                        Do not print progress
 
-By default every policy is compared with the baseline, and every priority policy also with the
-FIFO policy that runs the same virtual queue (this isolates the effect of the prioritisation).
+By default every policy is compared with the baseline. Each priority policy is also compared with
+the FIFO policy that runs the same virtual queue (this isolates the prioritisation), with today's
+practice with manual handling (fifo-manual) and with the priority policies listed before it.
+Risk classes on arrival use the parameters of the first priority policy listed.
 
 All results are SIMULATED on the assumptions of the scenario and are not operational evidence.
 `;
@@ -75,34 +80,61 @@ function scenarioHash(io: CliIo, scenario: Scenario): string {
   return `sha256:${io.sha256(canonicalJson(scenario))}`;
 }
 
-/** Classification for on-arrival risk classes: the first non-FIFO policy, else priority-v0's. */
+/** Classification for on-arrival risk classes: the first priority policy's, else priority-v1's. */
 function classificationFor(policies: readonly Policy[]): ClassificationParams {
   for (const policy of policies) {
     const classification = classificationOf(policy);
     if (classification !== null) return classification;
   }
-  const fallback = classificationOf(PRIORITY_V0_POLICY);
-  if (fallback === null) throw new Error('priority-v0 must define classification parameters');
+  const fallback = classificationOf(PRIORITY_V1_POLICY);
+  if (fallback === null) throw new Error('priority-v1 must define classification parameters');
   return fallback;
 }
 
 /**
- * Every policy against the baseline, plus each priority policy against the FIFO policy that
- * operates exactly the same queue (the difference is then the prioritisation alone).
+ * Default comparisons: every policy against the baseline; then each policy that reorders the queue
+ * against the FIFO policy operating exactly the same queue (the difference is the reordering
+ * alone); and each priority (constrained EDF) policy against today's practice with manual
+ * handling (a physical queue with staff calls, baseline A') and against the priority policies
+ * listed before it on the same queue (version against version).
  */
 export function defaultCompare(
   policies: readonly Policy[],
   baselineId: string,
 ): PolicyComparison[] {
   const pairs = defaultComparisons(policies, baselineId);
-  for (const candidate of policies) {
-    if (candidate.selection.kind === 'fifo' || candidate.id === baselineId) continue;
-    for (const reference of policies) {
-      if (reference.selection.kind !== 'fifo' || reference.id === baselineId) continue;
-      if (canonicalJson(reference.queue) !== canonicalJson(candidate.queue)) continue;
-      pairs.push({ candidateId: candidate.id, referenceId: reference.id });
+  const keys = new Set(pairs.map(comparisonKey));
+  const add = (candidateId: string, referenceId: string) => {
+    const pair = { candidateId, referenceId };
+    if (keys.has(comparisonKey(pair))) return;
+    keys.add(comparisonKey(pair));
+    pairs.push(pair);
+  };
+  const sameQueue = (a: Policy, b: Policy) => canonicalJson(a.queue) === canonicalJson(b.queue);
+  policies.forEach((candidate, index) => {
+    if (candidate.selection.kind === 'fifo' || candidate.id === baselineId) return;
+    const references = policies.filter((p) => p.id !== baselineId && p.id !== candidate.id);
+    for (const reference of references) {
+      if (reference.selection.kind === 'fifo' && sameQueue(reference, candidate)) {
+        add(candidate.id, reference.id);
+      }
     }
-  }
+    if (candidate.selection.kind !== 'constrained-edf') return;
+    for (const reference of references) {
+      if (reference.queue.kind === 'physical' && reference.selection.kind !== 'fifo') {
+        add(candidate.id, reference.id);
+      }
+    }
+    for (const reference of policies.slice(0, index)) {
+      if (
+        reference.id !== baselineId &&
+        reference.selection.kind === 'constrained-edf' &&
+        sameQueue(reference, candidate)
+      ) {
+        add(candidate.id, reference.id);
+      }
+    }
+  });
   return pairs;
 }
 
@@ -139,7 +171,7 @@ function commandRun(argv: string[], io: CliIo): number {
     options: {
       scenario: { type: 'string' },
       seeds: { type: 'string', default: '1-200' },
-      policies: { type: 'string', default: 'fifo,virtual-fifo,priority-v0' },
+      policies: { type: 'string', default: DEFAULT_POLICIES },
       baseline: { type: 'string' },
       compare: { type: 'string' },
       out: { type: 'string' },

@@ -3,6 +3,7 @@ import type {
   CheckpointEstimates,
   ClassificationParams,
   ConstrainedEdfSelection,
+  FlightCallSelection,
   SelectionParams,
   WaitingTicket,
 } from './types';
@@ -25,6 +26,12 @@ export function validateSelectionParams(input: SelectionParams): void {
   // Widened to string: callers may pass untyped data (e.g. parsed JSON).
   const kind: string = input.kind;
   if (kind === 'fifo') return;
+  if (kind === 'flight-call') {
+    const call = input as FlightCallSelection;
+    requireSafeInteger(call.callWindowMs, 'callWindowMs', 0);
+    requireSafeInteger(call.announcementIntervalMs, 'announcementIntervalMs', 1);
+    return;
+  }
   if (kind !== 'constrained-edf') throw new EngineInputError(`unknown selection kind: ${kind}`);
   const params = input as ConstrainedEdfSelection;
   requireSafeInteger(params.capWindowCalls, 'capWindowCalls', 1);
@@ -39,6 +46,15 @@ export function validateSelectionParams(input: SelectionParams): void {
 export function validateClassificationParams(params: ClassificationParams): void {
   requireSafeInteger(params.attentionThresholdMs, 'attentionThresholdMs', 0);
   requireSafeInteger(params.safetyBufferMs, 'safetyBufferMs', 0);
+  requireSafeInteger(params.feasibilityMarginMs, 'feasibilityMarginMs', 0);
+  // Widened: callers may pass untyped data (e.g. parsed JSON).
+  const cutoff: unknown = params.latePresentationCutoffMs;
+  if (cutoff !== null) {
+    if (typeof cutoff !== 'number') {
+      throw new EngineInputError('latePresentationCutoffMs must be a number or null');
+    }
+    requireSafeInteger(cutoff, 'latePresentationCutoffMs', 0);
+  }
   // Widened: callers may pass untyped data (e.g. parsed JSON).
   const allowRule: unknown = params.allowRuleBasedDeadline;
   if (typeof allowRule !== 'boolean') {
@@ -79,6 +95,15 @@ export function validateTicket(ticket: WaitingTicket): void {
   requireSafeInteger(ticket.fifoKey, `fifoKey of ${ticket.id}`);
   requireSafeInteger(ticket.walkEstimateMs, `walkEstimateMs of ${ticket.id}`, 0);
   requireSafeInteger(ticket.overtakenCount, `overtakenCount of ${ticket.id}`, 0);
+  if (ticket.partySize !== undefined) {
+    requireSafeInteger(ticket.partySize, `partySize of ${ticket.id}`, 1);
+  }
+  if (ticket.presentedAtMs !== undefined) {
+    requireSafeInteger(ticket.presentedAtMs, `presentedAtMs of ${ticket.id}`);
+  }
+  if (ticket.scheduledDepartureMs !== undefined && ticket.scheduledDepartureMs !== null) {
+    requireSafeInteger(ticket.scheduledDepartureMs, `scheduledDepartureMs of ${ticket.id}`);
+  }
   if (!(SEGMENTS as readonly string[]).includes(ticket.segment)) {
     throw new EngineInputError(`unknown segment of ${ticket.id}: ${ticket.segment}`);
   }

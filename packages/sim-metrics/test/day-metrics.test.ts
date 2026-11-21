@@ -86,6 +86,9 @@ const population: Population = {
     walkEstimateMs: 0,
     callResponseMs: 0,
     absenceDelayMs: 0,
+    partySize: 1,
+    path: 'QUEUE' as const,
+    strategic: false,
   })),
 };
 
@@ -176,7 +179,7 @@ describe('policyDayMetrics', () => {
 
 describe('comparisonDayMetrics', () => {
   it('pairs passengers: saved, harmed, net and the at-risk cohort', () => {
-    const c = comparisonDayMetrics(reference, candidate);
+    const c = comparisonDayMetrics(population, reference, candidate);
     expect(c).toMatchObject({
       saved: 1, // p0
       harmed: 1, // p3
@@ -196,6 +199,47 @@ describe('comparisonDayMetrics', () => {
   });
 
   it('rejects runs of different sizes', () => {
-    expect(() => comparisonDayMetrics(reference, run([outcome(1, false)]))).toThrow(RangeError);
+    expect(() => comparisonDayMetrics(population, reference, run([outcome(1, false)]))).toThrow(
+      RangeError,
+    );
+  });
+
+  it('counts people, not parties', () => {
+    // p0 becomes a family of three: its miss, its wait and its saving count three times.
+    const families: Population = {
+      ...population,
+      passengers: population.passengers.map((p, i) => (i === 0 ? { ...p, partySize: 3 } : p)),
+    };
+    const c = comparisonDayMetrics(families, reference, candidate);
+    expect(c).toMatchObject({ saved: 3, harmed: 1, net: 2, atRiskCohort: 4 });
+    expect(c.waitMeanDeltaMin).toBeCloseTo((3 * -9 + 1 + 1 + 8) / 6, 12);
+    const m = policyDayMetrics(families, reference);
+    expect(m).toMatchObject({ passengers: 6, missed: 4, parties: 4, groups: 1, peopleInGroups: 3 });
+    expect(m.waitMeanMin).toBeCloseTo((3 * 10 + 2 + 30 + 4) / 6, 12);
+  });
+});
+
+describe('groups, assisted passengers and strategic arrivals', () => {
+  it('reports them separately, in people', () => {
+    const mixed: Population = {
+      ...population,
+      passengers: population.passengers.map((p, i) => {
+        if (i === 0) return { ...p, partySize: 2, strategic: true };
+        if (i === 3) return { ...p, path: 'ASSISTED' as const };
+        return p;
+      }),
+    };
+    const m = policyDayMetrics(mixed, candidate);
+    expect(m).toMatchObject({
+      groups: 1,
+      peopleInGroups: 2,
+      groupsPrioritized: 1,
+      assistedPeople: 1,
+      assistedWaitMeanMin: 12,
+      assistedMissed: 1,
+      strategicPeople: 2,
+      strategicPrioritized: 2,
+      strategicMissed: 0,
+    });
   });
 });

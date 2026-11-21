@@ -35,14 +35,16 @@ function issuesOf(data: unknown): readonly string[] {
 }
 
 describe('scenario files', () => {
-  it.each(['single-checkpoint-demo', 'single-checkpoint-moderate', 'single-checkpoint-staffed'])(
-    '%s is valid',
-    (name) => {
-      const scenario = parseScenarioText(scenarioFile(name));
-      expect(scenario.id).toBe(name);
-      expect(scenario.dataClassification).toBe('SYNTHETIC');
-    },
-  );
+  it.each([
+    'single-checkpoint-demo',
+    'single-checkpoint-moderate',
+    'single-checkpoint-staffed',
+    'single-checkpoint-strategic',
+  ])('%s is valid', (name) => {
+    const scenario = parseScenarioText(scenarioFile(name));
+    expect(scenario.id).toBe(name);
+    expect(scenario.dataClassification).toBe('SYNTHETIC');
+  });
 });
 
 describe('single-checkpoint-staffed', () => {
@@ -124,10 +126,60 @@ describe('parseScenario validation', () => {
     expect(responseIssues({ absentExtraMedianMinutes: 0 })).toMatch(/absentExtraMedianMinutes/);
   });
 
-  it('explains how to migrate a schema version 1 scenario', () => {
-    const issues = issuesOf(withChange((d) => (d.schemaVersion = 1)));
-    expect(issues).toHaveLength(1);
-    expect(issues[0]).toMatch(/migrated to version 2.*laneSchedule.*callResponse/);
+  it('explains how to migrate scenarios of schema versions 1 and 2', () => {
+    const v1 = issuesOf(withChange((d) => (d.schemaVersion = 1)));
+    expect(v1).toHaveLength(1);
+    expect(v1[0]).toMatch(/migrated to version 3.*laneSchedule.*callResponse.*groups/);
+    const v2 = issuesOf(withChange((d) => (d.schemaVersion = 2)));
+    expect(v2).toHaveLength(1);
+    expect(v2[0]).toMatch(/migrated to version 3.*groups.*assistedShare.*strategicLateArrival/);
+  });
+
+  it('validates groups and strategic late arrivals', () => {
+    const passengersIssues = (mutate: (p: Record<string, { value: unknown }>) => void) =>
+      issuesOf(
+        withChange((d) => {
+          mutate(d.passengers as Record<string, { value: unknown }>);
+        }),
+      ).join('\n');
+    expect(
+      passengersIssues((p) => {
+        p.groups!.value = {
+          partySizes: [
+            { size: 2, share: 1 },
+            { size: 2, share: 1 },
+          ],
+        };
+      }),
+    ).toMatch(/each party size may appear only once/);
+    expect(
+      passengersIssues((p) => {
+        p.groups!.value = { partySizes: [{ size: 0, share: 1 }] };
+      }),
+    ).toMatch(/size/);
+    expect(
+      passengersIssues((p) => {
+        p.strategicLateArrival!.value = {
+          share: 0.1,
+          minMinutesBeforeStd: 10,
+          maxMinutesBeforeStd: 30,
+        };
+      }),
+    ).toMatch(/must arrive before boarding closes/);
+    expect(
+      passengersIssues((p) => {
+        p.strategicLateArrival!.value = {
+          share: 0.1,
+          minMinutesBeforeStd: 30,
+          maxMinutesBeforeStd: 25,
+        };
+      }),
+    ).toMatch(/maxMinutesBeforeStd/);
+    expect(
+      passengersIssues((p) => {
+        p.assistedShare!.value = 1.5;
+      }),
+    ).toMatch(/assistedShare/);
   });
 
   it('rejects passengers arriving after boarding closes', () => {
@@ -218,6 +270,9 @@ describe('collectAssumptions', () => {
       'passengers.showUp.transfer',
       'passengers.walkSpeedSigma',
       'passengers.callResponse',
+      'passengers.groups',
+      'passengers.assistedShare',
+      'passengers.strategicLateArrival',
       'operations.boardingCloseMinutesBeforeStd',
       'operations.deadlineKnowledge',
     ]);
@@ -297,7 +352,7 @@ describe('generatePopulation', () => {
     const schedule = generateSchedule(demo);
     const counts = new Map<number, number>();
     for (const p of population.passengers)
-      counts.set(p.flightIndex, (counts.get(p.flightIndex) ?? 0) + 1);
+      counts.set(p.flightIndex, (counts.get(p.flightIndex) ?? 0) + p.partySize);
     for (const flight of schedule) {
       const count = counts.get(flight.index) ?? 0;
       expect(count).toBeGreaterThanOrEqual(Math.round(flight.seats * 0.6));
@@ -411,5 +466,66 @@ describe('generatePopulation', () => {
     const strip = (pop: typeof population) =>
       pop.passengers.map((p) => ({ ...p, callResponseMs: 0, absenceDelayMs: 0 }));
     expect(strip(changed)).toEqual(strip(population));
+  });
+
+  it('forms parties without moving the attributes of single passengers', () => {
+    const singles: Scenario = {
+      ...demo,
+      passengers: {
+        ...demo.passengers,
+        groups: { value: { partySizes: [{ size: 1, share: 1 }] }, source: 'SYNTHETIC' },
+        assistedShare: { value: 0, source: 'SYNTHETIC' },
+      },
+    };
+    const alone = generatePopulation(singles, 7).passengers;
+    const byId = new Map(alone.map((p) => [p.id, p]));
+    const grouped = population.passengers;
+    expect(grouped.length).toBeLessThan(alone.length);
+    expect(grouped.reduce((a, p) => a + p.partySize, 0)).toBe(alone.length);
+    for (const party of grouped) {
+      const leader = byId.get(party.id)!;
+      expect(party.arrivalMs).toBe(leader.arrivalMs);
+      expect(party.segment).toBe(leader.segment);
+      expect(party.walkMs).toBe(leader.walkMs);
+      // The screening time of a party is the sum of its members' screening times.
+      const start = alone.indexOf(leader);
+      const members = alone.slice(start, start + party.partySize);
+      expect(members.every((m) => m.flightIndex === party.flightIndex)).toBe(true);
+      expect(party.serviceMs).toBe(members.reduce((a, m) => a + m.serviceMs, 0));
+    }
+  });
+
+  it('draws parties, assisted passengers and strategic arrivals with the configured shares', () => {
+    let parties = 0;
+    let groups = 0;
+    let people = 0;
+    let assisted = 0;
+    for (let seed = 1; seed <= 5; seed++) {
+      for (const p of generatePopulation(demo, seed).passengers) {
+        parties++;
+        people += p.partySize;
+        if (p.partySize > 1) groups++;
+        if (p.path === 'ASSISTED') assisted++;
+        expect(p.strategic).toBe(false);
+      }
+    }
+    expect(groups / parties).toBeGreaterThan(0.19);
+    expect(groups / parties).toBeLessThan(0.25);
+    expect(people / parties).toBeGreaterThan(1.25);
+    expect(people / parties).toBeLessThan(1.4);
+    expect(assisted / parties).toBeGreaterThan(0.004);
+    expect(assisted / parties).toBeLessThan(0.01);
+
+    const strategic = parseScenarioText(scenarioFile('single-checkpoint-strategic'));
+    const strategicPopulation = generatePopulation(strategic, 7);
+    const late = strategicPopulation.passengers.filter((p) => p.strategic);
+    expect(late.length).toBeGreaterThan(0);
+    for (const p of late) {
+      const flight = strategicPopulation.flights[p.flightIndex]!;
+      expect(p.segment).toBe('DEPARTING');
+      const earliness = (flight.stdMs - p.arrivalMs) / 60_000;
+      expect(earliness).toBeGreaterThanOrEqual(25);
+      expect(earliness).toBeLessThanOrEqual(35);
+    }
   });
 });

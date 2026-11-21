@@ -1,7 +1,11 @@
 import fc from 'fast-check';
 import { MS_PER_MINUTE } from '@gateflow/domain';
 import type { KnownDeadline } from '@gateflow/domain';
-import type { CheckpointEstimates, ConstrainedEdfSelection } from '@gateflow/priority-engine';
+import type {
+  CheckpointEstimates,
+  ConstrainedEdfSelection,
+  SelectionParams,
+} from '@gateflow/priority-engine';
 import { describe, expect, it } from 'vitest';
 import { CheckpointQueue, PRIORITY_V0_POLICY, classificationOf } from '../src';
 import type { Policy, QueueEvent, QueueStats, TicketState, VirtualQueue } from '../src';
@@ -12,20 +16,35 @@ const CLASSIFICATION = classificationOf(PRIORITY_V0_POLICY)!;
 /** 60 pax/h: every position in the queue is one minute of wait, so deadlines bite quickly. */
 const EST: CheckpointEstimates = { throughputPerHour: 60, processMs: 30_000, responseMs: 60_000 };
 
-const selectionArb = fc.oneof(
-  fc.constant({ kind: 'fifo' } as const),
-  fc.integer({ min: 1, max: 8 }).chain((n) =>
-    fc.record({
-      kind: fc.constant('constrained-edf' as const),
-      capWindowCalls: fc.constant(n),
-      capMaxPriorityCalls: fc.integer({ min: 0, max: n }),
-      maxOvertakes: fc.integer({ min: 0, max: 6 }),
-      attentionThresholdMs: fc.constant(15 * MIN),
-      safetyBufferMs: fc.integer({ min: 0, max: 5 * MIN }),
-      allowRuleBasedDeadline: fc.boolean(),
-      eligibleSegments: fc.constant(['DEPARTING', 'TRANSFER'] as const),
+const selectionArb: fc.Arbitrary<SelectionParams> = fc.oneof(
+  { weight: 1, arbitrary: fc.constant({ kind: 'fifo' } as const) },
+  {
+    weight: 1,
+    arbitrary: fc.record({
+      kind: fc.constant('flight-call' as const),
+      callWindowMs: fc.integer({ min: 0, max: 30 * MIN }),
+      announcementIntervalMs: fc.integer({ min: 1, max: 10 * MIN }),
     }),
-  ),
+  },
+  {
+    weight: 3,
+    arbitrary: fc.integer({ min: 1, max: 10 }).chain((n) =>
+      fc.record({
+        kind: fc.constant('constrained-edf' as const),
+        capWindowCalls: fc.constant(n),
+        capMaxPriorityCalls: fc.integer({ min: 0, max: n }),
+        maxOvertakes: fc.integer({ min: 0, max: 8 }),
+        attentionThresholdMs: fc.constant(15 * MIN),
+        safetyBufferMs: fc.integer({ min: 0, max: 5 * MIN }),
+        feasibilityMarginMs: fc.integer({ min: 0, max: 5 * MIN }),
+        allowRuleBasedDeadline: fc.boolean(),
+        eligibleSegments: fc.constant(['DEPARTING', 'TRANSFER'] as const),
+        latePresentationCutoffMs: fc.option(fc.integer({ min: 0, max: 40 * MIN }), {
+          nil: null,
+        }),
+      }),
+    ),
+  },
 );
 
 const queueArb: fc.Arbitrary<VirtualQueue> = fc.record({
@@ -49,7 +68,13 @@ const policyArb: fc.Arbitrary<Policy> = fc.record({
 });
 
 type Op =
-  | { readonly kind: 'issue'; readonly deadlineMin: number | null; readonly dt: number }
+  | {
+      readonly kind: 'issue';
+      readonly deadlineMin: number | null;
+      readonly dt: number;
+      readonly partySize: number;
+      readonly transfer: boolean;
+    }
   | { readonly kind: 'call'; readonly dt: number }
   /** A random ticket presents (often too early or unknown to the access point). */
   | { readonly kind: 'present'; readonly pick: number; readonly dt: number }
@@ -66,6 +91,11 @@ const opArb: fc.Arbitrary<Op> = fc.oneof(
       kind: fc.constant('issue' as const),
       deadlineMin: fc.option(fc.integer({ min: 0, max: 30 }), { nil: null, freq: 8 }),
       dt: fc.integer({ min: 0, max: 30_000 }),
+      partySize: fc.oneof(
+        { weight: 4, arbitrary: fc.constant(1) },
+        { weight: 1, arbitrary: fc.integer({ min: 2, max: 5 }) },
+      ),
+      transfer: fc.boolean(),
     }),
   },
   {
@@ -122,6 +152,8 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
   // ticket still waiting with a lower FIFO key is overtaken once.
   const queuedKeys = new Map<string, number>();
   const overtaken = new Map<string, number>();
+  /** One flag per person committed: whether by priority. */
+  const personFlags: boolean[] = [];
   let seen = 0;
   let now = 0;
   for (const op of ops) {
@@ -136,7 +168,20 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
           op.deadlineMin === null
             ? { atMs: null, source: 'NONE' }
             : { atMs: now + op.deadlineMin * MIN, source: 'FEED' };
-        q.issue({ id, segment: 'DEPARTING', deadline, walkEstimateMs: 0 }, now, EST);
+        // Departure 20 minutes after boarding closes; presented now.
+        const departure = deadline.atMs === null ? null : deadline.atMs + 20 * MIN;
+        q.issue(
+          {
+            id,
+            segment: op.transfer ? 'TRANSFER' : 'DEPARTING',
+            deadline,
+            walkEstimateMs: 0,
+            partySize: op.partySize,
+            scheduledDepartureMs: departure,
+          },
+          now,
+          EST,
+        );
         break;
       }
       case 'call':
@@ -180,10 +225,12 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
         if (e.type === 'ISSUED' || backOnReactivation) overtaken.set(e.ticketId, 0);
       } else if (e.type === 'COMMITTED') {
         const key = queuedKeys.get(e.ticketId)!;
+        const size = q.ticket(e.ticketId)!.partySize;
         queuedKeys.delete(e.ticketId);
         for (const [id, k] of queuedKeys) {
-          if (k < key) overtaken.set(id, (overtaken.get(id) ?? 0) + 1);
+          if (k < key) overtaken.set(id, (overtaken.get(id) ?? 0) + size);
         }
+        for (let p = 0; p < size; p++) personFlags.push(e.priority);
       }
     }
 
@@ -220,9 +267,9 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
     for (const count of overtaken.values()) {
       expect(count).toBeLessThanOrEqual(selection.maxOvertakes);
     }
-    const flags = events.flatMap((e) => (e.type === 'COMMITTED' ? [e.priority] : []));
-    for (let start = 0; start + selection.capWindowCalls <= flags.length; start++) {
-      const window = flags.slice(start, start + selection.capWindowCalls);
+    // The cap counts people: every window of N people committed holds at most k by priority.
+    for (let start = 0; start + selection.capWindowCalls <= personFlags.length; start++) {
+      const window = personFlags.slice(start, start + selection.capWindowCalls);
       expect(window.filter(Boolean).length).toBeLessThanOrEqual(selection.capMaxPriorityCalls);
     }
   }

@@ -32,7 +32,13 @@ interface TicketRecord {
   readonly segment: Segment;
   readonly deadline: KnownDeadline;
   readonly walkEstimateMs: Millis;
+  /** People on the ticket (a group or family is called together). */
+  readonly partySize: number;
+  /** When the passenger first presented at the checkpoint (kept across new tickets). */
+  readonly presentedAtMs: Millis;
+  readonly scheduledDepartureMs: Millis | null;
   fifoKey: number;
+  /** People who overtook this ticket while it waited. */
   overtakenCount: number;
   state: TicketState;
   readonly issuedAtMs: Millis;
@@ -54,6 +60,8 @@ function view(record: TicketRecord): TicketView {
     id: record.id,
     fifoKey: record.fifoKey,
     state: record.state,
+    partySize: record.partySize,
+    presentedAtMs: record.presentedAtMs,
     issuedAtMs: record.issuedAtMs,
     classAtIssue: record.classAtIssue,
     overtakenCount: record.overtakenCount,
@@ -67,6 +75,13 @@ function view(record: TicketRecord): TicketView {
     selectionReasons: record.selectionReasons,
     admittedAtMs: record.admittedAtMs,
   };
+}
+
+/** Number of people on the tickets of `list`. */
+function peopleOn(list: readonly TicketRecord[]): number {
+  let people = 0;
+  for (const record of list) people += record.partySize;
+  return people;
 }
 
 /** Runs an engine validator, reporting its failure as a {@link QueueError}. */
@@ -130,6 +145,7 @@ export class CheckpointQueue {
     issued: 0,
     commitments: 0,
     priorityCommitments: 0,
+    priorityPeople: 0,
     capReached: 0,
     overtakeGuard: 0,
     calls: 0,
@@ -178,6 +194,21 @@ export class CheckpointQueue {
     return this.noShows.length;
   }
 
+  /** People on the waiting tickets. */
+  get waitingPeople(): number {
+    return peopleOn(this.waiting);
+  }
+
+  /** People on the tickets of the prepare window. */
+  get windowPeople(): number {
+    return peopleOn(this.window);
+  }
+
+  /** People on the called tickets whose passengers have not presented yet. */
+  get outstandingPeople(): number {
+    return peopleOn(this.outstanding);
+  }
+
   stats(): QueueStats {
     return { ...this.counters };
   }
@@ -199,6 +230,11 @@ export class CheckpointQueue {
     }
     if (this.byId.has(input.id)) throw new QueueError(`duplicate ticket id ${input.id}`);
     this.begin(nowMs, estimates);
+    const people = {
+      partySize: input.partySize ?? 1,
+      presentedAtMs: input.presentedAtMs ?? nowMs,
+      scheduledDepartureMs: input.scheduledDepartureMs ?? null,
+    };
     const asWaiting: WaitingTicket = {
       id: input.id,
       fifoKey: this.nextFifoKey,
@@ -206,21 +242,24 @@ export class CheckpointQueue {
       deadline: input.deadline,
       walkEstimateMs: input.walkEstimateMs,
       overtakenCount: 0,
+      ...people,
     };
     check(() => {
       validateTicket(asWaiting);
     });
     this.nextFifoKey++;
+    const windowPeople = peopleOn(this.window);
     const classAtIssue = assessTicket(
       asWaiting,
-      this.window.length + this.waiting.length,
+      windowPeople + peopleOn(this.waiting),
       nowMs,
       estimates,
       this.classification,
-      this.window.length,
+      windowPeople,
     ).riskClass;
     const record: TicketRecord = {
       ...asWaiting,
+      ...people,
       state: 'QUEUED',
       issuedAtMs: nowMs,
       classAtIssue,
@@ -348,7 +387,7 @@ export class CheckpointQueue {
       waiting: this.waiting,
       recentPriorityCalls: this.recentPriority,
       selection: this.policy.selection,
-      aheadOfWaiting: this.window.length,
+      aheadOfWaiting: peopleOn(this.window),
     });
     if (selection === null) return undefined;
     const position = selection.positionInFifo;
@@ -356,9 +395,12 @@ export class CheckpointQueue {
     if (record?.id !== selection.ticketId) {
       throw new QueueError(`engine selected ${selection.ticketId} at an unexpected position`);
     }
-    for (let i = 0; i < position; i++) (this.waiting[i] as TicketRecord).overtakenCount++;
+    // Every older ticket is overtaken by all the people of the committed ticket.
+    for (let i = 0; i < position; i++) {
+      (this.waiting[i] as TicketRecord).overtakenCount += record.partySize;
+    }
     this.waiting.splice(position, 1);
-    this.recentPriority.push(selection.priorityCall);
+    for (let p = 0; p < record.partySize; p++) this.recentPriority.push(selection.priorityCall);
     if (this.recentPriority.length > 2 * this.historyLimit + 64) {
       this.recentPriority.splice(0, this.recentPriority.length - this.historyLimit);
     }
@@ -366,7 +408,10 @@ export class CheckpointQueue {
     if (selection.priorityCall) record.everPrioritized = true;
     record.selectionReasons = selection.reasons;
     this.counters.commitments++;
-    if (selection.priorityCall) this.counters.priorityCommitments++;
+    if (selection.priorityCall) {
+      this.counters.priorityCommitments++;
+      this.counters.priorityPeople += record.partySize;
+    }
     if (selection.reasons.includes('CAP_REACHED')) this.counters.capReached++;
     if (selection.reasons.includes('OVERTAKE_LIMIT_GUARD')) this.counters.overtakeGuard++;
     this.emit({

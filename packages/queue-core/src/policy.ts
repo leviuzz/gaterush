@@ -1,7 +1,11 @@
 import { MS_PER_HOUR, MS_PER_MINUTE } from '@gateflow/domain';
 import type { Millis } from '@gateflow/domain';
 import { validateSelectionParams } from '@gateflow/priority-engine';
-import type { ClassificationParams, ConstrainedEdfSelection } from '@gateflow/priority-engine';
+import type {
+  ClassificationParams,
+  ConstrainedEdfSelection,
+  FlightCallSelection,
+} from '@gateflow/priority-engine';
 import type { Policy, QueueOperation, VirtualQueue } from './types';
 
 /** Thrown when the queue is misconfigured or misused. */
@@ -102,8 +106,52 @@ export const PRIORITY_V0_SELECTION: ConstrainedEdfSelection = {
   maxOvertakes: 15,
   attentionThresholdMs: 15 * MS_PER_MINUTE,
   safetyBufferMs: 5 * MS_PER_MINUTE,
+  // Engines 0.1-0.2 escalated every ticket that could not keep the whole safety margin.
+  feasibilityMarginMs: 5 * MS_PER_MINUTE,
   allowRuleBasedDeadline: true,
   eligibleSegments: ['DEPARTING', 'TRANSFER'],
+  latePresentationCutoffMs: null,
+};
+
+/**
+ * Selection of policy B, version 1 (ADR-021 to ADR-026). Changes from v0, calibrated on seeds
+ * 1001-1020 of the four S3 scenarios (ADR-025):
+ * - the cap counts people: at most 10 people in any window of 20 calls, so groups can be boosted
+ *   as a whole and the cap no longer binds before the overtake bound;
+ * - the overtake bound is 30 people: with it no passenger was delayed more than 10 minutes on any
+ *   calibration day, and at most 0.1% more than 5 minutes;
+ * - CRITICAL means "cannot make it even without the safety margin" (F = 0): the margin is used to
+ *   detect risk early, not to give up on passengers who can still make it;
+ * - no late-presentation rule by default: in every scenario it cost flights to genuinely late
+ *   passengers and did not protect anyone else (see {@link PRIORITY_V1_STRICT_SELECTION}).
+ */
+export const PRIORITY_V1_SELECTION: ConstrainedEdfSelection = {
+  ...PRIORITY_V0_SELECTION,
+  capWindowCalls: 20,
+  capMaxPriorityCalls: 10,
+  maxOvertakes: 30,
+  feasibilityMarginMs: 0,
+  latePresentationCutoffMs: null,
+};
+
+/**
+ * Policy B v1 with the anti-abuse rule: departing passengers must present at least 45 minutes
+ * before the scheduled departure to be boosted automatically (transfers are exempt). For airports
+ * that observe passengers arriving late on purpose; it costs flights to genuinely late passengers.
+ */
+export const PRIORITY_V1_STRICT_SELECTION: ConstrainedEdfSelection = {
+  ...PRIORITY_V1_SELECTION,
+  latePresentationCutoffMs: 45 * MS_PER_MINUTE,
+};
+
+/**
+ * Staff practice modelled as baseline A' (ADR-022): every five minutes staff call the flights whose
+ * boarding closes within the next 20 minutes, and those passengers are taken first.
+ */
+export const FLIGHT_CALL_SELECTION: FlightCallSelection = {
+  kind: 'flight-call',
+  callWindowMs: 20 * MS_PER_MINUTE,
+  announcementIntervalMs: 5 * MS_PER_MINUTE,
 };
 
 /** Default GateFlow virtual-queue operation (values are hypotheses to calibrate, see ADR-017). */
@@ -128,6 +176,19 @@ export const FIFO_POLICY: Policy = {
   queue: { kind: 'physical' },
 };
 
+/**
+ * Policy A': today's physical queue with staff calling closing flights (an idealised version of
+ * the manual handling of urgent passengers: every called passenger comes forward at once).
+ */
+export const FIFO_MANUAL_POLICY: Policy = {
+  id: 'fifo-manual',
+  version: '0.1.0',
+  title:
+    "Physical FIFO queue with staff calling closing flights (status quo with manual handling, policy A')",
+  selection: FLIGHT_CALL_SELECTION,
+  queue: { kind: 'physical' },
+};
+
 /** GateFlow virtual queue served in FIFO order: isolates the cost of the call mechanics. */
 export const VIRTUAL_FIFO_POLICY: Policy = {
   id: 'virtual-fifo',
@@ -146,24 +207,47 @@ export const PRIORITY_V0_POLICY: Policy = {
   queue: DEFAULT_VIRTUAL_QUEUE,
 };
 
+/** Policy B, version 1: GateFlow virtual queue with constrained EDF priority v1. */
+export const PRIORITY_V1_POLICY: Policy = {
+  id: 'priority-v1',
+  version: '0.1.0',
+  title: 'GateFlow virtual queue with constrained EDF priority v1 (policy B)',
+  selection: PRIORITY_V1_SELECTION,
+  queue: DEFAULT_VIRTUAL_QUEUE,
+};
+
+/** Policy B v1 with the late-presentation rule (anti-abuse). */
+export const PRIORITY_V1_STRICT_POLICY: Policy = {
+  id: 'priority-v1-strict',
+  version: '0.1.0',
+  title: 'GateFlow virtual queue with constrained EDF priority v1 and the late-presentation rule',
+  selection: PRIORITY_V1_STRICT_SELECTION,
+  queue: DEFAULT_VIRTUAL_QUEUE,
+};
+
 export const POLICY_PRESETS: readonly Policy[] = [
   FIFO_POLICY,
+  FIFO_MANUAL_POLICY,
   VIRTUAL_FIFO_POLICY,
   PRIORITY_V0_POLICY,
+  PRIORITY_V1_POLICY,
+  PRIORITY_V1_STRICT_POLICY,
 ];
 
 export function findPolicyPreset(id: string): Policy | undefined {
   return POLICY_PRESETS.find((policy) => policy.id === id);
 }
 
-/** Classification parameters of a policy, or `null` when it selects in plain FIFO order. */
+/** Classification parameters of a policy, or `null` when it does not classify tickets. */
 export function classificationOf(policy: Policy): ClassificationParams | null {
   const { selection } = policy;
-  if (selection.kind === 'fifo') return null;
+  if (selection.kind !== 'constrained-edf') return null;
   return {
     attentionThresholdMs: selection.attentionThresholdMs,
     safetyBufferMs: selection.safetyBufferMs,
+    feasibilityMarginMs: selection.feasibilityMarginMs,
     allowRuleBasedDeadline: selection.allowRuleBasedDeadline,
     eligibleSegments: selection.eligibleSegments,
+    latePresentationCutoffMs: selection.latePresentationCutoffMs,
   };
 }

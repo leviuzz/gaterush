@@ -5,6 +5,7 @@ import {
   CheckpointQueue,
   DEFAULT_VIRTUAL_QUEUE,
   FIFO_POLICY,
+  POLICY_PRESETS,
   PRIORITY_V0_POLICY,
   PRIORITY_V0_SELECTION,
   QueueError,
@@ -13,6 +14,7 @@ import {
   classificationOf,
   findPolicyPreset,
   responseEstimateMs,
+  validatePolicy,
 } from '../src';
 import type { Policy, QueueEvent, TicketInput, VirtualQueue } from '../src';
 
@@ -207,7 +209,7 @@ describe('prepare window', () => {
   it('lets an urgent ticket enter the window ahead of older ones, never ahead of committed ones', () => {
     const policy = virtual(
       { prepareWindowSize: 2 },
-      { ...PRIORITY_V0_SELECTION, safetyBufferMs: 0 },
+      { ...PRIORITY_V0_SELECTION, safetyBufferMs: 0, feasibilityMarginMs: 0 },
     );
     const q = new CheckpointQueue(policy, CLASSIFICATION);
     for (const id of ['a', 'b', 'c', 'd']) q.issue(ticket(id, 600), 0, EST);
@@ -231,11 +233,115 @@ describe('prepare window', () => {
   });
 });
 
+describe('groups', () => {
+  it('counts the people of the window and of the waiting list when classifying a new ticket', () => {
+    // Window of 2 tickets holding 5 people, 3 more waiting: 8 people ahead at one per minute.
+    const q = new CheckpointQueue(virtual({ prepareWindowSize: 2 }), CLASSIFICATION);
+    q.issue({ ...ticket('a', 600), partySize: 4 }, 0, EST);
+    q.issue(ticket('b', 600), 0, EST);
+    q.issue({ ...ticket('c', 600), partySize: 3 }, 0, EST);
+    expect(q.windowPeople).toBe(5);
+    expect(q.waitingPeople).toBe(3);
+    // L = 12 - 5 = 7 min < 8 min of FIFO wait: URGENT; selected now it waits 5 min only.
+    expect(q.issue(ticket('late', 12), 0, EST).classAtIssue).toBe('URGENT');
+  });
+
+  it('counts the people of the groups still in the window when committing the next ticket', () => {
+    // Window of two groups of three; once the first is called, three people stay ahead. u must be
+    // called within 3 minutes: behind them and x it would wait 4 (URGENT); counting tickets
+    // instead of people it would wait only 2 and stay in FIFO order.
+    const policy = virtual(
+      { prepareWindowSize: 2 },
+      { ...PRIORITY_V0_SELECTION, safetyBufferMs: 0, feasibilityMarginMs: 0 },
+    );
+    const q = new CheckpointQueue(policy, CLASSIFICATION);
+    q.issue({ ...ticket('g1', 600), partySize: 3 }, 0, EST);
+    q.issue({ ...ticket('g2', 600), partySize: 3 }, 0, EST);
+    q.issue(ticket('x', 600), 0, EST);
+    q.issue(ticket('u', 3), 0, EST);
+    expect(q.callNext(0, EST)?.id).toBe('g1');
+    expect(q.prepareWindow().map((t) => t.id)).toEqual(['g2', 'u']);
+  });
+
+  it('keeps the first presentation time for the presentation rule', () => {
+    // Departure at 60 min, cutoff 45 min: presenting at 0 is in time, at 30 min it is late.
+    const policy = virtual(
+      {},
+      {
+        ...PRIORITY_V0_SELECTION,
+        safetyBufferMs: 0,
+        feasibilityMarginMs: 0,
+        latePresentationCutoffMs: 45 * MIN,
+      },
+    );
+    const urgentAt30 = (presentedAtMs: number | undefined) => {
+      const q = new CheckpointQueue(policy, CLASSIFICATION);
+      for (const id of ['a', 'b', 'c', 'd', 'e']) q.issue(ticket(id, 600), 30 * MIN, EST);
+      q.issue(
+        {
+          ...ticket('u', 33),
+          scheduledDepartureMs: 60 * MIN,
+          ...(presentedAtMs === undefined ? {} : { presentedAtMs }),
+        },
+        30 * MIN,
+        EST,
+      );
+      return q.callNext(30 * MIN, EST)?.id;
+    };
+    expect(urgentAt30(0)).toBe('u');
+    expect(urgentAt30(undefined)).toBe('a');
+  });
+
+  it('counts every person of a group that jumps as an overtake of each older ticket', () => {
+    const policy = virtual(
+      {},
+      { ...PRIORITY_V0_SELECTION, safetyBufferMs: 0, feasibilityMarginMs: 0 },
+    );
+    const q = new CheckpointQueue(policy, CLASSIFICATION);
+    for (const id of ['a', 'b', 'c', 'd']) q.issue(ticket(id, 600), 0, EST);
+    q.issue({ ...ticket('family', 3), partySize: 3 }, 0, EST);
+    expect(q.callNext(0, EST)?.id).toBe('family');
+    expect(['a', 'b', 'c', 'd'].map((id) => q.ticket(id)?.overtakenCount)).toEqual([3, 3, 3, 3]);
+    expect(q.stats()).toMatchObject({ priorityCommitments: 1, priorityPeople: 3 });
+    expect(q.outstandingPeople).toBe(3);
+  });
+});
+
 describe('policies and helpers', () => {
   it('exposes the presets', () => {
     expect(findPolicyPreset('fifo')?.queue.kind).toBe('physical');
     expect(findPolicyPreset('virtual-fifo')?.selection.kind).toBe('fifo');
     expect(findPolicyPreset('priority-v0')?.selection.kind).toBe('constrained-edf');
+    expect(findPolicyPreset('fifo-manual')).toMatchObject({
+      selection: { kind: 'flight-call' },
+      queue: { kind: 'physical' },
+    });
+    expect(findPolicyPreset('priority-v1')?.selection).toMatchObject({
+      capWindowCalls: 20,
+      capMaxPriorityCalls: 10,
+      maxOvertakes: 30,
+      feasibilityMarginMs: 0,
+      latePresentationCutoffMs: null,
+    });
+    // The strict variant differs from v1 only by the late-presentation rule.
+    expect(findPolicyPreset('priority-v1-strict')?.selection).toEqual({
+      ...findPolicyPreset('priority-v1')?.selection,
+      latePresentationCutoffMs: 45 * MIN,
+    });
+    expect(POLICY_PRESETS.map((p) => p.id)).toEqual([
+      'fifo',
+      'fifo-manual',
+      'virtual-fifo',
+      'priority-v0',
+      'priority-v1',
+      'priority-v1-strict',
+    ]);
+    for (const policy of POLICY_PRESETS) {
+      expect(() => {
+        validatePolicy(policy);
+      }).not.toThrow();
+    }
+    expect(classificationOf(findPolicyPreset('fifo-manual')!)).toBeNull();
     expect(findPolicyPreset('nope')).toBeUndefined();
     expect(classificationOf(FIFO_POLICY)).toBeNull();
   });

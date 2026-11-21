@@ -8,13 +8,14 @@ import {
   lognormalFromMedian,
   streamFor,
   triangular,
+  uniform,
 } from '@gateflow/sim-kernel';
 import type { Population, SimFlight, SimPassenger } from '@gateflow/sim-model';
 import { clockMinutes } from './schema';
 import type { Scenario } from './schema';
 
 /** Version of the population generator. Bump on any change that can alter generated data. */
-export const GENERATOR_VERSION = '0.2.0';
+export const GENERATOR_VERSION = '0.3.0';
 
 const DOMAIN = labelCode('gateflow.population');
 const KEY = {
@@ -30,6 +31,11 @@ const KEY = {
   response: labelCode('pax.response'),
   absent: labelCode('pax.absent'),
   absentExtra: labelCode('pax.absentExtra'),
+  // Added in generator 0.3.0, again without moving the attributes above.
+  party: labelCode('pax.party'),
+  assisted: labelCode('pax.assisted'),
+  strategic: labelCode('pax.strategic'),
+  strategicArrival: labelCode('pax.strategicArrival'),
 } as const;
 
 /** A flight of the design day, with the descriptive attributes used to generate passengers. */
@@ -100,9 +106,14 @@ export function generateSchedule(scenario: Scenario): ScheduledFlight[] {
 
 /**
  * Generates the population of one replication. Each random attribute has its own stream keyed by
- * (seed, attribute, flight, passenger), so the same passenger gets the same arrival, service and
- * walking times under every policy (common random numbers), and adding attributes in future
+ * (seed, attribute, flight, passenger slot), so the same passenger gets the same arrival, service
+ * and walking times under every policy (common random numbers), and adding attributes in future
  * versions does not perturb existing ones.
+ *
+ * Passengers are grouped into parties that fill the slots of a flight in order. A party draws its
+ * attributes from the streams of its first slot, and its screening time is the sum of its
+ * members' screening times. With parties of one person only, the population is exactly the one
+ * of generator 0.2.0.
  */
 export function generatePopulation(scenario: Scenario, seed: number): Population {
   const flights = generateSchedule(scenario);
@@ -113,6 +124,10 @@ export function generatePopulation(scenario: Scenario, seed: number): Population
   const serviceMeanMs = secondsToMs(checkpoint.serviceTimeMeanSeconds.value);
   const serviceCv = checkpoint.serviceTimeCv.value;
   const response = spec.callResponse.value;
+  const partySizes = spec.groups.value.partySizes;
+  const partyShares = partySizes.map((p) => p.share);
+  const assistedShare = spec.assistedShare.value;
+  const strategicSpec = spec.strategicLateArrival.value;
 
   const passengers: SimPassenger[] = [];
   for (const flight of flights) {
@@ -123,8 +138,13 @@ export function generatePopulation(scenario: Scenario, seed: number): Population
       lf.max,
     );
     const count = Math.round(flight.seats * loadFactor);
-    for (let j = 0; j < count; j++) {
-      const key = (attribute: number) => streamFor(seed, [DOMAIN, attribute, flight.index, j]);
+    let j = 0;
+    while (j < count) {
+      const slot = j;
+      const key = (attribute: number, at = slot) =>
+        streamFor(seed, [DOMAIN, attribute, flight.index, at]);
+      const drawn = pick(partySizes, categorical(key(KEY.party), partyShares)).size;
+      const partySize = Math.min(drawn, count - slot);
       const segment: Segment = bernoulli(key(KEY.segment), transferShare)
         ? 'TRANSFER'
         : 'DEPARTING';
@@ -135,10 +155,22 @@ export function generatePopulation(scenario: Scenario, seed: number): Population
         showUp.minMinutesBeforeStd +
           lognormalFromMedian(key(KEY.arrival), showUp.medianExtraMinutes, showUp.sigma),
       );
-      const serviceMs = Math.max(
-        1,
-        Math.round(lognormalFromMeanCv(key(KEY.service), serviceMeanMs, serviceCv)),
-      );
+      const strategic =
+        segment === 'DEPARTING' && bernoulli(key(KEY.strategic), strategicSpec.share);
+      const arrivalEarlinessMin = strategic
+        ? uniform(
+            key(KEY.strategicArrival),
+            strategicSpec.minMinutesBeforeStd,
+            strategicSpec.maxMinutesBeforeStd,
+          )
+        : earlinessMin;
+      let serviceMs = 0;
+      for (let m = 0; m < partySize; m++) {
+        serviceMs += Math.max(
+          1,
+          Math.round(lognormalFromMeanCv(key(KEY.service, slot + m), serviceMeanMs, serviceCv)),
+        );
+      }
       const walkMs = Math.round(
         flight.walkEstimateMs * lognormalFromMedian(key(KEY.walk), 1, walkSigma),
       );
@@ -161,18 +193,23 @@ export function generatePopulation(scenario: Scenario, seed: number): Population
             ),
           )
         : 0;
+      const path = bernoulli(key(KEY.assisted), assistedShare) ? 'ASSISTED' : 'QUEUE';
       passengers.push({
         index: passengers.length,
-        id: `${flight.id}-${String(j + 1).padStart(3, '0')}`,
+        id: `${flight.id}-${String(slot + 1).padStart(3, '0')}`,
         flightIndex: flight.index,
         segment,
-        arrivalMs: flight.stdMs - minutesToMs(earlinessMin),
+        partySize,
+        path,
+        strategic,
+        arrivalMs: flight.stdMs - minutesToMs(arrivalEarlinessMin),
         serviceMs,
         walkMs,
         walkEstimateMs: flight.walkEstimateMs,
         callResponseMs,
         absenceDelayMs,
       });
+      j += partySize;
     }
   }
 

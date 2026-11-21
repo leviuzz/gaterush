@@ -124,6 +124,16 @@ export function validatePopulation(population: Population): void {
     requireInteger(p.walkEstimateMs, `walkEstimateMs of ${p.id}`, 0);
     requireInteger(p.callResponseMs, `callResponseMs of ${p.id}`, 0);
     requireInteger(p.absenceDelayMs, `absenceDelayMs of ${p.id}`, 0);
+    requireInteger(p.partySize, `partySize of ${p.id}`, 1);
+    // Widened: callers may pass untyped data.
+    const path: string = p.path;
+    if (path !== 'QUEUE' && path !== 'ASSISTED') {
+      throw new PopulationError(`passenger ${p.id} has unknown path ${path}`);
+    }
+    const strategic: unknown = p.strategic;
+    if (typeof strategic !== 'boolean') {
+      throw new PopulationError(`strategic of ${p.id} must be a boolean`);
+    }
   });
 }
 
@@ -241,8 +251,12 @@ export function simulateCheckpoint(
   let freeOpen = open;
   /** Busy lanes that are closing (index >= open): they finish their passenger, then close. */
   let busyClosing = 0;
-  /** Passengers who validated their ticket and wait for a lane, in order of validation. */
+  /** Parties who validated their ticket and wait for a lane, in order of validation. */
   const buffer: number[] = [];
+  let bufferPeople = 0;
+  /** Assisted parties waiting for the next free lane, which they get before the buffer. */
+  const assisted: number[] = [];
+  let assistedPeople = 0;
   const scheduledTimeouts = new Set<number>();
 
   let busyMs = 0;
@@ -260,25 +274,28 @@ export function simulateCheckpoint(
   let maxStanding = 0;
 
   const uncalled = (): number => queue.waitingCount + queue.windowCount;
-  const standing = (): number => (physical ? uncalled() : 0) + buffer.length;
+  /** People waiting for their call. */
+  const uncalledPeople = (): number => queue.waitingPeople + queue.windowPeople;
+  /** People standing in a queue: the whole physical queue, or those waiting at the lanes. */
+  const standing = (): number => (physical ? uncalledPeople() : 0) + bufferPeople + assistedPeople;
 
   /** Integrates the piecewise-constant counts up to `now` (call before changing any of them). */
   const accumulate = (now: number): void => {
     const dt = now - lastMs;
     if (dt <= 0) return;
     if (integrating) {
-      const waiting = uncalled();
+      const waiting = uncalledPeople();
       waitingAreaMs += waiting * dt;
       standingAreaMs += standing() * dt;
       staffedMs += (open + busyClosing) * dt;
-      // Idle lanes that the passengers waiting for or answering a call could have used.
-      idleWithDemandMs += Math.min(freeOpen, waiting + queue.outstandingCount) * dt;
+      // Idle lanes that the people waiting for or answering a call could have used.
+      idleWithDemandMs += Math.min(freeOpen, waiting + queue.outstandingPeople) * dt;
     }
     lastMs = now;
   };
 
   const noteMaxima = (): void => {
-    maxWaiting = Math.max(maxWaiting, uncalled());
+    maxWaiting = Math.max(maxWaiting, uncalledPeople());
     maxStanding = Math.max(maxStanding, standing());
   };
 
@@ -293,12 +310,17 @@ export function simulateCheckpoint(
     }
     s.ticketId = s.tickets === 1 ? passenger.id : `${passenger.id}#${s.tickets}`;
     ticketOwner.set(s.ticketId, passengerIndex);
+    const flight = at(flights, passenger.flightIndex, 'flight');
     const view = queue.issue(
       {
         id: s.ticketId,
         segment: passenger.segment,
-        deadline: at(flights, passenger.flightIndex, 'flight').knownDeadline,
+        deadline: flight.knownDeadline,
         walkEstimateMs: passenger.walkEstimateMs,
+        partySize: passenger.partySize,
+        // A new ticket after an expiry keeps the first presentation at the checkpoint.
+        presentedAtMs: passenger.arrivalMs,
+        scheduledDepartureMs: flight.knownDeadline.atMs === null ? null : flight.stdMs,
       },
       now,
       estimates,
@@ -307,13 +329,16 @@ export function simulateCheckpoint(
   };
 
   const startServices = (now: number): void => {
-    while (buffer.length > 0 && freeOpen > 0) {
-      const passengerIndex = buffer.shift() as number;
+    while (freeOpen > 0 && (assisted.length > 0 || buffer.length > 0)) {
+      const fromAssisted = assisted.length > 0;
+      const passengerIndex = (fromAssisted ? assisted.shift() : buffer.shift()) as number;
       let lane = 0;
       while (lane < open && busy[lane] === true) lane++;
       if (lane >= open) throw new Error('no free open lane although one was counted');
       const passenger = at(passengers, passengerIndex, 'passenger');
       const s = at(state, passengerIndex, 'passenger');
+      if (fromAssisted) assistedPeople -= passenger.partySize;
+      else bufferPeople -= passenger.partySize;
       busy[lane] = true;
       freeOpen--;
       s.serviceStartMs = now;
@@ -330,7 +355,10 @@ export function simulateCheckpoint(
   /** Calls tickets while the pipeline (called + at the lanes) is below free lanes + call-ahead. */
   const callTickets = (now: number): void => {
     const target = callAheadTarget(policy.queue, open, rate);
-    while (uncalled() > 0 && buffer.length + queue.outstandingCount < freeOpen + target) {
+    while (
+      uncalled() > 0 &&
+      bufferPeople + assistedPeople + queue.outstandingPeople < freeOpen + target
+    ) {
       const view = queue.callNext(now, estimates);
       if (view === null) break;
       const passengerIndex = ticketOwner.get(view.id);
@@ -351,6 +379,7 @@ export function simulateCheckpoint(
       case 'ADMITTED':
         s.admittedAtMs = now;
         buffer.push(passengerIndex);
+        bufferPeople += at(passengers, passengerIndex, 'passenger').partySize;
         startServices(now);
         break;
       case 'REACTIVATED':
@@ -367,6 +396,22 @@ export function simulateCheckpoint(
         throw new Error(`unexpected presentation outcome ${outcome} for ticket ${s.ticketId}`);
     }
     noteMaxima();
+  };
+
+  const arrive = (passengerIndex: number, now: number): void => {
+    const passenger = at(passengers, passengerIndex, 'passenger');
+    if (passenger.path === 'QUEUE') {
+      issueTicket(passengerIndex, now);
+      return;
+    }
+    // Assisted: staff take the party to the next free lane, without a ticket.
+    const s = at(state, passengerIndex, 'passenger');
+    s.classAtArrival = 'UNVERIFIED';
+    s.firstCalledAtMs = now;
+    s.admittedAtMs = now;
+    assisted.push(passengerIndex);
+    assistedPeople += passenger.partySize;
+    startServices(now);
   };
 
   const changeLanes = (lanes: number): void => {
@@ -389,7 +434,7 @@ export function simulateCheckpoint(
           integrating = true;
           firstArrivalMs = now;
         }
-        issueTicket(payload.passenger, now);
+        arrive(payload.passenger, now);
         noteMaxima();
         break;
       case SERVICE_END: {
@@ -425,8 +470,13 @@ export function simulateCheckpoint(
 
   const outcomes: PassengerOutcome[] = passengers.map((passenger) => {
     const s = at(state, passenger.index, 'passenger');
-    const ticket = queue.ticket(s.ticketId);
-    if (s.serviceEndMs < 0 || s.classAtArrival === null || ticket?.state !== 'ADMITTED') {
+    const isAssisted = passenger.path === 'ASSISTED';
+    const ticket = isAssisted ? undefined : queue.ticket(s.ticketId);
+    if (
+      s.serviceEndMs < 0 ||
+      s.classAtArrival === null ||
+      (!isAssisted && ticket?.state !== 'ADMITTED')
+    ) {
       throw new Error(`passenger ${passenger.id} was not served (conservation violated)`);
     }
     const flight = at(flights, passenger.flightIndex, 'flight');
@@ -441,14 +491,14 @@ export function simulateCheckpoint(
       standingMs: s.serviceStartMs - (physical ? passenger.arrivalMs : s.admittedAtMs),
       missed: gateArrivalMs > flight.boardingCloseMs,
       priorityCall: s.prioritized,
-      overtakenCount: Math.max(s.maxOvertakenExpired, ticket.overtakenCount),
-      selectionReasons: ticket.selectionReasons,
+      overtakenCount: Math.max(s.maxOvertakenExpired, ticket?.overtakenCount ?? 0),
+      selectionReasons: ticket?.selectionReasons ?? [],
       classAtArrival: s.classAtArrival,
       laneIndex: s.lane,
       calls: s.calls,
       noShows: s.noShows,
       reactivations: s.reactivations,
-      reissuedTickets: s.tickets - 1,
+      reissuedTickets: Math.max(0, s.tickets - 1),
     } satisfies PassengerOutcome;
   });
 
@@ -465,7 +515,8 @@ export function simulateCheckpoint(
       recalls: q.recalls,
       noShows: q.noShows,
       reactivations: q.reactivations,
-      reissuedTickets: q.issued - passengers.length,
+      // Every queue party holds one ticket, plus one per expiry; assisted parties hold none.
+      reissuedTickets: q.issued - passengers.filter((p) => p.path === 'QUEUE').length,
       firstArrivalMs,
       lastServiceEndMs,
       busyMs,

@@ -1,9 +1,16 @@
 /** Version of the priority engine. Bump on any change that can alter a decision. */
-export const ENGINE_VERSION = '0.2.1';
+export const ENGINE_VERSION = '0.3.0';
 
-export { assessQueue, assessTicket, fifoWaitEstimateMs, isDeadlineTrusted } from './assess';
+export {
+  assessQueue,
+  assessTicket,
+  fifoWaitEstimateMs,
+  isDeadlineTrusted,
+  partySizeOf,
+  presentationBlock,
+} from './assess';
 export type { QueueSnapshot } from './assess';
-export { priorityCallsInWindow, selectNext } from './select';
+export { capAllows, priorityCallsInWindow, selectNext } from './select';
 export { REASON_CODES } from './reasons';
 export type { ReasonCode } from './reasons';
 export {
@@ -23,6 +30,7 @@ export type {
   ConstrainedEdfSelection,
   EngineInput,
   FifoSelection,
+  FlightCallSelection,
   Selection,
   SelectionParams,
   WaitingTicket,

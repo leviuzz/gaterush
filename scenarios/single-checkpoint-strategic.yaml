@@ -1,0 +1,142 @@
+# GateFlow simulation scenario (schema version 3).
+#
+# SYNTHETIC DEMONSTRATION SCENARIO. It does not describe any real airport. Every parameter is a
+# labelled assumption (source: SYNTHETIC) chosen to produce a plausible-looking day with a morning
+# peak. Results obtained with it are simulated and must never be presented as operational evidence.
+
+schemaVersion: 3
+id: single-checkpoint-strategic
+title: Single departure checkpoint, congested morning peak with strategic late arrivals
+description: >-
+  Stress test of the presentation rule. Identical to single-checkpoint-demo except that 5% of the
+  departing parties arrive late on purpose, 25 to 35 minutes before departure (5 to 15 minutes
+  before boarding closes), hoping to be prioritised. Compare priority-v0 (no presentation rule)
+  with priority-v1 (departing passengers must present at least 45 minutes before departure).
+dataClassification: SYNTHETIC
+timeZone: Europe/Rome
+
+checkpoint:
+  id: CP-DEMO
+  kind: DEPARTURE_SECURITY
+  laneSchedule:
+    value:
+      - { from: '00:00', lanes: 6 }
+    source: SYNTHETIC
+    note: Six lanes open all day, as in slice S1, so that results remain comparable.
+  serviceTimeMeanSeconds:
+    value: 40
+    source: SYNTHETIC
+    note: About 90 passengers per hour per lane.
+  serviceTimeCv:
+    value: 0.6
+    source: SYNTHETIC
+
+schedule:
+  kind: synthetic-hourly
+  generatorSeed: 20261121
+  departuresPerHour:
+    value:
+      - { hour: 6, departures: 5 }
+      - { hour: 7, departures: 5 }
+      - { hour: 8, departures: 3 }
+      - { hour: 9, departures: 2 }
+      - { hour: 10, departures: 2 }
+      - { hour: 11, departures: 2 }
+      - { hour: 12, departures: 2 }
+      - { hour: 13, departures: 2 }
+      - { hour: 14, departures: 2 }
+      - { hour: 15, departures: 2 }
+      - { hour: 16, departures: 2 }
+      - { hour: 17, departures: 3 }
+      - { hour: 18, departures: 3 }
+      - { hour: 19, departures: 2 }
+      - { hour: 20, departures: 2 }
+      - { hour: 21, departures: 1 }
+    source: SYNTHETIC
+    note: Design day with a morning bank of departures, typical of low-cost bases.
+  aircraftMix:
+    value:
+      - { category: regional-jet, seats: 100, share: 0.15 }
+      - { category: narrow-body, seats: 180, share: 0.6 }
+      - { category: narrow-body-large, seats: 220, share: 0.2 }
+      - { category: wide-body, seats: 300, share: 0.05 }
+    source: SYNTHETIC
+  gateZones:
+    value:
+      - { id: A, walkMinutes: 4, share: 0.4 }
+      - { id: B, walkMinutes: 8, share: 0.4 }
+      - { id: C, walkMinutes: 14, share: 0.2 }
+    source: SYNTHETIC
+    note: Nominal walking time from the checkpoint exit to the gate zone.
+
+passengers:
+  loadFactor:
+    value: { min: 0.6, mode: 0.85, max: 0.98 }
+    source: SYNTHETIC
+    note: Triangular distribution, drawn per flight and replication.
+  transferShare:
+    value: 0.05
+    source: SYNTHETIC
+    note: Connecting passengers who cross this checkpoint. Not an official statistic.
+  showUp:
+    departing:
+      value:
+        { minMinutesBeforeStd: 25, medianExtraMinutes: 70, sigma: 0.55, maxMinutesBeforeStd: 240 }
+      source: SYNTHETIC
+      note: Arrival at the checkpoint = STD minus (25 min + log-normal with median 70 min).
+    transfer:
+      value:
+        { minMinutesBeforeStd: 24, medianExtraMinutes: 25, sigma: 0.5, maxMinutesBeforeStd: 180 }
+      source: SYNTHETIC
+      note: Connecting passengers arrive later, after their inbound flight.
+  walkSpeedSigma:
+    value: 0.2
+    source: SYNTHETIC
+    note: Individual walking time = nominal zone time x log-normal(median 1, sigma).
+  callResponse:
+    value:
+      medianSeconds: 75
+      sigma: 0.5
+      absentProbability: 0.04
+      absentExtraMedianMinutes: 4
+      absentExtraSigma: 0.8
+    source: SYNTHETIC
+    note: >-
+      Virtual queue only. Time from a call to presenting at the access point is log-normal with a
+      median of 75 s (passengers wait near the checkpoint); 4% do not notice the first call and
+      present later by a log-normal extra delay with a median of 4 minutes. Hypotheses to measure
+      in a pilot.
+  groups:
+    value:
+      partySizes:
+        - { size: 1, share: 0.78 }
+        - { size: 2, share: 0.15 }
+        - { size: 3, share: 0.04 }
+        - { size: 4, share: 0.025 }
+        - { size: 5, share: 0.005 }
+    source: SYNTHETIC
+    note: >-
+      Shares over parties: about 40% of passengers travel with others. A party holds one ticket,
+      is called together and is screened on one lane, one person after the other.
+  assistedShare:
+    value: 0.007
+    source: SYNTHETIC
+    note: >-
+      Parties taking the assisted path (PRM and similar): staff take them to the next free lane,
+      ahead of the queue, under every policy. The reason is never recorded.
+  strategicLateArrival:
+    value: { share: 0.05, minMinutesBeforeStd: 25, maxMinutesBeforeStd: 35 }
+    source: SYNTHETIC
+    note: >-
+      Stress test, not an estimate: 5% of departing parties arrive late on purpose, uniformly
+      between 35 and 25 minutes before departure.
+
+operations:
+  boardingCloseMinutesBeforeStd:
+    value: 20
+    source: SYNTHETIC
+    note: Boarding closes 20 minutes before the scheduled departure, for every flight.
+  deadlineKnowledge:
+    value: RULE
+    source: SYNTHETIC
+    note: The system applies the closing rule to the schedule; in this slice it matches the ground truth exactly.

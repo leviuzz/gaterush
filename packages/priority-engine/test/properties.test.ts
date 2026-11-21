@@ -1,7 +1,12 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import type { KnownDeadline, Segment } from '@gateflow/domain';
-import type { ConstrainedEdfSelection, EngineInput, WaitingTicket } from '../src';
+import type {
+  ConstrainedEdfSelection,
+  EngineInput,
+  FlightCallSelection,
+  WaitingTicket,
+} from '../src';
 import { assessQueue, assessTicket, priorityCallsInWindow, selectNext } from '../src';
 import { MIN } from './fixtures';
 
@@ -27,10 +32,34 @@ const policyArb: fc.Arbitrary<ConstrainedEdfSelection> = fc
       maxOvertakes: fc.integer({ min: 0, max: 20 }),
       attentionThresholdMs: fc.integer({ min: 0, max: 30 * MIN }),
       safetyBufferMs: fc.integer({ min: 0, max: 10 * MIN }),
+      feasibilityMarginMs: fc.integer({ min: 0, max: 10 * MIN }),
       allowRuleBasedDeadline: fc.boolean(),
       eligibleSegments: fc.subarray<Segment>(['DEPARTING', 'TRANSFER']),
+      latePresentationCutoffMs: fc.option(fc.integer({ min: 0, max: 90 * MIN }), { nil: null }),
     }),
   );
+
+/** Mostly single passengers, some groups (up to 5 people). */
+const partySizeArb = fc.oneof(
+  { weight: 6, arbitrary: fc.constant(1) },
+  { weight: 3, arbitrary: fc.integer({ min: 2, max: 5 }) },
+);
+
+/** Tickets without the optional fields, as written by engine 0.2 callers. */
+function plain(t: WaitingTicket): WaitingTicket {
+  return {
+    id: t.id,
+    fifoKey: t.fifoKey,
+    segment: t.segment,
+    deadline: t.deadline,
+    walkEstimateMs: t.walkEstimateMs,
+    overtakenCount: t.overtakenCount,
+  };
+}
+
+function people(t: WaitingTicket): number {
+  return t.partySize ?? 1;
+}
 
 function ticketsArb(maxOvertakes: number, maxLength = 30): fc.Arbitrary<WaitingTicket[]> {
   return fc.uniqueArray(fc.integer({ min: 0, max: 100_000 }), { maxLength }).chain((keys) =>
@@ -43,6 +72,11 @@ function ticketsArb(maxOvertakes: number, maxLength = 30): fc.Arbitrary<WaitingT
           deadline: deadlineArb,
           walkEstimateMs: fc.integer({ min: 0, max: 20 * MIN }),
           overtakenCount: fc.integer({ min: 0, max: maxOvertakes }),
+          partySize: partySizeArb,
+          presentedAtMs: fc.integer({ min: -240 * MIN, max: 60 * MIN }),
+          scheduledDepartureMs: fc.option(fc.integer({ min: -30 * MIN, max: 260 * MIN }), {
+            nil: null,
+          }),
         }),
       ),
     ),
@@ -98,8 +132,10 @@ describe('priority engine properties', () => {
       fc.property(inputArb, (inp) => {
         const assessments = assessQueue(inp, inp.selection as ConstrainedEdfSelection);
         expect(assessments.map((a) => a.ticketId)).toEqual(byFifo(inp.waiting).map((t) => t.id));
-        assessments.forEach((a, i) => {
-          expect(a.aheadInFifo).toBe((inp.aheadOfWaiting ?? 0) + i);
+        let ahead = inp.aheadOfWaiting ?? 0;
+        byFifo(inp.waiting).forEach((t, i) => {
+          expect(assessments[i]!.aheadInFifo).toBe(ahead);
+          ahead += people(t);
         });
       }),
       RUNS,
@@ -148,10 +184,14 @@ describe('priority engine properties', () => {
     fc.assert(
       fc.property(inputArb, (inp) => {
         const policy = inp.selection as ConstrainedEdfSelection;
-        const atLimit = byFifo(inp.waiting).find((t) => t.overtakenCount >= policy.maxOvertakes);
+        const ordered = byFifo(inp.waiting);
+        const index = ordered.findIndex((t) => t.overtakenCount >= policy.maxOvertakes);
         const selection = selectNext(inp);
-        if (atLimit !== undefined) {
-          expect(selection?.ticketId).toBe(atLimit.id);
+        if (index >= 0) {
+          // The ticket at the limit, unless calling it would push an older ticket beyond K.
+          const olderMax = Math.max(0, ...ordered.slice(0, index).map((t) => t.overtakenCount));
+          const expected = olderMax + people(ordered[index]!) > policy.maxOvertakes ? 0 : index;
+          expect(selection?.ticketId).toBe(ordered[expected]!.id);
           expect(selection?.reasons).toEqual(['OVERTAKE_LIMIT_GUARD']);
         }
       }),
@@ -159,14 +199,18 @@ describe('priority engine properties', () => {
     );
   });
 
-  it('P6 never exceeds the cap within a single decision', () => {
+  it('P6 never exceeds the cap within a single decision, counting people', () => {
     fc.assert(
       fc.property(inputArb, (inp) => {
         const policy = inp.selection as ConstrainedEdfSelection;
-        const used = priorityCallsInWindow(inp.recentPriorityCalls, policy.capWindowCalls);
         const selection = selectNext(inp);
-        if (used >= policy.capMaxPriorityCalls)
-          expect(selection?.priorityCall ?? false).toBe(false);
+        if (!selection?.priorityCall) return;
+        const size = people(byFifo(inp.waiting)[selection.positionInFifo]!);
+        // Independent check: after appending `size` priority flags, the last N flags hold at most k.
+        const flags = [...inp.recentPriorityCalls, ...Array<boolean>(size).fill(true)];
+        const lastWindow = flags.slice(Math.max(0, flags.length - policy.capWindowCalls));
+        expect(lastWindow.filter(Boolean).length).toBeLessThanOrEqual(policy.capMaxPriorityCalls);
+        expect(size).toBeLessThanOrEqual(policy.capMaxPriorityCalls);
       }),
       RUNS,
     );
@@ -202,7 +246,11 @@ describe('priority engine properties', () => {
             checkpoint,
             waiting,
             recentPriorityCalls,
-            selection: policy,
+            selection: {
+              ...policy,
+              feasibilityMarginMs: policy.safetyBufferMs,
+              latePresentationCutoffMs: null,
+            },
           });
           expect(selection?.urgentCandidates).toBe(1);
           expect(selection?.priorityCall).toBe(used < policy.capMaxPriorityCalls);
@@ -243,16 +291,12 @@ describe('priority engine properties', () => {
           deadline: { ...chosen.deadline, atMs: deadlineMs - delta },
         };
         const offset = inp.aheadOfWaiting ?? 0;
-        const after = assessTicket(
-          earlier,
-          offset + selection.positionInFifo,
-          inp.nowMs,
-          inp.checkpoint,
-          policy,
-          offset,
-        );
+        const ahead = ordered
+          .slice(0, selection.positionInFifo)
+          .reduce((sum, t) => sum + people(t), offset);
+        const after = assessTicket(earlier, ahead, inp.nowMs, inp.checkpoint, policy, offset);
         // Only meaningful while the ticket stays feasible (CRITICAL tickets are escalated instead).
-        fc.pre(after.slackNowMs === null || after.slackNowMs >= 0);
+        fc.pre(after.feasibilitySlackMs === null || after.feasibilitySlackMs >= 0);
         const waiting = inp.waiting.map((t) => (t.id === chosen.id ? earlier : t));
         expect(selectNext({ ...inp, waiting })?.ticketId).toBe(chosen.id);
       }),
@@ -269,18 +313,22 @@ describe('priority engine properties', () => {
         const wait = (people: number) =>
           Math.floor((people * hour) / inp.checkpoint.throughputPerHour);
         const ordered = byFifo(inp.waiting);
+        let ahead = offset;
         assessQueue(inp, policy).forEach((a, i) => {
           const t = ordered[i]!;
+          const aheadOfThis = ahead;
+          ahead += people(t);
           if (a.latestCallMs === null) return;
-          const latest =
-            t.deadline.atMs! -
-            (inp.checkpoint.responseMs +
-              inp.checkpoint.processMs +
-              t.walkEstimateMs +
-              policy.safetyBufferMs);
+          const journey =
+            inp.checkpoint.responseMs + inp.checkpoint.processMs * people(t) + t.walkEstimateMs;
+          const latest = t.deadline.atMs! - (journey + policy.safetyBufferMs);
+          const feasibility =
+            t.deadline.atMs! - (journey + policy.feasibilityMarginMs) - inp.nowMs - wait(offset);
           expect(a.latestCallMs).toBe(latest);
-          expect(a.slackFifoMs).toBe(latest - inp.nowMs - wait(offset + i));
+          expect(a.slackFifoMs).toBe(latest - inp.nowMs - wait(aheadOfThis));
           expect(a.slackNowMs).toBe(latest - inp.nowMs - wait(offset));
+          expect(a.feasibilitySlackMs).toBe(feasibility);
+          expect(a.riskClass === 'CRITICAL').toBe(feasibility < 0);
         });
       }),
       RUNS,
@@ -304,7 +352,7 @@ describe('priority engine properties', () => {
     );
   });
 
-  it('P9 over a sequence of calls: every window of N calls has at most k priority calls and no ticket is overtaken more than K times', () => {
+  it('P9 over a sequence of calls: every window of N people has at most k called by priority and no ticket is overtaken by more than K people', () => {
     const scenarioArb = policyArb.chain((policy) =>
       fc.record({
         policy: fc.constant(policy),
@@ -333,12 +381,15 @@ describe('priority engine properties', () => {
               selection: policy,
             });
             if (selection === null) break;
+            const size = people(waiting.find((t) => t.id === selection.ticketId)!);
             waiting = waiting
               .filter((t) => t.id !== selection.ticketId)
               .map((t) =>
-                t.fifoKey < selection.fifoKey ? { ...t, overtakenCount: t.overtakenCount + 1 } : t,
+                t.fifoKey < selection.fifoKey
+                  ? { ...t, overtakenCount: t.overtakenCount + size }
+                  : t,
               );
-            calls.push(selection.priorityCall);
+            for (let p = 0; p < size; p++) calls.push(selection.priorityCall);
             for (const t of waiting) maxOvertaken = Math.max(maxOvertaken, t.overtakenCount);
             now += stepMs;
           }
@@ -349,6 +400,81 @@ describe('priority engine properties', () => {
           expect(window.filter(Boolean).length).toBeLessThanOrEqual(policy.capMaxPriorityCalls);
         }
       }),
+      RUNS,
+    );
+  });
+
+  it('P12 never boosts a departing passenger who presented after the cutoff, nor a group larger than the cap', () => {
+    fc.assert(
+      fc.property(inputArb, (inp) => {
+        const policy = inp.selection as ConstrainedEdfSelection;
+        const selection = selectNext(inp);
+        if (!selection?.priorityCall) return;
+        const t = byFifo(inp.waiting)[selection.positionInFifo]!;
+        expect(people(t)).toBeLessThanOrEqual(policy.capMaxPriorityCalls);
+        const cutoff = policy.latePresentationCutoffMs;
+        if (cutoff !== null && t.segment === 'DEPARTING') {
+          expect(t.scheduledDepartureMs).not.toBeNull();
+          expect(t.presentedAtMs!).toBeLessThanOrEqual(t.scheduledDepartureMs! - cutoff);
+        }
+      }),
+      RUNS,
+    );
+  });
+
+  it('P13 tickets without the optional fields behave as single passengers with no presentation rule', () => {
+    fc.assert(
+      fc.property(inputArb, (inp) => {
+        const policy = {
+          ...(inp.selection as ConstrainedEdfSelection),
+          latePresentationCutoffMs: null,
+        };
+        const withDefaults = inp.waiting.map((t) => ({
+          ...plain(t),
+          partySize: 1,
+          presentedAtMs: t.presentedAtMs,
+          scheduledDepartureMs: t.scheduledDepartureMs,
+        }));
+        expect(selectNext({ ...inp, selection: policy, waiting: inp.waiting.map(plain) })).toEqual(
+          selectNext({ ...inp, selection: policy, waiting: withDefaults }),
+        );
+      }),
+      RUNS,
+    );
+  });
+
+  it('P14 flight calls take the earliest closing flight among the called ones, else FIFO (oracle)', () => {
+    const flightCallArb: fc.Arbitrary<FlightCallSelection> = fc.record({
+      kind: fc.constant('flight-call' as const),
+      callWindowMs: fc.integer({ min: 0, max: 60 * MIN }),
+      announcementIntervalMs: fc.integer({ min: 1, max: 15 * MIN }),
+    });
+    fc.assert(
+      fc.property(
+        inputArb,
+        flightCallArb,
+        fc.integer({ min: -60 * MIN, max: 240 * MIN }),
+        (inp, call, now) => {
+          const selection = selectNext({ ...inp, nowMs: now, selection: call });
+          const ordered = byFifo(inp.waiting);
+          if (ordered.length === 0) {
+            expect(selection).toBeNull();
+            return;
+          }
+          const announcement =
+            Math.floor(now / call.announcementIntervalMs) * call.announcementIntervalMs;
+          const called = ordered.filter(
+            (t) => t.deadline.atMs !== null && t.deadline.atMs - announcement <= call.callWindowMs,
+          );
+          const expected = called.reduce<WaitingTicket | undefined>(
+            (best, t) => (best === undefined || t.deadline.atMs! < best.deadline.atMs! ? t : best),
+            undefined,
+          );
+          expect(selection?.ticketId).toBe((expected ?? ordered[0]!).id);
+          expect(selection?.urgentCandidates).toBe(called.length);
+          expect(selection?.reasons).toEqual([expected === undefined ? 'FIFO' : 'FLIGHT_CALL']);
+        },
+      ),
       RUNS,
     );
   });

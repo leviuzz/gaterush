@@ -1,10 +1,10 @@
-# GateFlow simulation scenario (schema version 2).
+# GateFlow simulation scenario (schema version 3).
 #
 # SYNTHETIC DEMONSTRATION SCENARIO. It does not describe any real airport. Every parameter is a
 # labelled assumption (source: SYNTHETIC) chosen to produce a plausible-looking day with a morning
 # peak. Results obtained with it are simulated and must never be presented as operational evidence.
 
-schemaVersion: 2
+schemaVersion: 3
 id: single-checkpoint-demo
 title: Single departure checkpoint, synthetic day with a congested morning peak
 description: >-
@@ -107,6 +107,28 @@ passengers:
       median of 75 s (passengers wait near the checkpoint); 4% do not notice the first call and
       present later by a log-normal extra delay with a median of 4 minutes. Hypotheses to measure
       in a pilot.
+  groups:
+    value:
+      partySizes:
+        - { size: 1, share: 0.78 }
+        - { size: 2, share: 0.15 }
+        - { size: 3, share: 0.04 }
+        - { size: 4, share: 0.025 }
+        - { size: 5, share: 0.005 }
+    source: SYNTHETIC
+    note: >-
+      Shares over parties: about 40% of passengers travel with others. A party holds one ticket,
+      is called together and is screened on one lane, one person after the other.
+  assistedShare:
+    value: 0.007
+    source: SYNTHETIC
+    note: >-
+      Parties taking the assisted path (PRM and similar): staff take them to the next free lane,
+      ahead of the queue, under every policy. The reason is never recorded.
+  strategicLateArrival:
+    value: { share: 0, minMinutesBeforeStd: 25, maxMinutesBeforeStd: 35 }
+    source: SYNTHETIC
+    note: Nobody arrives late on purpose in this scenario.
 
 operations:
   boardingCloseMinutesBeforeStd:

@@ -130,7 +130,11 @@ describe('physical queue: hand-computed cases', () => {
         passenger(3, 0, MINUTE, { flightIndex: 1 }),
       ],
     };
-    const edf = simulateCheckpoint(population, edfWith({ safetyBufferMs: 0 }), OPTIONS);
+    const edf = simulateCheckpoint(
+      population,
+      edfWith({ safetyBufferMs: 0, feasibilityMarginMs: 0 }),
+      OPTIONS,
+    );
     const fifo = simulateCheckpoint(population, FIFO, OPTIONS);
 
     expect(fifo.outcomes[3]?.serviceStartMs).toBe(3 * MINUTE);
@@ -153,6 +157,134 @@ describe('physical queue: hand-computed cases', () => {
     const population = mmcPopulation(2, 0.9, 60_000, 200, 4);
     const fifo = simulateCheckpoint(population, FIFO, OPTIONS);
     expect(fifo.outcomes.every((o) => o.classAtArrival === 'UNVERIFIED')).toBe(true);
+  });
+});
+
+describe('groups and assisted passengers: hand-computed cases', () => {
+  it('screens a family on one lane, one after the other, and can boost it as a whole', () => {
+    // One lane, one person per minute. A family of three (3 min of screening) must reach its
+    // gate by 5 min. In FIFO order it starts at 3 and finishes at 6; boosted at 1 it finishes at 4.
+    const population: Population = {
+      checkpoint: checkpoint(1, 60, MINUTE),
+      flights: [flight(0), flight(1, 5 * MINUTE)],
+      passengers: [
+        passenger(0, 0, MINUTE),
+        passenger(1, 0, MINUTE),
+        passenger(2, 0, MINUTE),
+        passenger(3, 0, 3 * MINUTE, { flightIndex: 1, partySize: 3 }),
+      ],
+    };
+    const fifo = simulateCheckpoint(population, FIFO, OPTIONS);
+    expect(fifo.outcomes[3]).toMatchObject({ serviceStartMs: 3 * MINUTE, missed: true });
+    const edf = simulateCheckpoint(
+      population,
+      edfWith({ safetyBufferMs: 0, feasibilityMarginMs: 0 }),
+      OPTIONS,
+    );
+    expect(edf.outcomes[3]).toMatchObject({
+      serviceStartMs: MINUTE,
+      serviceEndMs: 4 * MINUTE,
+      missed: false,
+      priorityCall: true,
+    });
+    // p1 and p2 were each overtaken by three people.
+    expect([edf.outcomes[1]?.overtakenCount, edf.outcomes[2]?.overtakenCount]).toEqual([3, 3]);
+    // The waiting area counts people: the family waited 1 min, p1 and p2 waited 4 and 5 min.
+    expect(edf.stats.waitingAreaMs).toBe((3 * 1 + 4 + 5) * MINUTE);
+  });
+
+  it('takes an assisted passenger to the next free lane, ahead of the queue, under every policy', () => {
+    const population: Population = {
+      checkpoint: checkpoint(1, 60, MINUTE),
+      flights: [flight(0)],
+      passengers: [
+        passenger(0, 0, MINUTE),
+        passenger(1, 0, MINUTE),
+        passenger(2, 30 * SECOND, 2 * MINUTE, { path: 'ASSISTED' }),
+      ],
+    };
+    for (const p of [FIFO, virtualFifo()]) {
+      const run = simulateCheckpoint(population, p, OPTIONS);
+      expect(run.outcomes.map((o) => o.serviceStartMs / MINUTE)).toEqual([0, 3, 1]);
+      expect(run.outcomes[2]).toMatchObject({ calls: 0, classAtArrival: 'UNVERIFIED' });
+      expect(run.stats.reissuedTickets).toBe(0);
+    }
+  });
+});
+
+describe('assisted passengers and the call pipeline', () => {
+  it('serves assisted passengers before called passengers already waiting at the lanes', () => {
+    // 5 minutes of call-ahead: p1 is called at once and waits at the lane; A arrives at 30 s.
+    const population: Population = {
+      checkpoint: checkpoint(1, 60, MINUTE),
+      flights: [flight(0)],
+      passengers: [
+        passenger(0, 0, MINUTE),
+        passenger(1, 0, MINUTE),
+        passenger(2, 30 * SECOND, 2 * MINUTE, { path: 'ASSISTED' }),
+      ],
+    };
+    const run = simulateCheckpoint(population, virtualFifo({ callAheadSeconds: 300 }), OPTIONS);
+    expect(run.outcomes.map((o) => o.serviceStartMs / MINUTE)).toEqual([0, 3, 1]);
+    expect(run.outcomes[1]?.standingMs).toBe(3 * MINUTE);
+  });
+
+  it('counts assisted passengers waiting for a lane in the call pipeline', () => {
+    // Call-ahead of two people. p1 waits at the lane and A for the next lane: the pipeline is
+    // full, so p2 (arriving at 30 s) is called only when A starts screening at 1 min.
+    const population: Population = {
+      checkpoint: checkpoint(1, 60, MINUTE),
+      flights: [flight(0)],
+      passengers: [
+        passenger(0, 0, MINUTE),
+        passenger(1, 0, MINUTE),
+        passenger(2, 15 * SECOND, MINUTE, { path: 'ASSISTED' }),
+        passenger(3, 30 * SECOND, MINUTE),
+      ],
+    };
+    const run = simulateCheckpoint(population, virtualFifo({ callAheadSeconds: 120 }), OPTIONS);
+    expect(run.outcomes[3]?.firstCalledAtMs).toBe(MINUTE);
+  });
+
+  it('keeps the first presentation time on a new ticket for the presentation rule', () => {
+    // P presents at 0 for a flight departing at 70 min (boarding closes at 50): in time for a
+    // cutoff of 45 min. Called at 10 min, P comes back at 36 min, after the ticket expired, and
+    // gets a new ticket behind 20 passengers who arrived at 30 min: P is URGENT and, thanks to
+    // the first presentation time, still eligible.
+    const flights = [
+      flight(0),
+      {
+        index: 1,
+        id: 'F1',
+        stdMs: 70 * MINUTE,
+        boardingCloseMs: 50 * MINUTE,
+        knownDeadline: { atMs: 50 * MINUTE, source: 'FEED' as const },
+        gateZone: 'A',
+      },
+    ];
+    const passengers = [
+      passenger(0, 0, 10 * MINUTE),
+      passenger(1, 0, MINUTE, {
+        flightIndex: 1,
+        callResponseMs: MINUTE,
+        absenceDelayMs: 25 * MINUTE,
+      }),
+      ...Array.from({ length: 20 }, (_, i) =>
+        passenger(2 + i, 30 * MINUTE, MINUTE, { callResponseMs: 0 }),
+      ),
+    ];
+    const population: Population = { checkpoint: checkpoint(1, 60, MINUTE), flights, passengers };
+    const policy = edfWith({
+      safetyBufferMs: 0,
+      feasibilityMarginMs: 0,
+      latePresentationCutoffMs: 45 * MINUTE,
+    });
+    const run = simulateCheckpoint(population, policy, OPTIONS);
+    expect(run.outcomes[1]).toMatchObject({
+      reissuedTickets: 1,
+      priorityCall: true,
+      missed: false,
+    });
   });
 });
 

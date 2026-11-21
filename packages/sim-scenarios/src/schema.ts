@@ -126,6 +126,31 @@ const CallResponseSchema = z.strictObject({
   absentExtraSigma: z.number().min(0).max(3),
 });
 
+const GroupsSchema = z.strictObject({
+  /**
+   * Distribution of party sizes: a party of `size` people travels together, holds one ticket and
+   * is screened on one lane. Shares are relative weights over parties.
+   */
+  partySizes: z
+    .array(z.strictObject({ size: z.number().int().min(1).max(10), share: z.number().positive() }))
+    .min(1)
+    .refine((rows) => new Set(rows.map((r) => r.size)).size === rows.length, {
+      message: 'each party size may appear only once',
+    }),
+});
+
+const StrategicSchema = z
+  .strictObject({
+    /** Share of departing parties who arrive late on purpose, hoping to be prioritised. */
+    share: z.number().min(0).max(1),
+    /** They arrive uniformly between these many minutes before the scheduled departure. */
+    minMinutesBeforeStd: z.number().min(0).max(600),
+    maxMinutesBeforeStd: z.number().min(0).max(600),
+  })
+  .refine((s) => s.maxMinutesBeforeStd >= s.minMinutesBeforeStd, {
+    message: 'maxMinutesBeforeStd must not be smaller than minMinutesBeforeStd',
+  });
+
 const SyntheticHourlyScheduleSchema = z.strictObject({
   kind: z.literal('synthetic-hourly'),
   /** Seed of the schedule generator: the design day is the same for every replication. */
@@ -137,7 +162,7 @@ const SyntheticHourlyScheduleSchema = z.strictObject({
 
 export const ScenarioSchema = z
   .strictObject({
-    schemaVersion: z.literal(2),
+    schemaVersion: z.literal(3),
     id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/, 'lowercase letters, digits and dashes'),
     title: z.string().min(1),
     description: z.string().min(1),
@@ -174,6 +199,12 @@ export const ScenarioSchema = z
       walkSpeedSigma: param(z.number().min(0).max(2)),
       /** How passengers answer calls of a virtual queue (ignored by the physical queue). */
       callResponse: param(CallResponseSchema),
+      /** Groups and families travelling together. */
+      groups: param(GroupsSchema),
+      /** Share of parties who take the assisted path (staff take them to a lane, no ticket). */
+      assistedShare: param(z.number().min(0).max(1)),
+      /** Departing parties who arrive late on purpose (stress test of the presentation rule). */
+      strategicLateArrival: param(StrategicSchema),
     }),
     operations: z.strictObject({
       boardingCloseMinutesBeforeStd: param(z.number().int().min(0).max(180)),
@@ -183,6 +214,13 @@ export const ScenarioSchema = z
   })
   .superRefine((scenario, ctx) => {
     const close = scenario.operations.boardingCloseMinutesBeforeStd.value;
+    if (scenario.passengers.strategicLateArrival.value.minMinutesBeforeStd < close) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['passengers', 'strategicLateArrival', 'value', 'minMinutesBeforeStd'],
+        message: `passengers must arrive before boarding closes (${close} min before departure)`,
+      });
+    }
     for (const segment of ['departing', 'transfer'] as const) {
       if (scenario.passengers.showUp[segment].value.minMinutesBeforeStd < close) {
         ctx.addIssue({

@@ -1,6 +1,6 @@
 {
   "name": "@gateflow/sim-scenarios",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Scenario schema, validation, assumptions registry and synthetic population generation (pure).",
   "type": "module",

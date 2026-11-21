@@ -73,6 +73,15 @@ const passengerRowArb = fc.record({
   absenceDelayMs: fc.oneof(fc.constant(0), fc.integer({ min: 1, max: 30 * MINUTE })),
   flightPick: fc.nat(),
   transfer: fc.boolean(),
+  partySize: fc.oneof(
+    { weight: 6, arbitrary: fc.constant(1) },
+    { weight: 2, arbitrary: fc.integer({ min: 2, max: 5 }) },
+  ),
+  assisted: fc.oneof(
+    { weight: 14, arbitrary: fc.constant(false) },
+    { weight: 1, arbitrary: fc.constant(true) },
+  ),
+  strategic: fc.boolean(),
 });
 
 const populationArb: fc.Arbitrary<Population> = fc
@@ -97,6 +106,9 @@ const populationArb: fc.Arbitrary<Population> = fc
       walkEstimateMs: row.walkEstimateMs,
       callResponseMs: row.callResponseMs,
       absenceDelayMs: row.absenceDelayMs,
+      partySize: row.partySize,
+      path: row.assisted ? 'ASSISTED' : 'QUEUE',
+      strategic: row.strategic,
     })),
   }));
 
@@ -104,7 +116,7 @@ const selectionArb: fc.Arbitrary<SelectionParams> = fc.oneof(
   { weight: 1, arbitrary: fc.constant({ kind: 'fifo' } as const) },
   {
     weight: 2,
-    arbitrary: fc.integer({ min: 1, max: 6 }).chain((n) =>
+    arbitrary: fc.integer({ min: 1, max: 12 }).chain((n) =>
       fc.record({
         kind: fc.constant('constrained-edf' as const),
         capWindowCalls: fc.constant(n),
@@ -115,13 +127,26 @@ const selectionArb: fc.Arbitrary<SelectionParams> = fc.oneof(
         ),
         attentionThresholdMs: fc.constant(15 * MINUTE),
         safetyBufferMs: fc.integer({ min: 0, max: 3 * MINUTE }),
+        feasibilityMarginMs: fc.integer({ min: 0, max: 3 * MINUTE }),
         allowRuleBasedDeadline: fc.boolean(),
         eligibleSegments: fc.oneof(
           { weight: 4, arbitrary: fc.constant(['DEPARTING', 'TRANSFER'] as const) },
           { weight: 1, arbitrary: fc.constant(['TRANSFER'] as const) },
         ),
+        latePresentationCutoffMs: fc.oneof(
+          { weight: 3, arbitrary: fc.constant(null) },
+          { weight: 1, arbitrary: fc.integer({ min: 0, max: 60 * MINUTE }) },
+        ),
       }),
     ),
+  },
+  {
+    weight: 1,
+    arbitrary: fc.record({
+      kind: fc.constant('flight-call' as const),
+      callWindowMs: fc.integer({ min: 0, max: 30 * MINUTE }),
+      announcementIntervalMs: fc.integer({ min: 1, max: 10 * MINUTE }),
+    }),
   },
 );
 
@@ -172,9 +197,22 @@ function checkRun(population: Population, p: Policy, run: RunResult): void {
     const intervals = byLane.get(o.laneIndex) ?? [];
     intervals.push([o.serviceStartMs, o.serviceEndMs]);
     byLane.set(o.laneIndex, intervals);
-    standing += o.standingMs;
+    standing += o.standingMs * pax.partySize;
 
-    if (p.queue.kind === 'physical') {
+    if (pax.path === 'ASSISTED') {
+      // Taken to the next free lane without a ticket, under every policy.
+      expect(o).toMatchObject({
+        calls: 0,
+        noShows: 0,
+        reactivations: 0,
+        reissuedTickets: 0,
+        priorityCall: false,
+        overtakenCount: 0,
+        firstCalledAtMs: pax.arrivalMs,
+        classAtArrival: 'UNVERIFIED',
+      });
+      expect(o.standingMs).toBe(o.waitMs);
+    } else if (p.queue.kind === 'physical') {
       expect(o).toMatchObject({ calls: 1, noShows: 0, reactivations: 0, reissuedTickets: 0 });
       expect(o.standingMs).toBe(o.waitMs);
       expect(o.serviceStartMs).toBe(o.firstCalledAtMs);
@@ -199,7 +237,7 @@ function checkRun(population: Population, p: Policy, run: RunResult): void {
     }
     if (p.selection.kind === 'constrained-edf') {
       expect(o.overtakenCount).toBeLessThanOrEqual(p.selection.maxOvertakes);
-    } else {
+    } else if (p.selection.kind === 'fifo') {
       expect(o.overtakenCount).toBe(0);
       expect(o.priorityCall).toBe(false);
     }
@@ -294,6 +332,9 @@ describe('checkpoint model properties', () => {
       reactivations: 0,
       reissued: 0,
       idleWithDemand: 0,
+      groupPriority: 0,
+      flightCallJump: 0,
+      assistedWaited: 0,
     };
     for (const [population, p] of samples) {
       const run = simulateCheckpoint(population, p, OPTIONS);
@@ -322,15 +363,27 @@ describe('checkpoint model properties', () => {
       if (s.reactivations > 0) hits.reactivations++;
       if (s.reissuedTickets > 0) hits.reissued++;
       if (s.idleLaneWithDemandMs > 0) hits.idleWithDemand++;
+      const parties = population.passengers;
+      const groupJumped = run.outcomes.some((o, i) => o.priorityCall && parties[i]!.partySize > 1);
+      if (p.selection.kind === 'constrained-edf' && groupJumped) hits.groupPriority++;
+      const anyJump = run.outcomes.some((o) => o.priorityCall);
+      if (p.selection.kind === 'flight-call' && anyJump) hits.flightCallJump++;
+      if (run.outcomes.some((o, i) => parties[i]!.path === 'ASSISTED' && o.waitMs > 0)) {
+        hits.assistedWaited++;
+      }
     }
     // Thresholds at about half of the counts observed with this seed.
-    expect(hits.priority).toBeGreaterThanOrEqual(12);
-    expect(hits.cap).toBeGreaterThanOrEqual(6);
-    expect(hits.guard).toBeGreaterThanOrEqual(6);
+    expect(hits.priority).toBeGreaterThanOrEqual(15);
+    expect(hits.cap).toBeGreaterThanOrEqual(4);
+    expect(hits.guard).toBeGreaterThanOrEqual(2);
     expect(hits.closingWhileScreening).toBeGreaterThanOrEqual(7);
     expect(hits.noShows).toBeGreaterThanOrEqual(30);
-    expect(hits.reactivations).toBeGreaterThanOrEqual(12);
+    expect(hits.reactivations).toBeGreaterThanOrEqual(8);
     expect(hits.reissued).toBeGreaterThanOrEqual(28);
     expect(hits.idleWithDemand).toBeGreaterThanOrEqual(40);
+    // Boosted groups are rare in random cases; a hand-computed test covers them in detail.
+    expect(hits.groupPriority).toBeGreaterThanOrEqual(1);
+    expect(hits.flightCallJump).toBeGreaterThanOrEqual(9);
+    expect(hits.assistedWaited).toBeGreaterThanOrEqual(50);
   });
 });

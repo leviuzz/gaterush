@@ -17,8 +17,10 @@ export const EDF: ConstrainedEdfSelection = {
   maxOvertakes: 15,
   attentionThresholdMs: 15 * MIN,
   safetyBufferMs: 5 * MIN,
+  feasibilityMarginMs: 5 * MIN,
   allowRuleBasedDeadline: true,
   eligibleSegments: ['DEPARTING', 'TRANSFER'],
+  latePresentationCutoffMs: null,
 };
 
 /** 180 pax/h: one person every 20 s, so `ahead` tickets wait ahead * 20 s. */
@@ -39,6 +41,11 @@ export function ticket(
     deadline: overrides.deadline ?? { atMs: 600 * MIN, source: 'RULE' },
     walkEstimateMs: overrides.walkEstimateMs ?? 0,
     overtakenCount: overrides.overtakenCount ?? 0,
+    ...(overrides.partySize === undefined ? {} : { partySize: overrides.partySize }),
+    ...(overrides.presentedAtMs === undefined ? {} : { presentedAtMs: overrides.presentedAtMs }),
+    ...(overrides.scheduledDepartureMs === undefined
+      ? {}
+      : { scheduledDepartureMs: overrides.scheduledDepartureMs }),
   };
 }
 

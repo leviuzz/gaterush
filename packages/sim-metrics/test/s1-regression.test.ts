@@ -12,6 +12,7 @@ import type { Scenario } from '@gateflow/sim-scenarios';
 import { describe, expect, it } from 'vitest';
 import { roundNumbers, runExperiment } from '../src';
 import type { PolicyDayMetrics } from '../src';
+import { withoutS3Features } from './legacy';
 
 /**
  * Acceptance criterion of slice S2: with zero call latency and no no-shows, outcomes equal S1.
@@ -31,8 +32,13 @@ const fixture = JSON.parse(
   readFileSync(new URL('./fixtures/s1-demo-seeds-1-3.json', import.meta.url), 'utf8'),
 ) as S1Fixture;
 
-const demo = parseScenarioText(
-  readFileSync(new URL('../../../scenarios/single-checkpoint-demo.yaml', import.meta.url), 'utf8'),
+const demo = withoutS3Features(
+  parseScenarioText(
+    readFileSync(
+      new URL('../../../scenarios/single-checkpoint-demo.yaml', import.meta.url),
+      'utf8',
+    ),
+  ),
 );
 
 /** The demo scenario with every call answered at once and never missed. */

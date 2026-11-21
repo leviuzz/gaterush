@@ -76,6 +76,39 @@ describe('comparisons', () => {
       { candidateId: 'priority-v0', referenceId: 'fifo' },
     ]);
   });
+
+  it('compares priority policies with manual handling and with earlier versions', () => {
+    const all = parsePolicies('fifo,fifo-manual,virtual-fifo,priority-v0,priority-v1');
+    expect(defaultCompare(all, 'fifo')).toEqual([
+      { candidateId: 'fifo-manual', referenceId: 'fifo' },
+      { candidateId: 'virtual-fifo', referenceId: 'fifo' },
+      { candidateId: 'priority-v0', referenceId: 'fifo' },
+      { candidateId: 'priority-v1', referenceId: 'fifo' },
+      { candidateId: 'priority-v0', referenceId: 'virtual-fifo' },
+      { candidateId: 'priority-v0', referenceId: 'fifo-manual' },
+      { candidateId: 'priority-v1', referenceId: 'virtual-fifo' },
+      { candidateId: 'priority-v1', referenceId: 'fifo-manual' },
+      { candidateId: 'priority-v1', referenceId: 'priority-v0' },
+    ]);
+    // With manual handling as the baseline, no pair is repeated.
+    expect(
+      defaultCompare(parsePolicies('fifo-manual,virtual-fifo,priority-v1'), 'fifo-manual'),
+    ).toEqual([
+      { candidateId: 'virtual-fifo', referenceId: 'fifo-manual' },
+      { candidateId: 'priority-v1', referenceId: 'fifo-manual' },
+      { candidateId: 'priority-v1', referenceId: 'virtual-fifo' },
+    ]);
+    // Staff flight calls are a reordering of the physical queue: compared with physical FIFO.
+    expect(defaultCompare(parsePolicies('virtual-fifo,fifo,fifo-manual'), 'virtual-fifo')).toEqual([
+      { candidateId: 'fifo', referenceId: 'virtual-fifo' },
+      { candidateId: 'fifo-manual', referenceId: 'virtual-fifo' },
+      { candidateId: 'fifo-manual', referenceId: 'fifo' },
+    ]);
+    // The order of the list decides which version is the reference.
+    expect(
+      defaultCompare(parsePolicies('fifo,priority-v1,priority-v1-strict'), 'fifo').slice(2),
+    ).toEqual([{ candidateId: 'priority-v1-strict', referenceId: 'priority-v1' }]);
+  });
 });
 
 describe('parsePositiveInteger', () => {

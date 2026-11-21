@@ -65,10 +65,23 @@ pnpm sim --help
 
 ## What the simulator shows today
 
-The slice S2 reports (200 simulated days for each of three synthetic scenarios, with every
-assumption and limitation) are in [docs/reports/slice-2](docs/reports/slice-2). The S1 reports,
-which ignored call mechanics, remain in [docs/reports/slice-1](docs/reports/slice-1) for
-reference.
+| Scenario (200 simulated days, SYNTHETIC) | Missed flights per day: today's physical queue | GateFlow, FIFO order | GateFlow, priority v0 | Net flights saved by priority v0 [95% CI] | Mean time standing in a queue: today / GateFlow |
+|---|---:|---:|---:|---:|---:|
+| `single-checkpoint-demo` (congested morning peak) | 48.7 | 49.3 | 29.7 | 19.1 [17.4, 20.7] | 3.0 / 0.5 min |
+| `single-checkpoint-moderate` | 11.9 | 12.3 | 10.1 | 1.8 [1.4, 2.4] | 1.2 / 0.4 min |
+| `single-checkpoint-staffed` (lanes follow demand) | 58.9 | 59.5 | 37.0 | 21.9 [20.1, 23.7] | 3.5 / 0.7 min |
+
+How to read these numbers:
+- The call mechanics of the virtual queue cost about half a missed flight per day (passengers who
+  miss their call). In exchange, people stop standing in line.
+- The benefit comes from the prioritisation and depends heavily on congestion. Non-prioritised
+  passengers wait 0.01 to 0.13 minutes longer on average.
+- The numbers rest on synthetic assumptions, notably the response times and missed calls, which
+  must be measured. The baseline does not yet include today's manual handling of urgent
+  passengers, so the benefit is likely overstated.
+- Reports with every assumption and limitation: [docs/reports/slice-2](docs/reports/slice-2).
+  The S1 reports, which ignored call mechanics, remain in
+  [docs/reports/slice-1](docs/reports/slice-1).
 
 ## Repository layout
 

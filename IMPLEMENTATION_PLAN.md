@@ -90,7 +90,7 @@ Scope delivered:
 
 | # | Criterion | Evidence |
 |---|---|---|
-| 1 | With zero latency and no no-shows, outcomes equal S1 (regression) | `packages/sim-metrics/test/s1-regression.test.ts`: every S1 metric of both S1 policies is reproduced exactly on seeds 1-3, against a fixture saved from the S1 commit. Moving the engine's urgency threshold by one minute makes it fail. The property "a virtual queue answered instantly behaves exactly like the physical queue" holds on random populations (`packages/sim-model/test/properties.test.ts`). |
+| 1 | With zero latency and no no-shows, outcomes equal S1 (regression) | `packages/sim-metrics/test/s1-regression.test.ts`: every S1 metric of both S1 policies is reproduced exactly on seeds 1-3, against a fixture saved from the S1 commit. Moving the engine's urgency threshold by one minute makes it fail. In the published 200-day reports, the 21 S1 metrics of FIFO are identical for every seed of both S1 scenarios (8,400 values). The property "a virtual queue answered instantly behaves exactly like the physical queue" holds on random populations (`packages/sim-model/test/properties.test.ts`). |
 | 2 | "Prepare" window churn is zero (property test) | `packages/queue-core/test/properties.test.ts`: over 1,000 random operation sequences on random policies, a committed ticket leaves the window only by being called, the remaining order is preserved, and the window never exceeds M. A mutation that lets priority tickets jump into the window is caught. |
 | 3 | The report adds lanes idle while people are queueing, the missed-call rate and recalls | Report section "Call mechanics" (second calls, no-shows as the missed-call rate, reactivations, new tickets, idle lane time) and "Checkpoint operations" (staffed lane-hours, utilisation, people standing). Covered by `experiment.test.ts` and the golden files. |
 | 4 | Golden files regenerated and the change explained in the changelog | `packages/sim-metrics/test/golden`; CHANGELOG 0.2.0, "Simulated numbers change". |
@@ -118,6 +118,18 @@ Findings that changed the design during the slice:
 - **CRITICAL (ADR-019).** The class now accounts for the committed prepare window, so priority
   commitments are not spent on passengers the window has made hopeless.
 - **Idle lane time** counts only the capacity that waiting passengers could have used.
+
+### S2 results at a glance (SIMULATED, synthetic data: not operational evidence)
+
+| Scenario (200 simulated days) | Missed flights per day: physical FIFO | virtual FIFO | priority v0 | Net flights saved, priority v0 vs physical FIFO [95% CI] | Net saved by the prioritisation alone [95% CI] |
+|---|---:|---:|---:|---:|---:|
+| `single-checkpoint-demo` | 48.7 | 49.3 | 29.7 | 19.1 [17.4, 20.7] | 19.6 [18.1, 21.1] |
+| `single-checkpoint-moderate` | 11.9 | 12.3 | 10.1 | 1.8 [1.4, 2.4] | 2.3 [1.8, 2.8] |
+| `single-checkpoint-staffed` | 58.9 | 59.5 | 37.0 | 21.9 [20.1, 23.7] | 22.5 [20.8, 24.2] |
+
+Realistic call mechanics reduce the benefit found in S1 (net 25.1 and 5.0 flights per day on the
+demo and moderate scenarios), as expected. Physical FIFO reproduces S1's FIFO exactly. Full reports
+and observations: [docs/reports/slice-2](docs/reports/slice-2/README.md).
 
 ## Later milestones (summary)
 

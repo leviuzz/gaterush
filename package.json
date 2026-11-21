@@ -16,7 +16,7 @@
     "boundaries": "depcruise packages apps --config .dependency-cruiser.cjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "pnpm run format:check && pnpm run boundaries && turbo run typecheck lint test",
+    "check": "pnpm run format:check && pnpm run boundaries && turbo run typecheck lint test --continue",
     "sim": "turbo run build --filter=@gateflow/sim-cli --output-logs=errors-only && node apps/sim-cli/dist/gateflow-sim.mjs"
   },
   "devDependencies": {

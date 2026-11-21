@@ -81,9 +81,11 @@ describe('exp', () => {
 
   it('inverts ln within a few ulp', () => {
     const rng = streamFor(2024, [3]);
+    let worst = 0;
     for (let i = 0; i < 10_000; i++) {
       const x = 1e-6 + rng.nextFloat() * 1e6;
-      expect(Math.abs(exp(ln(x)) - x) / x).toBeLessThan(1e-12);
+      worst = Math.max(worst, Math.abs(exp(ln(x)) - x) / x);
     }
+    expect(worst).toBeLessThan(1e-12);
   });
 });

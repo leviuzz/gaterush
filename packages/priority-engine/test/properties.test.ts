@@ -270,6 +270,7 @@ describe('priority engine properties', () => {
       fc.property(scenarioArb, ({ policy, checkpoint, batches, stepMs }) => {
         let waiting: WaitingTicket[] = [];
         const calls: boolean[] = [];
+        let maxOvertaken = 0;
         let nextKey = 0;
         let now = 0;
         for (const batch of batches) {
@@ -291,11 +292,11 @@ describe('priority engine properties', () => {
                 t.fifoKey < selection.fifoKey ? { ...t, overtakenCount: t.overtakenCount + 1 } : t,
               );
             calls.push(selection.priorityCall);
-            for (const t of waiting)
-              expect(t.overtakenCount).toBeLessThanOrEqual(policy.maxOvertakes);
+            for (const t of waiting) maxOvertaken = Math.max(maxOvertaken, t.overtakenCount);
             now += stepMs;
           }
         }
+        expect(maxOvertaken).toBeLessThanOrEqual(policy.maxOvertakes);
         for (let start = 0; start + policy.capWindowCalls <= calls.length; start++) {
           const window = calls.slice(start, start + policy.capWindowCalls);
           expect(window.filter(Boolean).length).toBeLessThanOrEqual(policy.capMaxPriorityCalls);

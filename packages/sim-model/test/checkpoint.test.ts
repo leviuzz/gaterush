@@ -97,11 +97,11 @@ describe('simulateCheckpoint: invariants', () => {
       const run = simulateCheckpoint(population, policy, OPTIONS);
       expect(run.outcomes).toHaveLength(population.passengers.length);
       expect(run.stats.calls).toBe(population.passengers.length);
-      run.outcomes.forEach((o, i) => {
+      const inconsistent = run.outcomes.filter((o, i) => {
         const p = population.passengers[i]!;
-        expect(o.calledAtMs).toBeGreaterThanOrEqual(p.arrivalMs);
-        expect(o.serviceEndMs).toBe(o.calledAtMs + p.serviceMs);
+        return o.calledAtMs < p.arrivalMs || o.serviceEndMs !== o.calledAtMs + p.serviceMs;
       });
+      expect(inconsistent).toEqual([]);
     }
   });
 
@@ -130,10 +130,12 @@ describe('simulateCheckpoint: invariants', () => {
     ]);
     events.sort((a, b) => a[0]! - b[0]! || a[1]! - b[1]!);
     let busy = 0;
+    let maxBusy = 0;
     for (const [, delta] of events) {
       busy += delta!;
-      expect(busy).toBeLessThanOrEqual(population.checkpoint.lanes);
+      maxBusy = Math.max(maxBusy, busy);
     }
+    expect(maxBusy).toBeLessThanOrEqual(population.checkpoint.lanes);
   });
 });
 

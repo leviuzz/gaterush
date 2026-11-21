@@ -48,3 +48,10 @@ First reproducible FIFO vs priority comparison, plus the repository foundations.
 
 - Acceptance criterion 4 of S1 (Erlang C validation) refined with control variates and
   simultaneous confidence intervals (ADR-012).
+
+### Fixed
+
+- CI timeouts on GitHub-hosted runners: long test loops now assert once instead of on every
+  iteration, every package runs Vitest with an explicit 60 s per-test timeout, and `pnpm check`
+  runs all Turborepo tasks (`--continue`) so that one failure does not hide others. Simulated
+  numbers are unchanged.

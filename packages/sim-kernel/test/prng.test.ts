@@ -20,14 +20,15 @@ describe('Xoshiro128StarStar', () => {
     const rng = streamFor(7, [1]);
     let min = 1;
     let max = 0;
+    let invalid = 0;
     for (let i = 0; i < 100_000; i++) {
       const x = rng.nextFloat();
-      expect(x >= 0 && x < 1).toBe(true);
-      // 53-bit resolution: x * 2^53 is an integer
-      expect(Number.isInteger(x * 9007199254740992)).toBe(true);
+      // In [0, 1) with 53-bit resolution: x * 2^53 is an integer.
+      if (!(x >= 0 && x < 1) || !Number.isInteger(x * 9007199254740992)) invalid++;
       min = Math.min(min, x);
       max = Math.max(max, x);
     }
+    expect(invalid).toBe(0);
     expect(min).toBeLessThan(0.001);
     expect(max).toBeGreaterThan(0.999);
   });

@@ -231,15 +231,18 @@ describe('generatePopulation', () => {
   });
 
   it('makes every passenger arrive within the show-up bounds, before boarding closes', () => {
-    for (const p of population.passengers) {
+    const violations = population.passengers.filter((p) => {
       const flight = population.flights[p.flightIndex]!;
       const earliness = (flight.stdMs - p.arrivalMs) / 60_000;
-      const bounds = p.segment === 'TRANSFER' ? [24, 180] : [25, 240];
-      expect(earliness).toBeGreaterThanOrEqual(bounds[0]!);
-      expect(earliness).toBeLessThanOrEqual(bounds[1]!);
-      expect(p.arrivalMs).toBeLessThan(flight.boardingCloseMs);
-      expect(p.serviceMs).toBeGreaterThanOrEqual(1);
-    }
+      const [min, max] = p.segment === 'TRANSFER' ? [24, 180] : [25, 240];
+      return (
+        earliness < min ||
+        earliness > max ||
+        p.arrivalMs >= flight.boardingCloseMs ||
+        p.serviceMs < 1
+      );
+    });
+    expect(violations).toEqual([]);
   });
 
   it('draws about 5% connecting passengers and uses the zone walking time as estimate', () => {
@@ -254,9 +257,10 @@ describe('generatePopulation', () => {
     expect(transfers / total).toBeGreaterThan(0.04);
     expect(transfers / total).toBeLessThan(0.06);
     const zones = new Map(demo.schedule.gateZones.value.map((z) => [z.id, z.walkMinutes * 60_000]));
-    for (const p of population.passengers) {
-      expect(p.walkEstimateMs).toBe(zones.get(population.flights[p.flightIndex]!.gateZone));
-    }
+    const wrongEstimates = population.passengers.filter(
+      (p) => p.walkEstimateMs !== zones.get(population.flights[p.flightIndex]!.gateZone),
+    );
+    expect(wrongEstimates).toEqual([]);
   });
 
   it('keeps each passenger attribute on its own stream (changing one parameter does not move others)', () => {

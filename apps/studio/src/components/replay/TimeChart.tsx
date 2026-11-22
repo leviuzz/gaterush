@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { clock } from '@gateflow/sim-trace';
 
 export interface ChartSeries {
@@ -38,13 +38,20 @@ function niceMax(value: number): number {
   return 10 * power;
 }
 
-/** The width of an element, followed as it changes. */
+/**
+ * The width of an element, followed as it changes. It is measured before the first paint, so that
+ * a chart never shows, even for a frame, at the fallback width: wider than a phone, it would make
+ * the page scroll sideways.
+ */
 function useWidth(fallback: number) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(fallback);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = ref.current;
-    if (element === null || typeof ResizeObserver === 'undefined') return;
+    if (element === null) return;
+    const measured = Math.round(element.getBoundingClientRect().width);
+    if (measured > 0) setWidth(measured);
+    if (typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect.width;
       if (w !== undefined && w > 0) setWidth(Math.round(w));

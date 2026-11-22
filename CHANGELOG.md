@@ -49,6 +49,9 @@ Slice S17 in progress, the supervisor's console. Part 1: the modes of a checkpoi
 ### Fixed
 
 - A test of the API read five tables at once on one connection (a deprecation warning of `pg`).
+- Studio: a chart of the replay was drawn 600 pixels wide until its width was measured, so a
+  phone could scroll sideways for a moment (the CI's slower browser caught it). It is measured
+  before it is first drawn, and never wider than its place.
 
 ## [0.16.0] - 2026-11-22: Slice S16, displays over server-sent events
 

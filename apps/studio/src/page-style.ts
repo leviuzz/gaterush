@@ -157,7 +157,7 @@ details[open] > summary { margin-bottom: 8px; }
 .chart { margin: 0; min-width: 0; }
 .chart-title { font-size: 13px; color: var(--text-secondary); margin-bottom: 2px; }
 .chart-plot { position: relative; min-width: 0; }
-.chart-plot svg { display: block; touch-action: pan-y; cursor: crosshair; }
+.chart-plot svg { display: block; max-width: 100%; height: auto; touch-action: pan-y; cursor: crosshair; }
 .grid-line { stroke: var(--grid); stroke-width: 1; }
 .axis-line { stroke: var(--axis); stroke-width: 1; }
 .cursor-line { stroke: var(--text-secondary); stroke-width: 1; stroke-dasharray: 3 3; }

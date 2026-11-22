@@ -216,7 +216,7 @@ input {
 
 .number {
   margin: 0.08em 0 0.12em;
-  font-size: clamp(4.5rem, 17vmin, 11rem);
+  font-size: clamp(4.5rem, 15vmin, 11rem);
   font-weight: 800;
   line-height: 1;
   letter-spacing: 0.03em;
@@ -321,6 +321,7 @@ input {
 /* The kiosk's cards grow with the screen, as its text does. */
 .kiosk .card {
   width: min(100%, 36em);
+  padding: clamp(1.25rem, 3.5vmin, 2.5rem);
 }
 
 .welcome {
@@ -437,7 +438,7 @@ input {
 }
 
 .qr {
-  width: clamp(9rem, 24vmin, 15rem);
+  width: clamp(9rem, 20vmin, 15rem);
   height: auto;
   border-radius: 8px;
 }
@@ -522,6 +523,18 @@ input {
 
 .kiosk-foot p {
   flex: 1 1 24em;
+}
+
+/*
+ * The short privacy line is read before scanning, on the welcome screen; the full notice stays one
+ * tap away on every screen.
+ */
+.kiosk:not([data-screen='welcome']) .kiosk-foot p {
+  display: none;
+}
+
+.kiosk:not([data-screen='welcome']) .kiosk-foot {
+  justify-content: flex-end;
 }
 
 .foot-actions {

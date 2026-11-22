@@ -61,6 +61,8 @@ async function open(
     viewport: { width: options.width ?? 1080, height: options.height ?? 1920 },
     locale: 'en-GB',
     colorScheme: options.colorScheme ?? 'light',
+    // Screens saved for people to look at are sharp; the layout is the same.
+    deviceScaleFactor: SHOTS === undefined ? 1 : 2,
   });
   const page = await context.newPage();
   const errors: string[] = [];
@@ -330,10 +332,19 @@ describe('the kiosk', () => {
       await shot(page, `kiosk-ticket-${name}`);
       expect(await noOverflow(page), name).toBe(true);
       expect(await numberFits(page), name).toBe(true);
-      expect(
-        await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight),
-        `${name}: the whole ticket on screen`,
-      ).toBe(true);
+      // The whole ticket on screen: the screen's own height without its stretching (min-height).
+      const { needed, height } = await page.evaluate(() => {
+        const root = document.querySelector<HTMLElement>('.kiosk');
+        if (root === null) return { needed: Infinity, height: window.innerHeight };
+        root.style.minHeight = '0';
+        const natural = root.getBoundingClientRect().height;
+        root.style.minHeight = '';
+        return { needed: natural, height: window.innerHeight };
+      });
+      process.stdout.write(
+        `${name}: ${String(Math.round((100 * needed) / height))}% of the height\n`,
+      );
+      expect(needed, `${name}: the whole ticket on screen`).toBeLessThanOrEqual(height);
       expect(errors).toEqual([]);
       await page.context().close();
     }

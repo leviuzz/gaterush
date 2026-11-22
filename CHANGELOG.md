@@ -20,7 +20,8 @@ The first screens of the product, served by the API (ADR-044).
     - the answer is a number with a QR code to its page and a print layout (one page on an
       80 mm roll), or the reason in the passenger's language;
     - sample boarding passes on demo airports;
-    - a privacy notice, marked as a draft;
+    - a privacy line on the welcome screen and the full notice, marked as a draft, one tap away
+      on every screen;
     - back to its welcome screen and language after 45 seconds.
   - The passenger's page, `/t/<reference>`: the number and what to do now, updated every 15
     seconds, in the phone's language or the one chosen, light or dark.
@@ -37,7 +38,9 @@ The first screens of the product, served by the API (ADR-044).
 - Contracts 0.3.0: `DeviceResponse`, `DemoFlightsResponse`, the types of the answers for
   clients, and the device bearer scheme in the OpenAPI document.
 - CI: the job "Kiosk and ticket page in Chromium" runs the product (the API's bundle on
-  PostgreSQL 17) and keeps the screens it saw. The bundle's check also loads a kiosk page.
+  PostgreSQL 17) and keeps the screens it saw, at twice their size. The bundle's check also loads
+  a kiosk page. The ticket must fit every kiosk screen with the fonts of any machine: 89% of a
+  768x1024 tablet at most here, after the CI runner's wider fonts overflowed it.
 
 ### Changed
 

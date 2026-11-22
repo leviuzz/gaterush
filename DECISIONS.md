@@ -2468,8 +2468,52 @@ founder on 2026-11-21 together with all of its recommendations.
     holding 76 to 79 % of the truths; the queue's bands 78 to 88 % when there is a queue, its
     median high on the VCE-like days (by 19 people at 90 minutes on the peak); the wait's bands
     too narrow, 37 to 77 %. A buffer at the lanes modelled from the policy's call-ahead made the
-    queue worse and was not adopted. **[to confirm]** recalibrate the bands per quantity and
-    horizon from a backtest on days apart from the reports', before the console reads them as
-    "8 in 10".
+    queue worse and was not adopted. The bands are recalibrated on days apart from the reports'
+    (ADR-055).
   - S22's recommendations project the same model with the lanes varied.
+
+## ADR-055: Calibrated bands, edges read where the truths fell on the scenario library
+
+- **Status:** Proposed (2026-11-22). Slice S21.3, on "vai pure avanti". The choices marked
+  **[to confirm]** are for the founder. forecast 0.2.0, sim-metrics 0.12.0, command line 0.13.0,
+  API and web 0.21.1, contracts 0.14.0. No simulated number changes; the forecasts' bands do.
+- **Context:**
+  - S21's backtest (ADR-054): the bands of the wait held 37 to 77 % of the truths when there was a
+    queue, not 80 %; the queue's 78 to 88 %, the arrivals' 76 to 79 %. The console was to say
+    "8 in 10".
+  - The paths model the flow of the queue, not everything the simulator does (its call-ahead, the
+    order of the calls, the walk back after a call): the spread of the truths around them is
+    wider than theirs, and not the same at every horizon.
+- **Decision:**
+  - **Levels from the PIT [to confirm].** A band reads the sorted paths at three quantile levels.
+    On simulated days set apart, the PIT of each truth (the share of paths below it, half of those
+    equal) gives, per quantity and horizon, the levels where 10 % and 90 % of the truths fell; the
+    band's edges read the paths there. Every forecast for the arrivals; the forecasts of a queue
+    (the paths' median or the truth at least 1) for the queue and the wait. Fewer than 30 truths:
+    the paths as they are.
+  - **The median stays the paths' [to confirm]:** read where half the truths fell, it put the
+    queue's median far below the truth on the demo and the TSF-like days (bias -9 to -20 people,
+    larger MAE) while helping the VCE-like days. Only the edges move.
+  - **One calibration, the library's [to confirm]:** the six scenarios of the reports, 60 days
+    each (seeds 2,000,001 to 2,000,060), pooled. Almost as good as each scenario's own on 40
+    report days (the wait 77 to 100 % against 79 to 98 %), and nothing to compute when the
+    console asks. With an airport's data, its own days.
+  - **The calibration is code:** `gateflow-sim calibrate` writes it as a module of the forecast
+    package (`LIBRARY_CALIBRATION`, with where it comes from and the truths behind each level);
+    `pnpm calibrate:library` regenerates it and CI checks it is what the library gives, as the
+    flight lists. The API and the backtest read the bands with it; the backtest reports the paths
+    as they are beside them; the API names the calibration in its answer and the console's note
+    says the brackets held 8 outcomes in 10 on other simulated days.
+- **Alternatives considered:**
+  - **Each scenario's calibration, computed by the server:** 30 to 80 seconds of simulation per
+    scenario, to run on worker threads and keep; hardly better on the library. Later, with an
+    airport's data.
+  - **Wider bands by a factor per horizon:** does not follow the shape of the spread (the wait's
+    misses are mostly below the band) and needs a width where the paths have none.
+  - **A model of the call-ahead in the paths:** tried in S21 (ADR-054), worse.
+- **Consequences:**
+  - The forecast of the arrivals barely changes; the queue's lower edge goes down, its upper edge
+    a little; the wait's band widens: it says less, and what it says holds.
+  - Any change to the forecasts, the simulator or the library's scenarios changes the calibration:
+    CI fails until `pnpm calibrate:library` is run and its module committed.
 

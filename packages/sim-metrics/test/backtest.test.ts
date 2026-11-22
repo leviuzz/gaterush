@@ -1,16 +1,27 @@
 import { readFileSync } from 'node:fs';
-import { BUCKET_MS, HORIZONS_MIN, errorSummary, isBusy } from '@gateflow/forecast';
+import {
+  BUCKET_MS,
+  HORIZONS_MIN,
+  LIBRARY_CALIBRATION,
+  errorSummary,
+  isBusy,
+} from '@gateflow/forecast';
 import { PRIORITY_V3_POLICY, classificationOf } from '@gateflow/queue-core';
 import { FORECAST_DAYS, generatePopulation, parseScenarioText } from '@gateflow/sim-scenarios';
 import { describe, expect, it } from 'vitest';
 import {
   BACKTEST_SCHEMA,
+  CALIBRATION_SCHEMA,
   ORIGIN_EVERY_MS,
   backtestDay,
   buildBacktest,
+  buildCalibration,
+  calibrationDay,
+  calibrationOfDays,
   checkpointProfile,
   planBacktest,
   renderBacktestReport,
+  renderCalibrationModule,
   stringifyBacktest,
   summariseBacktest,
 } from '../src';
@@ -124,5 +135,93 @@ describe('the backtest of the forecasts on the simulated truth (S21)', () => {
       })),
     );
     expect(backtestDay(planned, 1).length).toBeGreaterThan(0);
+  });
+});
+
+describe('the calibration of the bands on simulated days (S21.3)', () => {
+  const job = planBacktest(demo, PRIORITY_V3_POLICY, classification);
+  const pits = calibrationDay(job, 2_000_001);
+
+  it('places every truth of the arrivals, and of a queue, among the paths', () => {
+    const day = backtestDay(job, 2_000_001);
+    for (const h of HORIZONS_MIN) {
+      const at = (q: 'arrivals' | 'backlog' | 'wait') =>
+        day.filter((o) => o.quantity === q && o.horizon === h);
+      expect(pits.arrivals[String(h)]).toHaveLength(at('arrivals').length);
+      // A queue: the paths' median or the truth at least 1 (person, minute).
+      expect(pits.backlog[String(h)]).toHaveLength(at('backlog').filter((o) => isBusy(o)).length);
+      expect(pits.wait[String(h)]?.length).toBeGreaterThan(0);
+      for (const values of [pits.arrivals, pits.backlog, pits.wait]) {
+        for (const u of values[String(h)] ?? []) {
+          expect(u).toBeGreaterThanOrEqual(0);
+          expect(u).toBeLessThanOrEqual(1);
+        }
+      }
+    }
+    // Pooled days give the levels of their PIT values; one day of the demo is enough for 30 of
+    // the arrivals at every horizon.
+    const calibration = calibrationOfDays([pits, calibrationDay(job, 2_000_002)]);
+    expect(calibration.levels.arrivals['15']?.p50).toBe(0.5);
+    expect(calibration.levels.arrivals['15']?.p10).toBeLessThanOrEqual(0.5);
+  });
+
+  it('writes the calibration as a module of the forecasts, with where it comes from', () => {
+    const doc = buildCalibration(
+      {
+        scenarios: [{ id: demo.id, hash: 'sha256:' + 'ab'.repeat(32), policy: 'priority-v3' }],
+        seeds: [2_000_002, 2_000_001],
+        generator: { name: 'test', version: '0.0.0' },
+      },
+      [pits, calibrationDay(job, 2_000_002)],
+    );
+    expect(doc.schema).toBe(CALIBRATION_SCHEMA);
+    expect(doc.seeds).toEqual({ count: 2, ranges: '2000001-2000002' });
+    expect(doc.truths.arrivals['15']).toBe(
+      (pits.arrivals['15']?.length ?? 0) +
+        (calibrationDay(job, 2_000_002).arrivals['15']?.length ?? 0),
+    );
+    const module = renderCalibrationModule(doc);
+    expect(module).toContain('export const LIBRARY_CALIBRATION: Calibration = {');
+    expect(module).toContain(`- ${demo.id} (priority-v3, sha256:abababababab...)`);
+    expect(module).toContain(
+      'export const LIBRARY_CALIBRATION_SOURCE = "the scenario library (1 scenarios, seeds 2000001-2000002)";',
+    );
+    const start = module.indexOf('Calibration = ') + 'Calibration = '.length;
+    const json = module.slice(start, module.indexOf('};', start) + 1);
+    expect(JSON.parse(json)).toEqual({ levels: doc.levels });
+    expect(renderCalibrationModule(doc)).toBe(module);
+  });
+
+  it('reports the calibrated bands, and how the paths as they are did', () => {
+    const days = [1, 2].map((seed) => backtestDay(job, seed, LIBRARY_CALIBRATION));
+    const doc = buildBacktest(
+      {
+        scenario: demo,
+        scenarioHash: 'sha256:test',
+        policy: PRIORITY_V3_POLICY,
+        seeds: [1, 2],
+        generator: { name: 'test', version: '0.0.0' },
+        commit: 'test',
+        calibration: { source: 'the library', calibration: LIBRARY_CALIBRATION },
+      },
+      days,
+    );
+    expect(doc.manifest.calibration).toEqual({
+      source: 'the library',
+      levels: LIBRARY_CALIBRATION.levels,
+    });
+    const after = doc.summary.wait['30']?.busy;
+    const before = doc.uncalibrated?.wait['30']?.busy;
+    // The same forecasts and the same medians; wider bands.
+    expect(after?.n).toBe(before?.n);
+    expect(after?.mae).toBe(before?.mae);
+    expect(after?.bias).toBe(before?.bias);
+    expect(after?.width).toBeGreaterThan(before?.width ?? Infinity);
+    expect(after?.coverage).toBeGreaterThanOrEqual(before?.coverage ?? Infinity);
+    expect(summariseBacktest(days)).toEqual(doc.uncalibrated);
+    const report = renderBacktestReport(doc);
+    expect(report).toContain('| Paths in p10-p90 |');
+    expect(report).toContain('calibration (the library)');
+    expect(report).not.toMatch(/NaN|undefined|Infinity/);
   });
 });

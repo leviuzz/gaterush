@@ -1,6 +1,11 @@
 import { and, eq } from 'drizzle-orm';
 import type { ForecastResponse } from '@gateflow/contracts';
-import { FORECAST_VERSION, forecastFrom } from '@gateflow/forecast';
+import {
+  FORECAST_VERSION,
+  LIBRARY_CALIBRATION,
+  LIBRARY_CALIBRATION_SOURCE,
+  forecastFrom,
+} from '@gateflow/forecast';
 import type { Band, CheckpointProfile, PlannedLanes } from '@gateflow/forecast';
 import { arrivalsByBucket, profileOf } from '@gateflow/sim-metrics';
 import {
@@ -21,8 +26,8 @@ import { zonedEpoch } from './time';
  * GateFlow Predict, a preview (S21, ADR-054): what the next 90 minutes may bring at a checkpoint.
  * The forecast reads what the live system knows now, in one snapshot of the database (the people
  * who took a number in the last hour, the people not yet admitted, the lanes open), and the
- * scenario the checkpoint is configured with: its simulated days and its lane plan. Every number
- * it gives is SIMULATED.
+ * scenario the checkpoint is configured with: its simulated days and its lane plan. The bands
+ * are calibrated on the scenario library (S21.3). Every number it gives is SIMULATED.
  */
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -131,13 +136,18 @@ export async function liveForecast(
   const backlog = waiting.people + prepare.people + called.people;
   // The scenario's clock: milliseconds since the local midnight of the service day.
   const midnight = zonedEpoch(serviceDay, 0, cp.timeZone);
-  const forecast = forecastFrom(entry.profile, {
-    nowMs: at - midnight,
-    arrivalsLastHour,
-    backlog,
-    lanesOpen: live.overview.lanesOpen,
-    ratePerLanePerHour: cp.settings.ratePerLanePerHour,
-  });
+  // The bands' edges read the paths at the levels calibrated on the scenario library (S21.3).
+  const forecast = forecastFrom(
+    entry.profile,
+    {
+      nowMs: at - midnight,
+      arrivalsLastHour,
+      backlog,
+      lanesOpen: live.overview.lanesOpen,
+      ratePerLanePerHour: cp.settings.ratePerLanePerHour,
+    },
+    LIBRARY_CALIBRATION,
+  );
   return {
     checkpointId: cp.id,
     serviceDay,
@@ -146,6 +156,7 @@ export async function liveForecast(
       version: FORECAST_VERSION,
       paths: forecast.paths,
       days: entry.profile.days.length,
+      calibration: LIBRARY_CALIBRATION_SOURCE,
       scenario: {
         id: entry.scenario.id,
         title: entry.scenario.title,

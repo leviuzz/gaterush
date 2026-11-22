@@ -153,6 +153,8 @@ jobs:
           cmp out/ba/backtest.md out/bb/backtest.md
       - name: The library flight lists are up to date
         run: node scenarios/flights/make-library-flights.mjs --check
+      - name: The forecasts' calibration is what the scenario library gives (S21.3)
+        run: pnpm calibrate:check
 
   studio:
     name: Simulator Studio in Chromium

@@ -274,7 +274,7 @@ const EN = {
   'supervisor.forecast.lanes': 'Lanes assumed',
   'supervisor.forecast.band': '{p50} ({p10}–{p90})',
   'supervisor.forecast.note':
-    'SIMULATED: the median, and 8 paths in 10 between the brackets, of {paths} paths drawn from simulated days of “{scenario}”. Last hour: {seen} people arrived, {expected} expected.',
+    'SIMULATED: the median of {paths} paths drawn from simulated days of “{scenario}”; between the brackets, the range that held 8 outcomes in 10 on other simulated days. Last hour: {seen} people arrived, {expected} expected.',
   'supervisor.forecast.none': 'No forecast: this checkpoint names no scenario to forecast from.',
   'supervisor.forecast.unavailable': 'The forecast is not available right now.',
   'supervisor.alert.EMERGENCY': 'Emergency declared',
@@ -604,7 +604,7 @@ const IT: Readonly<Record<MessageKey, string>> = {
   'supervisor.forecast.lanes': 'Corsie ipotizzate',
   'supervisor.forecast.band': '{p50} ({p10}–{p90})',
   'supervisor.forecast.note':
-    'SIMULATO: la mediana, e 8 percorsi su 10 tra parentesi, di {paths} percorsi tratti da giornate simulate di “{scenario}”. Ultima ora: arrivate {seen} persone, attese {expected}.',
+    'SIMULATO: la mediana di {paths} percorsi tratti da giornate simulate di “{scenario}”; tra parentesi, l’intervallo che ha contenuto 8 esiti su 10 in altre giornate simulate. Ultima ora: arrivate {seen} persone, attese {expected}.',
   'supervisor.forecast.none':
     'Nessuna previsione: questo varco non indica uno scenario da cui prevedere.',
   'supervisor.forecast.unavailable': 'La previsione ora non è disponibile.',
@@ -930,7 +930,7 @@ const ES: Readonly<Record<MessageKey, string>> = {
   'supervisor.forecast.lanes': 'Carriles supuestos',
   'supervisor.forecast.band': '{p50} ({p10}–{p90})',
   'supervisor.forecast.note':
-    'SIMULADO: la mediana, y 8 trayectorias de 10 entre paréntesis, de {paths} trayectorias tomadas de días simulados de “{scenario}”. Última hora: llegaron {seen} personas, se esperaban {expected}.',
+    'SIMULADO: la mediana de {paths} trayectorias tomadas de días simulados de “{scenario}”; entre paréntesis, el intervalo que contuvo 8 resultados de 10 en otros días simulados. Última hora: llegaron {seen} personas, se esperaban {expected}.',
   'supervisor.forecast.none':
     'Sin pronóstico: este filtro no indica un escenario del cual pronosticar.',
   'supervisor.forecast.unavailable': 'El pronóstico no está disponible ahora.',

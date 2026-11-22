@@ -578,12 +578,15 @@ describe('gateflow-sim backtest', () => {
     expect(result.code, result.stderr).toBe(EXIT_OK);
     const json = readFileSync(join(out, 'backtest.json'), 'utf8');
     const doc = JSON.parse(json) as BacktestDocument;
-    expect(doc.schema).toBe('gateflow.forecast.backtest/1');
+    expect(doc.schema).toBe('gateflow.forecast.backtest/2');
     expect(doc.manifest.generator).toEqual({ name: 'gateflow-sim', version: CLI_VERSION });
     expect(doc.manifest.commit).toBe('test-commit');
     expect(doc.manifest.policy.id).toBe('priority-v3');
     expect(doc.manifest.seeds).toEqual({ count: 2, ranges: '1-2' });
     expect(Object.keys(doc.summary.wait)).toEqual(['15', '30', '60', '90']);
+    // The bands are calibrated on the library (S21.3); the paths as they are are reported too.
+    expect(doc.manifest.calibration?.source).toMatch(/^the scenario library/);
+    expect(doc.uncalibrated?.wait['30']?.busy?.n).toBe(doc.summary.wait['30']?.busy?.n);
     expect(readFileSync(join(out, 'backtest.md'), 'utf8')).toContain('# Forecast backtest');
     expect(result.stdout).toContain('SIMULATED RESULTS');
     expect(result.stdout).toMatch(/^90 min {4}/m);
@@ -601,6 +604,37 @@ describe('gateflow-sim backtest', () => {
       ['backtest', '--scenario', DEMO, '--seeds', 'x'],
     ]) {
       expect((await cli([...argv, '--out', out, '--quiet'])).code, argv.join(' ')).toBe(EXIT_USAGE);
+    }
+  });
+});
+
+describe('gateflow-sim calibrate', () => {
+  it("writes the bands' calibration as a module, and checks a module against the scenarios", async () => {
+    const out = join(workDir, 'calibration.ts');
+    const argv = ['calibrate', '--scenario', DEMO, '--seeds', '2000001-2000002', '--quiet'];
+    const written = await cli([...argv, '--out', out]);
+    expect(written.code, written.stderr).toBe(EXIT_OK);
+    const module = readFileSync(out, 'utf8');
+    expect(module).toContain('export const LIBRARY_CALIBRATION: Calibration = {');
+    expect(module).toContain('single-checkpoint-demo (priority-v3, sha256:');
+    expect(written.stdout).toMatch(/^ {2}wait {6}0\.\d{3}-0\.\d{3}/m);
+    // The same scenarios and days give the same module; anything else does not.
+    expect((await cli([...argv, '--check', out])).code).toBe(EXIT_OK);
+    writeFileSync(out, module.replace('"p50": 0.5', '"p50": 0.4'));
+    const stale = await cli([...argv, '--check', out]);
+    expect(stale.code).toBe(EXIT_FAILURE);
+    expect(stale.stderr).toContain('pnpm calibrate:library');
+  }, 120_000);
+
+  it('needs scenarios and one of --out and --check', async () => {
+    const out = join(workDir, 'bad-calibration.ts');
+    for (const argv of [
+      ['calibrate', '--out', out],
+      ['calibrate', '--scenario', DEMO],
+      ['calibrate', '--scenario', DEMO, '--out', out, '--check', out],
+      ['calibrate', '--scenario', DEMO, '--out', out, '--policy', 'fifo,priority-v3'],
+    ]) {
+      expect((await cli([...argv, '--quiet'])).code, argv.join(' ')).toBe(EXIT_USAGE);
     }
   });
 });

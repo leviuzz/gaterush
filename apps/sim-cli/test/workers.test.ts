@@ -120,4 +120,24 @@ describe('parallel days in worker threads', () => {
     };
     expect(backtest(3)).toBe(backtest(1));
   }, 300_000);
+
+  it('writes a byte-identical calibration whatever the number of workers', () => {
+    const calibrate = (workers: number) => {
+      const out = join(workDir, `calibration-w${workers}.ts`);
+      node([
+        'calibrate',
+        '--scenario',
+        DISRUPTED,
+        '--seeds',
+        '2000001-2000003',
+        '--out',
+        out,
+        '--workers',
+        String(workers),
+        '--quiet',
+      ]);
+      return readFileSync(out, 'utf8');
+    };
+    expect(calibrate(3)).toBe(calibrate(1));
+  }, 300_000);
 });

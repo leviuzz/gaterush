@@ -1,6 +1,10 @@
 import { MS_PER_HOUR, MS_PER_MINUTE } from '@gateflow/domain';
 import { exp, labelCode, streamFor } from '@gateflow/sim-kernel';
 import type { RandomSource } from '@gateflow/sim-kernel';
+import { BUCKET_MS, ForecastError, HORIZONS_MIN, SPAN_MS, quantile } from './base';
+import type { Band } from './base';
+import { UNCALIBRATED, levelsAt, validateCalibration } from './calibration';
+import type { Calibration, Levels } from './calibration';
 
 /*
  * GateFlow Predict, a preview (S21, ADR-054): from the live state of a checkpoint, what the next 90
@@ -9,16 +13,11 @@ import type { RandomSource } from '@gateflow/sim-kernel';
  * fading over the next minutes: on simulated days the last hour says little about the hours after
  * it. The queue is a Monte Carlo of its flow: the people not yet admitted, served by the lanes at
  * their rate, with a random variation per minute. The lanes follow the scenario's plan, keeping
- * today's difference from it (an extra lane, a lane out of service). Every band is the 10th, 50th
- * and 90th percentile of the paths. The same inputs give the same forecast.
+ * today's difference from it (an extra lane, a lane out of service). Every band reads the paths at
+ * three quantile levels: the 10th, 50th and 90th percentile, or levels calibrated on simulated
+ * days (S21.3). The same inputs give the same forecast.
  */
 
-/** The buckets of a forecast: 5 minutes. */
-export const BUCKET_MS = 5 * MS_PER_MINUTE;
-/** The horizons the duty manager reads, in minutes. */
-export const HORIZONS_MIN = [15, 30, 60, 90] as const;
-/** How far a forecast goes. */
-export const SPAN_MS = 90 * MS_PER_MINUTE;
 /** Paths drawn from each simulated day of the profile (each with its own service draws). */
 export const PATHS_PER_DAY = 4;
 /** The seed of the service draws: a forecast never depends on anything else at random. */
@@ -67,13 +66,6 @@ export interface LiveState {
   readonly ratePerLanePerHour: number;
 }
 
-/** A forecast's spread: the 10th, 50th and 90th percentile of its paths. */
-export interface Band {
-  readonly p10: number;
-  readonly p50: number;
-  readonly p90: number;
-}
-
 /** Arrivals in a 5-minute bucket from now. */
 export interface ForecastBucket {
   /** Minutes from now to the bucket's start. */
@@ -105,16 +97,10 @@ export interface Forecast {
   readonly capacityPerHour: number;
   /** The lanes the paths assume at each horizon: the plan's, with today's difference from it. */
   readonly lanesAt: readonly { readonly minutes: number; readonly lanes: number }[];
+  /** True when the bands read the paths at calibrated levels (S21.3). */
+  readonly calibrated: boolean;
   readonly buckets: readonly ForecastBucket[];
   readonly horizons: readonly ForecastHorizon[];
-}
-
-/** Thrown when a forecast's inputs cannot make one. */
-export class ForecastError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'ForecastError';
-  }
 }
 
 function validateProfile(profile: CheckpointProfile): void {
@@ -211,28 +197,52 @@ function poisson(rng: RandomSource, mean: number): number {
   return k;
 }
 
-/** The quantile of sorted values, by linear interpolation (Hyndman-Fan type 7, as the simulator). */
-export function quantile(sorted: readonly number[], q: number): number {
-  if (sorted.length === 0) throw new ForecastError('the quantile of nothing');
-  const position = (sorted.length - 1) * q;
-  const below = Math.floor(position);
-  const low = sorted[below] ?? 0;
-  const high = sorted[Math.min(sorted.length - 1, below + 1)] ?? low;
-  return low + (position - below) * (high - low);
+/** A band of sorted values, read at `levels` (the 10th, 50th and 90th percentiles by default). */
+export function bandAt(sorted: readonly number[], levels: Levels = UNCALIBRATED): Band {
+  return {
+    p10: quantile(sorted, levels.p10),
+    p50: quantile(sorted, levels.p50),
+    p90: quantile(sorted, levels.p90),
+  };
 }
 
 /** The band of values: their 10th, 50th and 90th percentiles. */
 export function bandOf(values: readonly number[]): Band {
-  const sorted = [...values].sort((a, b) => a - b);
-  return { p10: quantile(sorted, 0.1), p50: quantile(sorted, 0.5), p90: quantile(sorted, 0.9) };
+  return bandAt([...values].sort((a, b) => a - b));
 }
 
+/** The paths of a forecast at a horizon, each sorted. */
+export interface HorizonPaths {
+  readonly minutes: number;
+  /** People arriving in the 5 minutes before the horizon. */
+  readonly arrivals: readonly number[];
+  /** People not yet admitted at the horizon. */
+  readonly backlog: readonly number[];
+  /** The wait of a party arriving at the horizon. */
+  readonly waitMs: readonly number[];
+}
+
+/** Every path of a forecast, sorted: what its bands read (S21.3). */
+export interface ForecastPaths {
+  readonly nowMs: number;
+  readonly expectedLastHour: number;
+  readonly scale: number;
+  readonly paths: number;
+  readonly capacityPerHour: number;
+  readonly lanesAt: readonly { readonly minutes: number; readonly lanes: number }[];
+  /** People arriving in each 5-minute bucket from now. */
+  readonly buckets: readonly (readonly number[])[];
+  readonly horizons: readonly HorizonPaths[];
+}
+
+const ascending = (a: number, b: number) => a - b;
+
 /**
- * Forecasts the next 90 minutes of a checkpoint from its live state: arrivals per 5-minute bucket,
- * and at 15, 30, 60 and 90 minutes the arrivals, the people not yet admitted and the wait of a
- * party arriving then, each as a band over the paths.
+ * The paths of the next 90 minutes of a checkpoint from its live state: arrivals per 5-minute
+ * bucket, and at 15, 30, 60 and 90 minutes the arrivals, the people not yet admitted and the wait
+ * of a party arriving then.
  */
-export function forecastFrom(profile: CheckpointProfile, state: LiveState): Forecast {
+export function forecastPaths(profile: CheckpointProfile, state: LiveState): ForecastPaths {
   validateProfile(profile);
   validateState(state);
   const expected = expectedLastHour(profile, state.nowMs);
@@ -294,7 +304,7 @@ export function forecastFrom(profile: CheckpointProfile, state: LiveState): Fore
       }
     }
   });
-  const arrivals = arrivalsByBucket.map((values) => bandOf(values));
+  const sortedBuckets = arrivalsByBucket.map((values) => values.sort(ascending));
   return {
     nowMs: state.nowMs,
     expectedLastHour: expected,
@@ -305,12 +315,50 @@ export function forecastFrom(profile: CheckpointProfile, state: LiveState): Fore
       minutes: h,
       lanes: lanesAt(state.nowMs + h * MS_PER_MINUTE),
     })),
-    buckets: arrivals.map((band, i) => ({ fromMin: i * bucketMinutes, arrivals: band })),
+    buckets: sortedBuckets,
     horizons: HORIZONS_MIN.map((h) => ({
       minutes: h,
-      arrivals: arrivals[h / bucketMinutes - 1] ?? { p10: 0, p50: 0, p90: 0 },
-      backlog: bandOf(backlogAt.get(h) ?? []),
-      waitMs: bandOf(waitAt.get(h) ?? []),
+      arrivals: sortedBuckets[h / bucketMinutes - 1] ?? [0],
+      backlog: (backlogAt.get(h) ?? [0]).sort(ascending),
+      waitMs: (waitAt.get(h) ?? [0]).sort(ascending),
     })),
   };
+}
+
+/** The bands of a forecast's paths, at the calibration's levels or at the 10th, 50th and 90th. */
+export function bandsOf(paths: ForecastPaths, calibration?: Calibration): Forecast {
+  if (calibration !== undefined) validateCalibration(calibration);
+  const bucketMinutes = BUCKET_MS / MS_PER_MINUTE;
+  return {
+    nowMs: paths.nowMs,
+    expectedLastHour: paths.expectedLastHour,
+    scale: paths.scale,
+    paths: paths.paths,
+    capacityPerHour: paths.capacityPerHour,
+    lanesAt: paths.lanesAt,
+    calibrated: calibration !== undefined,
+    buckets: paths.buckets.map((sorted, i) => ({
+      fromMin: i * bucketMinutes,
+      arrivals: bandAt(sorted, levelsAt(calibration, 'arrivals', (i + 1) * bucketMinutes)),
+    })),
+    horizons: paths.horizons.map((h) => ({
+      minutes: h.minutes,
+      arrivals: bandAt(h.arrivals, levelsAt(calibration, 'arrivals', h.minutes)),
+      backlog: bandAt(h.backlog, levelsAt(calibration, 'backlog', h.minutes)),
+      waitMs: bandAt(h.waitMs, levelsAt(calibration, 'wait', h.minutes)),
+    })),
+  };
+}
+
+/**
+ * Forecasts the next 90 minutes of a checkpoint from its live state: arrivals per 5-minute bucket,
+ * and at 15, 30, 60 and 90 minutes the arrivals, the people not yet admitted and the wait of a
+ * party arriving then, each as a band over the paths; calibrated when a calibration is given.
+ */
+export function forecastFrom(
+  profile: CheckpointProfile,
+  state: LiveState,
+  calibration?: Calibration,
+): Forecast {
+  return bandsOf(forecastPaths(profile, state), calibration);
 }

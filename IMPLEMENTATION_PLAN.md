@@ -1391,8 +1391,8 @@ Part of the high queue is the simulator's call-ahead: when people wait to be cal
 1.8 minutes of the lanes' capacity stay admitted at the lanes, which the forecast counts as not
 yet admitted. Modelling that buffer from the policy (its call-ahead less its response estimate,
 1.5 minutes) was tried on the tuning days: the queue's bias turned negative (-5 to -8 people) and
-its MAE rose by 30 to 60 %, so it was not adopted. **[to confirm]** Next step: recalibrate the
-bands per quantity and horizon from a backtest on days apart from the reports', before the
+its MAE rose by 30 to 60 %, so it was not adopted. Next step, done in S21.3 below: recalibrate
+the bands per quantity and horizon from a backtest on days apart from the reports', before the
 console reads them as "8 in 10".
 
 Acceptance (kickoff): an error report per horizon; p10/p50/p90 bands. **Evidence:**
@@ -1415,6 +1415,55 @@ Acceptance (kickoff): an error report per horizon; p10/p50/p90 bands. **Evidence
 - Chromium: the console's card, a column per horizon and a median with its band per figure, the
   note SIMULATED with the scenario, in English and Italian;
 - the error report per horizon of the scenario library, 200 days each: `docs/reports/slice-21`.
+
+### S21.3: the bands calibrated (done)
+
+On "vai pure avanti" (2026-11-22), the next step proposed above. ADR-055.
+
+- **How [to confirm]:** a band reads the paths at three quantile levels, 0.1, 0.5 and 0.9 as they
+  are. On simulated days set apart for it, the probability integral transform (PIT) of each truth
+  says where it fell among the paths (the share of paths below it, half of those equal to it);
+  the band's edges then read the paths where 10 % and 90 % of the truths fell, per quantity and
+  horizon, the forecasts of a queue only for the queue and the wait. **The median stays the
+  paths'** (below).
+- **One calibration for the library [to confirm]:** fitted on 60 days of each of the six
+  scenarios of the reports (seeds 2,000,001 to 2,000,060: never a day of the reports, of the
+  forecasts' profile or of S21's tuning), pooled; written by `gateflow-sim calibrate` as a module
+  of the forecast package (`pnpm calibrate:library`), and checked by CI to be what the library
+  gives (`pnpm calibrate:check`, about a minute), as the flight lists are. The API, the console
+  and the backtest read the bands with it; the backtest reports the paths as they are too.
+- **The levels:** arrivals 0.08 to 0.10 and 0.90 to 0.92 (whole people: barely wider); the queue
+  0.04 to 0.06 and 0.76 to 0.82 (wider below, narrower above); the wait 0.013 to 0.020 and 0.915
+  to 0.945 (much wider).
+
+**What the trial on 40 report days showed** (the levels fitted on 60 other days, per scenario or
+pooled):
+- the wait's bands, holding 44 to 77 % of the truths when there was a queue, held 79 to 98 % with
+  each scenario's calibration and 77 to 100 % with the library's; the queue's, 77 to 91 %; the
+  arrivals', 77 to 81 %;
+- calibrating the median too (reading it where half the truths fell) cut the queue's high bias on
+  the VCE-like days, but put the median far below the truth on the demo and the TSF-like days
+  (bias -9 to -20 people) and raised its MAE there: the small queues, many of them, set the
+  median's level, the large ones the errors. The median stays the paths';
+- the library's calibration is almost as good as each scenario's own, and costs nothing when the
+  console asks: chosen. With an airport's data (M5) the calibration is fitted on its own days.
+
+Evidence:
+- forecast: the PIT with ties, the edges where 10 % and 90 % of the truths fell, the median kept,
+  too few truths, the levels between horizons for the buckets, a calibrated forecast with the same
+  median and wider edges, levels out of order refused, the library's calibration (5 tests; 12 in
+  the package);
+- sim-metrics: a day's PIT values for every arrival and every forecast of a queue, pooled days,
+  the module with where it comes from and its levels read back, the calibrated document with the
+  paths' figures beside them (3 tests);
+- the command line: `calibrate` writes the module and checks one, a changed module fails the
+  check; usage errors; byte for byte the same module on one and three worker threads; the backtest
+  is calibrated on the library and reports the paths as they are;
+- the API on PostgreSQL: the forecast's bands are the pure forecast's with the library's
+  calibration, the median the paths', the calibration named in the answer;
+- Chromium: the console's note says what the brackets hold;
+- the error report per horizon, calibrated, of the scenario library, 200 days each:
+  `docs/reports/slice-21`.
 
 ## Later milestones (summary)
 

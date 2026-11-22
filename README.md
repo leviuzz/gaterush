@@ -68,9 +68,9 @@ border procedures: it organises the flow before they start.
 >   waits counted as the simulator counts them, people at risk, lanes, a fairness monitor, flight
 >   data and alerts, checked on demand against a replay of the day's log.>
 > - **GateFlow Predict, a preview** (S21): from what the live system knows now, the arrivals, the
->   people not yet admitted and the wait of a party arriving in 15, 30, 60 and 90 minutes, each a
->   median with the band of 8 simulated paths in 10; the backtest measures them against the full
->   simulator's days, horizon by horizon.
+>   people not yet admitted and the wait of a party arriving in 15, 30, 60 and 90 minutes, each the
+>   median of simulated paths with a band calibrated to hold 8 outcomes in 10; the backtest
+>   measures them against the full simulator's days, horizon by horizon.
 >
 > Staff sign in with local passwords until the pilot brings the airport's identity provider. See
 > [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
@@ -334,6 +334,10 @@ The backtest (S21) measures GateFlow's forecasts against the full simulator: eve
 each simulated day, a forecast from what the live system knows then, compared at 15, 30, 60 and 90
 minutes with what happened (MAE, WAPE, bias, and how often the truth falls in the band). It writes
 `backtest.json` and `backtest.md` in `out/<scenario id>/backtest/`.
+
+The forecasts' bands are calibrated on the scenario library (S21.3): `pnpm calibrate:library`
+runs `gateflow-sim calibrate` on six scenarios and writes the levels as a module of the forecasts;
+CI checks the module (`pnpm calibrate:check`) after any change to the simulator or the forecasts.
 
 The last command writes the design day of a scenario as a flight list
 (`gateflow.flights/1`). An airport can send its own flights in that format: see

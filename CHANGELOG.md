@@ -4,6 +4,31 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Any change that alters simulated numbers
 must be listed, together with the component versions it bumps.
 
+## [0.21.1] - 2026-11-22: Slice S21.3, the forecasts' bands calibrated
+
+The bands' edges read the paths where the truths fell on simulated days set apart for it: the
+wait's bands, which held 37 to 77 % of the truths when there was a queue, are calibrated to hold
+8 in 10 (ADR-055). The medians do not change.
+
+### Simulated numbers change
+
+- None. The forecasts' bands change: their edges are calibrated.
+
+### Added
+
+- forecast 0.2.0: `forecastPaths` (every path, sorted) and `bandsOf`; `forecastFrom` takes a
+  calibration; `pitOf`, `calibrationFrom`, `levelsAt`, `validateCalibration`;
+  `LIBRARY_CALIBRATION`, the calibration of the scenario library (a generated module).
+- sim-metrics 0.12.0: `calibrationDay` and `calibrationOfDays` (the PIT of the truths on
+  simulated days), `buildCalibration` and `renderCalibrationModule`; the backtest reads the bands
+  with a calibration and reports the paths as they are beside them (schema
+  `gateflow.forecast.backtest/2`).
+- Command line 0.13.0: `gateflow-sim calibrate --scenario <file>... (--out | --check) <module>`;
+  `backtest` uses the library's calibration.
+- `pnpm calibrate:library` and `pnpm calibrate:check`; CI checks the module.
+- Contracts 0.14.0: the forecast names its calibration (`model.calibration`).
+- API 0.21.1 and web 0.21.1: calibrated bands; the console's note says what the brackets hold.
+
 ## [0.21.0] - 2026-11-22: Slice S21, GateFlow Predict preview
 
 The supervisor's console forecasts the next 90 minutes of a checkpoint from what the live system

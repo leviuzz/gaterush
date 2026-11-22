@@ -4,15 +4,23 @@ import {
   FORECAST_VERSION,
   HORIZONS_MIN,
   QUANTITIES,
+  bandAt,
+  calibrationFrom,
   errorSummary,
-  forecastFrom,
+  forecastPaths,
   isBusy,
+  levelsAt,
+  pitOf,
+  quantile,
 } from '@gateflow/forecast';
 import type {
+  Band,
+  Calibration,
   CheckpointProfile,
   ErrorSummary,
   LiveState,
   Observation,
+  PitSets,
   PlannedLanes,
   Quantity,
 } from '@gateflow/forecast';
@@ -39,7 +47,7 @@ import { DISCLAIMER, formatSeedRanges, roundNumbers } from './results';
  * wait of the people who arrived in those 5 minutes.
  */
 
-export const BACKTEST_SCHEMA = 'gateflow.forecast.backtest/1';
+export const BACKTEST_SCHEMA = 'gateflow.forecast.backtest/2';
 
 /** Forecasts are made every 15 minutes of the day. */
 export const ORIGIN_EVERY_MS = 15 * MS_PER_MINUTE;
@@ -102,6 +110,8 @@ export function checkpointProfile(scenario: Scenario, days = FORECAST_DAYS): Che
 export interface BacktestObservation extends Observation {
   /** When the forecast was made (ms since the start of the day). */
   readonly originMs: number;
+  /** The band at the calibration's levels, when the backtest has a calibration (S21.3). */
+  readonly calibrated?: Band;
 }
 
 /** What a backtest needs for one day: plain data, so that a worker thread can run it. */
@@ -278,44 +288,141 @@ export class SimulatedDay {
   }
 }
 
+/** A horizon of a forecast made in a backtest, and what happened then. */
+interface HorizonOutcome {
+  readonly minutes: number;
+  /** The paths, sorted: people, people, and milliseconds for the wait. */
+  readonly paths: Readonly<Record<Quantity, readonly number[]>>;
+  /** What happened, in the same units; the wait is null when nobody arrived in those 5 minutes. */
+  readonly truths: Readonly<Record<Quantity, number | null>>;
+}
+
 /**
- * One simulated day of the backtest: the truth from the full simulator, and the forecasts made
- * every 15 minutes, from an hour after the first arrival, with what the live system would have
- * known, compared at every horizon up to the last arrival. Waits are in minutes.
+ * Every forecast of a simulated day: from an hour after the first arrival, every 15 minutes,
+ * with what the live system would have known, and what happened at each horizon up to the last
+ * arrival.
  */
-export function backtestDay(job: BacktestJob, seed: number): BacktestObservation[] {
+function forecastsOfDay(
+  job: BacktestJob,
+  seed: number,
+  visit: (originMs: number, horizons: readonly HorizonOutcome[]) => void,
+): void {
   const day = SimulatedDay.run(job, seed);
   const span = day.span;
-  if (span === null) return [];
-  const observations: BacktestObservation[] = [];
+  if (span === null) return;
   const start = Math.ceil((span.firstMs + MS_PER_HOUR) / ORIGIN_EVERY_MS) * ORIGIN_EVERY_MS;
   for (let t = start; t <= span.lastMs; t += ORIGIN_EVERY_MS) {
-    const forecast = forecastFrom(job.profile, day.stateAt(t));
-    for (const h of forecast.horizons) {
+    const paths = forecastPaths(job.profile, day.stateAt(t));
+    const outcomes: HorizonOutcome[] = [];
+    for (const h of paths.horizons) {
       const end = t + h.minutes * MS_PER_MINUTE;
       if (end > span.lastMs) continue;
       const from = end - BUCKET_MS;
-      const at = { originMs: t, horizon: h.minutes };
-      observations.push(
-        { ...at, quantity: 'arrivals', truth: day.arrivedIn(from, end), band: h.arrivals },
-        { ...at, quantity: 'backlog', truth: day.backlogAt(end), band: h.backlog },
-      );
-      const wait = day.medianWaitMs(from, end);
-      if (wait !== null) {
+      outcomes.push({
+        minutes: h.minutes,
+        paths: { arrivals: h.arrivals, backlog: h.backlog, wait: h.waitMs },
+        truths: {
+          arrivals: day.arrivedIn(from, end),
+          backlog: day.backlogAt(end),
+          wait: day.medianWaitMs(from, end),
+        },
+      });
+    }
+    visit(t, outcomes);
+  }
+}
+
+/** A band in the report's units: waits in minutes. */
+const inUnits = (quantity: Quantity, band: Band): Band =>
+  quantity === 'wait'
+    ? {
+        p10: band.p10 / MS_PER_MINUTE,
+        p50: band.p50 / MS_PER_MINUTE,
+        p90: band.p90 / MS_PER_MINUTE,
+      }
+    : band;
+
+/**
+ * One simulated day of the backtest: the truth from the full simulator, and the forecasts made
+ * every 15 minutes with what the live system would have known, compared at every horizon, as the
+ * paths are and, with a calibration, as calibrated. Waits are in minutes.
+ */
+export function backtestDay(
+  job: BacktestJob,
+  seed: number,
+  calibration?: Calibration,
+): BacktestObservation[] {
+  const observations: BacktestObservation[] = [];
+  forecastsOfDay(job, seed, (originMs, horizons) => {
+    for (const h of horizons) {
+      for (const quantity of QUANTITIES) {
+        const truth = h.truths[quantity];
+        if (truth === null) continue;
+        const paths = h.paths[quantity];
         observations.push({
-          ...at,
-          quantity: 'wait',
-          truth: wait / MS_PER_MINUTE,
-          band: {
-            p10: h.waitMs.p10 / MS_PER_MINUTE,
-            p50: h.waitMs.p50 / MS_PER_MINUTE,
-            p90: h.waitMs.p90 / MS_PER_MINUTE,
-          },
+          originMs,
+          horizon: h.minutes,
+          quantity,
+          truth: quantity === 'wait' ? truth / MS_PER_MINUTE : truth,
+          band: inUnits(quantity, bandAt(paths)),
+          ...(calibration === undefined
+            ? {}
+            : {
+                calibrated: inUnits(
+                  quantity,
+                  bandAt(paths, levelsAt(calibration, quantity, h.minutes)),
+                ),
+              }),
         });
       }
     }
-  }
+  });
   return observations;
+}
+
+/** Empty PIT sets: an array per quantity and horizon. */
+function emptyPits(): Record<Quantity, Record<string, number[]>> {
+  const pits = {} as Record<Quantity, Record<string, number[]>>;
+  for (const quantity of QUANTITIES) {
+    pits[quantity] = Object.fromEntries(HORIZONS_MIN.map((h) => [String(h), [] as number[]]));
+  }
+  return pits;
+}
+
+/**
+ * Where the truths fell among the paths (their PIT) on one simulated day, for a calibration: every
+ * forecast of the arrivals, and the forecasts of a queue for the queue and the wait (the median of
+ * the paths or the truth at least 1, a person or a minute).
+ */
+export function calibrationDay(job: BacktestJob, seed: number): PitSets {
+  const pits = emptyPits();
+  forecastsOfDay(job, seed, (_originMs, horizons) => {
+    for (const h of horizons) {
+      for (const quantity of QUANTITIES) {
+        const truth = h.truths[quantity];
+        if (truth === null) continue;
+        const paths = h.paths[quantity];
+        const unit = quantity === 'wait' ? MS_PER_MINUTE : 1;
+        const busy = truth >= unit || quantile(paths, 0.5) >= unit;
+        if (quantity !== 'arrivals' && !busy) continue;
+        pits[quantity][String(h.minutes)]?.push(pitOf(paths, truth));
+      }
+    }
+  });
+  return pits;
+}
+
+/** The calibration of the bands from the PIT values of simulated days ({@link calibrationDay}). */
+export function calibrationOfDays(days: readonly PitSets[]): Calibration {
+  const pits = emptyPits();
+  for (const day of days) {
+    for (const quantity of QUANTITIES) {
+      for (const h of HORIZONS_MIN) {
+        pits[quantity][String(h)]?.push(...(day[quantity][String(h)] ?? []));
+      }
+    }
+  }
+  return calibrationFrom(pits);
 }
 
 /** The errors at one horizon: of every forecast, and of the forecasts of a queue. */
@@ -328,14 +435,22 @@ export interface HorizonErrors {
 /** The errors of every quantity at every horizon (keys: the horizons in minutes). */
 export type BacktestSummary = Readonly<Record<Quantity, Readonly<Record<string, HorizonErrors>>>>;
 
-/** Sums the observations of the days up per quantity and horizon. */
-export function summariseBacktest(days: readonly (readonly Observation[])[]): BacktestSummary {
+/**
+ * Sums the observations of the days up per quantity and horizon: their bands as the paths are, or
+ * as calibrated (the median is the same; the edges move).
+ */
+export function summariseBacktest(
+  days: readonly (readonly BacktestObservation[])[],
+  bands: 'paths' | 'calibrated' = 'paths',
+): BacktestSummary {
   const summary = {} as Record<Quantity, Record<string, HorizonErrors>>;
   for (const quantity of QUANTITIES) {
     const byHorizon: Record<string, HorizonErrors> = {};
     for (const h of HORIZONS_MIN) {
       const all = days.flatMap((day) =>
-        day.filter((o) => o.quantity === quantity && o.horizon === h),
+        day
+          .filter((o) => o.quantity === quantity && o.horizon === h)
+          .map((o) => (bands === 'calibrated' ? { ...o, band: o.calibrated ?? o.band } : o)),
       );
       byHorizon[String(h)] = {
         all: errorSummary(all),
@@ -371,8 +486,19 @@ export interface BacktestDocument {
     readonly originEveryMinutes: number;
     readonly horizonsMinutes: readonly number[];
     readonly units: { readonly arrivals: string; readonly backlog: string; readonly wait: string };
+    /**
+     * The calibration the bands were read with (S21.3): where it comes from and its levels; null
+     * when the bands are the paths' 10th, 50th and 90th percentiles.
+     */
+    readonly calibration: {
+      readonly source: string;
+      readonly levels: Calibration['levels'];
+    } | null;
   };
+  /** The errors of the bands as the product shows them: calibrated when there is a calibration. */
   readonly summary: BacktestSummary;
+  /** With a calibration, the errors of the paths' 10th, 50th and 90th percentiles; else null. */
+  readonly uncalibrated: BacktestSummary | null;
 }
 
 export function buildBacktest(
@@ -383,10 +509,13 @@ export function buildBacktest(
     readonly seeds: readonly number[];
     readonly generator: { readonly name: string; readonly version: string };
     readonly commit: string;
+    /** The calibration of the days' observations (`calibrated`), and where it comes from. */
+    readonly calibration?: { readonly source: string; readonly calibration: Calibration };
   },
-  days: readonly (readonly Observation[])[],
+  days: readonly (readonly BacktestObservation[])[],
 ): BacktestDocument {
   const seeds = normaliseSeeds(input.seeds);
+  const calibrated = input.calibration !== undefined;
   return {
     schema: BACKTEST_SCHEMA,
     disclaimer: DISCLAIMER,
@@ -414,8 +543,13 @@ export function buildBacktest(
         backlog: 'people not yet admitted at the horizon',
         wait: 'minutes from arrival to admission, the median of the people arriving in those 5 minutes',
       },
+      calibration:
+        input.calibration === undefined
+          ? null
+          : { source: input.calibration.source, levels: input.calibration.calibration.levels },
     },
-    summary: summariseBacktest(days),
+    summary: summariseBacktest(days, calibrated ? 'calibrated' : 'paths'),
+    uncalibrated: calibrated ? summariseBacktest(days, 'paths') : null,
   };
 }
 
@@ -427,18 +561,23 @@ function errorTable(
   summary: Readonly<Record<string, HorizonErrors>>,
   horizons: readonly number[],
   which: keyof HorizonErrors,
+  /** The paths as they are, when the bands are calibrated: their share in the band too. */
+  before: Readonly<Record<string, HorizonErrors>> | null,
 ): string[] {
+  const extra = before === null ? '' : ' Paths in p10-p90 |';
   const rows = [
-    '| Horizon | Forecasts | MAE | WAPE | Bias | In p10-p90 | Below p10 | Above p90 | Band width |',
-    '|---|---:|---:|---:|---:|---:|---:|---:|---:|',
+    `| Horizon | Forecasts | MAE | WAPE | Bias | In p10-p90 | Below p10 | Above p90 | Band width |${extra}`,
+    `|---|---:|---:|---:|---:|---:|---:|---:|---:|${before === null ? '' : '---:|'}`,
   ];
   for (const h of horizons) {
     const s = summary[String(h)]?.[which] ?? null;
+    const b = before === null ? undefined : (before[String(h)]?.[which] ?? null);
+    const tail = b === undefined ? '' : ` ${b === null ? '' : percent(b.coverage)} |`;
     rows.push(
       s === null
-        ? `| ${h} min | 0 | | | | | | | |`
+        ? `| ${h} min | 0 | | | | | | | |${b === undefined ? '' : ' |'}`
         : `| ${h} min | ${s.n} | ${fixed(s.mae, 1)} | ${percent(s.wape)} | ${fixed(s.bias, 1)} | ` +
-            `${percent(s.coverage)} | ${percent(s.below)} | ${percent(s.above)} | ${fixed(s.width, 1)} |`,
+            `${percent(s.coverage)} | ${percent(s.below)} | ${percent(s.above)} | ${fixed(s.width, 1)} |${tail}`,
     );
   }
   return rows;
@@ -468,6 +607,13 @@ export function renderBacktestReport(doc: BacktestDocument): string {
       'nothing of the bands, so the people not yet admitted and the waits are also measured on ' +
       'the forecasts of a queue alone (median or truth at least 1).',
     '',
+    m.calibration === null
+      ? "The bands are the paths' 10th, 50th and 90th percentiles."
+      : `The bands' edges read the paths at the levels of a calibration (${m.calibration.source}): ` +
+        'where the truths fell among the paths on other simulated days. The median is the ' +
+        "paths'. The last column gives the share of the truths between the paths' 10th and 90th " +
+        'percentiles, before the calibration.',
+    '',
   ];
   const titles: Record<Quantity, string> = {
     arrivals: `Arrivals: ${m.units.arrivals}`,
@@ -476,19 +622,20 @@ export function renderBacktestReport(doc: BacktestDocument): string {
   };
   for (const quantity of QUANTITIES) {
     const summary = doc.summary[quantity];
+    const before = doc.uncalibrated === null ? null : doc.uncalibrated[quantity];
     lines.push(`## ${titles[quantity]}`, '');
     if (quantity === 'arrivals') {
-      lines.push(...errorTable(summary, m.horizonsMinutes, 'all'), '');
+      lines.push(...errorTable(summary, m.horizonsMinutes, 'all', before), '');
       continue;
     }
     lines.push(
       '### When a queue was forecast or happened',
       '',
-      ...errorTable(summary, m.horizonsMinutes, 'busy'),
+      ...errorTable(summary, m.horizonsMinutes, 'busy', before),
       '',
       '### Every forecast',
       '',
-      ...errorTable(summary, m.horizonsMinutes, 'all'),
+      ...errorTable(summary, m.horizonsMinutes, 'all', before),
       '',
     );
   }

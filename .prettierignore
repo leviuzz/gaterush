@@ -7,5 +7,8 @@ out/
 **/test/golden/**
 docs/reports/**
 
+# Written by `pnpm calibrate:library` (gateflow-sim calibrate), checked by CI.
+packages/forecast/src/library-calibration.ts
+
 # Written by drizzle-kit on every `db:generate`.
 apps/api/migrations/meta/

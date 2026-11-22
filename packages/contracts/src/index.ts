@@ -6,7 +6,7 @@ import { z } from 'zod';
  * ticket is a number, a state and a flight, never a name.
  */
 
-export const CONTRACTS_VERSION = '0.13.0';
+export const CONTRACTS_VERSION = '0.14.0';
 
 export const Segment = z.enum(['DEPARTING', 'TRANSFER']);
 
@@ -789,7 +789,10 @@ export type OverviewVerifyResponse = z.infer<typeof OverviewVerifyResponse>;
 /** A scenario's name (S19): the SHA-256 of its canonical JSON, as results record it. */
 export const ScenarioHash = z.string().regex(/^sha256:[0-9a-f]{64}$/);
 
-/** A forecast's spread (S21): the 10th, 50th and 90th percentile of its simulated paths. */
+/**
+ * A forecast's spread (S21): the median of its simulated paths, and the edges that held 8 outcomes
+ * in 10 on other simulated days (calibrated, S21.3).
+ */
 export const ForecastBand = z.object({
   p10: z.number().min(0),
   p50: z.number().min(0),
@@ -814,6 +817,11 @@ export const ForecastResponse = z.object({
     paths: z.int().min(1),
     /** The simulated days of the scenario the arrivals come from. */
     days: z.int().min(1),
+    /**
+     * Where the calibration of the bands' edges comes from (S21.3): on other simulated days, the
+     * band held 8 outcomes in 10. Null: the paths' 10th and 90th percentiles.
+     */
+    calibration: z.string().nullable(),
     scenario: z.object({
       id: z.string(),
       title: z.string(),

@@ -10,7 +10,7 @@ import {
   TwinOptionsResponse,
   TwinRun,
 } from '@gateflow/contracts';
-import { forecastFrom } from '@gateflow/forecast';
+import { LIBRARY_CALIBRATION, LIBRARY_CALIBRATION_SOURCE, forecastFrom } from '@gateflow/forecast';
 import { PRIORITY_V3_POLICY } from '@gateflow/queue-core';
 import {
   SimulatedDay,
@@ -147,8 +147,9 @@ describe('the forecast of a checkpoint (S21)', () => {
     expect(f.state.backlog).toBe(
       o.tickets.waiting.people + o.tickets.prepare.people + o.tickets.called.people,
     );
-    // The bands are the pure forecast's, from the scenario's profile, to a tenth.
-    const pure = forecastFrom(job.profile, state);
+    // The bands are the pure forecast's, from the scenario's profile and calibrated on the
+    // library (S21.3), to a tenth.
+    const pure = forecastFrom(job.profile, state, LIBRARY_CALIBRATION);
     expect(f.horizons.map((h) => h.minutes)).toEqual([15, 30, 60, 90]);
     for (const [i, h] of f.horizons.entries()) {
       const p = pure.horizons[i];
@@ -158,16 +159,24 @@ describe('the forecast of a checkpoint (S21)', () => {
         p50: tenth(p.backlog.p50),
         p90: tenth(p.backlog.p90),
       });
-      expect(h.waitMinutes.p50).toBe(tenth(p.waitMs.p50 / MIN));
+      expect(h.waitMinutes).toEqual({
+        p10: tenth(p.waitMs.p10 / MIN),
+        p50: tenth(p.waitMs.p50 / MIN),
+        p90: tenth(p.waitMs.p90 / MIN),
+      });
+      // The calibration moves the edges only: the median is the paths'.
+      const raw = forecastFrom(job.profile, state).horizons[i];
+      expect(h.waitMinutes.p50).toBe(tenth((raw?.waitMs.p50 ?? NaN) / MIN));
       expect(h.arrivals.p50).toBe(tenth(p.arrivals.p50));
       expect(h.lanes).toBe(pure.lanesAt[i]?.lanes);
       expect(Date.parse(h.at) - Date.parse(f.at)).toBe(h.minutes * MIN);
     }
     expect(f.buckets).toHaveLength(18);
     expect(f.model).toMatchObject({
-      version: '0.1.0',
+      version: '0.2.0',
       paths: 200,
       days: 50,
+      calibration: LIBRARY_CALIBRATION_SOURCE,
       scenario: {
         id: scenario.id,
         hash: scenarioHashOf(scenario),

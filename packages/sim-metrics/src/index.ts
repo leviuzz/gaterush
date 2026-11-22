@@ -121,6 +121,8 @@ export {
   arrivalsByBucket,
   backtestDay,
   buildBacktest,
+  calibrationDay,
+  calibrationOfDays,
   checkpointProfile,
   planBacktest,
   profileOf,
@@ -135,3 +137,11 @@ export type {
   BacktestSummary,
   HorizonErrors,
 } from './backtest';
+export {
+  CALIBRATION_DAYS,
+  CALIBRATION_FIRST_SEED,
+  CALIBRATION_SCHEMA,
+  buildCalibration,
+  renderCalibrationModule,
+} from './calibration';
+export type { CalibrationDocument } from './calibration';

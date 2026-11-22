@@ -305,6 +305,7 @@ describe("the supervisor's console (S17)", () => {
     const api = (await answer.json()) as ForecastResponse;
     expect(api.model.scenario.id).toBe('vce-like-normal-day');
     expect(api.horizons.map((h) => h.minutes)).toEqual([15, 30, 60, 90]);
+    expect(api.model.calibration).toMatch(/^the scenario library/);
     const { page, errors } = await open();
     await signIn(page, 'supervisor');
     await page.waitForSelector('#console-forecast[data-state="ready"]', { timeout: 60_000 });
@@ -316,7 +317,7 @@ describe("the supervisor's console (S17)", () => {
       for (const text of await cells.allTextContents()) expect(text).toMatch(/^\d+ \(\d+–\d+\)$/);
     }
     expect(await page.textContent('#console-forecast-note')).toContain(
-      `SIMULATED: the median, and 8 paths in 10 between the brackets, of ${String(api.model.paths)} paths`,
+      `SIMULATED: the median of ${String(api.model.paths)} paths drawn from simulated days of`,
     );
     expect(await page.textContent('#console-forecast-note')).toContain(api.model.scenario.title);
     await shot(page, 'console-forecast');

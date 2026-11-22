@@ -1,8 +1,12 @@
 import { dirname, isAbsolute, join } from 'node:path';
 import { parseArgs } from 'node:util';
+import { LIBRARY_CALIBRATION, LIBRARY_CALIBRATION_SOURCE } from '@gateflow/forecast';
+import type { PitSets } from '@gateflow/forecast';
 import { LANE_MODES, POLICY_PRESETS } from '@gateflow/queue-core';
 import type { Policy } from '@gateflow/queue-core';
 import {
+  CALIBRATION_DAYS,
+  CALIBRATION_FIRST_SEED,
   DEFAULT_BOOTSTRAP,
   SweepConfigError,
   applyScenarioSettings,
@@ -10,6 +14,7 @@ import {
   assembleExperiment,
   assembleSweep,
   buildBacktest,
+  buildCalibration,
   buildResults,
   buildSweepResults,
   comparisonKey,
@@ -17,6 +22,7 @@ import {
   planExperiment,
   planSweep,
   renderBacktestReport,
+  renderCalibrationModule,
   renderHtmlReport,
   renderReport,
   renderSweepHtml,
@@ -81,6 +87,8 @@ Usage:
   ${CLI_NAME} sweep --spec <file> [options]     Run a sensitivity sweep: sweep.json, sweep.md, sweep.html
   ${CLI_NAME} backtest --scenario <file> [options]
                                                 Measure the forecasts on simulated days: backtest.json, backtest.md
+  ${CLI_NAME} calibrate --scenario <file> [--scenario <file>...] (--out <file> | --check <file>)
+                                                Calibrate the forecasts' bands on scenarios: a module of the forecasts
   ${CLI_NAME} trace --scenario <file> --seed <n> [options]
                                                 Trace one day of two policies: trace.json
   ${CLI_NAME} validate --scenario <file>        Validate a scenario file
@@ -119,6 +127,17 @@ from what the live system knows and compared with the simulated day at 15, 30, 6
   --policy <id>                  The policy running the queue            (default priority-v3)
   --out <dir>                    Output directory              (default out/<scenario id>/backtest)
   --workers, --commit, --quiet: as for "run"
+The bands are read at the levels of the library's calibration; the report gives the share of the
+truths they hold, and the share the paths as they are hold.
+
+Options for "calibrate" (where the truths fall among the paths, on days set apart for it, gives
+the levels at which the bands' edges read the paths):
+  --scenario <file>              A scenario; repeat it for several, pooled    (required)
+  --seeds <spec>                 The days of every scenario      (default ${String(CALIBRATION_FIRST_SEED)}-${String(CALIBRATION_FIRST_SEED + CALIBRATION_DAYS - 1)})
+  --policy <id>                  The policy running the queue            (default priority-v3)
+  --out <file>                   Write the calibration as a module of the forecasts
+  --check <file>                 Fail unless that module is what the scenarios give
+  --workers, --quiet: as for "run"
 
 Options for "sweep" (a sensitivity sweep is described in a file, see sweeps/):
   --spec <file>                  Sweep specification (YAML or JSON)      (required)
@@ -454,7 +473,12 @@ async function commandBacktest(argv: string[], io: CliIo): Promise<number> {
 
   // The profile of the forecasts is computed once; the days are independent.
   const job = planBacktest(scenario, policy, arrivalClassification([policy]));
-  const tasks: Task[] = seeds.map((seed) => ({ kind: 'backtest-day', job, seed }));
+  const tasks: Task[] = seeds.map((seed) => ({
+    kind: 'backtest-day',
+    job,
+    seed,
+    calibration: LIBRARY_CALIBRATION,
+  }));
   const progressEvery = Math.max(1, Math.ceil(seeds.length / 4));
   const results = await io.runTasks(tasks, workers, (done, total) => {
     if (!values.quiet && (done % progressEvery === 0 || done === total)) {
@@ -469,6 +493,7 @@ async function commandBacktest(argv: string[], io: CliIo): Promise<number> {
       seeds,
       generator: { name: CLI_NAME, version: CLI_VERSION },
       commit,
+      calibration: { source: LIBRARY_CALIBRATION_SOURCE, calibration: LIBRARY_CALIBRATION },
     },
     backtestDays(results),
   );
@@ -488,6 +513,99 @@ async function commandBacktest(argv: string[], io: CliIo): Promise<number> {
       '',
     ].join('\n'),
   );
+  return EXIT_OK;
+}
+
+async function commandCalibrate(argv: string[], io: CliIo): Promise<number> {
+  const { values } = parseArgs({
+    args: argv,
+    options: {
+      scenario: { type: 'string', multiple: true },
+      seeds: {
+        type: 'string',
+        default: `${String(CALIBRATION_FIRST_SEED)}-${String(CALIBRATION_FIRST_SEED + CALIBRATION_DAYS - 1)}`,
+      },
+      policy: { type: 'string', default: 'priority-v3' },
+      out: { type: 'string' },
+      check: { type: 'string' },
+      workers: { type: 'string' },
+      quiet: { type: 'boolean', default: false },
+    },
+    strict: true,
+    allowPositionals: false,
+  });
+  const files = values.scenario ?? [];
+  if (files.length === 0) throw new UsageError('--scenario is required');
+  if ((values.out === undefined) === (values.check === undefined)) {
+    throw new UsageError('give one of --out and --check');
+  }
+  const seeds = parseSeeds(values.seeds);
+  const workers =
+    values.workers === undefined ? io.cpus() : parsePositiveInteger(values.workers, '--workers');
+  const scenarios = files.map((file) => {
+    const scenario = loadScenario(io, file);
+    const policies = configuredPolicies(parsePolicies(values.policy), scenario);
+    if (policies.length !== 1) throw new UsageError('--policy takes one policy');
+    const policy = policies[0] as Policy;
+    return {
+      scenario,
+      policy,
+      hash: scenarioHash(io, scenario),
+      job: planBacktest(scenario, policy, arrivalClassification([policy])),
+    };
+  });
+  const tasks: Task[] = scenarios.flatMap(({ job }) =>
+    seeds.map((seed): Task => ({ kind: 'calibration-day', job, seed })),
+  );
+  const progressEvery = Math.max(1, Math.ceil(tasks.length / 4));
+  const results = await io.runTasks(tasks, workers, (done, total) => {
+    if (!values.quiet && (done % progressEvery === 0 || done === total)) {
+      io.stderr(`calibrated on ${done}/${total} days\n`);
+    }
+  });
+  const days = results.map((r): PitSets => {
+    if (r.kind !== 'calibration-day') throw new Error(`unexpected task result ${r.kind}`);
+    return r.day;
+  });
+  const doc = buildCalibration(
+    {
+      scenarios: scenarios.map((s) => ({ id: s.scenario.id, hash: s.hash, policy: s.policy.id })),
+      seeds,
+      generator: { name: CLI_NAME, version: CLI_VERSION },
+    },
+    days,
+  );
+  const module = renderCalibrationModule(doc);
+  const levels = (quantity: 'arrivals' | 'backlog' | 'wait') =>
+    ['15', '30', '60', '90']
+      .map((h) => {
+        const l = doc.levels[quantity][h];
+        return l === undefined ? 'n/a' : `${l.p10.toFixed(3)}-${l.p90.toFixed(3)}`;
+      })
+      .join('  ');
+  const summary = [
+    'GateFlow forecast calibration: on SIMULATED days of synthetic scenarios',
+    `scenarios  ${doc.scenarios.map((s) => s.id).join(', ')}`,
+    `seeds      ${doc.seeds.ranges} (${String(doc.seeds.count)} days each)`,
+    'levels of the band (p10-p90) at 15, 30, 60 and 90 minutes:',
+    `  arrivals  ${levels('arrivals')}`,
+    `  queue     ${levels('backlog')}`,
+    `  wait      ${levels('wait')}`,
+  ];
+  if (values.check !== undefined) {
+    const current = readText(io, values.check, 'calibration');
+    if (current !== module) {
+      io.stderr(
+        `${values.check} is not what the scenarios give: run "pnpm calibrate:library" and commit it\n`,
+      );
+      return EXIT_FAILURE;
+    }
+    io.stdout([...summary, '', `checked    ${values.check}`, ''].join('\n'));
+    return EXIT_OK;
+  }
+  const out = values.out ?? '';
+  io.writeFile(out, module);
+  io.stdout([...summary, '', `written    ${out}`, ''].join('\n'));
   return EXIT_OK;
 }
 
@@ -734,6 +852,8 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
         return await commandSweep(rest, io);
       case 'backtest':
         return await commandBacktest(rest, io);
+      case 'calibrate':
+        return await commandCalibrate(rest, io);
       case 'trace':
         return commandTrace(rest, io);
       case 'validate':

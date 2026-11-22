@@ -1,14 +1,10 @@
-import type { Band } from './forecast';
+import type { Band, Quantity } from './base';
 
 /*
  * How wrong a forecast was (S21): its median against what happened, and whether what happened
  * fell in its band. Calibrated bands hold 80 % of the truths between their 10th and 90th
  * percentiles.
  */
-
-/** What a forecast says: arrivals in a bucket, people not yet admitted, a party's wait. */
-export const QUANTITIES = ['arrivals', 'backlog', 'wait'] as const;
-export type Quantity = (typeof QUANTITIES)[number];
 
 /** A forecast's band at a horizon, and what then happened. */
 export interface Observation {

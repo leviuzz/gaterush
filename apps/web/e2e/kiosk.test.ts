@@ -410,36 +410,43 @@ describe('the kiosk', () => {
     await page.context().close();
   });
 
-  it('fits portrait and landscape screens without scrolling', async () => {
-    for (const size of [
+  it('fits portrait and landscape screens without scrolling, in its longest languages', async () => {
+    const sizes = [
       { width: 1080, height: 1920 },
       { width: 1920, height: 1080 },
       { width: 1280, height: 800 },
       { width: 768, height: 1024 },
-    ]) {
-      const name = `${String(size.width)}x${String(size.height)}`;
-      const { page, errors } = await openKiosk('it', size);
-      expect(await noOverflow(page), name).toBe(true);
-      await page.click('#kiosk-sample');
-      await page.waitForSelector('#kiosk-ticket');
-      await shot(page, `kiosk-ticket-${name}`);
-      expect(await noOverflow(page), name).toBe(true);
-      expect(await numberFits(page), name).toBe(true);
-      // The whole ticket on screen: the screen's own height without its stretching (min-height).
-      const needed = await naturalHeight(page);
-      const height = size.height;
-      process.stdout.write(
-        `${name}: ${String(Math.round((100 * needed) / height))}% of the height\n`,
-      );
-      expect(needed, `${name}: the whole ticket on screen`).toBeLessThanOrEqual(height);
-      // The screen that adds a party's passes fits as well (S15).
-      await page.click('#kiosk-add-pass');
-      await page.waitForSelector('#kiosk-party');
-      await shot(page, `kiosk-party-${name}`);
-      expect(await noOverflow(page), `${name} party`).toBe(true);
-      expect(await naturalHeight(page), `${name}: the party's screen`).toBeLessThanOrEqual(height);
-      expect(errors).toEqual([]);
-      await page.context().close();
+    ];
+    // Italian and Spanish have the longest texts.
+    for (const lang of ['it', 'es'] as const) {
+      for (const size of sizes) {
+        const screen = `${String(size.width)}x${String(size.height)}`;
+        const name = `${lang} ${screen}`;
+        const suffix = lang === 'it' ? screen : `${screen}-${lang}`;
+        const { page, errors } = await openKiosk(lang, size);
+        expect(await noOverflow(page), name).toBe(true);
+        await page.click('#kiosk-sample');
+        await page.waitForSelector('#kiosk-ticket');
+        await shot(page, `kiosk-ticket-${suffix}`);
+        expect(await noOverflow(page), name).toBe(true);
+        expect(await numberFits(page), name).toBe(true);
+        // The whole screen: its own height without its stretching (min-height).
+        const ticket = await naturalHeight(page);
+        // The screen that adds a party's passes fits as well (S15).
+        await page.click('#kiosk-add-pass');
+        await page.waitForSelector('#kiosk-party');
+        await shot(page, `kiosk-party-${suffix}`);
+        expect(await noOverflow(page), `${name} party`).toBe(true);
+        const party = await naturalHeight(page);
+        const share = (needed: number) => `${String(Math.round((100 * needed) / size.height))}%`;
+        process.stdout.write(
+          `${name}: ticket ${share(ticket)}, party ${share(party)} of the height\n`,
+        );
+        expect(ticket, `${name}: the whole ticket on screen`).toBeLessThanOrEqual(size.height);
+        expect(party, `${name}: the party's screen`).toBeLessThanOrEqual(size.height);
+        expect(errors).toEqual([]);
+        await page.context().close();
+      }
     }
   });
 });

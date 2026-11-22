@@ -1747,7 +1747,7 @@ founder on 2026-11-21 together with all of its recommendations.
     people actually served are not measured.
   - Until now only staff could give one number to a party, by hand at the lane (ADR-045).
 - **Decision:**
-  - After a number, the kiosk offers **"Add people travelling with you"**. On the screen that
+  - After a number, the kiosk offers **"Add travel companions"**. On the screen that
     opens, each companion scans their own boarding pass; the screen shows the people on the
     number and the answer to each scan, until "Done", or for a minute without a pass.
   - A pass joins the number (`POST /scans` with `party`, the ticket's reference) when:
@@ -1788,7 +1788,8 @@ founder on 2026-11-21 together with all of its recommendations.
   - **In Chromium, on the product:** a number, then a companion's pass by the scanner, the same
     pass twice, another flight's pass; the number for two on the ticket screen and the
     passenger's page; the companion scanning alone later finds the family's number; the demo's
-    sample pass is for the family's flight; the screen fits portrait and landscape kiosks.
+    sample pass is for the family's flight; the ticket and the party's screen fit portrait and
+    landscape kiosks, in Italian and in Spanish.
 - **Consequences:**
   - The step is optional. A family that skips it is a party of one in the queue's count; the lane
     still admits them together.

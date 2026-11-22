@@ -34,10 +34,12 @@ The founder's decision after S15: families are grouped, by the passengers themse
 - Contracts 0.5.0: `ScanRequest.party`, the outcome `ADDED` and the four reasons,
   `PublicTicketResponse.partySize`, the id of a demo flight.
 - Web 0.15.1:
-  - the kiosk's "Add people travelling with you" under a number still waiting, and the screen
+  - the kiosk's "Add travel companions" under a number still waiting, and the screen
     where each companion's pass joins it: the people on the number, the answer to each scan,
-    "Done", and back to the welcome screen after a minute without a pass. In the demo, the sample
-    pass is for the family's flight.
+    "Done", and back to the welcome screen after a minute without a pass. On a landscape kiosk it
+    has two columns, as the ticket has. In the demo, the sample pass is for the family's flight.
+  - The test of the kiosk's sizes covers the ticket and the party's screen, in Italian and in
+    Spanish.
   - The ticket screen, its printout and the passenger's page say for how many people a number
     is.
   - i18n: the texts of a party, in the three languages.

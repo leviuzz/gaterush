@@ -714,7 +714,7 @@ flowchart LR
   - A number comes with a QR code to its page and a print layout; a refusal comes with its
     reason, in the passenger's language.
   - The kiosk is back on its welcome screen, in its own language, 45 seconds later.
-  - **People travelling together** (ADR-046): "Add people travelling with you", under a number
+  - **People travelling together** (ADR-046): "Add travel companions", under a number
     still waiting, opens a screen where each companion's pass joins the number. It shows the
     people on the number and the answer to each scan, and closes after a minute without a pass.
     The ticket, its printout and the passenger's page say for how many people it is.

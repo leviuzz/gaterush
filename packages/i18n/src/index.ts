@@ -57,7 +57,7 @@ const EN = {
   'kiosk.reason.PARTY_FULL': 'This number cannot take more people. Please ask a member of staff.',
   'kiosk.reason.TOO_LATE':
     'Your number has been called already: go to the security entrance together.',
-  'kiosk.party.add': 'Add people travelling with you',
+  'kiosk.party.add': 'Add travel companions',
   'kiosk.party.title': 'One number for everyone travelling together',
   'kiosk.party.count': 'People on this number: {count}',
   'kiosk.party.hint': 'Scan their boarding passes one at a time. When you have finished, tap Done.',
@@ -306,7 +306,7 @@ const ES: Readonly<Record<MessageKey, string>> = {
   'kiosk.reason.PARTY_FULL': 'Este número no admite más personas. Pida ayuda al personal.',
   'kiosk.reason.TOO_LATE':
     'Su número ya fue llamado: vayan juntos a la entrada del control de seguridad.',
-  'kiosk.party.add': 'Agregar a quien viaja con usted',
+  'kiosk.party.add': 'Agregar acompañantes',
   'kiosk.party.title': 'Un solo número para quienes viajan juntos',
   'kiosk.party.count': 'Personas en este número: {count}',
   'kiosk.party.hint': 'Escanee sus pases de abordar uno por uno. Cuando termine, toque Listo.',

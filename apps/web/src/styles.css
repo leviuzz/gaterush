@@ -485,6 +485,46 @@ input {
   font-weight: 650;
 }
 
+/* On a landscape screen the answer and the buttons stand beside the number, as on the ticket. */
+@media (orientation: landscape) and (min-width: 900px) {
+  .kiosk .party {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      'title title'
+      'number status'
+      'count actions';
+    align-items: center;
+    column-gap: 2.5em;
+    width: min(100%, 52em);
+  }
+
+  .kiosk .party h1 {
+    grid-area: title;
+    max-width: none;
+  }
+
+  /* The count stays right under the number. */
+  .kiosk .party .number {
+    grid-area: number;
+    align-self: end;
+  }
+
+  .kiosk .party-count {
+    grid-area: count;
+    align-self: start;
+  }
+
+  .kiosk .party-status {
+    grid-area: status;
+    width: 100%;
+  }
+
+  .kiosk .party .actions {
+    grid-area: actions;
+    margin-top: 0;
+  }
+}
+
 .qr-block {
   display: grid;
   justify-items: center;

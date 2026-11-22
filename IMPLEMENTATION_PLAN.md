@@ -844,7 +844,7 @@ The founder's decisions on S15 (2026-11-22): a pass whose boarding has closed go
 default, as built; families are grouped, by the passengers themselves at the kiosk; local
 passwords until the pilot. ADR-046.
 
-- **Scope.** After a number, "Add people travelling with you": each companion scans their own
+- **Scope.** After a number, "Add travel companions": each companion scans their own
   boarding pass onto it. Same flight, no number of their own, a number still waiting, 20 people
   at most. A companion's rescan finds the family's number, and the access point admits the
   family by any of its passes. queue-core 0.8.0 (`grow`), operations 0.4.0 (`ADD_TO_PARTY`),
@@ -857,8 +857,10 @@ passwords until the pilot. ADR-046.
     companion's rescan and admission; every refusal; nothing of the passes kept; the log rebuilds
     every party; the audit chain is intact.
   - In Chromium (the kiosk's 13 tests): the whole flow with a scanner, in English, Italian and
-    Spanish; the ticket screen and the passenger's page say for how many people; the party's
-    screen fits the four kiosk sizes (1080x1920, 1920x1080, 1280x800, 768x1024).
+    Spanish; the ticket screen and the passenger's page say for how many people; the ticket and
+    the party's screen fit the four kiosk sizes (1080x1920, 1920x1080, 1280x800, 768x1024), in
+    Italian and in Spanish, the languages with the longest texts. On a landscape kiosk the
+    party's screen has two columns, as the ticket has.
   - No simulated number changes: the golden files change only in the version of the queue.
 
 ## Later milestones (summary)

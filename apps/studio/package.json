@@ -8,7 +8,7 @@
     "build": "node build.mjs",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
-    "test": "vitest run --testTimeout=60000 --hookTimeout=60000",
+    "test": "vitest run --testTimeout=300000 --hookTimeout=300000",
     "test:e2e": "vitest run --config vitest.e2e.config.mjs"
   },
   "dependencies": {

@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Any change that alters simulated numbers
 must be listed, together with the component versions it bumps.
 
+## [Unreleased]
+
+### Fixed
+
+- CI: the time limits of tests are budgets against hangs, not speed checks. On a shared runner all
+  suites run side by side, and CPU-bound property tests take five to seven times longer than
+  alone: one took 62 s against a 60 s limit on Node 22 (9 s for its whole file alone). The limit
+  is now 300 s for every package and 600 s for the Erlang C validations. No test does less.
+
 ## [0.13.0] - 2026-11-22: Slice S13, boarding passes
 
 Boarding passes at the kiosk, read in memory and kept as an HMAC (ADR-043).

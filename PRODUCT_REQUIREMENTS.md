@@ -62,8 +62,8 @@ without disproportionate harm to passengers who are not prioritised (ADR-002).
 | FR-15 | Data quality: every datum has a source, observation time, validity and confidence; stale data leaves automatic mode for the affected criterion. |
 | FR-16 | Dedicated paths for assisted passengers, groups and families, without penalising existing rights. |
 | FR-17 | Defined degraded modes for network or device failure; never disable security barriers. |
-| FR-18 | Simulator: scenarios (synthetic or from the airport's flight list, with the source and licence of every datum), policies (FIFO, rules, variants, lane opening), multi-seed batches, KPIs, reports, comparisons. |
-| FR-19 | Forecasts at 15/30/60/90 min, saturation, lane-opening recommendations with logged decisions and outcomes. |
+| FR-18 | Simulator: scenarios (synthetic or from the airport's flight list, with the source and licence of every datum), policies (FIFO, rules, variants, lane opening by a supervisor or by recommendation, with the staff on call and a duty manager who may not follow), multi-seed batches, KPIs, reports, comparisons. |
+| FR-19 | Forecasts at 15/30/60/90 min, saturation, lane-opening recommendations with logged decisions and outcomes (simulated in S8: ADR-039). |
 | FR-20 | Passenger information: current waits, forecast at arrival time, flight-based estimate, indicative priority only. |
 | FR-21 | Coordination between checkpoints: informative first, operator-driven later, never automatic reassignment. |
 | FR-22 | Analytics and exports, with simulated and observed results clearly separated. |
@@ -183,6 +183,12 @@ These must be checked with counsel; nothing below is legal advice.
     VCE-like departures checkpoint the gain is within noise. At a low-cost base with one morning
     bank, staff calling the closing flights is as good or better. The lane throughput and the
     staffing plan decide where a real checkpoint sits (`vce-like-peak-capacity` sweep).
+11. Who opens an extra lane today, on what signal, how many can be opened beyond the roster, and
+    how fast? Would the duty manager follow a recommendation, and which target wait would the
+    operator set? In simulation (S8, ADR-039) extra lanes opened before the waves matter most at
+    a hub (19.7 more flights per day than today's practice with a supervisor), and the target
+    wait is the setting that trades lane-hours for flights. The staff on call, the time to open a
+    lane and today's practice are assumptions until the airport describes them.
 
 ## 10. Glossary
 
@@ -192,6 +198,11 @@ These must be checked with counsel; nothing below is legal advice.
   benchmark for any claim about today's practice (ADR-022).
 - **Checkpoint:** a controlled point (e.g. a departure security filter) with its own logical queue.
 - **Lane:** a service unit of the checkpoint, with a throughput.
+- **Extra lane:** a lane opened during the day beyond the roster, by the staff on call; it costs
+  extra lane-hours (ADR-039).
+- **Lane mode:** how a policy opens extra lanes: `@reactive` (a supervisor, on the wait the queue
+  shows) or `@predict` (GateFlow's recommendations, from a forecast of arrivals, followed or not
+  by the duty manager).
 - **Access point:** where tickets are validated before the physical buffer. It is not the screening.
 - **Call-ahead buffer:** passengers called in advance so that lanes are not left waiting for
   people walking back; sized in seconds of lane work (ADR-017).

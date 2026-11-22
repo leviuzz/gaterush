@@ -1,0 +1,1041 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GateFlow sweep: vce-like-peak-lanes</title>
+<meta name="description" content="SIMULATED sensitivity sweep: Extra lanes on the VCE-like peak day, recommended by GateFlow or opened by a supervisor.">
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.1);
+  --deemph: #a9a79f;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --text-primary: #f0efec;
+  --text-secondary: #c3c2b7;
+  --muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255, 255, 255, 0.1);
+  --deemph: #6e6d67;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --text-primary: #f0efec;
+  --text-secondary: #c3c2b7;
+  --muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255, 255, 255, 0.1);
+  --deemph: #6e6d67;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text-primary);
+  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font-size: 26px; line-height: 1.25; margin: 8px 0 16px; }
+h2 { font-size: 20px; margin: 36px 0 12px; }
+h3 { font-size: 16px; margin: 24px 0 8px; }
+p, li { color: var(--text-primary); }
+a { color: var(--series-1); }
+blockquote {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+blockquote p { margin: 0; }
+code {
+  font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 4px;
+  overflow-wrap: anywhere;
+}
+pre { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow-x: auto; }
+pre code { border: 0; padding: 0; background: none; white-space: pre; overflow-wrap: normal; }
+.table { overflow-x: auto; margin: 12px 0 20px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { padding: 6px 10px; border-bottom: 1px solid var(--grid); text-align: left; vertical-align: top; }
+th { color: var(--text-secondary); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+.right { text-align: right; }
+.center { text-align: center; }
+td code { white-space: nowrap; overflow-wrap: normal; }
+td.right { white-space: nowrap; }
+figure.chart { margin: 16px 0 24px; padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; }
+figure.chart figcaption { font-weight: 600; margin-bottom: 4px; }
+figure.chart .note { color: var(--text-secondary); font-size: 13px; margin: 0 0 8px; }
+figure.chart svg { display: block; width: 100%; min-width: 560px; height: auto; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 4px 0 8px; font-size: 13px; color: var(--text-secondary); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { display: inline-block; width: 16px; height: 2px; border-radius: 1px; }
+svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+</style>
+</head>
+<body>
+<main>
+<h1 id="gateflow-sensitivity-sweep-extra-lanes-on-the-vce-like-peak-day-recommended-by-gateflow-or-opened-by-a-supervisor">GateFlow sensitivity sweep: Extra lanes on the VCE-like peak day, recommended by GateFlow or opened by a supervisor</h1>
+<blockquote><p><strong>SIMULATED RESULTS ON SYNTHETIC OR HYPOTHETICAL DATA. These numbers are model outputs, not measurements, and must not be presented as evidence of operational performance.</strong></p></blockquote>
+<p>What do lanes opened during the day buy, and on what does it depend? Today's practice with staff calls (fifo-manual) runs with the plan only, with a supervisor who opens a lane when the queue is long (@reactive), and with GateFlow's recommendations from the forecast of arrivals (@predict). The plan of the day is made for a screening time of 24 seconds per person; the first two curves make the day harder than planned (slower screening, a roster one lane short). The other curves start from a day when screening takes 26 seconds (8% slower than planned) and vary one assumption at a time: lane outages, the staff on call (base 2 extra lanes), the time to open a lane (base about 10 minutes), the share of recommendations followed (base 4 out of 5) and GateFlow's target wait (base 10 minutes).</p>
+<p>Base scenario <code>vce-like-peak-day</code> (data: SYNTHETIC). Every point is 200 simulated days (seeds 1-200); the parameters vary for <code>fifo-manual@predict</code>. Each table varies one parameter and keeps everything else at the base, marked <strong>(base)</strong>. Means per day; brackets give the 95% confidence interval of the mean (bootstrap over days). &quot;Others delayed &gt; 5 min&quot; is the share of non-prioritised passengers who wait more than 5 minutes longer than with the same queue in FIFO order; &quot;most overtakes&quot; is the largest number of people who overtook one ticket, on the worst day.</p>
+<h2 id="1-screening-slower-than-planned">1. Screening slower than planned</h2>
+<figure class="chart">
+<figcaption>Mean screening time per person (s): missed flights per day</figcaption>
+<p class="note">Mean per simulated day at each value; everything else at the base.</p>
+<div class="legend"><span><i style="background: var(--series-1)"></i>fifo-manual@predict</span><span><i style="background: var(--series-2)"></i>fifo-manual@reactive</span><span><i style="background: var(--series-3)"></i>fifo-manual</span></div>
+<svg viewBox="0 0 720 252" role="img" aria-label="Missed flights per day by Mean screening time per person (s)">
+<line x1="52" y1="212" x2="572" y2="212" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="216" text-anchor="end" font-size="11" fill="var(--muted)">0</text>
+<line x1="52" y1="178.7" x2="572" y2="178.7" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="182.7" text-anchor="end" font-size="11" fill="var(--muted)">20</text>
+<line x1="52" y1="145.3" x2="572" y2="145.3" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="149.3" text-anchor="end" font-size="11" fill="var(--muted)">40</text>
+<line x1="52" y1="112" x2="572" y2="112" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="116" text-anchor="end" font-size="11" fill="var(--muted)">60</text>
+<line x1="52" y1="78.7" x2="572" y2="78.7" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="82.7" text-anchor="end" font-size="11" fill="var(--muted)">80</text>
+<line x1="52" y1="45.3" x2="572" y2="45.3" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="49.3" text-anchor="end" font-size="11" fill="var(--muted)">100</text>
+<line x1="52" y1="12" x2="572" y2="12" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="16" text-anchor="end" font-size="11" fill="var(--muted)">120</text>
+<text x="64" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)" font-weight="600">24</text>
+<text x="64" y="245" text-anchor="middle" font-size="11" fill="var(--muted)">(base)</text>
+<text x="229.3" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">25</text>
+<text x="394.7" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">26</text>
+<text x="560" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">27</text>
+<polyline points="64,180.9 229.3,179.6 394.7,177.2 560,172.6" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual@predict, 24: 18.7</title>
+<circle cx="64" cy="180.9" r="12" fill="transparent"/>
+<circle cx="64" cy="180.9" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict, 25: 19.4</title>
+<circle cx="229.3" cy="179.6" r="12" fill="transparent"/>
+<circle cx="229.3" cy="179.6" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict, 26: 20.9</title>
+<circle cx="394.7" cy="177.2" r="12" fill="transparent"/>
+<circle cx="394.7" cy="177.2" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict, 27: 23.6</title>
+<circle cx="560" cy="172.6" r="12" fill="transparent"/>
+<circle cx="560" cy="172.6" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<polyline points="64,180.8 229.3,178.3 394.7,175 560,167.8" fill="none" stroke="var(--series-2)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual@reactive, 24: 18.7</title>
+<circle cx="64" cy="180.8" r="12" fill="transparent"/>
+<circle cx="64" cy="180.8" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@reactive, 25: 20.2</title>
+<circle cx="229.3" cy="178.3" r="12" fill="transparent"/>
+<circle cx="229.3" cy="178.3" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@reactive, 26: 22.2</title>
+<circle cx="394.7" cy="175" r="12" fill="transparent"/>
+<circle cx="394.7" cy="175" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@reactive, 27: 26.5</title>
+<circle cx="560" cy="167.8" r="12" fill="transparent"/>
+<circle cx="560" cy="167.8" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<polyline points="64,180.7 229.3,175.2 394.7,156.9 560,32" fill="none" stroke="var(--series-3)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual, 24: 18.8</title>
+<circle cx="64" cy="180.7" r="12" fill="transparent"/>
+<circle cx="64" cy="180.7" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual, 25: 22.1</title>
+<circle cx="229.3" cy="175.2" r="12" fill="transparent"/>
+<circle cx="229.3" cy="175.2" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual, 26: 33.1</title>
+<circle cx="394.7" cy="156.9" r="12" fill="transparent"/>
+<circle cx="394.7" cy="156.9" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual, 27: 108.0</title>
+<circle cx="560" cy="32" r="12" fill="transparent"/>
+<circle cx="560" cy="32" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+</svg>
+</figure>
+<figure class="chart">
+<figcaption>Mean screening time per person (s): net flights saved per day by fifo-manual@predict compared with fifo-manual@reactive</figcaption>
+<p class="note">Mean per day with its 95% confidence interval (shaded). Above zero, fifo-manual@predict catches more flights.</p>
+<svg viewBox="0 0 720 252" role="img" aria-label="Net flights saved by fifo-manual@predict vs fifo-manual@reactive, by Mean screening time per person (s)">
+<line x1="52" y1="212" x2="696" y2="212" stroke="var(--axis)" stroke-width="1"/>
+<text x="44" y="216" text-anchor="end" font-size="11" fill="var(--muted)">0</text>
+<line x1="52" y1="162" x2="696" y2="162" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="166" text-anchor="end" font-size="11" fill="var(--muted)">1</text>
+<line x1="52" y1="112" x2="696" y2="112" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="116" text-anchor="end" font-size="11" fill="var(--muted)">2</text>
+<line x1="52" y1="62" x2="696" y2="62" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="66" text-anchor="end" font-size="11" fill="var(--muted)">3</text>
+<line x1="52" y1="12" x2="696" y2="12" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="16" text-anchor="end" font-size="11" fill="var(--muted)">4</text>
+<text x="64" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)" font-weight="600">24</text>
+<text x="64" y="245" text-anchor="middle" font-size="11" fill="var(--muted)">(base)</text>
+<text x="270.7" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">25</text>
+<text x="477.3" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">26</text>
+<text x="684" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">27</text>
+<polygon points="64,207 270.7,163.2 477.3,131.2 684,45.5 684,88 477.3,159.3 270.7,183.3 64,212" fill="var(--series-1)" fill-opacity="0.1"/>
+<polyline points="64,209.5 270.7,173.5 477.3,145.3 684,67.5" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, 24: 0.1 [0.0, 0.1]</title>
+<circle cx="64" cy="209.5" r="12" fill="transparent"/>
+<circle cx="64" cy="209.5" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, 25: 0.8 [0.6, 1.0]</title>
+<circle cx="270.7" cy="173.5" r="12" fill="transparent"/>
+<circle cx="270.7" cy="173.5" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, 26: 1.3 [1.1, 1.6]</title>
+<circle cx="477.3" cy="145.3" r="12" fill="transparent"/>
+<circle cx="477.3" cy="145.3" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, 27: 2.9 [2.5, 3.3]</title>
+<circle cx="684" cy="67.5" r="12" fill="transparent"/>
+<circle cx="684" cy="67.5" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+</svg>
+</figure>
+<div class="table"><table><thead><tr><th>Mean screening time per person (s)</th><th class="right">Missed: <code>fifo-manual</code></th><th class="right">Missed: <code>fifo-manual@reactive</code></th><th class="right">Missed: <code>fifo-manual@predict</code></th><th class="right">Net saved vs <code>fifo-manual@reactive</code></th><th class="right">Net saved vs <code>fifo-manual</code></th><th class="right">Extra lane-hours: <code>fifo-manual@reactive</code></th><th class="right">Extra lane-hours: <code>fifo-manual@predict</code></th><th class="right">Wait change vs <code>fifo-manual@reactive</code> (min)</th><th class="right">Wait change vs <code>fifo-manual</code> (min)</th></tr></thead><tbody>
+<tr><td><strong>24 (base)</strong></td><td class="right">18.8</td><td class="right">18.7</td><td class="right">18.7</td><td class="right">0.1 [0.0, 0.1]</td><td class="right">0.1 [0.1, 0.2]</td><td class="right">0.1</td><td class="right">0.3</td><td class="right">-0.08 [-0.10, -0.06]</td><td class="right">-0.10 [-0.12, -0.07]</td></tr>
+<tr><td>25</td><td class="right">22.1</td><td class="right">20.2</td><td class="right">19.4</td><td class="right">0.8 [0.6, 1.0]</td><td class="right">2.6 [2.2, 3.0]</td><td class="right">1.0</td><td class="right">1.4</td><td class="right">-0.33 [-0.36, -0.29]</td><td class="right">-0.75 [-0.80, -0.69]</td></tr>
+<tr><td>26</td><td class="right">33.1</td><td class="right">22.2</td><td class="right">20.9</td><td class="right">1.3 [1.1, 1.6]</td><td class="right">12.2 [11.0, 13.4]</td><td class="right">2.2</td><td class="right">2.6</td><td class="right">-0.41 [-0.44, -0.39]</td><td class="right">-2.38 [-2.50, -2.26]</td></tr>
+<tr><td>27</td><td class="right">108.0</td><td class="right">26.5</td><td class="right">23.6</td><td class="right">2.9 [2.5, 3.3]</td><td class="right">84.4 [75.4, 93.6]</td><td class="right">3.4</td><td class="right">4.0</td><td class="right">-0.69 [-0.73, -0.65]</td><td class="right">-8.89 [-9.32, -8.47]</td></tr>
+</tbody></table></div>
+<h2 id="2-a-roster-one-lane-short">2. A roster one lane short</h2>
+<figure class="chart">
+<figcaption>Lanes added to every period of the schedule: missed flights per day</figcaption>
+<p class="note">Mean per simulated day at each value; everything else at the base.</p>
+<div class="legend"><span><i style="background: var(--series-1)"></i>fifo-manual@predict</span><span><i style="background: var(--series-2)"></i>fifo-manual@reactive</span><span><i style="background: var(--series-3)"></i>fifo-manual</span></div>
+<svg viewBox="0 0 720 252" role="img" aria-label="Missed flights per day by Lanes added to every period of the schedule">
+<line x1="52" y1="212" x2="572" y2="212" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="216" text-anchor="end" font-size="11" fill="var(--muted)">0</text>
+<line x1="52" y1="172" x2="572" y2="172" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="176" text-anchor="end" font-size="11" fill="var(--muted)">20</text>
+<line x1="52" y1="132" x2="572" y2="132" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="136" text-anchor="end" font-size="11" fill="var(--muted)">40</text>
+<line x1="52" y1="92" x2="572" y2="92" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="96" text-anchor="end" font-size="11" fill="var(--muted)">60</text>
+<line x1="52" y1="52" x2="572" y2="52" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="56" text-anchor="end" font-size="11" fill="var(--muted)">80</text>
+<line x1="52" y1="12" x2="572" y2="12" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="16" text-anchor="end" font-size="11" fill="var(--muted)">100</text>
+<text x="64" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">-1</text>
+<text x="560" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)" font-weight="600">0</text>
+<text x="560" y="245" text-anchor="middle" font-size="11" fill="var(--muted)">(base)</text>
+<polyline points="64,169.2 560,174.6" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual@predict, -1: 21.4</title>
+<circle cx="64" cy="169.2" r="12" fill="transparent"/>
+<circle cx="64" cy="169.2" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict, 0: 18.7</title>
+<circle cx="560" cy="174.6" r="12" fill="transparent"/>
+<circle cx="560" cy="174.6" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<polyline points="64,162.1 560,174.5" fill="none" stroke="var(--series-2)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual@reactive, -1: 24.9</title>
+<circle cx="64" cy="162.1" r="12" fill="transparent"/>
+<circle cx="64" cy="162.1" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@reactive, 0: 18.7</title>
+<circle cx="560" cy="174.5" r="12" fill="transparent"/>
+<circle cx="560" cy="174.5" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<polyline points="64,42.1 560,174.4" fill="none" stroke="var(--series-3)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual, -1: 84.9</title>
+<circle cx="64" cy="42.1" r="12" fill="transparent"/>
+<circle cx="64" cy="42.1" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual, 0: 18.8</title>
+<circle cx="560" cy="174.4" r="12" fill="transparent"/>
+<circle cx="560" cy="174.4" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+</svg>
+</figure>
+<figure class="chart">
+<figcaption>Lanes added to every period of the schedule: net flights saved per day by fifo-manual@predict compared with fifo-manual@reactive</figcaption>
+<p class="note">Mean per day with its 95% confidence interval (shaded). Above zero, fifo-manual@predict catches more flights.</p>
+<svg viewBox="0 0 720 252" role="img" aria-label="Net flights saved by fifo-manual@predict vs fifo-manual@reactive, by Lanes added to every period of the schedule">
+<line x1="52" y1="212" x2="696" y2="212" stroke="var(--axis)" stroke-width="1"/>
+<text x="44" y="216" text-anchor="end" font-size="11" fill="var(--muted)">0</text>
+<line x1="52" y1="172" x2="696" y2="172" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="176" text-anchor="end" font-size="11" fill="var(--muted)">1</text>
+<line x1="52" y1="132" x2="696" y2="132" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="136" text-anchor="end" font-size="11" fill="var(--muted)">2</text>
+<line x1="52" y1="92" x2="696" y2="92" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="96" text-anchor="end" font-size="11" fill="var(--muted)">3</text>
+<line x1="52" y1="52" x2="696" y2="52" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="56" text-anchor="end" font-size="11" fill="var(--muted)">4</text>
+<line x1="52" y1="12" x2="696" y2="12" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="16" text-anchor="end" font-size="11" fill="var(--muted)">5</text>
+<text x="64" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">-1</text>
+<text x="684" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)" font-weight="600">0</text>
+<text x="684" y="245" text-anchor="middle" font-size="11" fill="var(--muted)">(base)</text>
+<polygon points="64,51.6 684,208 684,211.8 64,89.4" fill="var(--series-1)" fill-opacity="0.1"/>
+<polyline points="64,70.4 684,210" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, -1: 3.5 [3.1, 4.0]</title>
+<circle cx="64" cy="70.4" r="12" fill="transparent"/>
+<circle cx="64" cy="70.4" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, 0: 0.1 [0.0, 0.1]</title>
+<circle cx="684" cy="210" r="12" fill="transparent"/>
+<circle cx="684" cy="210" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+</svg>
+</figure>
+<div class="table"><table><thead><tr><th>Lanes added to every period of the schedule</th><th class="right">Missed: <code>fifo-manual</code></th><th class="right">Missed: <code>fifo-manual@reactive</code></th><th class="right">Missed: <code>fifo-manual@predict</code></th><th class="right">Net saved vs <code>fifo-manual@reactive</code></th><th class="right">Net saved vs <code>fifo-manual</code></th><th class="right">Extra lane-hours: <code>fifo-manual@reactive</code></th><th class="right">Extra lane-hours: <code>fifo-manual@predict</code></th><th class="right">Wait change vs <code>fifo-manual@reactive</code> (min)</th><th class="right">Wait change vs <code>fifo-manual</code> (min)</th></tr></thead><tbody>
+<tr><td>-1</td><td class="right">84.9</td><td class="right">24.9</td><td class="right">21.4</td><td class="right">3.5 [3.1, 4.0]</td><td class="right">63.5 [58.8, 68.6]</td><td class="right">3.7</td><td class="right">4.5</td><td class="right">-0.62 [-0.66, -0.59]</td><td class="right">-4.29 [-4.49, -4.08]</td></tr>
+<tr><td><strong>0 (base)</strong></td><td class="right">18.8</td><td class="right">18.7</td><td class="right">18.7</td><td class="right">0.1 [0.0, 0.1]</td><td class="right">0.1 [0.1, 0.2]</td><td class="right">0.1</td><td class="right">0.3</td><td class="right">-0.08 [-0.10, -0.06]</td><td class="right">-0.10 [-0.12, -0.07]</td></tr>
+</tbody></table></div>
+<h2 id="3-lane-outages-on-a-day-of-slower-screening">3. Lane outages on a day of slower screening</h2>
+<figure class="chart">
+<figcaption>Lane outages per day: missed flights per day</figcaption>
+<p class="note">Mean per simulated day at each value; everything else at the base.</p>
+<div class="legend"><span><i style="background: var(--series-1)"></i>fifo-manual@predict</span><span><i style="background: var(--series-2)"></i>fifo-manual@reactive</span><span><i style="background: var(--series-3)"></i>fifo-manual</span></div>
+<svg viewBox="0 0 720 252" role="img" aria-label="Missed flights per day by Lane outages per day">
+<line x1="52" y1="212" x2="572" y2="212" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="216" text-anchor="end" font-size="11" fill="var(--muted)">20</text>
+<line x1="52" y1="172" x2="572" y2="172" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="176" text-anchor="end" font-size="11" fill="var(--muted)">25</text>
+<line x1="52" y1="132" x2="572" y2="132" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="136" text-anchor="end" font-size="11" fill="var(--muted)">30</text>
+<line x1="52" y1="92" x2="572" y2="92" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="96" text-anchor="end" font-size="11" fill="var(--muted)">35</text>
+<line x1="52" y1="52" x2="572" y2="52" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="56" text-anchor="end" font-size="11" fill="var(--muted)">40</text>
+<line x1="52" y1="12" x2="572" y2="12" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="16" text-anchor="end" font-size="11" fill="var(--muted)">45</text>
+<text x="64" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)" font-weight="600">0</text>
+<text x="64" y="245" text-anchor="middle" font-size="11" fill="var(--muted)">(base)</text>
+<text x="229.3" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">1</text>
+<text x="394.7" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">2</text>
+<text x="560" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">4</text>
+<polyline points="64,205.1 229.3,204.3 394.7,203.8 560,202" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual@predict, 0: 20.9</title>
+<circle cx="64" cy="205.1" r="12" fill="transparent"/>
+<circle cx="64" cy="205.1" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict, 1: 21.0</title>
+<circle cx="229.3" cy="204.3" r="12" fill="transparent"/>
+<circle cx="229.3" cy="204.3" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict, 2: 21.0</title>
+<circle cx="394.7" cy="203.8" r="12" fill="transparent"/>
+<circle cx="394.7" cy="203.8" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict, 4: 21.3</title>
+<circle cx="560" cy="202" r="12" fill="transparent"/>
+<circle cx="560" cy="202" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<polyline points="64,194.4 229.3,192.5 394.7,191.3 560,186.7" fill="none" stroke="var(--series-2)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual@reactive, 0: 22.2</title>
+<circle cx="64" cy="194.4" r="12" fill="transparent"/>
+<circle cx="64" cy="194.4" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@reactive, 1: 22.4</title>
+<circle cx="229.3" cy="192.5" r="12" fill="transparent"/>
+<circle cx="229.3" cy="192.5" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@reactive, 2: 22.6</title>
+<circle cx="394.7" cy="191.3" r="12" fill="transparent"/>
+<circle cx="394.7" cy="191.3" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@reactive, 4: 23.2</title>
+<circle cx="560" cy="186.7" r="12" fill="transparent"/>
+<circle cx="560" cy="186.7" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<polyline points="64,107.3 229.3,94 394.7,75.7 560,49.8" fill="none" stroke="var(--series-3)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual, 0: 33.1</title>
+<circle cx="64" cy="107.3" r="12" fill="transparent"/>
+<circle cx="64" cy="107.3" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual, 1: 34.8</title>
+<circle cx="229.3" cy="94" r="12" fill="transparent"/>
+<circle cx="229.3" cy="94" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual, 2: 37.0</title>
+<circle cx="394.7" cy="75.7" r="12" fill="transparent"/>
+<circle cx="394.7" cy="75.7" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual, 4: 40.3</title>
+<circle cx="560" cy="49.8" r="12" fill="transparent"/>
+<circle cx="560" cy="49.8" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<text x="570" y="206" font-size="12" fill="var(--text-primary)">fifo-manual@predict</text>
+<text x="570" y="190.7" font-size="12" fill="var(--text-primary)">fifo-manual@reactive</text>
+<text x="570" y="53.8" font-size="12" fill="var(--text-primary)">fifo-manual</text>
+</svg>
+</figure>
+<figure class="chart">
+<figcaption>Lane outages per day: net flights saved per day by fifo-manual@predict compared with fifo-manual@reactive</figcaption>
+<p class="note">Mean per day with its 95% confidence interval (shaded). Above zero, fifo-manual@predict catches more flights.</p>
+<svg viewBox="0 0 720 252" role="img" aria-label="Net flights saved by fifo-manual@predict vs fifo-manual@reactive, by Lane outages per day">
+<line x1="52" y1="212" x2="696" y2="212" stroke="var(--axis)" stroke-width="1"/>
+<text x="44" y="216" text-anchor="end" font-size="11" fill="var(--muted)">0.0</text>
+<line x1="52" y1="172" x2="696" y2="172" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="176" text-anchor="end" font-size="11" fill="var(--muted)">0.5</text>
+<line x1="52" y1="132" x2="696" y2="132" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="136" text-anchor="end" font-size="11" fill="var(--muted)">1.0</text>
+<line x1="52" y1="92" x2="696" y2="92" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="96" text-anchor="end" font-size="11" fill="var(--muted)">1.5</text>
+<line x1="52" y1="52" x2="696" y2="52" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="56" text-anchor="end" font-size="11" fill="var(--muted)">2.0</text>
+<line x1="52" y1="12" x2="696" y2="12" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="16" text-anchor="end" font-size="11" fill="var(--muted)">2.5</text>
+<text x="64" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)" font-weight="600">0</text>
+<text x="64" y="245" text-anchor="middle" font-size="11" fill="var(--muted)">(base)</text>
+<text x="270.7" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">1</text>
+<text x="477.3" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">2</text>
+<text x="684" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">4</text>
+<polygon points="64,81.6 270.7,69.2 477.3,61.2 684,30.4 684,84.8 477.3,111.2 270.7,117.2 64,125.6" fill="var(--series-1)" fill-opacity="0.1"/>
+<polyline points="64,105.2 270.7,94.4 477.3,86.8 684,59.2" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, 0: 1.3 [1.1, 1.6]</title>
+<circle cx="64" cy="105.2" r="12" fill="transparent"/>
+<circle cx="64" cy="105.2" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, 1: 1.5 [1.2, 1.8]</title>
+<circle cx="270.7" cy="94.4" r="12" fill="transparent"/>
+<circle cx="270.7" cy="94.4" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, 2: 1.6 [1.3, 1.9]</title>
+<circle cx="477.3" cy="86.8" r="12" fill="transparent"/>
+<circle cx="477.3" cy="86.8" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, 4: 1.9 [1.6, 2.3]</title>
+<circle cx="684" cy="59.2" r="12" fill="transparent"/>
+<circle cx="684" cy="59.2" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+</svg>
+</figure>
+<p>On this curve only: Mean screening time per person (s) = 26.</p>
+<div class="table"><table><thead><tr><th>Lane outages per day</th><th class="right">Missed: <code>fifo-manual</code></th><th class="right">Missed: <code>fifo-manual@reactive</code></th><th class="right">Missed: <code>fifo-manual@predict</code></th><th class="right">Net saved vs <code>fifo-manual@reactive</code></th><th class="right">Net saved vs <code>fifo-manual</code></th><th class="right">Extra lane-hours: <code>fifo-manual@reactive</code></th><th class="right">Extra lane-hours: <code>fifo-manual@predict</code></th><th class="right">Wait change vs <code>fifo-manual@reactive</code> (min)</th><th class="right">Wait change vs <code>fifo-manual</code> (min)</th></tr></thead><tbody>
+<tr><td><strong>0 (base)</strong></td><td class="right">33.1</td><td class="right">22.2</td><td class="right">20.9</td><td class="right">1.3 [1.1, 1.6]</td><td class="right">12.2 [11.1, 13.4]</td><td class="right">2.2</td><td class="right">2.6</td><td class="right">-0.41 [-0.44, -0.39]</td><td class="right">-2.38 [-2.51, -2.25]</td></tr>
+<tr><td>1</td><td class="right">34.8</td><td class="right">22.4</td><td class="right">21.0</td><td class="right">1.5 [1.2, 1.8]</td><td class="right">13.8 [12.5, 15.1]</td><td class="right">2.3</td><td class="right">2.8</td><td class="right">-0.44 [-0.47, -0.41]</td><td class="right">-2.57 [-2.70, -2.44]</td></tr>
+<tr><td>2</td><td class="right">37.0</td><td class="right">22.6</td><td class="right">21.0</td><td class="right">1.6 [1.3, 1.9]</td><td class="right">16.0 [14.3, 17.7]</td><td class="right">2.4</td><td class="right">2.9</td><td class="right">-0.46 [-0.49, -0.43]</td><td class="right">-2.74 [-2.89, -2.58]</td></tr>
+<tr><td>4</td><td class="right">40.3</td><td class="right">23.2</td><td class="right">21.3</td><td class="right">1.9 [1.6, 2.3]</td><td class="right">19.0 [16.8, 21.3]</td><td class="right">2.4</td><td class="right">3.2</td><td class="right">-0.52 [-0.56, -0.49]</td><td class="right">-3.07 [-3.27, -2.88]</td></tr>
+</tbody></table></div>
+<h2 id="4-staff-on-call-on-a-day-of-slower-screening">4. Staff on call on a day of slower screening</h2>
+<figure class="chart">
+<figcaption>Extra lanes the staff on call can open: missed flights per day</figcaption>
+<p class="note">Mean per simulated day at each value; everything else at the base.</p>
+<div class="legend"><span><i style="background: var(--series-1)"></i>fifo-manual@predict</span><span><i style="background: var(--series-2)"></i>fifo-manual@reactive</span><span><i style="background: var(--series-3)"></i>fifo-manual</span></div>
+<svg viewBox="0 0 720 252" role="img" aria-label="Missed flights per day by Extra lanes the staff on call can open">
+<line x1="52" y1="212" x2="572" y2="212" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="216" text-anchor="end" font-size="11" fill="var(--muted)">20</text>
+<line x1="52" y1="178.7" x2="572" y2="178.7" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="182.7" text-anchor="end" font-size="11" fill="var(--muted)">23</text>
+<line x1="52" y1="145.3" x2="572" y2="145.3" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="149.3" text-anchor="end" font-size="11" fill="var(--muted)">25</text>
+<line x1="52" y1="112" x2="572" y2="112" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="116" text-anchor="end" font-size="11" fill="var(--muted)">28</text>
+<line x1="52" y1="78.7" x2="572" y2="78.7" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="82.7" text-anchor="end" font-size="11" fill="var(--muted)">30</text>
+<line x1="52" y1="45.3" x2="572" y2="45.3" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="49.3" text-anchor="end" font-size="11" fill="var(--muted)">33</text>
+<line x1="52" y1="12" x2="572" y2="12" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="16" text-anchor="end" font-size="11" fill="var(--muted)">35</text>
+<text x="64" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">0</text>
+<text x="229.3" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">1</text>
+<text x="394.7" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)" font-weight="600">2</text>
+<text x="394.7" y="245" text-anchor="middle" font-size="11" fill="var(--muted)">(base)</text>
+<text x="560" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">3</text>
+<polyline points="64,37.5 229.3,191.9 394.7,200.5 560,200.7" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual@predict, 0: 33.1</title>
+<circle cx="64" cy="37.5" r="12" fill="transparent"/>
+<circle cx="64" cy="37.5" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict, 1: 21.5</title>
+<circle cx="229.3" cy="191.9" r="12" fill="transparent"/>
+<circle cx="229.3" cy="191.9" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict, 2: 20.9</title>
+<circle cx="394.7" cy="200.5" r="12" fill="transparent"/>
+<circle cx="394.7" cy="200.5" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict, 3: 20.9</title>
+<circle cx="560" cy="200.7" r="12" fill="transparent"/>
+<circle cx="560" cy="200.7" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<polyline points="64,37.5 229.3,165.6 394.7,182.7 560,182.7" fill="none" stroke="var(--series-2)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual@reactive, 0: 33.1</title>
+<circle cx="64" cy="37.5" r="12" fill="transparent"/>
+<circle cx="64" cy="37.5" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@reactive, 1: 23.5</title>
+<circle cx="229.3" cy="165.6" r="12" fill="transparent"/>
+<circle cx="229.3" cy="165.6" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@reactive, 2: 22.2</title>
+<circle cx="394.7" cy="182.7" r="12" fill="transparent"/>
+<circle cx="394.7" cy="182.7" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@reactive, 3: 22.2</title>
+<circle cx="560" cy="182.7" r="12" fill="transparent"/>
+<circle cx="560" cy="182.7" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<polyline points="64,37.5 229.3,37.5 394.7,37.5 560,37.5" fill="none" stroke="var(--series-3)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual, 0: 33.1</title>
+<circle cx="64" cy="37.5" r="12" fill="transparent"/>
+<circle cx="64" cy="37.5" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual, 1: 33.1</title>
+<circle cx="229.3" cy="37.5" r="12" fill="transparent"/>
+<circle cx="229.3" cy="37.5" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual, 2: 33.1</title>
+<circle cx="394.7" cy="37.5" r="12" fill="transparent"/>
+<circle cx="394.7" cy="37.5" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual, 3: 33.1</title>
+<circle cx="560" cy="37.5" r="12" fill="transparent"/>
+<circle cx="560" cy="37.5" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<text x="570" y="204.7" font-size="12" fill="var(--text-primary)">fifo-manual@predict</text>
+<text x="570" y="186.7" font-size="12" fill="var(--text-primary)">fifo-manual@reactive</text>
+<text x="570" y="41.5" font-size="12" fill="var(--text-primary)">fifo-manual</text>
+</svg>
+</figure>
+<figure class="chart">
+<figcaption>Extra lanes the staff on call can open: net flights saved per day by fifo-manual@predict compared with fifo-manual@reactive</figcaption>
+<p class="note">Mean per day with its 95% confidence interval (shaded). Above zero, fifo-manual@predict catches more flights.</p>
+<svg viewBox="0 0 720 252" role="img" aria-label="Net flights saved by fifo-manual@predict vs fifo-manual@reactive, by Extra lanes the staff on call can open">
+<line x1="52" y1="212" x2="696" y2="212" stroke="var(--axis)" stroke-width="1"/>
+<text x="44" y="216" text-anchor="end" font-size="11" fill="var(--muted)">0.0</text>
+<line x1="52" y1="172" x2="696" y2="172" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="176" text-anchor="end" font-size="11" fill="var(--muted)">0.5</text>
+<line x1="52" y1="132" x2="696" y2="132" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="136" text-anchor="end" font-size="11" fill="var(--muted)">1.0</text>
+<line x1="52" y1="92" x2="696" y2="92" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="96" text-anchor="end" font-size="11" fill="var(--muted)">1.5</text>
+<line x1="52" y1="52" x2="696" y2="52" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="56" text-anchor="end" font-size="11" fill="var(--muted)">2.0</text>
+<line x1="52" y1="12" x2="696" y2="12" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="16" text-anchor="end" font-size="11" fill="var(--muted)">2.5</text>
+<text x="64" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">0</text>
+<text x="270.7" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">1</text>
+<text x="477.3" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)" font-weight="600">2</text>
+<text x="477.3" y="245" text-anchor="middle" font-size="11" fill="var(--muted)">(base)</text>
+<text x="684" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">3</text>
+<polygon points="64,212 270.7,29.2 477.3,82.8 684,82.8 684,125.2 477.3,127.2 270.7,79.6 64,212" fill="var(--series-1)" fill-opacity="0.1"/>
+<polyline points="64,212 270.7,54.4 477.3,105.2 684,104.4" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, 0: 0.0 [0.0, 0.0]</title>
+<circle cx="64" cy="212" r="12" fill="transparent"/>
+<circle cx="64" cy="212" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, 1: 2.0 [1.7, 2.3]</title>
+<circle cx="270.7" cy="54.4" r="12" fill="transparent"/>
+<circle cx="270.7" cy="54.4" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, 2: 1.3 [1.1, 1.6]</title>
+<circle cx="477.3" cy="105.2" r="12" fill="transparent"/>
+<circle cx="477.3" cy="105.2" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, 3: 1.3 [1.1, 1.6]</title>
+<circle cx="684" cy="104.4" r="12" fill="transparent"/>
+<circle cx="684" cy="104.4" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+</svg>
+</figure>
+<p>On this curve only: Mean screening time per person (s) = 26.</p>
+<div class="table"><table><thead><tr><th>Extra lanes the staff on call can open</th><th class="right">Missed: <code>fifo-manual</code></th><th class="right">Missed: <code>fifo-manual@reactive</code></th><th class="right">Missed: <code>fifo-manual@predict</code></th><th class="right">Net saved vs <code>fifo-manual@reactive</code></th><th class="right">Net saved vs <code>fifo-manual</code></th><th class="right">Extra lane-hours: <code>fifo-manual@reactive</code></th><th class="right">Extra lane-hours: <code>fifo-manual@predict</code></th><th class="right">Wait change vs <code>fifo-manual@reactive</code> (min)</th><th class="right">Wait change vs <code>fifo-manual</code> (min)</th></tr></thead><tbody>
+<tr><td>0</td><td class="right">33.1</td><td class="right">33.1</td><td class="right">33.1</td><td class="right">0.0 [0.0, 0.0]</td><td class="right">0.0 [0.0, 0.0]</td><td class="right">0.0</td><td class="right">0.0</td><td class="right">0.00 [0.00, 0.00]</td><td class="right">0.00 [0.00, 0.00]</td></tr>
+<tr><td>1</td><td class="right">33.1</td><td class="right">23.5</td><td class="right">21.5</td><td class="right">2.0 [1.7, 2.3]</td><td class="right">11.6 [10.5, 12.7]</td><td class="right">1.7</td><td class="right">2.0</td><td class="right">-0.49 [-0.51, -0.46]</td><td class="right">-2.14 [-2.25, -2.04]</td></tr>
+<tr><td><strong>2 (base)</strong></td><td class="right">33.1</td><td class="right">22.2</td><td class="right">20.9</td><td class="right">1.3 [1.1, 1.6]</td><td class="right">12.2 [11.0, 13.5]</td><td class="right">2.2</td><td class="right">2.6</td><td class="right">-0.41 [-0.44, -0.39]</td><td class="right">-2.38 [-2.50, -2.26]</td></tr>
+<tr><td>3</td><td class="right">33.1</td><td class="right">22.2</td><td class="right">20.9</td><td class="right">1.3 [1.1, 1.6]</td><td class="right">12.2 [11.1, 13.5]</td><td class="right">2.2</td><td class="right">2.7</td><td class="right">-0.42 [-0.44, -0.39]</td><td class="right">-2.38 [-2.51, -2.26]</td></tr>
+</tbody></table></div>
+<h2 id="5-time-to-open-a-lane-on-a-day-of-slower-screening">5. Time to open a lane on a day of slower screening</h2>
+<figure class="chart">
+<figcaption>Median time to open an extra lane (min): missed flights per day</figcaption>
+<p class="note">Mean per simulated day at each value; everything else at the base.</p>
+<div class="legend"><span><i style="background: var(--series-1)"></i>fifo-manual@predict</span><span><i style="background: var(--series-2)"></i>fifo-manual@reactive</span><span><i style="background: var(--series-3)"></i>fifo-manual</span></div>
+<svg viewBox="0 0 720 252" role="img" aria-label="Missed flights per day by Median time to open an extra lane (min)">
+<line x1="52" y1="212" x2="572" y2="212" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="216" text-anchor="end" font-size="11" fill="var(--muted)">20</text>
+<line x1="52" y1="178.7" x2="572" y2="178.7" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="182.7" text-anchor="end" font-size="11" fill="var(--muted)">23</text>
+<line x1="52" y1="145.3" x2="572" y2="145.3" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="149.3" text-anchor="end" font-size="11" fill="var(--muted)">25</text>
+<line x1="52" y1="112" x2="572" y2="112" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="116" text-anchor="end" font-size="11" fill="var(--muted)">28</text>
+<line x1="52" y1="78.7" x2="572" y2="78.7" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="82.7" text-anchor="end" font-size="11" fill="var(--muted)">30</text>
+<line x1="52" y1="45.3" x2="572" y2="45.3" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="49.3" text-anchor="end" font-size="11" fill="var(--muted)">33</text>
+<line x1="52" y1="12" x2="572" y2="12" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="16" text-anchor="end" font-size="11" fill="var(--muted)">35</text>
+<text x="64" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">5</text>
+<text x="229.3" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)" font-weight="600">10</text>
+<text x="229.3" y="245" text-anchor="middle" font-size="11" fill="var(--muted)">(base)</text>
+<text x="394.7" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">15</text>
+<text x="560" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">20</text>
+<polyline points="64,202.1 229.3,200.5 394.7,197.8 560,196" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual@predict, 5: 20.7</title>
+<circle cx="64" cy="202.1" r="12" fill="transparent"/>
+<circle cx="64" cy="202.1" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict, 10: 20.9</title>
+<circle cx="229.3" cy="200.5" r="12" fill="transparent"/>
+<circle cx="229.3" cy="200.5" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict, 15: 21.1</title>
+<circle cx="394.7" cy="197.8" r="12" fill="transparent"/>
+<circle cx="394.7" cy="197.8" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict, 20: 21.2</title>
+<circle cx="560" cy="196" r="12" fill="transparent"/>
+<circle cx="560" cy="196" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<polyline points="64,186.1 229.3,182.7 394.7,180.2 560,178.5" fill="none" stroke="var(--series-2)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual@reactive, 5: 21.9</title>
+<circle cx="64" cy="186.1" r="12" fill="transparent"/>
+<circle cx="64" cy="186.1" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@reactive, 10: 22.2</title>
+<circle cx="229.3" cy="182.7" r="12" fill="transparent"/>
+<circle cx="229.3" cy="182.7" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@reactive, 15: 22.4</title>
+<circle cx="394.7" cy="180.2" r="12" fill="transparent"/>
+<circle cx="394.7" cy="180.2" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@reactive, 20: 22.5</title>
+<circle cx="560" cy="178.5" r="12" fill="transparent"/>
+<circle cx="560" cy="178.5" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<polyline points="64,37.5 229.3,37.5 394.7,37.5 560,37.5" fill="none" stroke="var(--series-3)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual, 5: 33.1</title>
+<circle cx="64" cy="37.5" r="12" fill="transparent"/>
+<circle cx="64" cy="37.5" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual, 10: 33.1</title>
+<circle cx="229.3" cy="37.5" r="12" fill="transparent"/>
+<circle cx="229.3" cy="37.5" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual, 15: 33.1</title>
+<circle cx="394.7" cy="37.5" r="12" fill="transparent"/>
+<circle cx="394.7" cy="37.5" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual, 20: 33.1</title>
+<circle cx="560" cy="37.5" r="12" fill="transparent"/>
+<circle cx="560" cy="37.5" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<text x="570" y="200" font-size="12" fill="var(--text-primary)">fifo-manual@predict</text>
+<text x="570" y="182.5" font-size="12" fill="var(--text-primary)">fifo-manual@reactive</text>
+<text x="570" y="41.5" font-size="12" fill="var(--text-primary)">fifo-manual</text>
+</svg>
+</figure>
+<figure class="chart">
+<figcaption>Median time to open an extra lane (min): net flights saved per day by fifo-manual@predict compared with fifo-manual@reactive</figcaption>
+<p class="note">Mean per day with its 95% confidence interval (shaded). Above zero, fifo-manual@predict catches more flights.</p>
+<svg viewBox="0 0 720 252" role="img" aria-label="Net flights saved by fifo-manual@predict vs fifo-manual@reactive, by Median time to open an extra lane (min)">
+<line x1="52" y1="212" x2="696" y2="212" stroke="var(--axis)" stroke-width="1"/>
+<text x="44" y="216" text-anchor="end" font-size="11" fill="var(--muted)">0.0</text>
+<line x1="52" y1="162" x2="696" y2="162" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="166" text-anchor="end" font-size="11" fill="var(--muted)">0.5</text>
+<line x1="52" y1="112" x2="696" y2="112" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="116" text-anchor="end" font-size="11" fill="var(--muted)">1.0</text>
+<line x1="52" y1="62" x2="696" y2="62" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="66" text-anchor="end" font-size="11" fill="var(--muted)">1.5</text>
+<line x1="52" y1="12" x2="696" y2="12" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="16" text-anchor="end" font-size="11" fill="var(--muted)">2.0</text>
+<text x="64" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">5</text>
+<text x="270.7" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)" font-weight="600">10</text>
+<text x="270.7" y="245" text-anchor="middle" font-size="11" fill="var(--muted)">(base)</text>
+<text x="477.3" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">15</text>
+<text x="684" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">20</text>
+<polygon points="64,66 270.7,50.5 477.3,52 684,54 684,106.5 477.3,107.5 270.7,105 64,119.5" fill="var(--series-1)" fill-opacity="0.1"/>
+<polyline points="64,92.5 270.7,78.5 477.3,80 684,81" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, 5: 1.2 [0.9, 1.5]</title>
+<circle cx="64" cy="92.5" r="12" fill="transparent"/>
+<circle cx="64" cy="92.5" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, 10: 1.3 [1.1, 1.6]</title>
+<circle cx="270.7" cy="78.5" r="12" fill="transparent"/>
+<circle cx="270.7" cy="78.5" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, 15: 1.3 [1.0, 1.6]</title>
+<circle cx="477.3" cy="80" r="12" fill="transparent"/>
+<circle cx="477.3" cy="80" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, 20: 1.3 [1.1, 1.6]</title>
+<circle cx="684" cy="81" r="12" fill="transparent"/>
+<circle cx="684" cy="81" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+</svg>
+</figure>
+<p>On this curve only: Mean screening time per person (s) = 26.</p>
+<div class="table"><table><thead><tr><th>Median time to open an extra lane (min)</th><th class="right">Missed: <code>fifo-manual</code></th><th class="right">Missed: <code>fifo-manual@reactive</code></th><th class="right">Missed: <code>fifo-manual@predict</code></th><th class="right">Net saved vs <code>fifo-manual@reactive</code></th><th class="right">Net saved vs <code>fifo-manual</code></th><th class="right">Extra lane-hours: <code>fifo-manual@reactive</code></th><th class="right">Extra lane-hours: <code>fifo-manual@predict</code></th><th class="right">Wait change vs <code>fifo-manual@reactive</code> (min)</th><th class="right">Wait change vs <code>fifo-manual</code> (min)</th></tr></thead><tbody>
+<tr><td>5</td><td class="right">33.1</td><td class="right">21.9</td><td class="right">20.7</td><td class="right">1.2 [0.9, 1.5]</td><td class="right">12.3 [11.2, 13.6]</td><td class="right">2.2</td><td class="right">2.5</td><td class="right">-0.38 [-0.41, -0.36]</td><td class="right">-2.41 [-2.53, -2.28]</td></tr>
+<tr><td><strong>10 (base)</strong></td><td class="right">33.1</td><td class="right">22.2</td><td class="right">20.9</td><td class="right">1.3 [1.1, 1.6]</td><td class="right">12.2 [11.0, 13.5]</td><td class="right">2.2</td><td class="right">2.6</td><td class="right">-0.41 [-0.44, -0.39]</td><td class="right">-2.38 [-2.50, -2.26]</td></tr>
+<tr><td>15</td><td class="right">33.1</td><td class="right">22.4</td><td class="right">21.1</td><td class="right">1.3 [1.0, 1.6]</td><td class="right">12.0 [10.9, 13.2]</td><td class="right">2.2</td><td class="right">2.6</td><td class="right">-0.44 [-0.47, -0.41]</td><td class="right">-2.34 [-2.46, -2.23]</td></tr>
+<tr><td>20</td><td class="right">33.1</td><td class="right">22.5</td><td class="right">21.2</td><td class="right">1.3 [1.1, 1.6]</td><td class="right">11.9 [10.7, 13.1]</td><td class="right">2.1</td><td class="right">2.7</td><td class="right">-0.48 [-0.51, -0.45]</td><td class="right">-2.31 [-2.43, -2.19]</td></tr>
+</tbody></table></div>
+<h2 id="6-recommendations-followed-on-a-day-of-slower-screening">6. Recommendations followed on a day of slower screening</h2>
+<figure class="chart">
+<figcaption>Share of GateFlow's lane recommendations followed: missed flights per day</figcaption>
+<p class="note">Mean per simulated day at each value; everything else at the base.</p>
+<div class="legend"><span><i style="background: var(--series-1)"></i>fifo-manual@predict</span><span><i style="background: var(--series-2)"></i>fifo-manual@reactive</span><span><i style="background: var(--series-3)"></i>fifo-manual</span></div>
+<svg viewBox="0 0 720 252" role="img" aria-label="Missed flights per day by Share of GateFlow's lane recommendations followed">
+<line x1="52" y1="212" x2="572" y2="212" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="216" text-anchor="end" font-size="11" fill="var(--muted)">20</text>
+<line x1="52" y1="178.7" x2="572" y2="178.7" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="182.7" text-anchor="end" font-size="11" fill="var(--muted)">23</text>
+<line x1="52" y1="145.3" x2="572" y2="145.3" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="149.3" text-anchor="end" font-size="11" fill="var(--muted)">25</text>
+<line x1="52" y1="112" x2="572" y2="112" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="116" text-anchor="end" font-size="11" fill="var(--muted)">28</text>
+<line x1="52" y1="78.7" x2="572" y2="78.7" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="82.7" text-anchor="end" font-size="11" fill="var(--muted)">30</text>
+<line x1="52" y1="45.3" x2="572" y2="45.3" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="49.3" text-anchor="end" font-size="11" fill="var(--muted)">33</text>
+<line x1="52" y1="12" x2="572" y2="12" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="16" text-anchor="end" font-size="11" fill="var(--muted)">35</text>
+<text x="64" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">0.4</text>
+<text x="229.3" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">0.6</text>
+<text x="394.7" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)" font-weight="600">0.8</text>
+<text x="394.7" y="245" text-anchor="middle" font-size="11" fill="var(--muted)">(base)</text>
+<text x="560" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">1</text>
+<polyline points="64,192.9 229.3,197.1 394.7,200.5 560,202.1" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual@predict, 0.4: 21.4</title>
+<circle cx="64" cy="192.9" r="12" fill="transparent"/>
+<circle cx="64" cy="192.9" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict, 0.6: 21.1</title>
+<circle cx="229.3" cy="197.1" r="12" fill="transparent"/>
+<circle cx="229.3" cy="197.1" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict, 0.8: 20.9</title>
+<circle cx="394.7" cy="200.5" r="12" fill="transparent"/>
+<circle cx="394.7" cy="200.5" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict, 1: 20.7</title>
+<circle cx="560" cy="202.1" r="12" fill="transparent"/>
+<circle cx="560" cy="202.1" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<polyline points="64,182.7 229.3,182.7 394.7,182.7 560,182.7" fill="none" stroke="var(--series-2)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual@reactive, 0.4: 22.2</title>
+<circle cx="64" cy="182.7" r="12" fill="transparent"/>
+<circle cx="64" cy="182.7" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@reactive, 0.6: 22.2</title>
+<circle cx="229.3" cy="182.7" r="12" fill="transparent"/>
+<circle cx="229.3" cy="182.7" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@reactive, 0.8: 22.2</title>
+<circle cx="394.7" cy="182.7" r="12" fill="transparent"/>
+<circle cx="394.7" cy="182.7" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@reactive, 1: 22.2</title>
+<circle cx="560" cy="182.7" r="12" fill="transparent"/>
+<circle cx="560" cy="182.7" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<polyline points="64,37.5 229.3,37.5 394.7,37.5 560,37.5" fill="none" stroke="var(--series-3)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual, 0.4: 33.1</title>
+<circle cx="64" cy="37.5" r="12" fill="transparent"/>
+<circle cx="64" cy="37.5" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual, 0.6: 33.1</title>
+<circle cx="229.3" cy="37.5" r="12" fill="transparent"/>
+<circle cx="229.3" cy="37.5" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual, 0.8: 33.1</title>
+<circle cx="394.7" cy="37.5" r="12" fill="transparent"/>
+<circle cx="394.7" cy="37.5" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual, 1: 33.1</title>
+<circle cx="560" cy="37.5" r="12" fill="transparent"/>
+<circle cx="560" cy="37.5" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<text x="570" y="206.1" font-size="12" fill="var(--text-primary)">fifo-manual@predict</text>
+<text x="570" y="186.7" font-size="12" fill="var(--text-primary)">fifo-manual@reactive</text>
+<text x="570" y="41.5" font-size="12" fill="var(--text-primary)">fifo-manual</text>
+</svg>
+</figure>
+<figure class="chart">
+<figcaption>Share of GateFlow's lane recommendations followed: net flights saved per day by fifo-manual@predict compared with fifo-manual@reactive</figcaption>
+<p class="note">Mean per day with its 95% confidence interval (shaded). Above zero, fifo-manual@predict catches more flights.</p>
+<svg viewBox="0 0 720 252" role="img" aria-label="Net flights saved by fifo-manual@predict vs fifo-manual@reactive, by Share of GateFlow's lane recommendations followed">
+<line x1="52" y1="212" x2="696" y2="212" stroke="var(--axis)" stroke-width="1"/>
+<text x="44" y="216" text-anchor="end" font-size="11" fill="var(--muted)">0.0</text>
+<line x1="52" y1="162" x2="696" y2="162" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="166" text-anchor="end" font-size="11" fill="var(--muted)">0.5</text>
+<line x1="52" y1="112" x2="696" y2="112" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="116" text-anchor="end" font-size="11" fill="var(--muted)">1.0</text>
+<line x1="52" y1="62" x2="696" y2="62" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="66" text-anchor="end" font-size="11" fill="var(--muted)">1.5</text>
+<line x1="52" y1="12" x2="696" y2="12" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="16" text-anchor="end" font-size="11" fill="var(--muted)">2.0</text>
+<text x="64" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">0.4</text>
+<text x="270.7" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">0.6</text>
+<text x="477.3" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)" font-weight="600">0.8</text>
+<text x="477.3" y="245" text-anchor="middle" font-size="11" fill="var(--muted)">(base)</text>
+<text x="684" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">1</text>
+<polygon points="64,103 270.7,77.5 477.3,51.5 684,35 684,96.5 477.3,104 270.7,128 64,168" fill="var(--series-1)" fill-opacity="0.1"/>
+<polyline points="64,136 270.7,104 477.3,78.5 684,67" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, 0.4: 0.8 [0.4, 1.1]</title>
+<circle cx="64" cy="136" r="12" fill="transparent"/>
+<circle cx="64" cy="136" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, 0.6: 1.1 [0.8, 1.3]</title>
+<circle cx="270.7" cy="104" r="12" fill="transparent"/>
+<circle cx="270.7" cy="104" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, 0.8: 1.3 [1.1, 1.6]</title>
+<circle cx="477.3" cy="78.5" r="12" fill="transparent"/>
+<circle cx="477.3" cy="78.5" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, 1: 1.4 [1.2, 1.8]</title>
+<circle cx="684" cy="67" r="12" fill="transparent"/>
+<circle cx="684" cy="67" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+</svg>
+</figure>
+<p>On this curve only: Mean screening time per person (s) = 26.</p>
+<div class="table"><table><thead><tr><th>Share of GateFlow's lane recommendations followed</th><th class="right">Missed: <code>fifo-manual</code></th><th class="right">Missed: <code>fifo-manual@reactive</code></th><th class="right">Missed: <code>fifo-manual@predict</code></th><th class="right">Net saved vs <code>fifo-manual@reactive</code></th><th class="right">Net saved vs <code>fifo-manual</code></th><th class="right">Extra lane-hours: <code>fifo-manual@reactive</code></th><th class="right">Extra lane-hours: <code>fifo-manual@predict</code></th><th class="right">Wait change vs <code>fifo-manual@reactive</code> (min)</th><th class="right">Wait change vs <code>fifo-manual</code> (min)</th></tr></thead><tbody>
+<tr><td>0.4</td><td class="right">33.1</td><td class="right">22.2</td><td class="right">21.4</td><td class="right">0.8 [0.4, 1.1]</td><td class="right">11.7 [10.4, 12.9]</td><td class="right">2.2</td><td class="right">2.9</td><td class="right">-0.30 [-0.34, -0.27]</td><td class="right">-2.27 [-2.40, -2.15]</td></tr>
+<tr><td>0.6</td><td class="right">33.1</td><td class="right">22.2</td><td class="right">21.1</td><td class="right">1.1 [0.8, 1.3]</td><td class="right">12.0 [10.8, 13.2]</td><td class="right">2.2</td><td class="right">2.6</td><td class="right">-0.38 [-0.41, -0.35]</td><td class="right">-2.34 [-2.47, -2.21]</td></tr>
+<tr><td><strong>0.8 (base)</strong></td><td class="right">33.1</td><td class="right">22.2</td><td class="right">20.9</td><td class="right">1.3 [1.1, 1.6]</td><td class="right">12.2 [11.1, 13.4]</td><td class="right">2.2</td><td class="right">2.6</td><td class="right">-0.41 [-0.44, -0.39]</td><td class="right">-2.38 [-2.50, -2.25]</td></tr>
+<tr><td>1</td><td class="right">33.1</td><td class="right">22.2</td><td class="right">20.7</td><td class="right">1.4 [1.2, 1.8]</td><td class="right">12.3 [11.2, 13.5]</td><td class="right">2.2</td><td class="right">2.5</td><td class="right">-0.45 [-0.47, -0.42]</td><td class="right">-2.41 [-2.53, -2.29]</td></tr>
+</tbody></table></div>
+<h2 id="7-gateflow-s-target-wait-on-a-day-of-slower-screening">7. GateFlow's target wait on a day of slower screening</h2>
+<figure class="chart">
+<figcaption>GateFlow's target wait for extra lanes (min): missed flights per day</figcaption>
+<p class="note">Mean per simulated day at each value; everything else at the base.</p>
+<div class="legend"><span><i style="background: var(--series-1)"></i>fifo-manual@predict</span><span><i style="background: var(--series-2)"></i>fifo-manual@reactive</span><span><i style="background: var(--series-3)"></i>fifo-manual</span></div>
+<svg viewBox="0 0 720 252" role="img" aria-label="Missed flights per day by GateFlow's target wait for extra lanes (min)">
+<line x1="52" y1="212" x2="572" y2="212" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="216" text-anchor="end" font-size="11" fill="var(--muted)">15</text>
+<line x1="52" y1="162" x2="572" y2="162" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="166" text-anchor="end" font-size="11" fill="var(--muted)">20</text>
+<line x1="52" y1="112" x2="572" y2="112" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="116" text-anchor="end" font-size="11" fill="var(--muted)">25</text>
+<line x1="52" y1="62" x2="572" y2="62" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="66" text-anchor="end" font-size="11" fill="var(--muted)">30</text>
+<line x1="52" y1="12" x2="572" y2="12" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="16" text-anchor="end" font-size="11" fill="var(--muted)">35</text>
+<text x="64" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">5</text>
+<text x="229.3" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">8</text>
+<text x="394.7" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)" font-weight="600">10</text>
+<text x="394.7" y="245" text-anchor="middle" font-size="11" fill="var(--muted)">(base)</text>
+<text x="560" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">15</text>
+<polyline points="64,171.3 229.3,162.9 394.7,153.4 560,118.7" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual@predict, 5: 19.1</title>
+<circle cx="64" cy="171.3" r="12" fill="transparent"/>
+<circle cx="64" cy="171.3" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict, 8: 19.9</title>
+<circle cx="229.3" cy="162.9" r="12" fill="transparent"/>
+<circle cx="229.3" cy="162.9" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict, 10: 20.9</title>
+<circle cx="394.7" cy="153.4" r="12" fill="transparent"/>
+<circle cx="394.7" cy="153.4" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict, 15: 24.3</title>
+<circle cx="560" cy="118.7" r="12" fill="transparent"/>
+<circle cx="560" cy="118.7" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<polyline points="64,140.1 229.3,140.1 394.7,140.1 560,140.1" fill="none" stroke="var(--series-2)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual@reactive, 5: 22.2</title>
+<circle cx="64" cy="140.1" r="12" fill="transparent"/>
+<circle cx="64" cy="140.1" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@reactive, 8: 22.2</title>
+<circle cx="229.3" cy="140.1" r="12" fill="transparent"/>
+<circle cx="229.3" cy="140.1" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@reactive, 10: 22.2</title>
+<circle cx="394.7" cy="140.1" r="12" fill="transparent"/>
+<circle cx="394.7" cy="140.1" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@reactive, 15: 22.2</title>
+<circle cx="560" cy="140.1" r="12" fill="transparent"/>
+<circle cx="560" cy="140.1" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<polyline points="64,31.1 229.3,31.1 394.7,31.1 560,31.1" fill="none" stroke="var(--series-3)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual, 5: 33.1</title>
+<circle cx="64" cy="31.1" r="12" fill="transparent"/>
+<circle cx="64" cy="31.1" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual, 8: 33.1</title>
+<circle cx="229.3" cy="31.1" r="12" fill="transparent"/>
+<circle cx="229.3" cy="31.1" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual, 10: 33.1</title>
+<circle cx="394.7" cy="31.1" r="12" fill="transparent"/>
+<circle cx="394.7" cy="31.1" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual, 15: 33.1</title>
+<circle cx="560" cy="31.1" r="12" fill="transparent"/>
+<circle cx="560" cy="31.1" r="4" fill="var(--series-3)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<text x="570" y="122.7" font-size="12" fill="var(--text-primary)">fifo-manual@predict</text>
+<text x="570" y="144.1" font-size="12" fill="var(--text-primary)">fifo-manual@reactive</text>
+<text x="570" y="35.1" font-size="12" fill="var(--text-primary)">fifo-manual</text>
+</svg>
+</figure>
+<figure class="chart">
+<figcaption>GateFlow's target wait for extra lanes (min): net flights saved per day by fifo-manual@predict compared with fifo-manual@reactive</figcaption>
+<p class="note">Mean per day with its 95% confidence interval (shaded). Above zero, fifo-manual@predict catches more flights.</p>
+<svg viewBox="0 0 720 252" role="img" aria-label="Net flights saved by fifo-manual@predict vs fifo-manual@reactive, by GateFlow's target wait for extra lanes (min)">
+<line x1="52" y1="212" x2="696" y2="212" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="216" text-anchor="end" font-size="11" fill="var(--muted)">-4</text>
+<line x1="52" y1="162" x2="696" y2="162" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="166" text-anchor="end" font-size="11" fill="var(--muted)">-2</text>
+<line x1="52" y1="112" x2="696" y2="112" stroke="var(--axis)" stroke-width="1"/>
+<text x="44" y="116" text-anchor="end" font-size="11" fill="var(--muted)">0</text>
+<line x1="52" y1="62" x2="696" y2="62" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="66" text-anchor="end" font-size="11" fill="var(--muted)">2</text>
+<line x1="52" y1="12" x2="696" y2="12" stroke="var(--grid)" stroke-width="1"/>
+<text x="44" y="16" text-anchor="end" font-size="11" fill="var(--muted)">4</text>
+<text x="64" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">5</text>
+<text x="270.7" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">8</text>
+<text x="477.3" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)" font-weight="600">10</text>
+<text x="477.3" y="245" text-anchor="middle" font-size="11" fill="var(--muted)">(base)</text>
+<text x="684" y="230" text-anchor="middle" font-size="12" fill="var(--text-secondary)">15</text>
+<polygon points="64,24.3 270.7,46.8 477.3,71.7 684,153.1 684,177.8 477.3,85.1 270.7,62.8 64,43.8" fill="var(--series-1)" fill-opacity="0.1"/>
+<polyline points="64,33.9 270.7,55 477.3,78.6 684,165.4" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, 5: 3.1 [2.7, 3.5]</title>
+<circle cx="64" cy="33.9" r="12" fill="transparent"/>
+<circle cx="64" cy="33.9" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, 8: 2.3 [2.0, 2.6]</title>
+<circle cx="270.7" cy="55" r="12" fill="transparent"/>
+<circle cx="270.7" cy="55" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, 10: 1.3 [1.1, 1.6]</title>
+<circle cx="477.3" cy="78.6" r="12" fill="transparent"/>
+<circle cx="477.3" cy="78.6" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+<g><title>fifo-manual@predict vs fifo-manual@reactive, 15: -2.1 [-2.6, -1.6]</title>
+<circle cx="684" cy="165.4" r="12" fill="transparent"/>
+<circle cx="684" cy="165.4" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+</g>
+</svg>
+</figure>
+<p>On this curve only: Mean screening time per person (s) = 26.</p>
+<div class="table"><table><thead><tr><th>GateFlow's target wait for extra lanes (min)</th><th class="right">Missed: <code>fifo-manual</code></th><th class="right">Missed: <code>fifo-manual@reactive</code></th><th class="right">Missed: <code>fifo-manual@predict</code></th><th class="right">Net saved vs <code>fifo-manual@reactive</code></th><th class="right">Net saved vs <code>fifo-manual</code></th><th class="right">Extra lane-hours: <code>fifo-manual@reactive</code></th><th class="right">Extra lane-hours: <code>fifo-manual@predict</code></th><th class="right">Wait change vs <code>fifo-manual@reactive</code> (min)</th><th class="right">Wait change vs <code>fifo-manual</code> (min)</th></tr></thead><tbody>
+<tr><td>5</td><td class="right">33.1</td><td class="right">22.2</td><td class="right">19.1</td><td class="right">3.1 [2.7, 3.5]</td><td class="right">14.0 [12.8, 15.3]</td><td class="right">2.2</td><td class="right">3.9</td><td class="right">-0.89 [-0.91, -0.87]</td><td class="right">-2.85 [-2.98, -2.73]</td></tr>
+<tr><td>8</td><td class="right">33.1</td><td class="right">22.2</td><td class="right">19.9</td><td class="right">2.3 [2.0, 2.6]</td><td class="right">13.2 [12.0, 14.4]</td><td class="right">2.2</td><td class="right">3.2</td><td class="right">-0.65 [-0.67, -0.62]</td><td class="right">-2.61 [-2.74, -2.49]</td></tr>
+<tr><td><strong>10 (base)</strong></td><td class="right">33.1</td><td class="right">22.2</td><td class="right">20.9</td><td class="right">1.3 [1.1, 1.6]</td><td class="right">12.2 [11.1, 13.5]</td><td class="right">2.2</td><td class="right">2.6</td><td class="right">-0.41 [-0.44, -0.39]</td><td class="right">-2.38 [-2.51, -2.26]</td></tr>
+<tr><td>15</td><td class="right">33.1</td><td class="right">22.2</td><td class="right">24.3</td><td class="right">-2.1 [-2.6, -1.6]</td><td class="right">8.8 [7.6, 10.0]</td><td class="right">2.2</td><td class="right">1.4</td><td class="right">0.47 [0.39, 0.56]</td><td class="right">-1.49 [-1.64, -1.34]</td></tr>
+</tbody></table></div>
+<h2 id="8-method">8. Method</h2>
+<ul>
+<li>One-at-a-time sensitivity: each curve varies one parameter around the base, all else equal.</li>
+<li>At every point all policies run on the same passengers (common random numbers), and the same seeds are used at every point, so the differences between points are not noise of different days.</li>
+<li>Points that only change a policy share their simulated days, and the policies they do not change are simulated once.</li>
+<li>Policy parameters change the candidate; the prepare window changes every virtual queue, so that the comparison with the same queue in FIFO order stays valid. Scenario parameters change the simulated days for every policy.</li>
+<li>Confidence intervals: percentile bootstrap of the mean over days (2000 resamples, seed 20261121). Quantiles: linear interpolation between order statistics (Hyndman-Fan type 7).</li>
+</ul>
+<h2 id="9-policies-at-the-base">9. Policies at the base</h2>
+<ul>
+<li>Physical FIFO queue with staff calling closing flights (status quo with manual handling, policy A'): <code>fifo-manual</code> 0.1.0</li>
+<li>Physical FIFO queue with staff calling closing flights (status quo with manual handling, policy A'), with extra lanes opened by a supervisor when the queue is long (today): <code>fifo-manual@reactive</code> 0.1.0</li>
+<li>Physical FIFO queue with staff calling closing flights (status quo with manual handling, policy A'), with extra lanes recommended by GateFlow's forecast: <code>fifo-manual@predict</code> 0.1.0</li>
+</ul>
+<p>Full parameters are in the <code>manifest</code> of <code>sweep.json</code>.</p>
+<h2 id="10-data-sources-and-licences">10. Data sources and licences</h2>
+<p>Where the data of this scenario comes from, and the terms under which it may be used.</p>
+<div class="table"><table><thead><tr><th>Source</th><th>Kind</th><th>Provider</th><th>Licence or terms of use</th><th>Retrieved</th><th>Used for</th></tr></thead><tbody>
+<tr><td>Synthetic assumptions of this airport configuration (<code>gateflow-synthetic</code>)</td><td>SYNTHETIC</td><td>GateFlow</td><td>Created for GateFlow; contains no third-party data.</td><td>-</td><td>-</td></tr>
+<tr><td>Venice Marco Polo traffic in 2025 (11.85 million passengers) (<code>save-traffic-2025</code>)</td><td>LITERATURE</td><td>SAVE S.p.A., annual figure as reported in the business plan and in the press</td><td>Published aggregate figure, cited with attribution. Used only to size the synthetic day.</td><td>2026-11-21</td><td>passengers.loadFactor</td></tr>
+<tr><td>Synthetic flight list of the scenario library (<code>library-flights</code>)</td><td>SYNTHETIC</td><td>GateFlow (scenarios/flights/make-library-flights.mjs)</td><td>Created for GateFlow; contains no third-party schedule data.</td><td>-</td><td>flight list</td></tr>
+</tbody></table></div>
+<ul>
+<li><code>save-traffic-2025</code>: 11,850,336 passengers in 2025 according to the business plan (marked verified there); press coverage of SAVE's results gives 11.85 million. Not re-verified against SAVE's own publication, whose website refused automated access.</li>
+</ul>
+<p>Airport configuration: <code>vce-like</code> (VCE-like airport (synthetic)), checkpoint <code>departures</code>, file <code>../airports/vce-like.yaml</code> (SHA-256 <code>ac6f19af1d1a9e260dfb815b1efc4bc5a41282500072bb1c70895bf978cd10ec</code>). The scenario gives only its day; every other parameter comes from this configuration.</p>
+<p>Design day: 138 departures from the flight list <code>flights/vce-like-peak-day.csv</code> (SHA-256 <code>e3a5886b882c0135d44ff8954108f30787d51babdfa325454870803038c7ac9e</code>), source <code>library-flights</code>.</p>
+<h2 id="11-assumptions-of-the-base-scenario">11. Assumptions of the base scenario</h2>
+<div class="table"><table><thead><tr><th>Parameter</th><th>Source</th><th>Note</th></tr></thead><tbody>
+<tr><td>checkpoint.lanesAvailable</td><td>SYNTHETIC</td><td>Lanes the checkpoint has (assumed): the roster plans at most 12, the others open only as extra lanes.</td></tr>
+<tr><td>checkpoint.laneSchedule</td><td>SYNTHETIC</td><td>Planned for this day with the lane plan rule of the checkpoint (airports/vce-like.yaml): 177.0 lane-hours. gateflow-sim lanes --scenario &lt;this file&gt; prints the plan again.</td></tr>
+<tr><td>checkpoint.lanePlanRule</td><td>SYNTHETIC</td><td>Assumed planning rule, not the airport's: every hour, enough lanes to screen the expected arrivals at 90% utilisation, at least 2 and at most 12 lanes.</td></tr>
+<tr><td>checkpoint.laneStaffing</td><td>SYNTHETIC</td><td>Assumed: staff on call can open 2 extra lanes beyond the plan, about 10 minutes after the decision (5 to 20 on most days); an extra lane stays open at least 30 minutes; the duty manager follows 4 recommendations of GateFlow out of 5.</td></tr>
+<tr><td>checkpoint.serviceTimeMeanSeconds</td><td>SYNTHETIC</td><td>About 150 passengers per hour per lane (assumed modern lanes with several divesting positions).</td></tr>
+<tr><td>checkpoint.serviceTimeCv</td><td>SYNTHETIC</td><td></td></tr>
+<tr><td>schedule.seats</td><td>SYNTHETIC</td><td>Assumed typical configurations by ICAO type designator (one class on short haul, two or three on long haul), not airline data. Replace with the airport's seat data.</td></tr>
+<tr><td>schedule.gateZones</td><td>SYNTHETIC</td><td>Nominal walk from the checkpoint exit: A and B are Schengen gates, C non-Schengen gates after passport control (its queue is not modelled). Long-haul flights use zone C; the others draw a zone with these shares.</td></tr>
+<tr><td>passengers.loadFactor</td><td>SYNTHETIC (save-traffic-2025)</td><td>Summer load factors, drawn per flight and day. With the flight list the day has about 22,000 departing passengers, about 1.35 times the average day of 2025 (11.85 million passengers, half of them departing, over 365 days): assumed peak-day factor.</td></tr>
+<tr><td>passengers.transferShare</td><td>SYNTHETIC</td><td>Few connecting passengers cross this checkpoint (an origin-and-destination airport).</td></tr>
+<tr><td>passengers.showUp.departing</td><td>SYNTHETIC</td><td>Arrival at the checkpoint = STD minus (25 min + log-normal with median 70 min), as in the demo scenario.</td></tr>
+<tr><td>passengers.showUp.transfer</td><td>SYNTHETIC</td><td>Connecting passengers arrive later, after their inbound flight.</td></tr>
+<tr><td>passengers.walkSpeedSigma</td><td>SYNTHETIC</td><td>Individual walking time = nominal zone time x log-normal(median 1, sigma).</td></tr>
+<tr><td>passengers.callResponse</td><td>SYNTHETIC</td><td>Virtual queue only. As in the demo scenario; to be measured in a pilot.</td></tr>
+<tr><td>passengers.groups</td><td>SYNTHETIC</td><td>More couples and families than on a normal day (leisure season).</td></tr>
+<tr><td>passengers.assistedShare</td><td>SYNTHETIC</td><td>Parties taking the assisted path (PRM and similar), as in the demo scenario.</td></tr>
+<tr><td>passengers.strategicLateArrival</td><td>SYNTHETIC</td><td>Nobody arrives late on purpose.</td></tr>
+<tr><td>operations.boardingCloseMinutesBeforeStd</td><td>SYNTHETIC</td><td>Boarding closes 20 minutes before the scheduled departure, for every flight.</td></tr>
+<tr><td>operations.deadlineKnowledge</td><td>SYNTHETIC</td><td>The system applies the closing rule to the schedule; without disruptions it matches the ground truth exactly.</td></tr>
+<tr><td>disruptions.flightDelays</td><td>SYNTHETIC</td><td>No delays unless a day says otherwise (see vce-like-disrupted-day).</td></tr>
+<tr><td>disruptions.gateChanges</td><td>SYNTHETIC</td><td>No gate changes unless a day says otherwise.</td></tr>
+<tr><td>disruptions.laneOutages</td><td>SYNTHETIC</td><td>No unplanned lane outages unless a day says otherwise.</td></tr>
+<tr><td>disruptions.feedOutages</td><td>SYNTHETIC</td><td>The flight feed never goes down unless a day says otherwise.</td></tr>
+<tr><td>gateflow</td><td>SYNTHETIC</td><td>GateFlow defaults (priority v3 0.2.0, the virtual queue of ADR-017 and the lane recommendations of ADR-039), to be approved by the airport for this checkpoint.</td></tr>
+<tr><td>todayPractice</td><td>SYNTHETIC</td><td>Baseline A' as in ADR-022: every 5 minutes staff call the flights closing within 20 minutes. With a supervisor (@reactive, ADR-039), an extra lane opens when the queue shows more than 10 minutes and closes below 2. To replace with how this airport handles urgent passengers and long queues.</td></tr>
+<tr><td>fairnessTarget</td><td>SYNTHETIC</td><td>The criterion of ADR-025, to be approved by the airport.</td></tr>
+</tbody></table></div>
+<h2 id="12-limitations-of-this-model-version">12. Limitations of this model version</h2>
+<ul>
+<li>Single checkpoint. Lanes follow a planned schedule, minus unplanned outages when the scenario has them: a lane going out of service finishes its passenger first, at least one lane always stays open, and the system knows at once.</li>
+<li>Extra lanes (policies with lane management, S8) open beyond the plan only up to the lanes the checkpoint has and the staff on call. A decision to open takes the day's delay to put a lane into service, an extra lane stays open for a minimum time, and staff go back when the plan itself needs the lane. Staff on call have no other duties in the model, and their cost is counted as extra lane-hours only. The supervisor of today's practice decides on the wait the queue shows; GateFlow recommends on a forecast of arrivals (the average of 50 other simulated days with the same flights, scaled by the arrivals of the last hour), and the duty manager follows each recommendation with the scenario's probability.</li>
+<li>Every passenger uses the virtual queue when one is simulated: no opt-outs, no passengers without a phone or a view of the displays.</li>
+<li>Response times and absences are drawn per party from assumed distributions. A second call does not make an absent passenger come sooner, the prepare window does not shorten response times, and a passenger who has been at the access point once answers later calls at once.</li>
+<li>The access point never becomes a bottleneck, and the walk from the access point to the lanes is part of the response time.</li>
+<li>Fast track (priority v2): a fast-tracked party is called next and, once its ticket is validated, goes ahead of the people waiting at the lanes who still have room under K. The fast-track entry never becomes a bottleneck of its own and needs no staff in the model.</li>
+<li>CRITICAL passengers are flagged for staff, but staff escorts are not modelled: such passengers wait in the queue order.</li>
+<li>Before any disruption the system's deadline equals the ground truth (boarding close from a fixed rule). Delays and gate changes, when the scenario has them, are known only once the flight feed announces them, and messages sent while the feed is down arrive when it recovers. Delays only move boarding later; passengers still arrive for the scheduled departure. A gate change affects only passengers who finish screening after it.</li>
+<li>Staff of baseline A' learn of delays when the system does and keep using the last known times while the feed is down (no stale-data rule).</li>
+<li>Passengers never abandon the queue, even after their flight has closed.</li>
+<li>A group stays together: one ticket, one call, one lane, screened one person after the other. Assisted passengers always get the next free lane and are not assessed by the engine.</li>
+<li>Baseline A' (<code>fifo-manual</code>) is an idealised staff practice: every five minutes staff call the flights closing within 20 minutes, and every passenger of those flights comes forward at once. Real practice is less systematic, so A' may overstate today's handling where it is informal, or understate it where staff watch individual passengers.</li>
+<li>Strategic late arrivals are a fixed share in a stress-test scenario, not a behavioural response to the policy.</li>
+<li>Tickets are issued on arrival with no kiosk or scanning delay.</li>
+<li>The engine estimates screening time as the mean screening time per person, walking time as the nominal time of the gate zone, and the time from call to screening as the larger of the response estimate and the call-ahead time (through the fast track: the response estimate, or the time since the passenger was last at the access point when shorter).</li>
+</ul>
+<h2 id="13-reproducibility">13. Reproducibility</h2>
+<div class="table"><table><thead><tr><th>Item</th><th>Value</th></tr></thead><tbody>
+<tr><td>Sweep specification hash</td><td><code>sha256:0c58479a5aa18bd756cd5bcf590ab211808a1b667956fcda2b5f0377d168dfac</code></td></tr>
+<tr><td>Base scenario hash</td><td><code>sha256:84e71ee46929c79eee7467bcd5c616b0106a690752ba9bbe7777fc3bf6b1b658</code></td></tr>
+<tr><td>Seeds</td><td>1-200 (200)</td></tr>
+<tr><td>Distinct simulated days</td><td>3400</td></tr>
+<tr><td>Source revision</td><td><code>b3c9f7e3b0fae64477fb45231fcb31cb4864982e</code></td></tr>
+<tr><td>Versions</td><td>engine 0.5.0, queue core 0.6.0, model 0.6.0, kernel 0.1.0, population generator 0.6.0, scenario schema 5</td></tr>
+<tr><td>Generated by</td><td>gateflow-sim 0.8.0</td></tr>
+</tbody></table></div>
+<p>Command:</p>
+<pre><code class="language-bash">gateflow-sim sweep --spec sweeps/vce-like-peak-lanes.yaml --seeds 1-200 --bootstrap-resamples 2000</code></pre>
+</main>
+</body>
+</html>

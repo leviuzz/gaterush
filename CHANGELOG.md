@@ -4,10 +4,47 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Any change that alters simulated numbers
 must be listed, together with the component versions it bumps.
 
-## [Unreleased]
+## [0.8.0] - 2026-11-22: Airport configurations and slice S8
+
+One configuration file per airport, and extra lanes during the day: opened by today's supervisor
+when the queue is long, or recommended by GateFlow from a forecast of arrivals, with a duty
+manager who may not follow (ADR-038, ADR-039).
+
+### Simulated numbers change
+
+- None for the existing policies and scenarios: without a lane mode no lane opens beyond the plan,
+  and the populations of the library days are those of S7 plus the day's staff on call (drawn on
+  streams of their own). Golden files differ only in the manifest (queue core 0.6.0, model 0.6.0,
+  population generator 0.6.0, results schema 7, sweep schema 3), in a new model limitation and in
+  the added metrics (extra lane-hours, lane decisions, lanes opened and closed, most lanes open,
+  change in waiting in person-hours and in extra lane-hours).
+- New numbers come from the new lane modes (`@reactive`, `@predict`): see
+  [docs/reports/slice-8](docs/reports/slice-8/README.md).
 
 ### Added
 
+- Extra lanes (S8, ADR-039):
+  - lane modes for every policy: `<policy>@reactive` (a supervisor opens a lane when the queue
+    shows a long wait) and `<policy>@predict` (GateFlow projects the queue over 45 minutes from a
+    forecast of arrivals and recommends the fewest lanes that keep the wait below 10 minutes);
+  - scenario fields `checkpoint.laneStaffing` (staff on call for extra lanes, time to open one,
+    minimum time open, share of recommendations followed) and `checkpoint.lanePlanRule.maxLanes`
+    (the roster below the lanes the checkpoint has);
+  - lane thresholds in `todayPractice` (`laneOpenWaitMinutes`, `laneCloseWaitMinutes`) and in
+    `gateflow` (`laneTargetWaitMinutes`, `laneHorizonMinutes`);
+  - the arrival forecast: the average arrival profile of 50 simulated days never simulated in the
+    reports;
+  - metrics: extra lane-hours, decisions and those followed, lanes opened and closed, most lanes
+    open; per comparison, the change in waiting and in extra lane-hours, and the waiting saved
+    and the net flights made per extra lane-hour with bootstrap intervals;
+  - a "Lane management" section in every report with a lane mode, and extra lane-hours and the
+    change in time to screening in sweep tables;
+  - sweep parameters `laneTargetWaitMinutes`, `maxExtraLanes`, `laneOpenDelayMinutes` and
+    `laneFollowShare`, and the sweep `sweeps/vce-like-peak-lanes.yaml`;
+  - default comparisons for lane modes; `gateflow-sim validate` prints the lanes and the staff on
+    call; `gateflow-sim policies` lists the lane modes;
+  - tests: hand-computed cases, 200 random cases of the lane limits, equivalence with the plan
+    without staff on call, the S7 results unchanged without lane management.
 - Airport configurations (ADR-038):
   - `airports/<id>.yaml` holds every parameter of an airport and its checkpoints, with their
     sources;
@@ -36,6 +73,15 @@ must be listed, together with the component versions it bumps.
 
 - The library days (`scenarios/vce-like-*.yaml`, `tsf-like-peak-day.yaml`,
   `mx-like-transfer-hub.yaml`) extend their airport configuration. Their results are unchanged.
+- The library airports have more lanes than their roster plans and staff on call (synthetic):
+  VCE-like 14 lanes with a roster of at most 12 and 2 extra lanes, TSF-like 6/5/1, MX-like hub
+  5/4/1. The lane plans of the days are unchanged.
+- `results.json` is `gateflow.sim.results/7` and `sweep.json` `gateflow.sim.sweep/3`. A
+  comparison may carry `perExtraLaneHour`.
+- `gateflow-sim policies` prints `{ presets, laneModes }` instead of the list of presets.
+- Sweep tables leave out the overtake column when the candidate does not prioritise.
+- HTML reports keep policy ids and values with their interval on one line in tables (they broke
+  in the middle); wide tables scroll inside their frame.
 - `results.json` and `sweep.json` manifests carry `scenario.airport` (null for scenarios without
   one).
 - Sweeps: adding lanes (`lanesDelta` > 0) also adds them to the lanes the checkpoint has.

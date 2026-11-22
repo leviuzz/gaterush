@@ -27,10 +27,10 @@ apps/
 packages/
   domain/           shared domain types and units (integer milliseconds, segments, risk classes)
   priority-engine/  assessment and selection of the next call (pure)
-  queue-core/       queue state machine: tickets, prepare window, calls, no-shows; policies (pure)
+  queue-core/       queue state machine: tickets, prepare window, calls, no-shows; policies and lane modes (pure)
   sim-kernel/       seeded RNG streams, deterministic math, distributions, event calendar (pure)
-  sim-model/        checkpoint simulation: physical queue or GateFlow virtual queue (pure)
-  sim-scenarios/    scenario schema, validation, assumptions, synthetic population (pure)
+  sim-model/        checkpoint simulation: physical queue or GateFlow virtual queue, extra lanes (pure)
+  sim-scenarios/    scenario schema, validation, assumptions, synthetic population, arrival forecast (pure)
   sim-metrics/      experiments, sweeps, paired metrics, statistics, results, Markdown and HTML (pure)
 airports/           airport configurations: parameters of each airport and checkpoint (YAML)
 airports/private/   airport-provided configurations, ignored by git
@@ -251,6 +251,11 @@ States: `QUEUED -> PREPARE -> CALLED -> RECALLED -> NO_SHOW -> EXPIRED`, where:
 - **Presets.** `fifo` (A, physical), `fifo-manual` (A', physical, staff flight calls),
   `virtual-fifo`, `priority-v0`, `priority-v1`, `priority-v1-strict`, `priority-v2` and
   `priority-v3` (virtual queue).
+- **Lane modes (S8, ADR-039).** `withLaneMode(policy, mode)` adds lane management to any policy,
+  with the id `<policy>@<mode>`, without changing its calls: `reactive` (today's supervisor) or
+  `predict` (GateFlow's recommendations). `findPolicyPreset('fifo-manual@reactive')` resolves
+  such ids. The queue itself does not manage lanes: the simulator does (section 7), and in
+  production the operations console will.
 
 Property tests (1,000 random operation sequences on random policies, 300 for determinism) check,
 independently of the implementation: zero churn, window size at most M, state counters, a single admission per ticket,
@@ -259,7 +264,7 @@ independent overtake model), class changes and reversals against an independent 
 observed classes, and determinism. A coverage test guarantees that the sequences reach
 priority commitments, the cap, the guard and reactivations.
 
-## 7. Checkpoint simulation model (model version 0.5.0)
+## 7. Checkpoint simulation model (model version 0.6.0)
 
 `simulateCheckpoint(population, policy, { classification })` is a discrete-event simulation of
 one checkpoint operated by a `CheckpointQueue`:
@@ -285,6 +290,25 @@ one checkpoint operated by a `CheckpointQueue`:
   during unplanned outages (S5), always at least one. Lanes close from the highest number down,
   finish the passenger they are screening, and a lane closing at time t takes nobody at t. The
   engine's throughput estimate follows the open lanes at once.
+- **Extra lanes (S8, ADR-039).** A policy with lane management (`policy.lanes`) can open lanes
+  beyond the plan when the population has staff on call (`population.staffing`). Open lanes are
+  `max(1, min(planned + extra, lanes the checkpoint has) - out of service)`, so without extra
+  lanes this is the plan of S5.
+  - Lane management looks at the queue every 5 minutes (event `LANE_REVIEW`, after everything
+    else at the same instant) while passengers are still to come or to be screened.
+  - A decision to open takes the day's delay of that decision (`staffing.openDelaysMs`). The
+    lane then opens (event `LANE_READY`, with the priority of a lane change) if the checkpoint and
+    the staff still have room.
+  - At most `maxExtraLanes` extra lanes are open or decided at the same time. A decision is
+    followed by a wait (cooldown), and an extra lane stays open at least `minOpenMs`. When the
+    plan grows, staff beyond the lanes it leaves free go back.
+  - *Reactive* (today's supervisor): opens one lane when the wait the queue shows (people waiting
+    / throughput of the open lanes) exceeds a threshold, and closes one below another.
+  - *Predict* (GateFlow): projects the backlog minute by minute over a horizon from the people
+    waiting and the forecast of arrivals (`population.forecast`), scaled by the arrivals of the
+    last hour. It recommends the fewest lanes that keep the projected wait below the target, and
+    closing a lane when the projection without it stays short. The duty manager follows the n-th
+    recommendation when `staffing.follows[n]` is true.
 - **Ground truth and knowledge (S5, ADR-030).** The system starts the day with the known
   deadlines and learns of delays and gate changes from the feed messages, at the time the feed
   sends them. During a feed outage the messages are held until the feed recovers, and every known
@@ -292,15 +316,18 @@ one checkpoint operated by a `CheckpointQueue`:
   age stops trusting it). After a gate change, passengers who finish screening from that instant
   walk to the new gate, their walk scaled by the nominal walking times of the two gates.
 - **Events and order at the same instant:** the feed recovers, the feed goes down, feed messages
-  arrive, lane change, end of service, presentation at the access point, timeouts, arrival. With
-  instant calls and no call-ahead or window, this reproduces S1 exactly.
+  arrive, lane change (and an extra lane ready), end of service, presentation at the access point,
+  timeouts, arrival, then the lane review. With instant calls and no call-ahead or window, this
+  reproduces S1 exactly.
 - **Outcome.** Time to screening, time standing in a queue, calls, no-shows, reactivations, new
   tickets, class changes and reversals per passenger; gate arrival = end of service + walking time
   (after a gate change, to the new gate); the passenger misses the flight if they reach the gate
   after the true boarding close. The run counts the people boosted while the system's knowledge
   of their flight differed from the truth.
-- **Run statistics.** Lane busy and staffed time, idle lane time that waiting passengers could
-  have used (`min(idle lanes, waiting + walking)`), integrals of tickets waiting for a call and of
+- **Run statistics.** Lane busy and staffed time, extra lane time beyond the plan, lane decisions
+  (and those followed), lanes opened and closed and the most lanes open, idle lane time that
+  waiting passengers could have used (`min(idle lanes, waiting + walking)`), integrals of tickets
+  waiting for a call and of
   people standing in a queue.
 
 Validation:
@@ -344,10 +371,19 @@ Validation:
   checkpoint's part, then the day (objects merge key by key; labelled parameters, lists and values
   replace), and records the airport and the file's SHA-256 in `scenario.airport`.
 - A checkpoint may give `lanesAvailable` and a `lanePlanRule` instead of a lane schedule. The plan
-  is then made at load time (`planLanes`) from the expected arrivals of simulated days 1 to N.
+  is then made at load time (`planLanes`) from the expected arrivals of simulated days 1 to N, up
+  to `maxLanes` (the roster) when the rule gives it.
+- A checkpoint may give staff on call (`laneStaffing`, S8): extra lanes, the time to open one, the
+  minimum time open and the share of GateFlow's recommendations the duty manager follows.
+  Generator 0.6.0 draws the day's 64 open delays (log-normal) and answers (Bernoulli) on streams of
+  their own, so every policy meets the same ones and the rest of the population is unchanged.
+- `arrivalForecast(scenario)` is GateFlow's forecast for lane recommendations: the people
+  arriving per minute, averaged over 50 simulated days that the reports never simulate (seeds from
+  1,000,001). `planExperiment` and `sweepDayJob` compute it once, only when a policy uses it.
 - The scenario's `gateflow`, `todayPractice` and `fairnessTarget` configure the checkpoint.
   `applyScenarioSettings` (sim-metrics) applies the first two to the policies before a run or
-  sweep, and the reports check the third.
+  sweep (including the lane thresholds of `@reactive` and `@predict`), and the reports check the
+  third.
 - The package does no I/O: `parseScenarioText(text, format, files)` receives functions that read
   the flight list named by the scenario (relative to the scenario file) and hash it. The CLI
   passes file system access. The rows are then part of the scenario, so its hash, the worker
@@ -379,7 +415,8 @@ by seed, whatever the order in which they were computed. `runExperiment` does al
 thread; the CLI spreads the days over worker threads (section 10). For each day:
 - policy metrics, counted in people: missed flights (total and by segment), time to screening
   and standing time, prioritised passengers, overtakes, calls, second calls, no-shows,
-  reactivations, new tickets, staffed lane-hours, lane utilisation, idle lane time, tickets
+  reactivations, new tickets, staffed lane-hours, extra lane-hours, lane decisions, lanes opened
+  and closed, the most lanes open, lane utilisation, idle lane time, tickets
   waiting and people standing, risk classes on arrival, groups, assisted passengers, strategic
   late arrivals, people through the fast track and people passed at the lanes, class changes,
   reversals and people whose class flapped, people boosted on wrong information, and misses among
@@ -387,15 +424,20 @@ thread; the CLI spreads the days over worker threads (section 10). For each day:
 - the disruptions of the day (delayed flights, gate changes, lane outages, feed outages, feed
   messages and those held), the same for every policy;
 - paired comparisons for each requested `candidate`/`reference` pair, weighted by party size:
-  saved, lost, net, the at-risk cohort, the extra wait of non-prioritised passengers, and the
-  change in time to screening and standing time. By default:
+  saved, lost, net, the at-risk cohort, the extra wait of non-prioritised passengers, the
+  change in time to screening and standing time, the change in waiting (person-hours) and in
+  extra lane-hours. By default:
   - every policy against the status quo;
   - each reordering policy against the FIFO policy of the same queue;
   - each priority policy against today's practice with manual handling (A') and against the
-    priority policies listed before it.
+    priority policies listed before it, these references managing lanes as the candidate does;
+  - each policy with a lane mode against the same policy without it, `@predict` against
+    `@reactive`, and a priority policy with `@predict` against `fifo-manual@reactive`.
 
 `buildResults` aggregates over days (mean, P5, P50, P95, min, max, and bootstrap intervals for
-comparisons) into `results.json` (`schema: gateflow.sim.results/6`):
+comparisons; for comparisons that only add lane-hours, the waiting saved and the net flights made
+per extra lane-hour, as ratios of totals with a bootstrap interval) into `results.json`
+(`schema: gateflow.sim.results/7`):
 - disclaimer;
 - manifest: versions, scenario hash, the scenario's data sources and how its design day was built
   (hourly profile or flight list, with the file and its SHA-256), seeds, policies, comparisons,
@@ -414,16 +456,17 @@ dark, rounded to 0.1 px, so the HTML is as deterministic as the JSON (ADR-033).
 **Sensitivity sweeps** (ADR-032). A sweep varies one parameter at a time around a base:
 - the specification (`sweeps/*.yaml`) names the base scenario, the policies, the candidate, the
   comparisons and the curves (a parameter, its values, optionally a modified base);
-- `applySetting` changes the candidate (K, k, N, h, maximum data age), every virtual queue (M,
-  call-ahead, response estimate) or the scenario (lanes, load factor, arrival shift, call
-  response, missed calls, delays, lane and feed outages), and validates the result again;
+- `applySetting` changes the candidate (K, k, N, h, maximum data age, GateFlow's target wait for
+  extra lanes), every virtual queue (M, call-ahead, response estimate) or the scenario (lanes,
+  load factor, arrival shift, call response, missed calls, delays, lane and feed outages, staff on
+  call, time to open a lane, share of recommendations followed), and validates the result again;
 - `planSweep` groups the points by scenario. A task is one day of one scenario variant:
   `runSweepDay` generates the population once and simulates each distinct policy once, so
   baselines are shared by every policy-only point;
 - `buildSweepResults` summarises each point (missed flights per policy, net saved against each
-  reference with a bootstrap interval, cost to other passengers, largest overtake count) into
-  `sweep.json` (`gateflow.sim.sweep/2`), rendered as `sweep.md` and `sweep.html` (two charts per
-  curve).
+  reference with a bootstrap interval, cost to other passengers, largest overtake count, extra
+  lane-hours and the change in time to screening) into `sweep.json` (`gateflow.sim.sweep/3`),
+  rendered as `sweep.md` and `sweep.html` (two charts per curve).
 
 Golden files (`packages/sim-metrics/test/golden`) lock the full results, Markdown and HTML report
 of the demo scenario for seeds 1-3, the report of the disrupted scenario, and a small sweep (JSON,

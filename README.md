@@ -9,19 +9,22 @@ engine** brings forward passengers who would miss their flight under FIFO but ca
 It does so within **declared, measurable fairness bounds**. GateFlow never changes security or
 border procedures: it organises the flow before they start.
 
-> **Status: slices S1 to S7 done.** This repository contains the simulation foundations:
+> **Status: slices S1 to S8 done (milestone M1).** This repository contains the simulation
+> foundations:
 > - the priority engine;
 > - the queue state machine that the operational product will share;
 > - a reproducible discrete-event simulator of a checkpoint. It runs either as today's physical
 >   queue, with or without staff calling closing flights, or as a GateFlow virtual queue with
 >   realistic call mechanics, groups and assisted passengers. Days can include flight delays,
 >   gate changes, lane outages and flight feed outages: the system decides on what it knows,
->   and outcomes are judged on what really happens;
+>   and outcomes are judged on what really happens. Extra lanes can open during the day, by
+>   today's supervisor or on GateFlow's recommendation, within the lanes and the staff on call
+>   of each checkpoint;
 > - a CLI that compares policies on the same simulated passengers, runs sensitivity sweeps, uses
 >   every CPU and writes JSON, Markdown and HTML reports with charts;
 > - scenarios that take their flights from the airport's own flight list (a CSV file), with the
->   source and licence of every datum printed in every report, and a library of synthetic
->   VCE-like, TSF-like and MX-like checkpoints.
+>   source and licence of every datum printed in every report, one configuration file per
+>   airport, and a library of synthetic VCE-like, TSF-like and MX-like checkpoints.
 >
 > There is no operational system, API or user interface yet. See
 > [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
@@ -61,6 +64,16 @@ Also available: `priority-v0` (S2), `priority-v1` (S3, without the fast track),
 `priority-v1-strict` (v1 with the late-presentation rule) and `priority-v2` (S4, v3 without the
 data-quality rules).
 
+Any policy can also open extra lanes during the day (S8), when the checkpoint has staff on call:
+- `<policy>@reactive`: a supervisor opens a lane when the queue shows more than 10 minutes of
+  waiting (today's practice);
+- `<policy>@predict`: GateFlow recommends lanes from a forecast of arrivals, and the duty
+  manager follows 4 recommendations out of 5.
+
+```bash
+pnpm sim run --scenario scenarios/mx-like-transfer-hub.yaml --policies fifo,fifo-manual,fifo-manual@reactive,fifo-manual@predict,priority-v3,priority-v3@predict
+```
+
 Other commands:
 
 ```bash
@@ -88,10 +101,10 @@ The last command writes the design day of a scenario as a flight list
 [docs/data-request](docs/data-request/README.md) for what the simulator needs, and
 [scenarios/flights](scenarios/flights/README.md) for the format.
 
-Each airport has a configuration file in `airports/` with all its parameters: lanes, throughput,
-walking times, passenger behaviour, GateFlow settings and fairness target per checkpoint. A
-scenario names the airport and the checkpoint and gives only its day. See
-[airports/README.md](airports/README.md).
+Each airport has a configuration file in `airports/` with all its parameters: lanes, roster and
+staff on call, throughput, walking times, passenger behaviour, GateFlow settings and fairness
+target per checkpoint. A scenario names the airport and the checkpoint and gives only its day.
+See [airports/README.md](airports/README.md).
 
 ```bash
 pnpm sim policies
@@ -120,6 +133,16 @@ lanes planned with a stated rule):
 | `vce-like-disrupted-day` | 21,792 | 20.0 | 14.3 | 14.1 | 0.3 [-0.1, 0.7] |
 | `tsf-like-peak-day` (low-cost base, one morning bank) | 5,981 | 25.8 | 0.0 | 2.3 | **-2.3** [-3.1, -1.6] |
 | `mx-like-transfer-hub` (transfer screening, tight connections) | 4,473 | 131.6 | 96.7 | 87.9 | **8.7** [7.2, 10.4] |
+
+Extra lanes during the day (S8: each checkpoint has more lanes than its roster plans, and staff
+on call for 1 or 2 of them):
+
+| Scenario (200 simulated days, SYNTHETIC) | A' | A' + supervisor | A' + GateFlow lanes | GateFlow as a whole: v3 + GateFlow lanes | GateFlow as a whole vs A' + supervisor [95% CI] | Extra lane-hours per day: supervisor / GateFlow |
+|---|---:|---:|---:|---:|---:|---:|
+| `vce-like-peak-day` | 18.8 | 18.7 | 18.7 | 18.4 | +0.4 [0.0, 0.7] | 0.1 / 0.3 |
+| `vce-like-disrupted-day` | 14.3 | 14.0 | 13.9 | 13.6 | +0.4 [0.1, 0.8] | 0.2 / 0.5 |
+| `tsf-like-peak-day` | 0.0 | 0.0 | 0.0 | 0.1 | -0.1 [-0.2, -0.1] | 1.1 / 1.3 |
+| `mx-like-transfer-hub` | 96.7 | 81.5 | 64.5 | 61.8 | **+19.7** [17.8, 21.6] | 0.6 / 1.8 |
 
 How to read these numbers:
 - Today's manual handling, idealised (A'), is the benchmark that matters: staff who call closing
@@ -155,7 +178,24 @@ How to read these numbers:
 - The numbers rest on synthetic assumptions. Response times, missed calls, today's practice,
   lane throughput and the reliability of the flight feed must be measured. Public flight data
   (OPDI) is published for non-commercial use only and is not used (ADR-035).
+- **Extra lanes at the right time** (S8):
+  - at the hub, GateFlow sees the next wave coming and opens the extra lane before it: 32 fewer
+    missed flights per day than the plan alone, against 15 for a supervisor who reacts to the
+    queue. With the priority calls, GateFlow as a whole catches 19.7 more flights per day than
+    today's practice with a supervisor, for 1.3 more lane-hours per day (about 2.5% of the 49.5
+    staffed);
+  - at the low-cost base, the lanes close most of the gap of S7 (v3 alone: 2.3 more misses than
+    A'; with GateFlow's lanes: 0.1), and the 90th percentile of the wait falls from 15 to
+    4 minutes;
+  - where the roster follows demand (VCE-like days), extra lanes are rarely needed: 0.3-0.5
+    lane-hours per day on the peak days, with little change in missed flights. On a day harder
+    than planned (screening 8% slower) they are the safety valve: 33.1 missed flights per day
+    with the plan alone, 22.2 with a supervisor, 20.9 with GateFlow's lanes;
+  - each extra lane-hour saves 35 to 180 hours of passenger waiting;
+  - GateFlow's target wait (10 minutes by default) trades lane-hours for flights, and is set for
+    each checkpoint.
 - Reports with every assumption, data source and limitation, and pages with charts:
+  - extra lanes: [docs/reports/slice-8](docs/reports/slice-8/README.md);
   - the library: [docs/reports/slice-7](docs/reports/slice-7/README.md);
   - the demo days: [docs/reports/slice-6](docs/reports/slice-6/README.md);
   - earlier reports: [docs/reports](docs/reports).
@@ -166,10 +206,10 @@ How to read these numbers:
 |---|---|
 | `packages/domain` | Shared domain types and units |
 | `packages/priority-engine` | Deterministic priority engine (pure) |
-| `packages/queue-core` | Queue state machine and policies, shared by simulator and product (pure) |
+| `packages/queue-core` | Queue state machine, policies and lane modes, shared by simulator and product (pure) |
 | `packages/sim-kernel` | Seeded RNG streams, deterministic math, distributions, event calendar (pure) |
-| `packages/sim-model` | Checkpoint simulation: physical or virtual queue, calls, lane schedules, disruptions (pure) |
-| `packages/sim-scenarios` | Scenario schema, assumptions registry, synthetic population (pure) |
+| `packages/sim-model` | Checkpoint simulation: physical or virtual queue, calls, lane schedules, extra lanes, disruptions (pure) |
+| `packages/sim-scenarios` | Scenario schema, airport configurations, assumptions registry, synthetic population, arrival forecast (pure) |
 | `packages/sim-metrics` | Experiments, paired metrics, statistics, results and report (pure) |
 | `apps/sim-cli` | `gateflow-sim` command-line interface |
 | `airports/` | Airport configurations: the parameters of each airport and checkpoint ([guide](airports/README.md)) |

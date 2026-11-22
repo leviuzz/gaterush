@@ -42,8 +42,9 @@ A spreadsheet export is fine. Semicolons and quoted fields are accepted. The CSV
   - how many lanes the staff on call can open beyond the roster;
   - how many minutes pass from the decision to the first passenger screened;
   - how long an extra lane then stays open.
-  In simulation, opening lanes before the queue builds saves flights on the days when screening is
-  slower than planned or the roster is short.
+  In simulation, opening a lane before the queue builds saves flights at a transfer checkpoint
+  that receives waves of connecting passengers, and on days when screening is slower than
+  planned or the roster is short.
 - Fast-track lanes and assisted-passenger (PRM) paths: how many, which rights, which rules.
 - Whether a checkpoint screens connecting passengers again (transfer security), and how many of
   them cross it per day. In simulation this is where GateFlow helps most.

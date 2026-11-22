@@ -1190,3 +1190,12 @@ founder on 2026-11-21 together with all of its recommendations.
   - Staff on call have no other duties, and an extra lane costs only its lane-hours, which the
     airport prices.
   - Results: [docs/reports/slice-8](docs/reports/slice-8/README.md).
+- **Findings** (SIMULATED, synthetic data, 200 days):
+  - at the MX-like hub, GateFlow as a whole catches 19.7 more flights per day than today's
+    practice with a supervisor [17.8, 21.6], for 1.25 more lane-hours per day;
+  - at the TSF-like base, v3 with GateFlow's lanes misses 0.1 flights per day instead of 2.3;
+  - on the VCE-like days, where the roster follows demand, extra lanes are rarely needed;
+  - on a day harder than planned they are the safety valve, and GateFlow adds 0.8 to 3.5
+    flights per day over the supervisor;
+  - the target wait is the main setting, more than the time to open a lane or the share of
+    recommendations followed.

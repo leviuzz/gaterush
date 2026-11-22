@@ -10,7 +10,7 @@ Status legend: **Done**, **Next**, **Planned**, **Gated** (needs a business deci
 
 | Milestone | Business plan stage | Status |
 |---|---|---|
-| M1: Simulator core and priority engine | R1 | In progress (S1 to S7 done) |
+| M1: Simulator core and priority engine | R1 | **Done** (S1 to S8) |
 | M2: Simulator Studio (web, runs in the browser) | R1-R2 | Planned |
 | M3: Priority end-to-end in the browser, digital twin | R2 | Planned |
 | M4: Operations console and Predict preview (pitch-ready) | R2 | Planned |
@@ -30,7 +30,7 @@ Status legend: **Done**, **Next**, **Planned**, **Gated** (needs a business deci
 | **S6** | Parallel batches (worker threads), sensitivity sweeps (k/N, K, lanes, load factor, show-up, maximum data age, feed reliability), HTML report with charts (ADR-031 to ADR-034) | **Done** |
 | **S7** | Data licences checked (OPDI is non-commercial, not imported: ADR-035); airport flight lists from CSV files, seats by aircraft type, data sources and licences in every report (ADR-036); scenario library: VCE-like normal, peak and disrupted days, TSF-like peak day, MX-like transfer hub (ADR-037) | **Done** |
 | *after S7* | Airport configurations: one file per airport and checkpoint with every parameter, GateFlow settings, today's practice and fairness target per checkpoint, lane plans from a rule (ADR-038) | **Done** |
-| S8 | Experiment C: lane-opening recommendations with an operator model | **Next** |
+| **S8** | Experiment C: extra lanes opened by today's supervisor or recommended by GateFlow from a forecast of arrivals, with an operator model (staff on call, time to open, duty manager who may not follow), within the lanes and staff of each checkpoint (ADR-039) | **Done** |
 
 The slices after S3 were renumbered when S4 was proposed: S4 to S7 of the kickoff proposal (and of
 earlier documents) are now S5 to S8.
@@ -477,6 +477,89 @@ With S7 the technical part of the M1 exit gate is met:
 - every number labelled as simulated.
 
 S8 (lane opening) completes M1.
+
+## S8: acceptance criteria and evidence
+
+Scope delivered (approved with "Vai", the details delegated: "il resto decidi te la cosa
+migliore"):
+- **Lane modes for every policy** (ADR-039): `<policy>@reactive`, today's supervisor who opens a
+  lane when the queue shows a long wait, and `<policy>@predict`, GateFlow's recommendations from
+  a projection of the queue over 45 minutes on a forecast of arrivals.
+- **Operator model**, per checkpoint in the airport configuration (`checkpoint.laneStaffing`):
+  - staff on call for a number of extra lanes;
+  - a time from the decision to the first passenger screened, drawn per decision;
+  - a minimum time open;
+  - the share of GateFlow's recommendations the duty manager follows.
+- **Physical lanes and roster**: `lanesAvailable` is the lanes the checkpoint has,
+  `lanePlanRule.maxLanes` the most the roster plans; extra lanes open only in between.
+- **Forecast of arrivals** from 50 simulated days that are never simulated in the reports.
+- **Metrics and reports**:
+  - extra lane-hours, decisions and those followed (the alerts generated and accepted of the
+    kickoff), lanes opened and closed, most lanes open;
+  - what each extra lane-hour buys, with bootstrap intervals;
+  - a "Lane management" section in the reports, and four new sweep parameters.
+- Queue core 0.6.0, model 0.6.0, population generator 0.6.0, results schema 7, sweep schema 3,
+  scenarios 0.6.0, metrics and CLI 0.8.0. The scenario schema stays at version 5.
+
+| # | Criterion (kickoff, as proposed) | Evidence |
+|---|---|---|
+| 1 | A recommendation rule for opening lanes | `@predict` (`packages/sim-model/src/checkpoint.ts`, ADR-039). It recommends the fewest lanes that keep the projected wait below the target, and closing a lane when the projection without it stays short. The target and the horizon are settings of the checkpoint (`gateflow.laneTargetWaitMinutes`, `laneHorizonMinutes`). Hand-computed test: on a wave of arrivals it opens the lane before anyone arrives, and the supervisor only once the queue is long (`packages/sim-model/test/lanes.test.ts`). |
+| 2 | An operator model | `checkpoint.laneStaffing`. The day's open delays (log-normal) and the duty manager's answers (Bernoulli) are drawn on streams of their own: every policy meets the same ones, and the rest of the population is unchanged (`packages/sim-scenarios/test/lanes.test.ts`). A recommendation that is not followed changes nothing (test). The supervisor of `@reactive` stands for today's practice; its thresholds come from `todayPractice`. |
+| 3 | Cooldown and deduplication | 10 minutes between decisions; lanes decided but not yet open count against the staff on call, so the same need is not decided twice (tests with a 20-minute delay: one decision with staff for one lane, three decisions 10 minutes apart with staff for three). |
+| 4 | The report shows the benefit against the extra lane-hours | Section "Lane management" of every report with a lane mode: extra lane-hours per policy, and per comparison the net flights saved, the change in time to screening, and the waiting saved and net flights saved per extra lane-hour, with 95% bootstrap intervals (`bootstrapRatioInterval`, tested). The sweep tables give the extra lane-hours of every point. |
+| 5 | No extra capacity beyond the limits of the scenario | Open lanes never exceed `lanesAvailable` nor the roster plus the staff on call. 200 random cases check it, and that everybody is screened (`lanes.test.ts`, properties). In the 1,000 simulated days of the reports the most lanes open are 14, 6 and 5, the lanes the three checkpoints have. Without staff on call a policy with a lane mode gives exactly the run of the plan (test). |
+
+Verification beyond the criteria:
+- The S7 results are unchanged without lane management:
+  - the library days give the populations of S7, plus the day's staff on call, and the per-day
+    results of S7 field by field (`packages/sim-metrics/test/s7-library-regression.test.ts`);
+  - in the published reports, `fifo`, `fifo-manual` and `priority-v3` give the S7 outcomes on
+    all 1,000 days, value by value. Only the risk classes on arrival differ, on the disrupted
+    day and at the hub, because these runs classify with v3 (the first priority policy listed)
+    and those of S7 with v2.
+- The golden files differ only by the added fields, the versions and one model limitation.
+- CI checks that runs with lane modes give identical outputs on 1 and 4 threads.
+- 478 tests in 8 packages.
+
+Findings that change the claims (SIMULATED, synthetic data, 200 days per scenario and per
+point; details in [docs/reports/slice-8](docs/reports/slice-8/README.md)):
+
+- **At the hub, the extra lane decides.** One lane more than the roster, opened before each
+  wave on GateFlow's recommendation: 32.2 fewer missed flights per day than the plan alone,
+  against 15.2 when a supervisor reacts to the queue. GateFlow as a whole (calls and lanes)
+  catches **+19.7 flights per day** [17.8, 21.6] more than today's practice with a supervisor,
+  for 1.25 more lane-hours (about 2.5% of the staffed lane-hours, 4 lane-minutes per flight).
+- **At the low-cost base, the lanes close the gap of S7**: v3 with GateFlow's lanes misses 0.1
+  flights per day instead of 2.3 (A' with a supervisor: 0.0), and the 90th percentile of the
+  wait falls from 15 to 4 minutes.
+- **Where the roster follows demand, extra lanes are rarely needed** (VCE-like days: 0.3-0.5
+  lane-hours per day on peak days, missed flights almost unchanged). On a day harder than
+  planned they are the safety valve: with screening 8% slower than planned the plan alone misses
+  33.1 flights per day, the supervisor 22.2 and GateFlow's lanes 20.9.
+- **The operator model matters less than the target.** The time to open a lane (5-20 minutes)
+  and the share of recommendations followed (40-100%) move the result little, because a
+  recommendation not followed comes back. GateFlow's target wait trades lane-hours for flights
+  (5 minutes: +3.1 flights per day over the supervisor for 1.7 more lane-hours; 15 minutes: -2.1),
+  so it is a setting of each checkpoint.
+- **Limits.** The supervisor is idealised (exact wait, every 5 minutes), the staff on call have
+  no other duties, and the forecast is learnt from the model itself. The airport's practice and
+  data decide: the data request asks who opens lanes, on what signal, how many and how fast.
+
+### S8 results at a glance (SIMULATED, synthetic data: not operational evidence)
+
+| Scenario (200 simulated days) | Missed per day: A' / with a supervisor / with GateFlow lanes | v3 / v3 with GateFlow lanes | GateFlow as a whole vs today's practice with a supervisor [95% CI] | Extra lane-hours per day: supervisor / GateFlow |
+|---|---:|---:|---:|---:|
+| VCE-like normal day | 10.9 / 10.9 / 10.9 | 10.9 / 10.9 | 0.0 [-0.1, 0.1] | 0.0 / 0.0 |
+| VCE-like peak day | 18.8 / 18.7 / 18.7 | 18.6 / 18.4 | +0.4 [0.0, 0.7] | 0.1 / 0.3 |
+| VCE-like disrupted day | 14.3 / 14.0 / 13.9 | 14.1 / 13.6 | +0.4 [0.1, 0.8] | 0.2 / 0.5 |
+| TSF-like peak day | 0.0 / 0.0 / 0.0 | 2.3 / 0.1 | -0.1 [-0.2, -0.1] | 1.1 / 1.3 |
+| MX-like transfer hub | 96.7 / 81.5 / 64.5 | 87.9 / 61.8 | **+19.7** [17.8, 21.6] | 0.6 / 1.8 |
+
+With S8, M1 is complete:
+- the priority engine and the queue shared with the product;
+- a reproducible simulator with today's practice, disruptions, data quality and extra lanes;
+- the airport's data as input, per airport configuration;
+- reproducible reports.
 
 ## Later milestones (summary)
 

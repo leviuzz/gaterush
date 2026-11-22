@@ -8,7 +8,7 @@ import {
   responseEstimateMs,
 } from '@gateflow/queue-core';
 import type { TicketView } from '@gateflow/queue-core';
-import { MANUAL_REASONS, PRESENT_METHODS, TICKET_SOURCES } from './commands';
+import { MANUAL_REASONS, PASS_INFANTS, PRESENT_METHODS, TICKET_SOURCES } from './commands';
 import type {
   Applied,
   Command,
@@ -17,6 +17,7 @@ import type {
   DayConfig,
   DayLogEvent,
   IssueTicket,
+  PassInfant,
   StaffAction,
   TicketSource,
   TicketSummary,
@@ -68,6 +69,19 @@ function invalid(message: string): never {
 function requireInteger(value: number, what: string, min: number, max = Number.MAX_SAFE_INTEGER) {
   if (!Number.isSafeInteger(value) || value < min || value > max) {
     invalid(`${what} must be a whole number from ${min} to ${max}, not ${value}`);
+  }
+}
+
+/**
+ * Checks the infant a pass speaks of: a known one, with the people it brings (an adult with an
+ * infant brings two). A command read back from a log is not trusted to carry a known value.
+ */
+function validateInfant(infant: PassInfant | undefined, people: number): void {
+  if (infant === undefined) return;
+  const value: string = infant;
+  if (!(PASS_INFANTS as readonly string[]).includes(value)) invalid(`unknown infant ${value}`);
+  if (infant === 'WITH_INFANT' && people < 2) {
+    invalid('an adult with an infant brings two people');
   }
 }
 
@@ -129,6 +143,12 @@ export class CheckpointDay {
   private readonly issueOrder: string[] = [];
   private readonly byNumber = new Map<string, string>();
   private readonly byRef = new Map<string, string>();
+  /**
+   * For each party with infants (ADR-046): the infants adults' passes declared, less the infants'
+   * own passes added. Above zero, infants counted from an adult's pass whose own pass has not come;
+   * below zero, infants counted from their own pass whose adult's pass has not come.
+   */
+  private readonly infants = new Map<string, number>();
   private pending: DayLogEvent[] = [];
   private seq: number;
   private atMs: number;
@@ -241,12 +261,19 @@ export class CheckpointDay {
           return this.act(command.type, command.ticketId, nowMs);
         case 'ADD_TO_PARTY': {
           this.requireTicket(command.ticketId);
-          const size = this.view(command.ticketId).partySize;
-          requireInteger(command.people, 'the people joining', 1, MAX_PARTY_SIZE - size);
+          requireInteger(command.people, 'the people joining', 1, MAX_PARTY_SIZE);
+          validateInfant(command.infant, command.people);
           if (command.dedupKey !== null && !/^[0-9a-f]{64}$/.test(command.dedupKey)) {
             invalid('the deduplication key must be a hexadecimal SHA-256 HMAC');
           }
-          const outcome = this.queue.grow(command.ticketId, command.people, nowMs, this.estimates);
+          const view = this.view(command.ticketId);
+          const growth = this.partyGrowth(command.ticketId, command.people, command.infant);
+          if (view.partySize + growth > MAX_PARTY_SIZE) {
+            invalid(`a party has at most ${String(MAX_PARTY_SIZE)} people`);
+          }
+          // An infant counted already joins without growing the party, while it waits.
+          const outcome = this.queue.grow(command.ticketId, growth, nowMs, this.estimates);
+          if (outcome === 'DONE') this.countInfant(command.ticketId, command.infant);
           return {
             type: 'ACTED',
             action: 'ADD_TO_PARTY',
@@ -326,6 +353,7 @@ export class CheckpointDay {
       if (command.source !== 'STAFF') invalid('only a ticket issued by staff has a reason');
       if (!MANUAL_REASONS.includes(command.reason)) invalid('unknown reason for a manual ticket');
     }
+    validateInfant(command.infant, command.partySize);
     const number = `${this.config.ticketPrefix}${String(this.issueOrder.length + 1).padStart(3, '0')}`;
     const view = this.queue.issue(
       {
@@ -351,7 +379,28 @@ export class CheckpointDay {
     this.issueOrder.push(command.ticketId);
     this.byNumber.set(number, command.ticketId);
     this.byRef.set(command.opaqueRef, command.ticketId);
+    this.countInfant(command.ticketId, command.infant);
     return { type: 'TICKET_ISSUED', ticket: this.summaryOf(view), opaqueRef: command.opaqueRef };
+  }
+
+  /** Records the infant a pass on the ticket speaks of (ADR-046). */
+  private countInfant(ticketId: string, infant: PassInfant | undefined): void {
+    if (infant === undefined) return;
+    const balance = (this.infants.get(ticketId) ?? 0) + (infant === 'WITH_INFANT' ? 1 : -1);
+    if (balance === 0) this.infants.delete(ticketId);
+    else this.infants.set(ticketId, balance);
+  }
+
+  /**
+   * How many people a pass adds to a party (ADR-046): the people it brings, less an infant the
+   * party counts already. An adult's pass with an infant whose own pass came first adds the adult;
+   * an infant's own pass whose adult declared it adds nobody.
+   */
+  partyGrowth(ticketId: string, people: number, infant: PassInfant | undefined): number {
+    const balance = this.infants.get(ticketId) ?? 0;
+    if (infant === 'WITH_INFANT' && balance < 0) return people - 1;
+    if (infant === 'INFANT' && balance > 0) return people - 1;
+    return people;
   }
 
   private view(ticketId: string): TicketView {

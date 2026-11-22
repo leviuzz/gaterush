@@ -74,7 +74,20 @@ export interface IssueTicket {
    * kiosk tickets, and from staff tickets of logs written before S15.
    */
   readonly reason?: ManualReason;
+  /**
+   * The infant the boarding pass speaks of (ADR-046), if any. An adult's pass with an infant
+   * counts the infant in `partySize`; an infant's own pass counts the infant. A party counts each
+   * infant once, whichever of the two passes comes first.
+   */
+  readonly infant?: PassInfant;
 }
+
+/**
+ * An infant a boarding pass speaks of (ADR-046), from its passenger description: an adult
+ * travelling with an infant on the lap (`WITH_INFANT`), or the infant's own pass (`INFANT`).
+ */
+export const PASS_INFANTS = ['WITH_INFANT', 'INFANT'] as const;
+export type PassInfant = (typeof PASS_INFANTS)[number];
 
 /** Why staff issue a ticket by hand (S15). */
 export const MANUAL_REASONS = [
@@ -147,7 +160,14 @@ export interface ResolveReview {
 export interface AddToParty {
   readonly type: 'ADD_TO_PARTY';
   readonly ticketId: string;
+  /**
+   * The people the pass brings: 1, or 2 for an adult with an infant (ADR-046). An infant the
+   * party counts already, from an adult's pass or from its own, is not counted again: the party
+   * grows by `CheckpointDay.partyGrowth`.
+   */
   readonly people: number;
+  /** The infant the pass speaks of, if any (ADR-046). */
+  readonly infant?: PassInfant;
   /** The HMAC of the boarding pass added (ADR-043); null when staff add people by hand. */
   readonly dedupKey: string | null;
 }

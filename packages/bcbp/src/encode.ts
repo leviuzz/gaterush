@@ -26,6 +26,11 @@ export interface BoardingPassInput {
   /** Version of the conditional items (default 6). */
   readonly version?: number;
   readonly issued?: { readonly yearDigit: number; readonly dayOfYear: number };
+  /**
+   * The passenger description of the conditional items (item 15), one character: `0` an adult
+   * (the default), `4` an infant, `6` an adult travelling with an infant.
+   */
+  readonly passengerDescription?: string;
   readonly securityData?: string;
 }
 
@@ -84,7 +89,7 @@ export function encodeBoardingPass(input: BoardingPassInput): string {
           : `${input.issued.yearDigit}${String(input.issued.dayOfYear).padStart(3, '0')}`;
       // Passenger description, source of check-in and of issuance, date of issue, document type,
       // issuer.
-      const unique = `0WW${issued}B${left(leg.carrier, 3)}`;
+      const unique = `${left(input.passengerDescription ?? '0', 1)}WW${issued}B${left(leg.carrier, 3)}`;
       variable = `>${version}${hex2(unique.length)}${unique}${variable}`;
     }
     text +=

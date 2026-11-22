@@ -1,5 +1,5 @@
 /** Version of the boarding pass package. */
-export const BCBP_VERSION = '0.1.0';
+export const BCBP_VERSION = '0.2.0';
 
 export {
   civilDate,
@@ -16,6 +16,12 @@ export type { BoardingPassInput, LegInput } from './encode';
 export { syntheticBoardingPass } from './generate';
 export type { SyntheticLeg } from './generate';
 export { BCBP_ERRORS, MAX_LENGTH, parseBoardingPass } from './parse';
-export type { BcbpErrorCode, BoardingPass, BoardingPassLeg, ParseResult } from './parse';
+export type {
+  BcbpErrorCode,
+  BoardingPass,
+  BoardingPassLeg,
+  ParseResult,
+  PassInfant,
+} from './parse';
 export { LEG_REFUSALS, dedupMaterial, legForDeparture } from './select';
 export type { LegChoice, LegRefusal } from './select';

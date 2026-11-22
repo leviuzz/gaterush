@@ -37,8 +37,19 @@ interface ShownTicket {
   readonly canGrow: boolean;
 }
 
-/** What the latest scan of a party's pass did (S15). */
-type PartyStatus = 'ready' | 'reading' | 'added' | 'already' | 'error' | ScanReason;
+/**
+ * What the latest scan of a party's pass did (S15): added one person, an adult with the infant on
+ * the pass (two), or an infant counted already from an adult's pass (ADR-046).
+ */
+type PartyStatus =
+  | 'ready'
+  | 'reading'
+  | 'added'
+  | 'addedInfant'
+  | 'infantCounted'
+  | 'already'
+  | 'error'
+  | ScanReason;
 
 type Screen =
   | { readonly kind: 'starting' }
@@ -242,8 +253,10 @@ export function Kiosk({
           if (scan.ticket !== null) {
             ticket = { ...party, partySize: scan.ticket.partySize };
           }
-          if (scan.outcome === 'ADDED') status = 'added';
-          else if (scan.outcome === 'RETRIEVED') status = 'already';
+          if (scan.outcome === 'ADDED') {
+            const grown = ticket.partySize - party.partySize;
+            status = grown === 0 ? 'infantCounted' : grown === 2 ? 'addedInfant' : 'added';
+          } else if (scan.outcome === 'RETRIEVED') status = 'already';
           else if (scan.reason !== null) status = scan.reason;
           if (scan.reason === 'TOO_LATE') ticket = { ...ticket, canGrow: false };
         } else if (answer.status === 400) {
@@ -367,6 +380,8 @@ export function Kiosk({
     if (status === 'ready') return t(locale, 'kiosk.party.hint');
     if (status === 'reading') return t(locale, 'kiosk.reading');
     if (status === 'added') return t(locale, 'kiosk.party.added');
+    if (status === 'addedInfant') return t(locale, 'kiosk.party.addedInfant');
+    if (status === 'infantCounted') return t(locale, 'kiosk.party.infantCounted');
     if (status === 'already') return t(locale, 'kiosk.party.already');
     if (status === 'error') return t(locale, 'kiosk.error');
     return t(locale, `kiosk.reason.${status}`);
@@ -495,7 +510,7 @@ export function Kiosk({
             className="party-status"
             id="kiosk-party-status"
             data-kind={
-              status === 'added'
+              status === 'added' || status === 'addedInfant' || status === 'infantCounted'
                 ? 'ok'
                 : status === 'ready' || status === 'reading' || status === 'already'
                   ? 'info'

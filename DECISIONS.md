@@ -1735,9 +1735,11 @@ founder on 2026-11-21 together with all of its recommendations.
 
 ## ADR-046: People travelling together take one number at the kiosk
 
-- **Status:** Accepted (2026-11-22). Founder's decision after S15: "va raggruppato", passengers
-  group themselves at the kiosk. queue-core 0.8.0, operations 0.4.0, contracts 0.5.0, API and web
-  0.15.1. No simulated number changes: the golden files change only in the version of the queue.
+- **Status:** Accepted (2026-11-22). Founder's decisions after S15: "va raggruppato", passengers
+  group themselves at the kiosk; then "conta anche i neonati dal pass del genitore", infants count
+  from their parent's boarding pass. BCBP 0.2.0, queue-core 0.8.0, operations 0.4.0, contracts
+  0.5.0, API and web 0.15.1. No simulated number changes: the golden files change only in the
+  version of the queue.
 - **Context:**
   - The queue counts people, not tickets: the prepare window, the outstanding calls, the cap on
     priority and the lane's throughput are all in people (ADR-021). A family of four on a ticket
@@ -1767,6 +1769,22 @@ founder on 2026-11-21 together with all of its recommendations.
     companion's pass finds the family's number, and the access point admits the family by any of
     its passes.
   - The ticket, its printout and the passenger's page say for how many people the number is.
+  - **Infants.** An infant under two usually travels on the lap of an adult, with no seat. The
+    adult's boarding pass may say so: its passenger description (item 15 of Resolution 792) is 6,
+    "adult travelling with infant". Some airlines also give the infant a pass of its own
+    (description 4).
+    - A pass whose description is 6 brings two people: when it takes a number, and when it joins
+      a party.
+    - Each infant is counted once, whichever of the two passes comes first. The day keeps, for
+      each party, the infants declared on adults' passes less the infants' own passes added
+      (`CheckpointDay.partyGrowth`). An infant's own pass whose infant an adult declared joins
+      without growing the party; an adult's pass whose infant's own pass came first adds the
+      adult only.
+    - The parser returns only the infant (`WITH_INFANT`, `INFANT` or nothing): the description's
+      other values tell a passenger's sex, and are never returned, stored or logged. The log
+      records that a pass carried an infant, nothing else of the passenger.
+    - The kiosk says when a pass added an adult with an infant, and when an infant was counted
+      already. The privacy notice says the number is kept with how many people it is for.
 - **Alternatives considered:**
   - **Asking "how many are you?".** Quicker for the family, but nothing proves the count: one pass
     could claim the room of twenty in the lane's plan, and people without a boarding pass for this
@@ -1775,21 +1793,33 @@ founder on 2026-11-21 together with all of its recommendations.
     several bookings.
   - **Merging two numbers already taken.** More rules for a rare case; staff can cancel one and
     give a manual ticket for the party.
+  - **Counting every infant's pass and every adult's infant.** Simpler, but an infant with a pass
+    of its own would be counted twice when both passes are scanned.
 - **Evidence:**
+  - **BCBP:** description 6 reads as an adult with an infant and 4 as an infant, in 500 random
+    round trips; the values that tell a passenger's sex give nothing, and the parsed pass has no
+    field for them.
   - **queue-core:** `grow` in the table of every state (allowed only while the ticket waits), and
-    1,000 random sequences with growing parties keep every invariant.
-  - **operations:** random days with `ADD_TO_PARTY` rebuild from their log.
+    1,000 random sequences with growing parties keep every invariant. Nobody more (an infant
+    counted already) is allowed in the same states and changes nothing.
+  - **operations:** random days with `ADD_TO_PARTY` rebuild from their log. Infants are counted
+    once in either order: three adults with infants, the own passes of two of the infants and one
+    more adult, mixed, make seven people; the count is rebuilt from the log. An adult with an
+    infant counted as one, an unknown infant and a party over 20 are refused.
   - **API on PostgreSQL:** a family's passes join one number, once each, also when the request
     is sent twice; a companion's rescan finds the family's number; the family is admitted by a
     companion's pass; another flight, a number of its own, a number held by staff, a full party
     and a number already called are refused, and an unknown number is not found; no pass, name
     or booking reference in any table, and the passes added cannot be changed or removed; the log
-    rebuilds every party; the audit chain is intact.
+    rebuilds every party; the audit chain is intact. A mother's pass with a baby takes a number
+    for two, the baby's own pass adds nobody and the father one; the baby's pass first and then
+    its parent's make two.
   - **In Chromium, on the product:** a number, then a companion's pass by the scanner, the same
     pass twice, another flight's pass; the number for two on the ticket screen and the
     passenger's page; the companion scanning alone later finds the family's number; the demo's
     sample pass is for the family's flight; the ticket and the party's screen fit portrait and
-    landscape kiosks, in Italian and in Spanish.
+    landscape kiosks, in Italian and in Spanish. A parent's pass with a baby gives a number for
+    two; the baby's own pass is counted already; another parent with a baby adds two.
 - **Consequences:**
   - The step is optional. A family that skips it is a party of one in the queue's count; the lane
     still admits them together.

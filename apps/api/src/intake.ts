@@ -106,7 +106,6 @@ export async function readPass(
   };
 }
 
-/** The latest ticket of this boarding pass at the checkpoint, if any. */
 /**
  * The latest ticket of a boarding pass at the checkpoint: the one it was issued, or the party it
  * joined at the kiosk (S15), whichever came last.

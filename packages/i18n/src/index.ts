@@ -23,7 +23,7 @@ const EN = {
   'kiosk.privacy.open': 'Privacy',
   'kiosk.privacy.title': 'How we use your boarding pass',
   'kiosk.privacy.body':
-    'The kiosk reads your boarding pass to find your flight and give you a number in the queue. Your name, booking reference and seat are read and forgotten at once: they are never stored. We keep your number, your flight and when you were called, to run the queue and to measure waiting times. The airport is responsible for this processing.',
+    'The kiosk reads your boarding pass to find your flight and give you a number in the queue. Your name, booking reference and seat are read and forgotten at once: they are never stored. We keep your number and how many people it is for, your flight and when you were called, to run the queue and to measure waiting times. The airport is responsible for this processing.',
   'kiosk.privacy.draft': 'Draft notice, to be completed with the airport.',
   'kiosk.paste.label': 'Or type or paste the code of a boarding pass',
   'kiosk.paste.submit': 'Read',
@@ -62,6 +62,10 @@ const EN = {
   'kiosk.party.count': 'People on this number: {count}',
   'kiosk.party.hint': 'Scan their boarding passes one at a time. When you have finished, tap Done.',
   'kiosk.party.added': 'Added. Scan the next boarding pass, or tap Done.',
+  'kiosk.party.addedInfant':
+    'Added, with the infant on this boarding pass. Scan the next one, or tap Done.',
+  'kiosk.party.infantCounted':
+    "Added. This infant was already counted with an adult's boarding pass.",
   'kiosk.party.already': 'This boarding pass is already on this number.',
   'kiosk.notSetUp': 'This kiosk is not set up yet. Please ask a member of staff.',
   'kiosk.error': 'Something went wrong. Please ask a member of staff.',
@@ -148,7 +152,7 @@ const IT: Readonly<Record<MessageKey, string>> = {
   'kiosk.privacy.open': 'Privacy',
   'kiosk.privacy.title': "Come usiamo la tua carta d'imbarco",
   'kiosk.privacy.body':
-    "Il totem legge la carta d'imbarco per trovare il tuo volo e darti un numero nella coda. Nome, codice di prenotazione e posto vengono letti e dimenticati subito: non sono mai salvati. Conserviamo il tuo numero, il volo e quando sei stato chiamato, per gestire la coda e misurare le attese. Il titolare del trattamento è il gestore dell'aeroporto.",
+    "Il totem legge la carta d'imbarco per trovare il tuo volo e darti un numero nella coda. Nome, codice di prenotazione e posto vengono letti e dimenticati subito: non sono mai salvati. Conserviamo il tuo numero e per quante persone è, il volo e quando sei stato chiamato, per gestire la coda e misurare le attese. Il titolare del trattamento è il gestore dell'aeroporto.",
   'kiosk.privacy.draft': "Bozza di informativa, da completare con l'aeroporto.",
   'kiosk.paste.label': "Oppure scrivi o incolla il codice di una carta d'imbarco",
   'kiosk.paste.submit': 'Leggi',
@@ -187,6 +191,10 @@ const IT: Readonly<Record<MessageKey, string>> = {
   'kiosk.party.hint':
     "Scansiona le loro carte d'imbarco, una alla volta. Quando hai finito, tocca Fatto.",
   'kiosk.party.added': "Aggiunta. Scansiona la prossima carta d'imbarco, oppure tocca Fatto.",
+  'kiosk.party.addedInfant':
+    "Aggiunta, con il neonato indicato su questa carta d'imbarco. Scansiona la prossima, oppure tocca Fatto.",
+  'kiosk.party.infantCounted':
+    "Aggiunta. Questo neonato era già contato con la carta d'imbarco di un adulto.",
   'kiosk.party.already': "Questa carta d'imbarco è già su questo numero.",
   'kiosk.reason.BOARDING_CLOSED':
     "L'imbarco del tuo volo potrebbe essere già chiuso. Chiedi subito al personale.",
@@ -274,7 +282,7 @@ const ES: Readonly<Record<MessageKey, string>> = {
   'kiosk.privacy.open': 'Privacidad',
   'kiosk.privacy.title': 'Cómo usamos su pase de abordar',
   'kiosk.privacy.body':
-    'El quiosco lee su pase de abordar para encontrar su vuelo y darle un número en la fila. Su nombre, clave de reservación y asiento se leen y se olvidan de inmediato: nunca se guardan. Conservamos su número, su vuelo y cuándo fue llamado, para operar la fila y medir los tiempos de espera. El responsable de este tratamiento es el operador del aeropuerto.',
+    'El quiosco lee su pase de abordar para encontrar su vuelo y darle un número en la fila. Su nombre, clave de reservación y asiento se leen y se olvidan de inmediato: nunca se guardan. Conservamos su número y para cuántas personas es, su vuelo y cuándo fue llamado, para operar la fila y medir los tiempos de espera. El responsable de este tratamiento es el operador del aeropuerto.',
   'kiosk.privacy.draft': 'Aviso de privacidad en borrador, por completar con el aeropuerto.',
   'kiosk.paste.label': 'O escriba o pegue el código de un pase de abordar',
   'kiosk.paste.submit': 'Leer',
@@ -311,6 +319,10 @@ const ES: Readonly<Record<MessageKey, string>> = {
   'kiosk.party.count': 'Personas en este número: {count}',
   'kiosk.party.hint': 'Escanee sus pases de abordar uno por uno. Cuando termine, toque Listo.',
   'kiosk.party.added': 'Agregado. Escanee el siguiente pase de abordar o toque Listo.',
+  'kiosk.party.addedInfant':
+    'Agregado, con el bebé indicado en este pase de abordar. Escanee el siguiente o toque Listo.',
+  'kiosk.party.infantCounted':
+    'Agregado. Este bebé ya estaba contado con el pase de abordar de un adulto.',
   'kiosk.party.already': 'Este pase de abordar ya está en este número.',
   'kiosk.reason.BOARDING_CLOSED':
     'Es posible que el abordaje de su vuelo ya haya cerrado. Pida ayuda al personal de inmediato.',

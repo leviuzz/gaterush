@@ -95,11 +95,21 @@ async function post(path: string, body?: unknown) {
 }
 
 let sequence = 0;
-function passFor(f: typeof flight.$inferSelect, pnr: string, name = 'SAMPLE/ADA'): string {
+/**
+ * A boarding pass for a flight of the day; `description` is its passenger description: 6 an adult
+ * with an infant, 4 an infant's own pass (ADR-046).
+ */
+function passFor(
+  f: typeof flight.$inferSelect,
+  pnr: string,
+  name = 'SAMPLE/ADA',
+  description = '0',
+): string {
   sequence++;
   return encodeBoardingPass({
     passengerName: name,
     electronicTicket: true,
+    passengerDescription: description,
     legs: [
       {
         pnr,
@@ -245,10 +255,34 @@ describe('a party at the kiosk (S15)', () => {
     expect(await scanPass(passFor(f, 'LATE03'), ref)).toEqual(refused('TOO_LATE'));
   });
 
+  it("counts an infant on an adult's pass, once, whichever pass comes first (ADR-046)", async () => {
+    const f = later(150);
+    // A mother travelling with her baby takes a number: two people.
+    const mother = await scanPass(passFor(f, 'BABY01', 'SAMPLE/EVA', '6'));
+    expect(mother.outcome).toBe('ISSUED');
+    expect(mother.ticket?.partySize).toBe(2);
+    const ref = mother.ref ?? '';
+    // The baby's own pass, if the airline gave one: counted already.
+    const baby = await scanPass(passFor(f, 'BABY01', 'SAMPLE/BABY', '4'), ref);
+    expect(baby).toMatchObject({ outcome: 'ADDED', ticket: { partySize: 2 } });
+    // The father: one more.
+    expect((await scanPass(passFor(f, 'BABY01', 'SAMPLE/IVO'), ref)).ticket?.partySize).toBe(3);
+    // The other way round: the baby's pass first, then the adult's declaring it.
+    const first = await scanPass(passFor(f, 'BABY02', 'SAMPLE/MIA', '4'));
+    expect(first.ticket?.partySize).toBe(1);
+    const parent = await scanPass(passFor(f, 'BABY02', 'SAMPLE/LEO', '6'), first.ref ?? '');
+    expect(parent).toMatchObject({ outcome: 'ADDED', ticket: { partySize: 2 } });
+    // The passenger's view says so too.
+    const page = PublicTicketResponse.parse(
+      (await app.inject({ url: `/v1/tickets/${ref}` })).json(),
+    );
+    expect(page.partySize).toBe(3);
+  });
+
   it('keeps nothing of the passes it adds, and rebuilds every party from the log', async () => {
     const outcomes = (await database.db.select().from(scan)).map((s) => s.outcome);
     expect(outcomes).toContain('ADDED');
-    expect((await database.db.select().from(partyPass)).length).toBe(5);
+    expect((await database.db.select().from(partyPass)).length).toBe(8);
     // A record, like the scans: nobody changes or removes a pass added.
     for (const statement of [
       `UPDATE party_pass SET at_ms = 0`,
@@ -263,7 +297,15 @@ describe('a party at the kiosk (S15)', () => {
       tables.push((await database.admin.query(`SELECT * FROM ${table}`)).rows);
     }
     const dump = JSON.stringify(tables);
-    for (const secret of ['FAM001', 'FAM002', 'SAMPLE/GIULIA', 'GIULIA', 'MARCO']) {
+    for (const secret of [
+      'FAM001',
+      'FAM002',
+      'BABY01',
+      'SAMPLE/GIULIA',
+      'GIULIA',
+      'MARCO',
+      'SAMPLE/EVA',
+    ]) {
       expect(dump).not.toContain(secret);
     }
     const rows = await database.db
@@ -271,7 +313,10 @@ describe('a party at the kiosk (S15)', () => {
       .from(queueCommand)
       .where(eq(queueCommand.checkpointId, checkpointId))
       .orderBy(asc(queueCommand.seq));
-    expect(rows.filter((r) => r.type === 'ADD_TO_PARTY').length).toBe(5);
+    expect(rows.filter((r) => r.type === 'ADD_TO_PARTY').length).toBe(8);
+    // The log says only that a pass carried an infant: never the passenger's description.
+    const added = rows.filter((r) => r.type === 'ADD_TO_PARTY').map((r) => r.command);
+    expect(added.filter((c) => JSON.stringify(c).includes('"infant"')).length).toBe(2);
     const day = CheckpointDay.replay(
       rows.map((r) => ({ seq: r.seq, atMs: r.atMs, command: r.command as Command })),
     );

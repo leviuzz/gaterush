@@ -4,7 +4,9 @@
  * It never throws: any input gives a boarding pass or a typed error with a position, and an error
  * never quotes the input (a boarding pass holds a name and a booking reference).
  *
- * The passenger's name is skipped, never returned: GateFlow has no use for it (ADR-043).
+ * The passenger's name is skipped, never returned: GateFlow has no use for it (ADR-043). Of the
+ * passenger description only an infant is returned (ADR-046): some of its values tell a
+ * passenger's sex.
  */
 
 /** One flight of a boarding pass. */
@@ -40,9 +42,19 @@ export interface BoardingPass {
   readonly version: number | null;
   /** Date of issue of the pass from the conditional items: last digit of the year, day of the year. */
   readonly issued: { readonly yearDigit: number; readonly dayOfYear: number } | null;
+  /**
+   * An infant the pass speaks of, from the passenger description of the conditional items (item
+   * 15): `WITH_INFANT` for an adult travelling with an infant (description 6), `INFANT` for an
+   * infant's own pass (4), null for anybody else or when the item is not given. Nothing else of
+   * the description is returned: some of its values tell a passenger's sex.
+   */
+  readonly infant: PassInfant | null;
   /** True when the pass carries security data (a signature). It is not verified here. */
   readonly securityData: boolean;
 }
+
+/** An infant a boarding pass speaks of (ADR-046). */
+export type PassInfant = 'WITH_INFANT' | 'INFANT';
 
 /** Why a text is not a boarding pass this parser can read. */
 export const BCBP_ERRORS = [
@@ -128,6 +140,7 @@ function field(reader: Reader, length: number, pattern: RegExp, code: BcbpErrorC
 interface Conditional {
   version: number | null;
   issued: BoardingPass['issued'];
+  infant: PassInfant | null;
   marketingCarrier: string | null;
   fastTrack: boolean | null;
 }
@@ -137,7 +150,13 @@ interface Conditional {
  * these sizes; when they are not, the items are left unknown rather than misread.
  */
 function conditional(text: string, first: boolean): Conditional {
-  const out: Conditional = { version: null, issued: null, marketingCarrier: null, fastTrack: null };
+  const out: Conditional = {
+    version: null,
+    issued: null,
+    infant: null,
+    marketingCarrier: null,
+    fastTrack: null,
+  };
   let at = 0;
   const take = (n: number): string | null => {
     if (at + n > text.length) return null;
@@ -156,6 +175,9 @@ function conditional(text: string, first: boolean): Conditional {
     const unique = take(Number.parseInt(size, 16));
     if (unique === null) return out;
     // Passenger description, source of check-in, source of issuance, then the date of issue.
+    // Of the description, only an infant is kept: 6 an adult with an infant, 4 an infant.
+    const description = unique.charAt(0);
+    out.infant = description === '6' ? 'WITH_INFANT' : description === '4' ? 'INFANT' : null;
     const issue = unique.slice(3, 7);
     if (/^\d{4}$/.test(issue)) {
       const day = Number(issue.slice(1));
@@ -185,6 +207,7 @@ function parseLegs(reader: Reader): BoardingPass {
   const legs: BoardingPassLeg[] = [];
   let version: number | null = null;
   let issued: BoardingPass['issued'] = null;
+  let infant: BoardingPass['infant'] = null;
   for (let i = 0; i < Number(count); i++) {
     const pnr = reader.read(7).trim();
     const from = field(reader, 3, AIRPORT, 'BAD_AIRPORT');
@@ -206,6 +229,7 @@ function parseLegs(reader: Reader): BoardingPass {
     if (i === 0) {
       version = extra.version;
       issued = extra.issued;
+      infant = extra.infant;
     }
     legs.push({
       pnr,
@@ -230,7 +254,7 @@ function parseLegs(reader: Reader): BoardingPass {
     securityData = true;
   }
   if (reader.left > 0) throw new Failure('TRAILING_DATA', reader.position);
-  return { legs, electronicTicket, version, issued, securityData };
+  return { legs, electronicTicket, version, issued, infant, securityData };
 }
 
 /**

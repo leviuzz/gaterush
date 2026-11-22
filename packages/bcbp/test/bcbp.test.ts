@@ -48,6 +48,66 @@ describe('reading a boarding pass', () => {
     expect(parseBoardingPass(`${MINIMAL}\r\n`)).toEqual(parseBoardingPass(MINIMAL));
   });
 
+  it("tells an infant on an adult's pass or on its own, and nothing else of the passenger (ADR-046)", () => {
+    const random = streamFor(7, [46]);
+    const legs = [
+      {
+        from: 'VCE',
+        to: 'CDG',
+        carrier: 'AZ',
+        flightNumber: '318',
+        date: { year: 2026, month: 11, day: 23 },
+      },
+    ];
+    const read = (infant?: 'WITH_INFANT' | 'INFANT') =>
+      pass(
+        parseBoardingPass(
+          syntheticBoardingPass(random, legs, infant === undefined ? {} : { infant }).text,
+        ),
+      );
+    expect(read('WITH_INFANT').infant).toBe('WITH_INFANT');
+    expect(read('INFANT').infant).toBe('INFANT');
+    expect(read().infant).toBeNull();
+    // The values that tell a passenger's sex give nothing, and are not returned.
+    for (const description of ['1', '2']) {
+      const p = pass(
+        parseBoardingPass(
+          encodeBoardingPass({
+            passengerName: 'SAMPLE/ALEX',
+            electronicTicket: true,
+            version: 6,
+            passengerDescription: description,
+            legs: [
+              {
+                pnr: 'ABC123',
+                from: 'VCE',
+                to: 'CDG',
+                carrier: 'AZ',
+                flightNumber: '318',
+                dayOfYear: 327,
+                compartment: 'Y',
+                seat: '012A',
+                checkInSequence: '0042',
+                passengerStatus: '1',
+              },
+            ],
+          }),
+        ),
+      );
+      expect(p.infant).toBeNull();
+      expect(Object.keys(p).sort()).toEqual([
+        'electronicTicket',
+        'infant',
+        'issued',
+        'legs',
+        'securityData',
+        'version',
+      ]);
+    }
+    // Without conditional items, nothing is known.
+    expect(pass(parseBoardingPass(MINIMAL)).infant).toBeNull();
+  });
+
   it('refuses what is not a boarding pass, with a reason and a position', () => {
     const cases: [unknown, string][] = [
       ['', 'EMPTY'],
@@ -99,6 +159,8 @@ const passArb: fc.Arbitrary<BoardingPassInput> = fc.record({
     yearDigit: fc.integer({ min: 0, max: 9 }),
     dayOfYear: fc.integer({ min: 1, max: 366 }),
   }),
+  // Adult, male, female, child, infant, adult with infant, unaccompanied minor, unspecified...
+  passengerDescription: fc.constantFrom('0', '1', '2', '3', '4', '6', '7', 'X', 'U'),
   securityData: fc.option(fc.stringMatching(/^[A-Z0-9]{10,80}$/), { nil: undefined }),
 });
 
@@ -126,6 +188,13 @@ describe('encoding and reading', () => {
         expect(p.electronicTicket).toBe(input.electronicTicket);
         expect(p.version).toBe(input.version);
         expect(p.issued).toEqual(input.issued);
+        expect(p.infant).toBe(
+          input.passengerDescription === '6'
+            ? 'WITH_INFANT'
+            : input.passengerDescription === '4'
+              ? 'INFANT'
+              : null,
+        );
         expect(p.securityData).toBe(input.securityData !== undefined);
         expect(JSON.stringify(p)).not.toContain(input.passengerName);
       }),

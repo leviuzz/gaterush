@@ -539,7 +539,9 @@ export class CheckpointQueue {
   /**
    * More people join a waiting ticket (S15): a family adds its boarding passes at the kiosk.
    * Allowed while the ticket waits (QUEUED or PREPARE). The overtakes and priority calls already
-   * counted keep the size the party had then.
+   * counted keep the size the party had then. Nobody more (0) is a pass whose person the party
+   * counts already, such as an infant declared on an adult's pass (ADR-046): allowed in the same
+   * states, it changes nothing.
    */
   grow(
     ticketId: string,
@@ -547,13 +549,14 @@ export class CheckpointQueue {
     nowMs: Millis,
     estimates: CheckpointEstimates,
   ): StaffActionOutcome {
-    if (!Number.isSafeInteger(people) || people < 1) {
-      throw new QueueError(`people joining a party must be a whole number from 1, not ${people}`);
+    if (!Number.isSafeInteger(people) || people < 0) {
+      throw new QueueError(`people joining a party must be a whole number from 0, not ${people}`);
     }
     this.begin(nowMs, estimates);
     const record = this.byId.get(ticketId);
     if (record === undefined) return 'UNKNOWN_TICKET';
     if (record.state !== 'QUEUED' && record.state !== 'PREPARE') return 'NOT_ALLOWED';
+    if (people === 0) return 'DONE';
     record.partySize += people;
     this.emit({
       type: 'PARTY_GROWN',

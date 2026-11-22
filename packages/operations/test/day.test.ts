@@ -11,7 +11,7 @@ import {
 import type { Policy, QueueEvent } from '@gateflow/queue-core';
 import { describe, expect, it } from 'vitest';
 import { CheckpointDay, OperationError, estimatesOf } from '../src';
-import type { Command, CommandRecord, DayConfig, IssueTicket } from '../src';
+import type { AddToParty, Command, CommandRecord, DayConfig, IssueTicket } from '../src';
 
 const MIN = 60_000;
 /** A service day starting at 05:00 UTC on 2026-11-23, in epoch milliseconds. */
@@ -289,6 +289,102 @@ const dayArb = fc
     });
     return log(commands, times);
   });
+
+describe('infants in a party (ADR-046)', () => {
+  const KEY = (n: number) => String(n).padStart(64, 'a');
+  const join = (n: number, infant?: 'WITH_INFANT' | 'INFANT'): AddToParty => ({
+    type: 'ADD_TO_PARTY',
+    ticketId: 't-1',
+    people: infant === 'WITH_INFANT' ? 2 : 1,
+    ...(infant === undefined ? {} : { infant }),
+    dedupKey: KEY(n),
+  });
+  const sizes = (applied: ReturnType<typeof run>['applied']) =>
+    applied.flatMap((a) =>
+      a.result.type === 'ACTED' || a.result.type === 'TICKET_ISSUED'
+        ? [a.result.ticket.partySize]
+        : [],
+    );
+
+  it("counts each infant once, from an adult's pass or from its own, in any order", () => {
+    const kiosk = { source: 'KIOSK' as const, dedupKey: KEY(0) };
+    const { day, applied } = run(
+      log([
+        { type: 'OPEN_DAY', config: config() },
+        // An adult with an infant: two people.
+        issue(1, { ...kiosk, partySize: 2, infant: 'WITH_INFANT' }),
+        // That infant's own pass: counted already.
+        join(1, 'INFANT'),
+        // Another infant's own pass: one more.
+        join(2, 'INFANT'),
+        // Its adult, whose pass declares it: the adult only.
+        join(3, 'WITH_INFANT'),
+        // An adult with an infant whose own pass has not come: two more.
+        join(4, 'WITH_INFANT'),
+        join(5),
+      ]),
+    );
+    expect(sizes(applied)).toEqual([2, 2, 3, 4, 6, 7]);
+    // Joining without growing reports nothing.
+    expect(applied[2]!.events).toEqual([]);
+    expect(applied[2]!.result).toMatchObject({ outcome: 'DONE' });
+    // The log rebuilds the count of every party.
+    const records = log([
+      { type: 'OPEN_DAY', config: config() },
+      issue(1, { ...kiosk, partySize: 2, infant: 'WITH_INFANT' }),
+      join(1, 'INFANT'),
+      join(2, 'INFANT'),
+      join(3, 'WITH_INFANT'),
+    ]);
+    const replayed = CheckpointDay.replay(records);
+    expect(replayed.ticket('t-1')?.partySize).toBe(4);
+    expect(replayed.partyGrowth('t-1', 1, 'INFANT')).toBe(1);
+    expect(day.partyGrowth('t-1', 1, 'INFANT')).toBe(0);
+    // The infant's own pass first, then its adult's.
+    const reversed = run(
+      log([
+        { type: 'OPEN_DAY', config: config() },
+        issue(1, { ...kiosk, infant: 'INFANT' }),
+        join(1, 'WITH_INFANT'),
+      ]),
+    );
+    expect(sizes(reversed.applied)).toEqual([1, 2]);
+  });
+
+  it('refuses an adult with an infant counted as one, an unknown infant and a party over 20', () => {
+    const refuse = (commands: Command[]) => {
+      const records = log([{ type: 'OPEN_DAY', config: config() }, ...commands]);
+      expect(() => CheckpointDay.replay(records)).toThrow(OperationError);
+    };
+    refuse([issue(1, { infant: 'WITH_INFANT' })]);
+    refuse([issue(1), { ...join(1, 'WITH_INFANT'), people: 1 }]);
+    refuse([issue(1), { ...join(1), infant: 'TODDLER' as 'INFANT' }]);
+    refuse([issue(1, { partySize: 19 }), join(1, 'WITH_INFANT')]);
+    // An infant counted already joins a full party while it waits, and nobody once it is called.
+    const outcomes = (applied: ReturnType<typeof run>['applied']) =>
+      applied.flatMap((a) => (a.result.type === 'ACTED' ? [a.result.outcome] : []));
+    const full = run(
+      log([
+        { type: 'OPEN_DAY', config: config() },
+        issue(1, { partySize: 20, infant: 'WITH_INFANT' }),
+        join(1, 'INFANT'),
+      ]),
+    );
+    expect(sizes(full.applied)).toEqual([20, 20]);
+    expect(outcomes(full.applied)).toEqual(['DONE']);
+    const called = run(
+      log([
+        { type: 'OPEN_DAY', config: config() },
+        issue(1, { partySize: 2, infant: 'WITH_INFANT' }),
+        { type: 'CALL_NEXT' },
+        join(1, 'INFANT'),
+      ]),
+    );
+    expect(outcomes(called.applied)).toEqual(['NOT_ALLOWED']);
+    // Refused, the pass leaves the count as it was: the infant is still the adult's.
+    expect(called.day.partyGrowth('t-1', 1, 'INFANT')).toBe(0);
+  });
+});
 
 describe('the log of a day', () => {
   it('rebuilds the same day: the same results, events and tickets', () => {

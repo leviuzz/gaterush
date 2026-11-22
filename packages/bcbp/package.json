@@ -1,6 +1,6 @@
 {
   "name": "@gateflow/bcbp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "IATA bar coded boarding passes (Resolution 792, M format): a parser that never throws and never returns the passenger's name, an encoder, a synthetic generator, the flight date's year, the leg for a checkpoint and the material of the deduplication key (pure).",
   "type": "module",

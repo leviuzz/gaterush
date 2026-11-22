@@ -237,8 +237,14 @@ describe('staff actions on the ticket state machine (S15)', () => {
       atMs: MIN,
       partySize: 4,
     });
-    expect(() => q.grow('family', 0, MIN, EST)).toThrow(/whole number/);
+    expect(() => q.grow('family', -1, MIN, EST)).toThrow(/whole number/);
+    // Nobody more (an infant counted already, ADR-046): allowed while it waits, and silent.
+    const before = events.length;
+    expect(q.grow('family', 0, MIN, EST)).toBe('DONE');
+    expect(events.length).toBe(before);
+    expect(q.ticket('family')?.partySize).toBe(4);
     expect(q.callNext(2 * MIN, EST)?.partySize).toBe(4);
+    expect(q.grow('family', 0, 2 * MIN, EST)).toBe('NOT_ALLOWED');
     // Once called, the party is what it is.
     expect(q.grow('family', 1, 2 * MIN, EST)).toBe('NOT_ALLOWED');
   });

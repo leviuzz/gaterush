@@ -6,8 +6,8 @@ must be listed, together with the component versions it bumps.
 
 ## [0.15.1] - 2026-11-22: People travelling together take one number at the kiosk
 
-The founder's decision after S15: families are grouped, by the passengers themselves at the kiosk
-(ADR-046).
+The founder's decisions after S15: families are grouped, by the passengers themselves at the
+kiosk, and infants count from their parent's boarding pass (ADR-046).
 
 ### Simulated numbers change
 
@@ -16,10 +16,15 @@ The founder's decision after S15: families are grouped, by the passengers themse
 
 ### Added
 
+- BCBP 0.2.0: the parser tells an adult travelling with an infant (passenger description 6) and an
+  infant's own pass (4), and nothing else of the description, whose other values tell a
+  passenger's sex. The encoder and the synthetic generator write the description.
 - queue-core 0.8.0: `grow`, more people join a waiting ticket (`QUEUED` or `PREPARE`), with the
   event `PARTY_GROWN`. Overtakes and priority calls already counted keep the size the party had
-  then.
-- operations 0.4.0: the command `ADD_TO_PARTY`, with the HMAC of the pass added.
+  then. Nobody more (an infant counted already) is allowed in the same states and changes nothing.
+- operations 0.4.0: the command `ADD_TO_PARTY`, with the HMAC of the pass added. A ticket and its
+  party count each infant once, from an adult's pass or from its own, in either order
+  (`partyGrowth`).
 - API 0.15.1:
   - `POST /v1/checkpoints/{id}/scans` with `party`, a ticket's reference: the pass joins that
     number if it is for the same flight, has no number of its own, the number still waits and its
@@ -28,6 +33,8 @@ The founder's decision after S15: families are grouped, by the passengers themse
     for a pass whose own number is admitted, under review or cancelled).
   - A companion's rescan finds the family's number; the access point admits the family by any of
     its passes.
+  - An adult's pass with an infant takes a number for two people, and brings two to a party; an
+    infant's own pass adds nobody when an adult's pass declared it.
   - The passenger's view of a ticket gives its party size; the demo flights of a kiosk give their
     id.
   - Migration `0007_party`: `party_pass` (append-only) and the scan outcome `ADDED`.
@@ -42,7 +49,10 @@ The founder's decision after S15: families are grouped, by the passengers themse
     Spanish.
   - The ticket screen, its printout and the passenger's page say for how many people a number
     is.
-  - i18n: the texts of a party, in the three languages.
+  - The party's screen says when a pass added an adult with an infant, and when an infant was
+    counted already.
+  - i18n: the texts of a party, in the three languages. The privacy notice says that a number is
+    kept with how many people it is for.
 
 ## [0.15.0] - 2026-11-22: Slice S15, the queue's life cycle and the lane station
 

@@ -127,10 +127,17 @@ async function demoFlights(): Promise<DemoFlightsResponse> {
 
 /**
  * A synthetic boarding pass for one of today's demo flights, `days` after today if asked; with
- * `another`, for another flight of the same date.
+ * `another`, for another flight of the same date; with `infant`, an adult's travelling with an
+ * infant, or an infant's own (ADR-046).
  */
 async function passForToday(
-  options: { from?: string; days?: number; flightNumber?: string; another?: boolean } = {},
+  options: {
+    from?: string;
+    days?: number;
+    flightNumber?: string;
+    another?: boolean;
+    infant?: 'WITH_INFANT' | 'INFANT';
+  } = {},
 ): Promise<{ text: string; input: BoardingPassInput }> {
   const demo = await demoFlights();
   const later = demo.flights.filter((f) => Date.parse(f.departure) > Date.now() + 30 * 60_000);
@@ -143,15 +150,23 @@ async function passForToday(
   if (flight === undefined) throw new Error('no demo flight in the next 24 hours');
   const [year = 0, month = 0, day = 0] = flight.date.split('-').map(Number);
   const date = new Date(Date.UTC(year, month - 1, day + (options.days ?? 0)));
-  return syntheticBoardingPass(browserRandom(), [
-    {
-      from: options.from ?? 'VCE',
-      to: 'CDG',
-      carrier: flight.carrier,
-      flightNumber: options.flightNumber ?? flight.flightNumber,
-      date: { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate() },
-    },
-  ]);
+  return syntheticBoardingPass(
+    browserRandom(),
+    [
+      {
+        from: options.from ?? 'VCE',
+        to: 'CDG',
+        carrier: flight.carrier,
+        flightNumber: options.flightNumber ?? flight.flightNumber,
+        date: {
+          year: date.getUTCFullYear(),
+          month: date.getUTCMonth() + 1,
+          day: date.getUTCDate(),
+        },
+      },
+    ],
+    options.infant === undefined ? {} : { infant: options.infant },
+  );
 }
 
 async function ticketOf(ref: string): Promise<PublicTicketResponse> {
@@ -327,6 +342,36 @@ describe('the kiosk', () => {
     );
     expect(phone.errors).toEqual([]);
     await phone.page.context().close();
+    expect(errors).toEqual([]);
+    await page.context().close();
+  });
+
+  it("counts an infant on its parent's boarding pass, once (ADR-046)", async () => {
+    const { page, errors } = await openKiosk('en');
+    // A parent travelling with a baby: a number for two.
+    await scan(page, (await passForToday({ infant: 'WITH_INFANT' })).text);
+    await page.waitForSelector('#kiosk-ticket[data-party-size="2"]');
+    expect(await page.textContent('#ticket-party')).toBe(t('en', 'ticket.people', { count: 2 }));
+    await page.click('#kiosk-add-pass');
+    await page.waitForSelector('#kiosk-party[data-status="ready"]');
+    // The baby's own pass, if the airline gave one: counted already.
+    await scan(page, (await passForToday({ infant: 'INFANT' })).text);
+    expect(await page.getAttribute('#kiosk-party', 'data-status')).toBe('infantCounted');
+    expect(await page.textContent('#kiosk-party-status')).toBe(
+      MESSAGES.en['kiosk.party.infantCounted'],
+    );
+    expect(await page.textContent('#kiosk-party-count')).toBe(
+      t('en', 'kiosk.party.count', { count: 2 }),
+    );
+    // Another parent with a baby: two more.
+    await scan(page, (await passForToday({ infant: 'WITH_INFANT' })).text);
+    expect(await page.textContent('#kiosk-party-status')).toBe(
+      MESSAGES.en['kiosk.party.addedInfant'],
+    );
+    expect(await page.textContent('#kiosk-party-count')).toBe(
+      t('en', 'kiosk.party.count', { count: 4 }),
+    );
+    await shot(page, 'kiosk-party-infants');
     expect(errors).toEqual([]);
     await page.context().close();
   });

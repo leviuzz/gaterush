@@ -3,6 +3,7 @@ import { dayOfYear } from './calendar';
 import type { CivilDate } from './calendar';
 import { encodeBoardingPass } from './encode';
 import type { BoardingPassInput, LegInput } from './encode';
+import type { PassInfant } from './parse';
 
 /** Names of synthetic passengers: never a real person. */
 const NAMES = [
@@ -42,16 +43,20 @@ export interface SyntheticLeg {
 
 /**
  * A synthetic boarding pass for demos and tests: a sample name and booking reference drawn from
- * `random`, the given legs, a seat and a check-in sequence number.
+ * `random`, the given legs, a seat and a check-in sequence number. With `infant`, the pass is an
+ * adult's travelling with an infant, or an infant's own (ADR-046).
  */
 export function syntheticBoardingPass(
   random: RandomSource,
   legs: readonly SyntheticLeg[],
+  options: { readonly infant?: PassInfant } = {},
 ): { readonly text: string; readonly input: BoardingPassInput } {
   const pnr = code(random, 6);
   const input: BoardingPassInput = {
     passengerName: pick(random, NAMES),
     electronicTicket: true,
+    passengerDescription:
+      options.infant === 'WITH_INFANT' ? '6' : options.infant === 'INFANT' ? '4' : '0',
     legs: legs.map((leg): LegInput => ({
       pnr,
       from: leg.from,

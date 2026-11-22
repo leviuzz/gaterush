@@ -151,6 +151,11 @@ function scanAnswerFor(state: TicketSummary['state']): {
   }
 }
 
+/** The people a boarding pass brings: an adult travelling with an infant is two (ADR-046). */
+function peopleOn(intake: Accepted): number {
+  return intake.pass.infant === 'WITH_INFANT' ? 2 : 1;
+}
+
 /** What a kiosk is told of a scan. */
 interface ScanAnswer {
   readonly outcome: ScanOutcome;
@@ -519,6 +524,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
         }
         const own = await ticketOfPass(tx, cp.id, intake.dedupKey);
         const mine = own === undefined ? undefined : day.ticket(own.id);
+        const infant = intake.pass.infant ?? undefined;
         const refuse = (outcome: ScanOutcome, reason: ScanReason): ScanAnswer => ({
           outcome,
           reason,
@@ -540,13 +546,17 @@ export function buildApp(options: AppOptions): FastifyInstance {
               : refuse('REJECTED', 'HAS_OWN_NUMBER');
         } else if (party.state !== 'QUEUED' && party.state !== 'PREPARE') {
           answer = refuse('REJECTED', 'TOO_LATE');
-        } else if (party.partySize >= MAX_PARTY_SIZE) {
+        } else if (
+          party.partySize + day.partyGrowth(party.ticketId, peopleOn(intake), infant) >
+          MAX_PARTY_SIZE
+        ) {
           answer = refuse('REJECTED', 'PARTY_FULL');
         } else {
           return {
             type: 'ADD_TO_PARTY',
             ticketId: party.ticketId,
-            people: 1,
+            people: peopleOn(intake),
+            ...(infant === undefined ? {} : { infant }),
             dedupKey: intake.dedupKey,
           };
         }
@@ -681,7 +691,9 @@ export function buildApp(options: AppOptions): FastifyInstance {
               source: 'KIOSK',
               flightId: f.id,
               segment: intake.segment,
-              partySize: 1,
+              // An adult travelling with an infant is two people (ADR-046).
+              partySize: peopleOn(intake),
+              ...(intake.pass.infant === null ? {} : { infant: intake.pass.infant }),
               deadline:
                 f.boardingCloseMs === null || f.deadlineSource === 'NONE'
                   ? { atMs: null, source: 'NONE' }

@@ -872,7 +872,8 @@ describe('what the current state needs from each command (S20)', () => {
           expect(store).toEqual(new Map(day.tickets().map((t) => [t.ticketId, t])));
         }
       }),
-      { numRuns: 200 },
+      // A fixed seed: whether random days change tickets without an event depends on the draw.
+      { numRuns: 200, seed: 20261122 },
     );
     // The random days do change tickets without an event: the property is not empty.
     expect(silent).toBeGreaterThan(0);

@@ -15,6 +15,12 @@ forecasts against the full simulator's days, horizon by horizon (ADR-054).
 
 - None.
 
+### Fixed
+
+- A property test of S20 (operations) checked that its random days change some ticket without an
+  event, and drew new days on every run: on one CI run none did, and the test failed. Its seed is
+  now fixed, as the other property samples' are.
+
 ### Added
 
 - forecast 0.1.0 (new, pure): `forecastFrom`, a Monte Carlo of a checkpoint's next 90 minutes

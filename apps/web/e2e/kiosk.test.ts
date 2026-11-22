@@ -88,8 +88,22 @@ async function openKiosk(
   return opened;
 }
 
+/**
+ * Saves a screen for people to look at. A screenshot is no check of the page: when the browser
+ * cannot take one (it happens on CI runners), it tries once more, then says so and goes on.
+ */
 async function shot(page: Page, name: string): Promise<void> {
-  if (SHOTS !== undefined) await page.screenshot({ path: join(SHOTS, `${name}.png`) });
+  if (SHOTS === undefined) return;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      await page.screenshot({ path: join(SHOTS, `${name}.png`) });
+      return;
+    } catch (error) {
+      if (attempt === 2) {
+        process.stdout.write(`screenshot ${name} not saved: ${(error as Error).message}\n`);
+      }
+    }
+  }
 }
 
 /** As a keyboard-wedge scanner reads a pass: keystrokes wherever the focus is, then Enter. */

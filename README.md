@@ -28,7 +28,8 @@ border procedures: it organises the flow before they start.
 > - **GateFlow Simulator Studio**: the same simulator in one HTML page that runs offline, on a
 >   phone too, and never connects to the network.
 >
-> There is no operational system, API or user interface yet. See
+> There is no operational system or API yet, and no interface for passengers or airport staff:
+> the Studio is the simulator's interface. See
 > [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 > **All results in this repository are SIMULATED on synthetic assumptions.** They are not

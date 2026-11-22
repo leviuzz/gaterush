@@ -30,6 +30,7 @@ const EN = {
   'kiosk.reading': 'Reading…',
   'kiosk.issued': 'Your number',
   'kiosk.retrieved': 'You already have a number',
+  'kiosk.reactivated': 'You are back in the queue',
   'kiosk.wait':
     'You can wait anywhere. Watch the screens: when your number appears, go to the security entrance.',
   'kiosk.qr': 'Scan to follow your number on your phone',
@@ -45,6 +46,10 @@ const EN = {
   'kiosk.reason.UNKNOWN_FLIGHT': 'We could not find your flight. Please ask a member of staff.',
   'kiosk.reason.ALREADY_ADMITTED':
     'This boarding pass has already gone through security. Please ask a member of staff.',
+  'kiosk.reason.UNDER_REVIEW': 'Staff are checking your number. Please ask a member of staff.',
+  'kiosk.reason.CANCELLED': 'Your number was cancelled. Please ask a member of staff.',
+  'kiosk.reason.BOARDING_CLOSED':
+    'Boarding for your flight may have closed. Please ask a member of staff at once.',
   'kiosk.notSetUp': 'This kiosk is not set up yet. Please ask a member of staff.',
   'kiosk.error': 'Something went wrong. Please ask a member of staff.',
   'kiosk.demo': 'Demo with synthetic data',
@@ -57,6 +62,8 @@ const EN = {
     'You missed your call. Go to the security entrance now, or scan your boarding pass again at a kiosk.',
   'ticket.state.ADMITTED': 'You are through security. Have a good flight.',
   'ticket.state.EXPIRED': 'This number has expired. Scan your boarding pass again at a kiosk.',
+  'ticket.state.REVIEW': 'Please see a member of staff at the security entrance.',
+  'ticket.state.CANCELLED': 'This number was cancelled. Please ask a member of staff.',
   'ticket.notFound': 'This ticket does not exist.',
   'ticket.updated': 'Updated at {time}',
   'ticket.ticketFor': 'Ticket for {checkpoint}',
@@ -80,6 +87,7 @@ const IT: Readonly<Record<MessageKey, string>> = {
   'kiosk.reading': 'Lettura in corso…',
   'kiosk.issued': 'Il tuo numero',
   'kiosk.retrieved': 'Hai già un numero',
+  'kiosk.reactivated': 'Sei di nuovo in coda',
   'kiosk.wait':
     "Puoi aspettare dove vuoi. Guarda gli schermi: quando compare il tuo numero, vai all'ingresso dei controlli.",
   'kiosk.qr': 'Inquadra per seguire il tuo numero sul telefono',
@@ -95,6 +103,10 @@ const IT: Readonly<Record<MessageKey, string>> = {
   'kiosk.reason.UNKNOWN_FLIGHT': 'Non troviamo il tuo volo. Chiedi al personale.',
   'kiosk.reason.ALREADY_ADMITTED':
     "Questa carta d'imbarco ha già passato i controlli. Chiedi al personale.",
+  'kiosk.reason.UNDER_REVIEW': 'Il personale sta verificando il tuo numero. Chiedi al personale.',
+  'kiosk.reason.CANCELLED': 'Il tuo numero è stato annullato. Chiedi al personale.',
+  'kiosk.reason.BOARDING_CLOSED':
+    "L'imbarco del tuo volo potrebbe essere già chiuso. Chiedi subito al personale.",
   'kiosk.notSetUp': 'Questo totem non è ancora configurato. Chiedi al personale.',
   'kiosk.error': 'Qualcosa non ha funzionato. Chiedi al personale.',
   'kiosk.demo': 'Demo con dati sintetici',
@@ -108,6 +120,8 @@ const IT: Readonly<Record<MessageKey, string>> = {
   'ticket.state.ADMITTED': 'Hai passato i controlli. Buon viaggio.',
   'ticket.state.EXPIRED':
     "Questo numero è scaduto. Scansiona di nuovo la carta d'imbarco a un totem.",
+  'ticket.state.REVIEW': "Rivolgiti al personale all'ingresso dei controlli.",
+  'ticket.state.CANCELLED': 'Questo numero è stato annullato. Chiedi al personale.',
   'ticket.notFound': 'Questo ticket non esiste.',
   'ticket.updated': 'Aggiornato alle {time}',
   'ticket.ticketFor': 'Ticket per {checkpoint}',
@@ -129,6 +143,7 @@ const ES: Readonly<Record<MessageKey, string>> = {
   'kiosk.reading': 'Leyendo…',
   'kiosk.issued': 'Su número',
   'kiosk.retrieved': 'Ya tiene un número',
+  'kiosk.reactivated': 'Está de nuevo en la fila',
   'kiosk.wait':
     'Puede esperar donde quiera. Mire las pantallas: cuando aparezca su número, vaya a la entrada del control de seguridad.',
   'kiosk.qr': 'Escanee para seguir su número en su teléfono',
@@ -144,6 +159,10 @@ const ES: Readonly<Record<MessageKey, string>> = {
   'kiosk.reason.UNKNOWN_FLIGHT': 'No encontramos su vuelo. Pida ayuda al personal.',
   'kiosk.reason.ALREADY_ADMITTED':
     'Este pase de abordar ya pasó el control de seguridad. Pida ayuda al personal.',
+  'kiosk.reason.UNDER_REVIEW': 'El personal está revisando su número. Pida ayuda al personal.',
+  'kiosk.reason.CANCELLED': 'Su número fue cancelado. Pida ayuda al personal.',
+  'kiosk.reason.BOARDING_CLOSED':
+    'Es posible que el abordaje de su vuelo ya haya cerrado. Pida ayuda al personal de inmediato.',
   'kiosk.notSetUp': 'Este quiosco todavía no está configurado. Pida ayuda al personal.',
   'kiosk.error': 'Algo salió mal. Pida ayuda al personal.',
   'kiosk.demo': 'Demo con datos sintéticos',
@@ -157,6 +176,8 @@ const ES: Readonly<Record<MessageKey, string>> = {
   'ticket.state.ADMITTED': 'Ya pasó el control de seguridad. Buen viaje.',
   'ticket.state.EXPIRED':
     'Este número ha vencido. Escanee de nuevo su pase de abordar en un quiosco.',
+  'ticket.state.REVIEW': 'Acuda con el personal en la entrada del control de seguridad.',
+  'ticket.state.CANCELLED': 'Este número fue cancelado. Pida ayuda al personal.',
   'ticket.notFound': 'Este boleto no existe.',
   'ticket.updated': 'Actualizado a las {time}',
   'ticket.ticketFor': 'Boleto para {checkpoint}',

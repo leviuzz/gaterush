@@ -6,7 +6,7 @@ import { z } from 'zod';
  * ticket is a number, a state and a flight, never a name.
  */
 
-export const CONTRACTS_VERSION = '0.3.0';
+export const CONTRACTS_VERSION = '0.4.0';
 
 export const Segment = z.enum(['DEPARTING', 'TRANSFER']);
 
@@ -18,6 +18,8 @@ export const TicketState = z.enum([
   'NO_SHOW',
   'ADMITTED',
   'EXPIRED',
+  'REVIEW',
+  'CANCELLED',
 ]);
 
 export const RiskClass = z.enum(['UNVERIFIED', 'NORMAL', 'ATTENTION', 'URGENT', 'CRITICAL']);
@@ -39,6 +41,8 @@ export const Ticket = z.object({
   calls: z.int().min(0),
   issuedAt: Instant,
   firstCalledAt: Instant.nullable(),
+  /** The latest call: a reactivated ticket is called again. */
+  lastCalledAt: Instant.nullable(),
   admittedAt: Instant.nullable(),
 });
 export type Ticket = z.infer<typeof Ticket>;
@@ -49,7 +53,14 @@ export type Ticket = z.infer<typeof Ticket>;
  */
 export const ScanRequest = z.strictObject({ bcbp: z.string().min(1).max(1100) });
 
-export const ScanOutcome = z.enum(['ISSUED', 'RETRIEVED', 'REJECTED', 'NEEDS_ASSISTANCE']);
+export const ScanOutcome = z.enum([
+  'ISSUED',
+  'RETRIEVED',
+  /** A no-show scanned again within its window: back in the queue (S15). */
+  'REACTIVATED',
+  'REJECTED',
+  'NEEDS_ASSISTANCE',
+]);
 
 /** Why a scan gave no ticket, or sent the passenger to staff. */
 export const ScanReason = z.enum([
@@ -58,13 +69,29 @@ export const ScanReason = z.enum([
   'WRONG_DAY',
   'UNKNOWN_FLIGHT',
   'ALREADY_ADMITTED',
+  /** The pass's ticket is held for a review by staff (S15). */
+  'UNDER_REVIEW',
+  /** Staff cancelled the pass's ticket (S15). */
+  'CANCELLED',
+  /** Boarding of the flight has closed, as GateFlow knows it: staff decide (S15). */
+  'BOARDING_CLOSED',
 ]);
 
-/** Staff issue a ticket for a passenger of a flight. */
+/** Why staff issue a ticket by hand: a coded reason, never free text (S15). */
+export const ManualReason = z.enum([
+  'NO_BOARDING_PASS',
+  'PASS_UNREADABLE',
+  'ASSISTANCE',
+  'GROUP',
+  'OTHER',
+]);
+
+/** Staff issue a ticket for a passenger, or a party, of a flight. */
 export const IssueTicketRequest = z.strictObject({
   flightId: z.uuid(),
   segment: Segment,
   partySize: z.int().min(1).max(20).default(1),
+  reason: ManualReason,
 });
 
 export const IssueTicketResponse = z.object({
@@ -87,11 +114,35 @@ export const CallNextResponse = z.object({
   called: Ticket.nullable(),
 });
 
-/** A ticket presented at the access point, by its number or by the reference of its QR code. */
+/**
+ * A ticket presented at the access point: by its number, by the reference of its QR code, or by
+ * the boarding pass it was issued for (read in memory, never stored, S15).
+ */
 export const AdmissionRequest = z.union([
   z.strictObject({ number: z.string().min(1).max(10) }),
   z.strictObject({ ref: z.string().min(16).max(64) }),
+  z.strictObject({ bcbp: z.string().min(1).max(1100) }),
 ]);
+
+/** What staff can do to one ticket (S15). */
+export const StaffAction = z.enum([
+  'RECALL',
+  'MARK_NO_SHOW',
+  'REACTIVATE',
+  'HOLD',
+  'CANCEL',
+  'RESOLVE_REVIEW',
+]);
+
+/** A review ends with the ticket back at its place in the queue, or cancelled. */
+export const ResolveReviewRequest = z.strictObject({ decision: z.enum(['QUEUE', 'CANCEL']) });
+
+/** `DONE` when the ticket's state allowed the action; `NOT_ALLOWED` leaves it unchanged. */
+export const StaffActionResponse = z.object({
+  action: StaffAction,
+  outcome: z.enum(['DONE', 'NOT_ALLOWED']),
+  ticket: Ticket,
+});
 
 export const PresentOutcome = z.enum([
   'ADMITTED',
@@ -99,6 +150,8 @@ export const PresentOutcome = z.enum([
   'EXPIRED',
   'NOT_CALLED',
   'ALREADY_ADMITTED',
+  'UNDER_REVIEW',
+  'CANCELLED',
 ]);
 
 export const AdmissionResponse = z.object({
@@ -152,11 +205,22 @@ export const DeviceResponse = z.object({
   }),
 });
 
-/** Today's demo flights at a kiosk's airport, for sample boarding passes; never live flights. */
+/**
+ * The demo flights leaving a kiosk's airport in the next 24 hours, for sample boarding passes;
+ * never live flights.
+ */
 export const DemoFlightsResponse = z.object({
   /** The day at the airport. */
   date: z.iso.date(),
-  flights: z.array(z.object({ carrier: z.string(), flightNumber: z.string(), departure: Instant })),
+  flights: z.array(
+    z.object({
+      carrier: z.string(),
+      flightNumber: z.string(),
+      departure: Instant,
+      /** The local date of the departure: the date on the flight's boarding passes. */
+      date: z.iso.date(),
+    }),
+  ),
 });
 
 export const ErrorResponse = z.object({
@@ -172,6 +236,8 @@ export type PublicTicketResponse = z.infer<typeof PublicTicketResponse>;
 export type DeviceKind = z.infer<typeof DeviceKind>;
 export type DeviceResponse = z.infer<typeof DeviceResponse>;
 export type DemoFlightsResponse = z.infer<typeof DemoFlightsResponse>;
+export type ManualReason = z.infer<typeof ManualReason>;
+export type StaffActionResponse = z.infer<typeof StaffActionResponse>;
 export type ErrorResponse = z.infer<typeof ErrorResponse>;
 
 /** An endpoint of the API, for the OpenAPI document. */
@@ -275,6 +341,37 @@ export const ROUTES: readonly Route[] = [
     body: AdmissionRequest,
     responses: {
       '200': { description: 'The outcome of the presentation', schema: AdmissionResponse },
+      ...errors,
+      '409': { description: 'Idempotency key reused for another request', schema: ErrorResponse },
+    },
+  },
+  ...(
+    [
+      ['recall', 'Call a called passenger again, now: the no-show timeout counts from this call'],
+      ['no-show', 'Mark a called passenger as absent, now'],
+      ['reactivate', 'Bring a no-show back to the queue, within its window'],
+      ['review', 'Hold a waiting ticket for a review: it keeps its place'],
+      ['cancel', 'Cancel a ticket'],
+    ] as const
+  ).map(([action, summary]): Route => ({
+    method: 'post',
+    path: `/v1/checkpoints/{checkpointId}/tickets/{ticketId}/${action}`,
+    summary,
+    command: true,
+    responses: {
+      '200': { description: 'Done, or not allowed in its state', schema: StaffActionResponse },
+      ...errors,
+      '409': { description: 'Idempotency key reused for another request', schema: ErrorResponse },
+    },
+  })),
+  {
+    method: 'post',
+    path: '/v1/checkpoints/{checkpointId}/tickets/{ticketId}/resolve',
+    summary: 'End the review of a ticket: back to its place in the queue, or cancelled',
+    command: true,
+    body: ResolveReviewRequest,
+    responses: {
+      '200': { description: 'Done, or not allowed in its state', schema: StaffActionResponse },
       ...errors,
       '409': { description: 'Idempotency key reused for another request', schema: ErrorResponse },
     },

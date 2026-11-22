@@ -14,9 +14,16 @@ import { localDate } from './time';
  * never stored or logged.
  */
 
-export type ScanOutcome = 'ISSUED' | 'RETRIEVED' | 'REJECTED' | 'NEEDS_ASSISTANCE';
+export type ScanOutcome = 'ISSUED' | 'RETRIEVED' | 'REACTIVATED' | 'REJECTED' | 'NEEDS_ASSISTANCE';
 export type ScanReason =
-  'UNREADABLE' | 'WRONG_AIRPORT' | 'WRONG_DAY' | 'UNKNOWN_FLIGHT' | 'ALREADY_ADMITTED';
+  | 'UNREADABLE'
+  | 'WRONG_AIRPORT'
+  | 'WRONG_DAY'
+  | 'UNKNOWN_FLIGHT'
+  | 'ALREADY_ADMITTED'
+  | 'UNDER_REVIEW'
+  | 'CANCELLED'
+  | 'BOARDING_CLOSED';
 
 /** A boarding pass that can give a ticket at this checkpoint. */
 export interface Accepted {

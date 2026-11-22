@@ -12,7 +12,15 @@ import { arrivalClassification } from '@gateflow/sim-metrics';
 import { GENESIS_HASH, chainHash, sha256 } from './chain';
 import type { ChainEvent } from './chain';
 import type { Db, Tx } from './db/client';
-import { admission, airport, checkpoint, queueCommand, queueEvent, queueToken } from './db/schema';
+import {
+  admission,
+  airport,
+  checkpoint,
+  checkpointTimer,
+  queueCommand,
+  queueEvent,
+  queueToken,
+} from './db/schema';
 import type { CheckpointSettings } from './db/schema';
 import { serviceDayOf } from './time';
 import type { Clock } from './time';
@@ -357,6 +365,7 @@ export class Runtime {
         calls: t.calls,
         issuedAtMs: t.issuedAtMs,
         firstCalledAtMs: t.firstCalledAtMs,
+        lastCalledAtMs: t.lastCalledAtMs,
         admittedAtMs: t.admittedAtMs,
         updatedSeq: record.seq,
         dedupKey: record.command.type === 'ISSUE_TICKET' ? record.command.dedupKey : null,
@@ -376,6 +385,7 @@ export class Runtime {
           priority: t.priority,
           calls: t.calls,
           firstCalledAtMs: t.firstCalledAtMs,
+          lastCalledAtMs: t.lastCalledAtMs,
           admittedAtMs: t.admittedAtMs,
           updatedSeq: record.seq,
         })
@@ -391,6 +401,12 @@ export class Runtime {
         commandSeq: record.seq,
       });
     }
+    // When the day's next timeout is due, for the scheduler (S15).
+    const timer = { serviceDay, nextDueMs: day.nextDueMs(), updatedSeq: record.seq };
+    await tx
+      .insert(checkpointTimer)
+      .values({ checkpointId: cp.id, ...timer })
+      .onConflictDoUpdate({ target: checkpointTimer.checkpointId, set: timer });
     memory.seq = record.seq;
     memory.hash = hash;
     memory.eventSeq += events.length;

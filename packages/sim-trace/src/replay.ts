@@ -71,6 +71,12 @@ function stageAfterQueueEvent(event: QueueEvent): Stage | null {
     case 'RECALLED':
     case 'EXPIRED':
       return null;
+    // Staff actions of the live product (S15): a simulated day has none.
+    case 'REVIEW':
+    case 'RELEASED':
+      return 'WAITING';
+    case 'CANCELLED':
+      return null;
   }
 }
 

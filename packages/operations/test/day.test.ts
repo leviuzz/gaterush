@@ -214,6 +214,24 @@ const dayArb = fc
           weight: 3,
           arbitrary: fc.record({ kind: fc.constant('present' as const), pick: fc.nat() }),
         },
+        // The scheduler's timeouts and the staff's actions (S15).
+        { weight: 2, arbitrary: fc.record({ kind: fc.constant('advance' as const) }) },
+        {
+          weight: 3,
+          arbitrary: fc.record({
+            kind: fc.constant('staff' as const),
+            action: fc.constantFrom(
+              'RECALL',
+              'MARK_NO_SHOW',
+              'REACTIVATE',
+              'HOLD',
+              'CANCEL',
+              'QUEUE',
+              'REJECT',
+            ),
+            pick: fc.nat(),
+          }),
+        },
       ),
       { minLength: 1, maxLength: 80 },
     ),
@@ -242,6 +260,20 @@ const dayArb = fc
         );
       } else if (step.kind === 'call') {
         commands.push({ type: 'CALL_NEXT' });
+      } else if (step.kind === 'advance') {
+        commands.push({ type: 'ADVANCE' });
+      } else if (step.kind === 'staff') {
+        if (issued === 0) return;
+        const ticketId = `t-${(step.pick % issued) + 1}`;
+        if (step.action === 'QUEUE' || step.action === 'REJECT') {
+          commands.push({
+            type: 'RESOLVE_REVIEW',
+            ticketId,
+            decision: step.action === 'QUEUE' ? 'QUEUE' : 'CANCEL',
+          });
+        } else {
+          commands.push({ type: step.action, ticketId });
+        }
       } else {
         if (issued === 0) return;
         commands.push({
@@ -264,6 +296,7 @@ describe('the log of a day', () => {
         expect(again.tickets()).toEqual(first.day.tickets());
         expect(again.prepareWindow()).toEqual(first.day.prepareWindow());
         expect(again.lastSeq).toBe(records.length);
+        expect(again.nextDueMs()).toBe(first.day.nextDueMs());
         // Replaying one more time from scratch gives the same events, command by command.
         const third = run(records);
         expect(third.applied).toEqual(first.applied);
@@ -303,6 +336,20 @@ describe('the log of a day', () => {
             queue.callNext(atMs, estimates);
           } else if (command.type === 'PRESENT') {
             queue.present(command.ticketId, atMs, estimates);
+          } else if (command.type === 'ADVANCE') {
+            queue.advance(atMs);
+          } else if (command.type === 'RECALL') {
+            queue.recall(command.ticketId, atMs, estimates);
+          } else if (command.type === 'MARK_NO_SHOW') {
+            queue.markNoShow(command.ticketId, atMs, estimates);
+          } else if (command.type === 'REACTIVATE') {
+            queue.reactivate(command.ticketId, atMs, estimates);
+          } else if (command.type === 'HOLD') {
+            queue.hold(command.ticketId, atMs, estimates);
+          } else if (command.type === 'CANCEL') {
+            queue.cancel(command.ticketId, atMs, estimates);
+          } else if (command.type === 'RESOLVE_REVIEW') {
+            queue.resolve(command.ticketId, command.decision, atMs, estimates);
           }
         }
         expect(applied.slice(1).flatMap((a) => a.events)).toEqual(events);

@@ -4,6 +4,48 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Any change that alters simulated numbers
 must be listed, together with the component versions it bumps.
 
+## [Unreleased]
+
+Slice S15 in progress. Part 1: the life cycle of a ticket on a clock.
+
+### Simulated numbers change
+
+- None. The golden files change only in the version of the queue (0.7.0); the simulator never
+  takes the new staff actions, and fails at once if one ever reaches it.
+
+### Added
+
+- queue-core 0.7.0: staff actions, each allowed only in the states the ticket's state machine
+  says (kickoff 2.8): call again, mark a no-show, bring a no-show back, hold for a review (the
+  ticket keeps its place), end a review (back to its place, or cancelled), cancel. States
+  `REVIEW` and `CANCELLED`. The no-show timeout counts from the latest second call, by the first
+  timeout or by staff.
+- operations 0.3.0: the commands `ADVANCE` (the timeouts due), `RECALL`, `MARK_NO_SHOW`,
+  `REACTIVATE`, `HOLD`, `RESOLVE_REVIEW` and `CANCEL`; a manual ticket's coded reason; a ticket
+  presented by its boarding pass (`PASS`).
+- API:
+  - the timers: `serve` applies every checkpoint's timeouts when they are due (a second call, a
+    no-show, an expiry), through the log like any command. The key of a timeout makes it apply
+    once, whichever servers see it due.
+  - `POST /v1/checkpoints/{id}/tickets/{ticket}/recall`, `no-show`, `reactivate`, `review`,
+    `resolve` and `cancel`.
+  - A manual ticket needs its coded reason: no boarding pass, pass unreadable, assistance, group,
+    other.
+  - A rescan at a kiosk brings a no-show back within its window (`REACTIVATED`); a ticket under
+    review or cancelled sends the passenger to staff.
+  - A pass whose flight's boarding has closed sends the passenger to staff (`BOARDING_CLOSED`),
+    unless the checkpoint's `afterBoardingClose` is `ISSUE`.
+  - The access point can find a ticket by its boarding pass, read in memory.
+  - The demo flights of a kiosk are those of the next 24 hours, each with the date of its
+    passes: sample passes work at any hour, also late in the evening.
+  - Migration `0005_life_cycle`: `checkpoint_timer`, the latest call of a ticket, the new states,
+    outcomes and method.
+- Contracts 0.4.0: the staff actions and their answers, `ResolveReviewRequest`, a manual ticket's
+  `reason`, a ticket's `lastCalledAt`, the new scan outcome and reasons, admission by boarding
+  pass.
+- i18n: the texts of a review, a cancellation, a return to the queue and a closed boarding, in
+  the three languages. The kiosk says "You are back in the queue" with the same number.
+
 ## [0.14.0] - 2026-11-22: Slice S14, the kiosk and the passenger's page
 
 The first screens of the product, served by the API (ADR-044).

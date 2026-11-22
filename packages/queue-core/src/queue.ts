@@ -24,6 +24,8 @@ import type {
   QueueListener,
   QueueStats,
   TicketInput,
+  ReviewDecision,
+  StaffActionOutcome,
   TicketState,
   TicketView,
   VirtualQueue,
@@ -62,6 +64,11 @@ interface TicketRecord {
   calls: number;
   firstCalledAtMs: Millis | null;
   lastCalledAtMs: Millis | null;
+  /**
+   * The second call of the latest call: by the first timeout or by staff (S15). The no-show
+   * timeout counts from it. Null until the ticket is called a second time.
+   */
+  recalledAtMs: Millis | null;
   noShows: number;
   noShowAtMs: Millis | null;
   reactivations: number;
@@ -312,6 +319,7 @@ export class CheckpointQueue {
       calls: 0,
       firstCalledAtMs: null,
       lastCalledAtMs: null,
+      recalledAtMs: null,
       noShows: 0,
       noShowAtMs: null,
       reactivations: 0,
@@ -350,7 +358,13 @@ export class CheckpointQueue {
     if (records === undefined) return;
     let live = 0;
     for (const record of records) {
-      if (record.state === 'ADMITTED' || record.state === 'EXPIRED') continue;
+      if (
+        record.state === 'ADMITTED' ||
+        record.state === 'EXPIRED' ||
+        record.state === 'CANCELLED'
+      ) {
+        continue;
+      }
       const updated: WaitingTicket = {
         ...record,
         ...(knowledge.deadline === undefined ? {} : { deadline: knowledge.deadline }),
@@ -387,6 +401,7 @@ export class CheckpointQueue {
     record.calls++;
     record.firstCalledAtMs ??= nowMs;
     record.lastCalledAtMs = nowMs;
+    record.recalledAtMs = null;
     this.outstanding.push(record);
     this.counters.calls++;
     this.emit({ type: 'CALLED', ticketId: record.id, atMs: nowMs });
@@ -415,7 +430,7 @@ export class CheckpointQueue {
         this.emit({ type: 'ADMITTED', ticketId: record.id, atMs: nowMs });
         return 'ADMITTED';
       case 'NO_SHOW':
-        this.reactivate(record, nowMs, estimates);
+        this.bringBack(record, nowMs, estimates);
         return 'REACTIVATED';
       case 'EXPIRED':
         return 'EXPIRED';
@@ -424,7 +439,132 @@ export class CheckpointQueue {
       case 'QUEUED':
       case 'PREPARE':
         return 'NOT_CALLED';
+      case 'REVIEW':
+        return 'UNDER_REVIEW';
+      case 'CANCELLED':
+        return 'CANCELLED';
     }
+  }
+
+  /*
+   * Staff actions (S15). Each is guarded by the ticket's state: when the state does not allow
+   * it, the answer is NOT_ALLOWED and nothing changes. Timeouts due strictly before `nowMs` are
+   * applied first, as for every operation. The simulator never uses them.
+   */
+
+  /**
+   * Staff call a called passenger again, now. The no-show timeout then counts from this second
+   * call. Allowed for CALLED and RECALLED tickets.
+   */
+  recall(ticketId: string, nowMs: Millis, estimates: CheckpointEstimates): StaffActionOutcome {
+    this.begin(nowMs, estimates);
+    const record = this.byId.get(ticketId);
+    if (record === undefined) return 'UNKNOWN_TICKET';
+    if (record.state !== 'CALLED' && record.state !== 'RECALLED') return 'NOT_ALLOWED';
+    if (record.state === 'CALLED') this.counters.recalls++;
+    record.state = 'RECALLED';
+    record.recalledAtMs = nowMs;
+    this.emit({ type: 'RECALLED', ticketId: record.id, atMs: nowMs });
+    return 'DONE';
+  }
+
+  /** Staff mark a called passenger as absent, now, as the second timeout would. */
+  markNoShow(ticketId: string, nowMs: Millis, estimates: CheckpointEstimates): StaffActionOutcome {
+    this.begin(nowMs, estimates);
+    const record = this.byId.get(ticketId);
+    if (record === undefined) return 'UNKNOWN_TICKET';
+    const v = this.virtual;
+    if (v === null || (record.state !== 'CALLED' && record.state !== 'RECALLED')) {
+      return 'NOT_ALLOWED';
+    }
+    this.noShow(record, nowMs, v);
+    return 'DONE';
+  }
+
+  /**
+   * A no-show comes back within its window: rescanned at a kiosk or brought back by staff. It
+   * goes where the policy puts reactivated tickets, as when it presents at the access point.
+   */
+  reactivate(ticketId: string, nowMs: Millis, estimates: CheckpointEstimates): StaffActionOutcome {
+    this.begin(nowMs, estimates);
+    const record = this.byId.get(ticketId);
+    if (record === undefined) return 'UNKNOWN_TICKET';
+    if (record.state !== 'NO_SHOW') return 'NOT_ALLOWED';
+    this.bringBack(record, nowMs, estimates);
+    return 'DONE';
+  }
+
+  /**
+   * Staff hold a waiting ticket for a review: it leaves the order of calls (and the prepare
+   * window) but keeps its place, to go back to when the review ends.
+   */
+  hold(ticketId: string, nowMs: Millis, estimates: CheckpointEstimates): StaffActionOutcome {
+    this.begin(nowMs, estimates);
+    const record = this.byId.get(ticketId);
+    if (record === undefined) return 'UNKNOWN_TICKET';
+    if (record.state === 'QUEUED') this.remove(this.waiting, record);
+    else if (record.state === 'PREPARE') this.remove(this.window, record);
+    else return 'NOT_ALLOWED';
+    record.state = 'REVIEW';
+    record.priorityCommitment = false;
+    record.fastTracked = false;
+    this.emit({ type: 'REVIEW', ticketId: record.id, atMs: nowMs });
+    this.refillWindow(nowMs, estimates);
+    return 'DONE';
+  }
+
+  /** Staff end a review: the ticket goes back to its place in the queue, or is cancelled. */
+  resolve(
+    ticketId: string,
+    decision: ReviewDecision,
+    nowMs: Millis,
+    estimates: CheckpointEstimates,
+  ): StaffActionOutcome {
+    this.begin(nowMs, estimates);
+    const record = this.byId.get(ticketId);
+    if (record === undefined) return 'UNKNOWN_TICKET';
+    if (record.state !== 'REVIEW') return 'NOT_ALLOWED';
+    if (decision === 'CANCEL') {
+      this.cancelRecord(record, nowMs);
+      return 'DONE';
+    }
+    record.state = 'QUEUED';
+    record.lastSeenAtMs = nowMs;
+    this.waiting.splice(insertionIndex(this.waiting, record.fifoKey), 0, record);
+    this.emit({ type: 'RELEASED', ticketId: record.id, atMs: nowMs });
+    this.refillWindow(nowMs, estimates);
+    return 'DONE';
+  }
+
+  /** Staff cancel a ticket that is not admitted, expired or cancelled already. */
+  cancel(ticketId: string, nowMs: Millis, estimates: CheckpointEstimates): StaffActionOutcome {
+    this.begin(nowMs, estimates);
+    const record = this.byId.get(ticketId);
+    if (record === undefined) return 'UNKNOWN_TICKET';
+    switch (record.state) {
+      case 'QUEUED':
+        this.remove(this.waiting, record);
+        break;
+      case 'PREPARE':
+        this.remove(this.window, record);
+        break;
+      case 'CALLED':
+      case 'RECALLED':
+        this.remove(this.outstanding, record);
+        break;
+      case 'NO_SHOW':
+        this.remove(this.noShows, record);
+        break;
+      case 'REVIEW':
+        break;
+      case 'ADMITTED':
+      case 'EXPIRED':
+      case 'CANCELLED':
+        return 'NOT_ALLOWED';
+    }
+    this.cancelRecord(record, nowMs);
+    this.refillWindow(nowMs, estimates);
+    return 'DONE';
   }
 
   /** Applies every timeout due at or before `nowMs` (second calls, no-shows, expiries). */
@@ -572,7 +712,7 @@ export class CheckpointQueue {
     }
   }
 
-  private reactivate(record: TicketRecord, nowMs: Millis, estimates: CheckpointEstimates): void {
+  private bringBack(record: TicketRecord, nowMs: Millis, estimates: CheckpointEstimates): void {
     const v = this.virtual;
     if (v === null) throw new QueueError('no-shows cannot exist in a physical queue');
     this.remove(this.noShows, record);
@@ -599,6 +739,26 @@ export class CheckpointQueue {
     this.emit({ type: 'EXPIRED', ticketId: record.id, atMs });
   }
 
+  /** The ticket is final as CANCELLED; it is already out of every list. */
+  private cancelRecord(record: TicketRecord, atMs: Millis): void {
+    record.state = 'CANCELLED';
+    record.priorityCommitment = false;
+    record.fastTracked = false;
+    this.emit({ type: 'CANCELLED', ticketId: record.id, atMs });
+  }
+
+  /** A called ticket becomes a no-show at `atMs` (second timeout, or staff). */
+  private noShow(record: TicketRecord, atMs: Millis, v: VirtualQueue): void {
+    this.remove(this.outstanding, record);
+    record.state = 'NO_SHOW';
+    record.noShows++;
+    record.noShowAtMs = atMs;
+    this.counters.noShows++;
+    this.emit({ type: 'NO_SHOW', ticketId: record.id, atMs });
+    if (record.reactivations >= v.maxReactivations) this.expire(record, atMs);
+    else this.noShows.push(record);
+  }
+
   /**
    * The earliest pending timeout: a second call, a no-show or the expiry of a no-show. Ties go to
    * the earlier call, then to the earlier no-show, so the order is deterministic.
@@ -610,10 +770,11 @@ export class CheckpointQueue {
     let bestAt = Infinity;
     for (const record of this.outstanding) {
       const calledAt = record.lastCalledAtMs ?? record.issuedAtMs;
+      // The no-show timeout counts from the second call: the first timeout's, or staff's.
       const at =
         record.state === 'CALLED'
           ? calledAt + v.callTimeoutMs
-          : calledAt + v.callTimeoutMs + v.recallTimeoutMs;
+          : (record.recalledAtMs ?? calledAt + v.callTimeoutMs) + v.recallTimeoutMs;
       if (at < bestAt) {
         bestAt = at;
         best = record;
@@ -643,18 +804,12 @@ export class CheckpointQueue {
       switch (record.state) {
         case 'CALLED':
           record.state = 'RECALLED';
+          record.recalledAtMs = atMs;
           this.counters.recalls++;
           this.emit({ type: 'RECALLED', ticketId: record.id, atMs });
           break;
         case 'RECALLED':
-          this.remove(this.outstanding, record);
-          record.state = 'NO_SHOW';
-          record.noShows++;
-          record.noShowAtMs = atMs;
-          this.counters.noShows++;
-          this.emit({ type: 'NO_SHOW', ticketId: record.id, atMs });
-          if (record.reactivations >= v.maxReactivations) this.expire(record, atMs);
-          else this.noShows.push(record);
+          this.noShow(record, atMs, v);
           break;
         case 'NO_SHOW':
           this.remove(this.noShows, record);
@@ -664,6 +819,8 @@ export class CheckpointQueue {
         case 'PREPARE':
         case 'ADMITTED':
         case 'EXPIRED':
+        case 'REVIEW':
+        case 'CANCELLED':
           throw new QueueError(`ticket ${record.id} has a timeout in state ${record.state}`);
       }
     }

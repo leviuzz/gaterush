@@ -8,7 +8,7 @@ import {
   responseEstimateMs,
 } from '@gateflow/queue-core';
 import type { TicketView } from '@gateflow/queue-core';
-import { PRESENT_METHODS, TICKET_SOURCES } from './commands';
+import { MANUAL_REASONS, PRESENT_METHODS, TICKET_SOURCES } from './commands';
 import type {
   Applied,
   Command,
@@ -17,6 +17,7 @@ import type {
   DayConfig,
   DayLogEvent,
   IssueTicket,
+  StaffAction,
   TicketSource,
   TicketSummary,
 } from './commands';
@@ -221,12 +222,39 @@ export class CheckpointDay {
         }
         case 'PRESENT': {
           if (!PRESENT_METHODS.includes(command.method)) invalid('unknown way of presenting');
-          if (!this.info.has(command.ticketId)) {
-            throw new OperationError('UNKNOWN_TICKET', `no ticket ${command.ticketId} today`);
-          }
+          this.requireTicket(command.ticketId);
           const outcome = this.queue.present(command.ticketId, nowMs, this.estimates);
           return {
             type: 'PRESENTED',
+            outcome,
+            ticket: this.summaryOf(this.view(command.ticketId)),
+          };
+        }
+        case 'ADVANCE':
+          this.queue.advance(nowMs);
+          return { type: 'ADVANCED', nextDueMs: this.queue.nextDueMs() };
+        case 'RECALL':
+        case 'MARK_NO_SHOW':
+        case 'REACTIVATE':
+        case 'HOLD':
+        case 'CANCEL':
+          return this.act(command.type, command.ticketId, nowMs);
+        case 'RESOLVE_REVIEW': {
+          // A command read back from a log is not trusted to carry a known decision.
+          const decision: string = command.decision;
+          if (decision !== 'QUEUE' && decision !== 'CANCEL') {
+            invalid('a review ends with QUEUE or CANCEL');
+          }
+          this.requireTicket(command.ticketId);
+          const outcome = this.queue.resolve(
+            command.ticketId,
+            command.decision,
+            nowMs,
+            this.estimates,
+          );
+          return {
+            type: 'ACTED',
+            action: 'RESOLVE_REVIEW',
             outcome,
             ticket: this.summaryOf(this.view(command.ticketId)),
           };
@@ -236,6 +264,28 @@ export class CheckpointDay {
       if (error instanceof QueueError) invalid(error.message);
       throw error;
     }
+  }
+
+  private requireTicket(ticketId: string): void {
+    if (!this.info.has(ticketId)) {
+      throw new OperationError('UNKNOWN_TICKET', `no ticket ${ticketId} today`);
+    }
+  }
+
+  private act(action: StaffAction, ticketId: string, nowMs: number): CommandResult {
+    this.requireTicket(ticketId);
+    const queue = this.queue;
+    const outcome =
+      action === 'RECALL'
+        ? queue.recall(ticketId, nowMs, this.estimates)
+        : action === 'MARK_NO_SHOW'
+          ? queue.markNoShow(ticketId, nowMs, this.estimates)
+          : action === 'REACTIVATE'
+            ? queue.reactivate(ticketId, nowMs, this.estimates)
+            : action === 'HOLD'
+              ? queue.hold(ticketId, nowMs, this.estimates)
+              : queue.cancel(ticketId, nowMs, this.estimates);
+    return { type: 'ACTED', action, outcome, ticket: this.summaryOf(this.view(ticketId)) };
   }
 
   private issue(command: IssueTicket, nowMs: number): CommandResult {
@@ -256,6 +306,10 @@ export class CheckpointDay {
     validateDeadline(command.deadline);
     if (command.dedupKey !== null && !/^[0-9a-f]{64}$/.test(command.dedupKey)) {
       invalid('the deduplication key must be a hexadecimal SHA-256 HMAC');
+    }
+    if (command.reason !== undefined) {
+      if (command.source !== 'STAFF') invalid('only a ticket issued by staff has a reason');
+      if (!MANUAL_REASONS.includes(command.reason)) invalid('unknown reason for a manual ticket');
     }
     const number = `${this.config.ticketPrefix}${String(this.issueOrder.length + 1).padStart(3, '0')}`;
     const view = this.queue.issue(
@@ -307,6 +361,7 @@ export class CheckpointDay {
       calls: view.calls,
       issuedAtMs: view.issuedAtMs,
       firstCalledAtMs: view.firstCalledAtMs,
+      lastCalledAtMs: view.lastCalledAtMs,
       admittedAtMs: view.admittedAtMs,
     };
   }

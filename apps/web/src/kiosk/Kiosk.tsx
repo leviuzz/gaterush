@@ -31,7 +31,8 @@ type Screen =
   | { readonly kind: 'reading' }
   | {
       readonly kind: 'ticket';
-      readonly retrieved: boolean;
+      /** A new number, the same number again, or a no-show back in the queue (S15). */
+      readonly heading: 'kiosk.issued' | 'kiosk.retrieved' | 'kiosk.reactivated';
       readonly number: string;
       readonly ref: string;
       readonly atMs: number;
@@ -222,13 +223,20 @@ export function Kiosk({
       }
       const scan = answer.body;
       if (
-        (scan.outcome === 'ISSUED' || scan.outcome === 'RETRIEVED') &&
+        (scan.outcome === 'ISSUED' ||
+          scan.outcome === 'RETRIEVED' ||
+          scan.outcome === 'REACTIVATED') &&
         scan.ticket !== null &&
         scan.ref !== null
       ) {
         setScreen({
           kind: 'ticket',
-          retrieved: scan.outcome === 'RETRIEVED',
+          heading:
+            scan.outcome === 'ISSUED'
+              ? 'kiosk.issued'
+              : scan.outcome === 'RETRIEVED'
+                ? 'kiosk.retrieved'
+                : 'kiosk.reactivated',
           number: scan.ticket.number,
           ref: scan.ref,
           atMs: Date.now(),
@@ -251,7 +259,7 @@ export function Kiosk({
   }, [screen, reset]);
 
   useEffect(() => {
-    if (autoPrint && screen.kind === 'ticket' && !screen.retrieved) window.print();
+    if (autoPrint && screen.kind === 'ticket' && screen.heading === 'kiosk.issued') window.print();
   }, [screen, autoPrint]);
 
   // The scanner types into the field: it keeps the focus, but never takes it from the dialog.
@@ -343,7 +351,7 @@ export function Kiosk({
                 : t(locale, 'ticket.ticketFor', { checkpoint: me.checkpoint.label })}
             </p>
             <h1 className="eyebrow" id="ticket-heading">
-              {t(locale, screen.retrieved ? 'kiosk.retrieved' : 'kiosk.issued')}
+              {t(locale, screen.heading)}
             </h1>
             <p
               className="number"

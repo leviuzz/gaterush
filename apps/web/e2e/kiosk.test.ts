@@ -132,8 +132,8 @@ async function passForToday(
   const demo = await demoFlights();
   const later = demo.flights.filter((f) => Date.parse(f.departure) > Date.now() + 30 * 60_000);
   const flight = (later.length > 0 ? later : demo.flights)[0];
-  if (flight === undefined) throw new Error('no demo flight today');
-  const [year = 0, month = 0, day = 0] = demo.date.split('-').map(Number);
+  if (flight === undefined) throw new Error('no demo flight in the next 24 hours');
+  const [year = 0, month = 0, day = 0] = flight.date.split('-').map(Number);
   const date = new Date(Date.UTC(year, month - 1, day + (options.days ?? 0)));
   return syntheticBoardingPass(browserRandom(), [
     {

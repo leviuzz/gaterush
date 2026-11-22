@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import fastifyStatic from '@fastify/static';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, gte, lte } from 'drizzle-orm';
 import Fastify from 'fastify';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ZodError } from 'zod';
@@ -9,14 +9,16 @@ import type { z } from 'zod';
 import {
   AdmissionRequest,
   IssueTicketRequest,
+  ResolveReviewRequest,
   ScanRequest,
   openApiDocument,
 } from '@gateflow/contracts';
-import type { Ticket } from '@gateflow/contracts';
+import type { StaffActionResponse, Ticket } from '@gateflow/contracts';
 import { OperationError } from '@gateflow/operations';
 import type { Command, CommandResult, TicketSummary } from '@gateflow/operations';
 import { requestHash } from './chain';
 import { readPass, recordScan, ticketOfPass } from './intake';
+import { TimerScheduler } from './scheduler';
 import type { ScanOutcome, ScanReason } from './intake';
 import type { Db } from './db/client';
 import { airport, checkpoint, flight, queueToken } from './db/schema';
@@ -38,6 +40,18 @@ export interface AppOptions {
   readonly logger?: boolean | { readonly stream: { write(line: string): void } };
   /** The built web application (kiosk, ticket page...), served at `/` when given. */
   readonly webRoot?: string;
+  /**
+   * The timers of the queue (S15): `auto` applies them every second while the server listens;
+   * `manual` (the default, for tests) leaves it to `app.timers.tick()`.
+   */
+  readonly timers?: 'auto' | 'manual';
+}
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    /** The scheduler of the queue's timeouts (S15). */
+    readonly timers: TimerScheduler;
+  }
 }
 
 /**
@@ -83,8 +97,38 @@ export function toTicket(t: TicketSummary): Ticket {
     calls: t.calls,
     issuedAt: new Date(t.issuedAtMs).toISOString(),
     firstCalledAt: iso(t.firstCalledAtMs),
+    lastCalledAt: iso(t.lastCalledAtMs),
     admittedAt: iso(t.admittedAtMs),
   };
+}
+
+/**
+ * What a kiosk says when a pass's ticket of the day exists (S13, S15): the same ticket again; a
+ * no-show brought back; or staff, for a ticket admitted, under review or cancelled.
+ */
+function scanAnswerFor(state: TicketSummary['state']): {
+  readonly outcome: ScanOutcome;
+  readonly reason: ScanReason | null;
+  /** Whether the kiosk gets the ticket and its reference, to show and print it. */
+  readonly withTicket: boolean;
+} {
+  switch (state) {
+    case 'QUEUED':
+    case 'PREPARE':
+    case 'CALLED':
+    case 'RECALLED':
+      return { outcome: 'RETRIEVED', reason: null, withTicket: true };
+    case 'NO_SHOW':
+      return { outcome: 'REACTIVATED', reason: null, withTicket: true };
+    case 'ADMITTED':
+      return { outcome: 'NEEDS_ASSISTANCE', reason: 'ALREADY_ADMITTED', withTicket: true };
+    case 'REVIEW':
+      return { outcome: 'NEEDS_ASSISTANCE', reason: 'UNDER_REVIEW', withTicket: false };
+    case 'CANCELLED':
+      return { outcome: 'NEEDS_ASSISTANCE', reason: 'CANCELLED', withTicket: false };
+    case 'EXPIRED':
+      throw new Error('an expired ticket gives way to a new one');
+  }
 }
 
 function parse<T extends z.ZodType>(schema: T, value: unknown): z.output<T> {
@@ -163,6 +207,19 @@ export function buildApp(options: AppOptions): FastifyInstance {
   });
 
   /** Runs a command of a checkpoint and answers with its result. */
+  const timers = new TimerScheduler(options.db, runtime, clock);
+  app.decorate('timers', timers);
+  if (options.timers === 'auto') {
+    app.addHook('onReady', () => {
+      timers.start((error) => {
+        app.log.error(error);
+      });
+    });
+  }
+  app.addHook('onClose', async () => {
+    await timers.stop();
+  });
+
   const command = async (
     request: FastifyRequest<{ Params: { checkpointId: string } }>,
     reply: FastifyReply,
@@ -242,17 +299,17 @@ export function buildApp(options: AppOptions): FastifyInstance {
   });
 
   /**
-   * The demo flights of today at a kiosk's airport, for its sample boarding passes. Only flights
-   * marked DEMO are listed: live flight data never goes to a kiosk.
+   * The demo flights leaving a kiosk's airport in the next 24 hours, for its sample boarding passes
+   * at any hour. Only flights marked DEMO are listed: live flight data never goes to a kiosk.
    */
   app.get<{ Params: { checkpointId: string } }>(
     '/v1/checkpoints/:checkpointId/demo-flights',
     async (request) => {
       await requireDevice(options.db, request, request.params.checkpointId, 'KIOSK');
       const cp = await loadCheckpoint(options.db, request.params.checkpointId);
-      const today = localDate(clock.now(), cp.timeZone);
+      const now = clock.now();
       const two = (n: number) => String(n).padStart(2, '0');
-      const date = `${String(today.year)}-${two(today.month)}-${two(today.day)}`;
+      const today = localDate(now, cp.timeZone);
       const rows = await options.db
         .select()
         .from(flight)
@@ -260,20 +317,22 @@ export function buildApp(options: AppOptions): FastifyInstance {
           and(
             eq(flight.airportId, cp.airportId),
             eq(flight.environment, 'DEMO'),
-            eq(flight.departureDate, date),
+            gte(flight.stdMs, now),
+            lte(flight.stdMs, now + 24 * 60 * 60 * 1000),
           ),
         )
         .orderBy(asc(flight.stdMs));
       return {
-        date,
+        date: `${String(today.year)}-${two(today.month)}-${two(today.day)}`,
         flights: rows.flatMap((f) =>
-          f.carrier === null || f.flightNumber === null
+          f.carrier === null || f.flightNumber === null || f.departureDate === null
             ? []
             : [
                 {
                   carrier: f.carrier,
                   flightNumber: f.flightNumber,
                   departure: new Date(f.stdMs).toISOString(),
+                  date: f.departureDate,
                 },
               ],
         ),
@@ -316,6 +375,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
             walkEstimateMs: f.walkEstimateMs,
             scheduledDepartureMs: f.stdMs,
             dedupKey: null,
+            reason: body.reason,
           };
         },
         (result) => {
@@ -325,6 +385,14 @@ export function buildApp(options: AppOptions): FastifyInstance {
       );
     },
   );
+
+  /** A ticket's current-state row. */
+  const tokenRow = async (ticketId: string) => {
+    const rows = await options.db.select().from(queueToken).where(eq(queueToken.id, ticketId));
+    const row = rows[0];
+    if (row === undefined) throw new Error(`the ticket ${ticketId} is gone`);
+    return row;
+  };
 
   /** A ticket as staff see it, from its current-state row. */
   const ticketOfRow = (r: typeof queueToken.$inferSelect): Ticket =>
@@ -341,6 +409,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
       calls: r.calls,
       issuedAtMs: r.issuedAtMs,
       firstCalledAtMs: r.firstCalledAtMs,
+      lastCalledAtMs: r.lastCalledAtMs,
       admittedAtMs: r.admittedAtMs,
     });
 
@@ -366,93 +435,140 @@ export function buildApp(options: AppOptions): FastifyInstance {
           .send({ outcome: intake.outcome, reason: intake.reason, ticket: null, ref: null });
       }
       // Under the checkpoint's lock: the same pass at two kiosks at once still gives one ticket.
-      const found: {
-        value?: { outcome: ScanOutcome; reason: ScanReason | null; ticketId: string; ref: string };
-      } = {};
-      const executed = await runtime.execute({
-        checkpointId: cp.id,
-        idempotencyKey: idempotencyKeyOf(request),
-        requestHash: requestHash('POST /v1/checkpoints/:checkpointId/scans', {
-          pass: intake.dedupKey,
-        }),
-        actor: `kiosk:${kiosk.id}`,
-        build: async ({ tx, day, atMs }) => {
-          const existing = await ticketOfPass(tx, cp.id, intake.dedupKey);
-          const current = existing === undefined ? undefined : day.ticket(existing.id);
-          if (existing !== undefined && current !== undefined && current.state !== 'EXPIRED') {
-            const admitted = current.state === 'ADMITTED';
-            found.value = {
-              outcome: admitted ? 'NEEDS_ASSISTANCE' : 'RETRIEVED',
-              reason: admitted ? 'ALREADY_ADMITTED' : null,
-              ticketId: existing.id,
-              ref: existing.opaqueRef,
-            };
-            await recordScan(tx, {
-              id: ids.uuid(),
-              checkpointId: cp.id,
-              atMs,
-              outcome: found.value.outcome,
-              reason: found.value.reason,
-              ticketId: existing.id,
-              pass: intake.pass,
-            });
-            return null;
-          }
-          const ticketId = ids.uuid();
-          await recordScan(tx, {
-            id: ids.uuid(),
-            checkpointId: cp.id,
-            atMs,
-            outcome: 'ISSUED',
-            reason: null,
-            ticketId,
-            pass: intake.pass,
-          });
-          const f = intake.flight;
-          return {
-            type: 'ISSUE_TICKET',
-            ticketId,
-            opaqueRef: ids.opaqueRef(),
-            source: 'KIOSK',
-            flightId: f.id,
-            segment: intake.segment,
-            partySize: 1,
-            deadline:
-              f.boardingCloseMs === null || f.deadlineSource === 'NONE'
-                ? { atMs: null, source: 'NONE' }
-                : {
-                    atMs: f.boardingCloseMs,
-                    source: f.deadlineSource === 'RULE' ? 'RULE' : 'FEED',
-                    ...(f.observedAtMs === null ? {} : { observedAtMs: f.observedAtMs }),
-                  },
-            walkEstimateMs: f.walkEstimateMs,
-            scheduledDepartureMs: f.stdMs,
-            dedupKey: intake.dedupKey,
+      const scanOnce = async (key: string): Promise<{ status: number; body: unknown } | null> => {
+        const found: {
+          value?: {
+            outcome: ScanOutcome;
+            reason: ScanReason | null;
+            ticketId: string | null;
+            ref: string | null;
           };
-        },
-      });
-      if (executed.result?.type === 'TICKET_ISSUED') {
-        return reply.status(201).send({
-          outcome: 'ISSUED',
-          reason: null,
-          ticket: toTicket(executed.result.ticket),
-          ref: executed.result.opaqueRef,
+        } = {};
+        const executed = await runtime.execute({
+          checkpointId: cp.id,
+          idempotencyKey: key,
+          requestHash: requestHash('POST /v1/checkpoints/:checkpointId/scans', {
+            pass: intake.dedupKey,
+          }),
+          actor: `kiosk:${kiosk.id}`,
+          build: async ({ tx, day, atMs }) => {
+            const scanned = (
+              outcome: ScanOutcome,
+              reason: ScanReason | null,
+              ticketId: string | null,
+            ) =>
+              recordScan(tx, {
+                id: ids.uuid(),
+                checkpointId: cp.id,
+                atMs,
+                outcome,
+                reason,
+                ticketId,
+                pass: intake.pass,
+              });
+            const existing = await ticketOfPass(tx, cp.id, intake.dedupKey);
+            const current = existing === undefined ? undefined : day.ticket(existing.id);
+            if (existing !== undefined && current !== undefined && current.state !== 'EXPIRED') {
+              // The pass's ticket: found again, brought back from a no-show (S15), or for staff.
+              const answer = scanAnswerFor(current.state);
+              found.value = {
+                ...answer,
+                ticketId: answer.withTicket ? existing.id : null,
+                ref: answer.withTicket ? existing.opaqueRef : null,
+              };
+              await scanned(answer.outcome, answer.reason, existing.id);
+              return answer.outcome === 'REACTIVATED'
+                ? { type: 'REACTIVATE', ticketId: existing.id }
+                : null;
+            }
+            const f = intake.flight;
+            const closed = f.boardingCloseMs !== null && atMs > f.boardingCloseMs;
+            if (closed && (cp.settings.afterBoardingClose ?? 'ASSIST') === 'ASSIST') {
+              // Boarding has closed, as GateFlow knows it: staff decide, not the queue (S15).
+              found.value = {
+                outcome: 'NEEDS_ASSISTANCE',
+                reason: 'BOARDING_CLOSED',
+                ticketId: null,
+                ref: null,
+              };
+              await scanned('NEEDS_ASSISTANCE', 'BOARDING_CLOSED', null);
+              return null;
+            }
+            const ticketId = ids.uuid();
+            await scanned('ISSUED', null, ticketId);
+            return {
+              type: 'ISSUE_TICKET',
+              ticketId,
+              opaqueRef: ids.opaqueRef(),
+              source: 'KIOSK',
+              flightId: f.id,
+              segment: intake.segment,
+              partySize: 1,
+              deadline:
+                f.boardingCloseMs === null || f.deadlineSource === 'NONE'
+                  ? { atMs: null, source: 'NONE' }
+                  : {
+                      atMs: f.boardingCloseMs,
+                      source: f.deadlineSource === 'RULE' ? 'RULE' : 'FEED',
+                      ...(f.observedAtMs === null ? {} : { observedAtMs: f.observedAtMs }),
+                    },
+              walkEstimateMs: f.walkEstimateMs,
+              scheduledDepartureMs: f.stdMs,
+              dedupKey: intake.dedupKey,
+            };
+          },
         });
-      }
-      const again = found.value;
-      if (again === undefined) throw new Error('the scan found no ticket and issued none');
-      const rows = await options.db
-        .select()
-        .from(queueToken)
-        .where(eq(queueToken.id, again.ticketId));
-      const row = rows[0];
-      if (row === undefined) throw new Error('the ticket of the pass is gone');
-      return reply.status(200).send({
-        outcome: again.outcome,
-        reason: again.reason,
-        ticket: ticketOfRow(row),
-        ref: again.ref,
-      });
+        const result = executed.result;
+        if (result?.type === 'TICKET_ISSUED') {
+          return {
+            status: 201,
+            body: {
+              outcome: 'ISSUED',
+              reason: null,
+              ticket: toTicket(result.ticket),
+              ref: result.opaqueRef,
+            },
+          };
+        }
+        if (result?.type === 'ACTED') {
+          // The no-show's window closed before this scan: it is expired now, try again.
+          if (result.outcome !== 'DONE') return null;
+          const row = await tokenRow(result.ticket.ticketId);
+          return {
+            status: 200,
+            body: {
+              outcome: 'REACTIVATED',
+              reason: null,
+              ticket: toTicket(result.ticket),
+              ref: row.opaqueRef,
+            },
+          };
+        }
+        const answer = found.value;
+        if (answer === undefined) throw new Error('the scan found no ticket and issued none');
+        if (answer.ticketId === null) {
+          return {
+            status: 200,
+            body: { outcome: answer.outcome, reason: answer.reason, ticket: null, ref: null },
+          };
+        }
+        const row = await tokenRow(answer.ticketId);
+        return {
+          status: 200,
+          body: {
+            outcome: answer.outcome,
+            reason: answer.reason,
+            ticket: ticketOfRow(row),
+            ref: answer.ref,
+          },
+        };
+      };
+      const key = idempotencyKeyOf(request);
+      // A rescan reads the ticket's state: the timeouts due by now come first (S15).
+      await timers.advanceIfDue(cp.id);
+      const answer = (await scanOnce(key)) ?? (await scanOnce(`${key}:expired`));
+      if (answer === null) throw new Error('a no-show could not be brought back nor replaced');
+      return reply.status(answer.status).send(answer.body);
     },
   );
 
@@ -478,20 +594,30 @@ export function buildApp(options: AppOptions): FastifyInstance {
     '/v1/checkpoints/:checkpointId/admissions',
     async (request, reply) => {
       const body = parse(AdmissionRequest, request.body);
+      const unknown = () =>
+        new ApiError(404, 'UNKNOWN_TICKET', 'no such ticket today at this checkpoint');
+      // A boarding pass is read in memory: only its deduplication key is used, and hashed (S15).
+      let passKey: string | null = null;
+      if ('bcbp' in body) {
+        const cp = await loadCheckpoint(options.db, request.params.checkpointId);
+        const intake = await readPass(options.db, cp, body.bcbp, clock.now());
+        if (!intake.ok) throw unknown();
+        passKey = intake.dedupKey;
+      }
       return command(
         request,
         reply,
-        body,
-        ({ day }) => {
-          const ticket =
-            'number' in body ? day.ticketByNumber(body.number) : day.ticketByRef(body.ref);
-          if (ticket === undefined) {
-            throw new ApiError(404, 'UNKNOWN_TICKET', 'no such ticket today at this checkpoint');
-          }
+        passKey === null ? body : { pass: passKey },
+        async ({ tx, day, checkpoint: cp }) => {
+          let ticketId: string | undefined;
+          if (passKey !== null) ticketId = (await ticketOfPass(tx, cp.id, passKey))?.id;
+          else if ('number' in body) ticketId = day.ticketByNumber(body.number)?.ticketId;
+          else if ('ref' in body) ticketId = day.ticketByRef(body.ref)?.ticketId;
+          if (ticketId === undefined || day.ticket(ticketId) === undefined) throw unknown();
           return {
             type: 'PRESENT',
-            ticketId: ticket.ticketId,
-            method: 'number' in body ? 'NUMBER' : 'REF',
+            ticketId,
+            method: passKey !== null ? 'PASS' : 'number' in body ? 'NUMBER' : 'REF',
           };
         },
         (result) => {
@@ -501,6 +627,65 @@ export function buildApp(options: AppOptions): FastifyInstance {
             body: { outcome: result.outcome, ticket: toTicket(result.ticket) },
           };
         },
+      );
+    },
+  );
+
+  /** The answer to a staff action (S15). */
+  const acted = (result: CommandResult): { status: number; body: StaffActionResponse } => {
+    if (result.type !== 'ACTED') throw new Error(`unexpected result ${result.type}`);
+    return {
+      status: 200,
+      body: {
+        action: result.action,
+        outcome: result.outcome === 'DONE' ? 'DONE' : 'NOT_ALLOWED',
+        ticket: toTicket(result.ticket),
+      },
+    };
+  };
+  const unknownTicket = () =>
+    new ApiError(404, 'UNKNOWN_TICKET', 'no such ticket today at this checkpoint');
+
+  const STAFF_ROUTES = [
+    ['recall', 'RECALL'],
+    ['no-show', 'MARK_NO_SHOW'],
+    ['reactivate', 'REACTIVATE'],
+    ['review', 'HOLD'],
+    ['cancel', 'CANCEL'],
+  ] as const;
+  for (const [path, action] of STAFF_ROUTES) {
+    app.post<{ Params: { checkpointId: string; ticketId: string } }>(
+      `/v1/checkpoints/:checkpointId/tickets/:ticketId/${path}`,
+      async (request, reply) => {
+        const { ticketId } = request.params;
+        return command(
+          request,
+          reply,
+          { action, ticketId },
+          ({ day }) => {
+            if (day.ticket(ticketId) === undefined) throw unknownTicket();
+            return { type: action, ticketId };
+          },
+          acted,
+        );
+      },
+    );
+  }
+
+  app.post<{ Params: { checkpointId: string; ticketId: string } }>(
+    '/v1/checkpoints/:checkpointId/tickets/:ticketId/resolve',
+    async (request, reply) => {
+      const { ticketId } = request.params;
+      const body = parse(ResolveReviewRequest, request.body);
+      return command(
+        request,
+        reply,
+        { ...body, ticketId },
+        ({ day }) => {
+          if (day.ticket(ticketId) === undefined) throw unknownTicket();
+          return { type: 'RESOLVE_REVIEW', ticketId, decision: body.decision };
+        },
+        acted,
       );
     },
   );
@@ -515,27 +700,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
         .from(queueToken)
         .where(and(eq(queueToken.checkpointId, cp.id), eq(queueToken.serviceDay, serviceDay)))
         .orderBy(asc(queueToken.issuedAtMs), asc(queueToken.number));
-      return {
-        checkpointId: cp.id,
-        serviceDay,
-        tickets: rows.map((r) =>
-          toTicket({
-            ticketId: r.id,
-            number: r.number,
-            state: r.state as TicketSummary['state'],
-            source: r.source as TicketSummary['source'],
-            flightId: r.flightId,
-            segment: r.segment as TicketSummary['segment'],
-            partySize: r.partySize,
-            riskClass: r.riskClass,
-            priority: r.priority,
-            calls: r.calls,
-            issuedAtMs: r.issuedAtMs,
-            firstCalledAtMs: r.firstCalledAtMs,
-            admittedAtMs: r.admittedAtMs,
-          }),
-        ),
-      };
+      return { checkpointId: cp.id, serviceDay, tickets: rows.map(ticketOfRow) };
     },
   );
 

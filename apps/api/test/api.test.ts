@@ -64,6 +64,10 @@ afterAll(async () => {
   await database.close();
 });
 
+/** A manual ticket's request for a flight. */
+const manual = (flightId: string) =>
+  ({ flightId, segment: 'DEPARTING', reason: 'NO_BOARDING_PASS' }) as const;
+
 /** A flight leaving at least `minutes` after now. */
 function flightAfter(minutes: number) {
   const f = flights.find((x) => x.stdMs > clock.now() + minutes * MIN);
@@ -81,7 +85,12 @@ async function post(server: FastifyInstance, path: string, body?: unknown, key?:
 }
 
 async function issue(server: FastifyInstance, flightId: string, partySize = 1) {
-  const response = await post(server, 'tickets', { flightId, segment: 'DEPARTING', partySize });
+  const response = await post(server, 'tickets', {
+    flightId,
+    segment: 'DEPARTING',
+    partySize,
+    reason: 'NO_BOARDING_PASS',
+  });
   expect(response.statusCode, response.body).toBe(201);
   return IssueTicketResponse.parse(response.json());
 }
@@ -163,13 +172,13 @@ describe('the API (S12)', () => {
     const first = await post(
       app,
       'tickets',
-      { flightId: f.id, segment: 'TRANSFER' },
+      { flightId: f.id, segment: 'TRANSFER', reason: 'NO_BOARDING_PASS' },
       'kiosk-7:0001',
     );
     const again = await post(
       app,
       'tickets',
-      { flightId: f.id, segment: 'TRANSFER' },
+      { flightId: f.id, segment: 'TRANSFER', reason: 'NO_BOARDING_PASS' },
       'kiosk-7:0001',
     );
     expect(first.statusCode).toBe(201);
@@ -179,7 +188,7 @@ describe('the API (S12)', () => {
     const other = await post(
       app,
       'tickets',
-      { flightId: f.id, segment: 'DEPARTING' },
+      { flightId: f.id, segment: 'DEPARTING', reason: 'NO_BOARDING_PASS' },
       'kiosk-7:0001',
     );
     expect(other.statusCode).toBe(409);
@@ -221,16 +230,15 @@ describe('the API (S12)', () => {
     const before = await commandsCount();
     const f = flightAfter(150);
     const cases = [
-      await post(app, 'tickets', { flightId: f.id, segment: 'DEPARTING', name: 'Mario Rossi' }),
-      await post(app, 'tickets', { flightId: f.id, segment: 'DEPARTING', partySize: 50 }),
-      await post(app, 'tickets', {
-        flightId: '0193a0b2-7c1d-7e5f-8a9b-0c1d2e3f4a5b',
-        segment: 'DEPARTING',
-      }),
+      await post(app, 'tickets', { ...manual(f.id), name: 'Mario Rossi' }),
+      await post(app, 'tickets', { ...manual(f.id), partySize: 50 }),
+      await post(app, 'tickets', manual('0193a0b2-7c1d-7e5f-8a9b-0c1d2e3f4a5b')),
+      // A manual ticket needs its coded reason (S15).
+      await post(app, 'tickets', { flightId: f.id, segment: 'DEPARTING' }),
       await post(app, 'admissions', { number: 'Z999' }),
       await post(app, 'admissions', { number: 'A001', ref: 'x'.repeat(22) }),
     ];
-    expect(cases.map((r) => r.statusCode)).toEqual([400, 400, 404, 404, 400]);
+    expect(cases.map((r) => r.statusCode)).toEqual([400, 400, 404, 400, 404, 400]);
     const unknown = await app.inject({
       method: 'POST',
       url: '/v1/checkpoints/0193a0b2-7c1d-7e5f-8a9b-0c1d2e3f4a5b/calls',

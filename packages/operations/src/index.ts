@@ -1,8 +1,10 @@
 /** Version of the operational checkpoint. Bump on any change to commands, results or events. */
-export const OPERATIONS_VERSION = '0.2.0';
+export const OPERATIONS_VERSION = '0.3.0';
 
-export { PRESENT_METHODS, TICKET_SOURCES } from './commands';
+export { MANUAL_REASONS, PRESENT_METHODS, STAFF_ACTIONS, TICKET_SOURCES } from './commands';
 export type {
+  ActOnTicket,
+  Advance,
   Applied,
   CallNext,
   Command,
@@ -12,9 +14,12 @@ export type {
   DayConfig,
   DayLogEvent,
   IssueTicket,
+  ManualReason,
   OpenDay,
   Present,
   PresentMethod,
+  ResolveReview,
+  StaffAction,
   TicketSource,
   TicketSummary,
 } from './commands';

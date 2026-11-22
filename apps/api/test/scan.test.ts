@@ -151,7 +151,10 @@ describe('scanning boarding passes (S13)', () => {
     });
     const listed = DemoFlightsResponse.parse(demo.json());
     expect(listed.date).toBe(DAY);
-    expect(listed.flights.length).toBe(flights.length);
+    // The flights of the next 24 hours, each with the date of its passes (S15).
+    const coming = flights.filter((f) => f.stdMs >= clock.now());
+    expect(listed.flights.length).toBe(coming.length);
+    expect(listed.flights.map((f) => f.date)).toEqual(coming.map((f) => f.departureDate));
     expect(listed.flights.every((f) => f.carrier === 'ZZ')).toBe(true);
   });
 

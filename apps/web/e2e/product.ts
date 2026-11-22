@@ -80,10 +80,17 @@ export async function startProduct(serverUrl: string, scenario: string): Promise
   const seeded = cli(['seed', '--scenario', file]);
   const checkpointId = /checkpoint ([0-9a-f-]{36})/.exec(seeded)?.[1];
   if (checkpointId === undefined) throw new Error(`no checkpoint in:\n${seeded}`);
-  // Before the service day starts (03:00) the calendar day is the next one: seed it too, so that
-  // the demo flights of today exist at any hour the tests run.
+  // The calendar day (before 03:00 it is not the service day) and the next one too: the demo
+  // flights of the next 24 hours exist at any hour the tests run.
   const calendarDay = dayAt(Date.now(), 'Europe/Rome');
   cli(['seed', '--scenario', file, '--day', calendarDay]);
+  cli([
+    'seed',
+    '--scenario',
+    file,
+    '--day',
+    dayAt(Date.now() + 24 * 60 * 60 * 1000, 'Europe/Rome'),
+  ]);
   const kioskToken = deviceToken(
     cli(['device', 'add', '--checkpoint', checkpointId, '--kind', 'kiosk', '--name', 'Kiosk 1']),
   );

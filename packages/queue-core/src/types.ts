@@ -17,6 +17,13 @@ export const TICKET_STATES = [
   'ADMITTED',
   /** No-show that was not (or could no longer be) reactivated. */
   'EXPIRED',
+  /**
+   * Held by staff for a review (S15): out of the order of calls, the ticket keeps its place and
+   * goes back to it, or is cancelled, when the review is resolved.
+   */
+  'REVIEW',
+  /** Cancelled by staff: final. */
+  'CANCELLED',
 ] as const;
 export type TicketState = (typeof TICKET_STATES)[number];
 
@@ -176,7 +183,24 @@ export interface TicketView {
 
 /** Result of a passenger presenting at the access point (or rescanning). */
 export type PresentOutcome =
-  'ADMITTED' | 'REACTIVATED' | 'EXPIRED' | 'NOT_CALLED' | 'ALREADY_ADMITTED' | 'UNKNOWN_TICKET';
+  | 'ADMITTED'
+  | 'REACTIVATED'
+  | 'EXPIRED'
+  | 'NOT_CALLED'
+  | 'ALREADY_ADMITTED'
+  | 'UNKNOWN_TICKET'
+  /** The ticket is held for a review: staff decide (S15). */
+  | 'UNDER_REVIEW'
+  | 'CANCELLED';
+
+/**
+ * The outcome of a staff action on a ticket (S15): `DONE` when the ticket's state allowed it,
+ * `NOT_ALLOWED` otherwise (the ticket is unchanged and no event is reported).
+ */
+export type StaffActionOutcome = 'DONE' | 'NOT_ALLOWED' | 'UNKNOWN_TICKET';
+
+/** What staff decide at the end of a review: back to the queue at its place, or cancelled. */
+export type ReviewDecision = 'QUEUE' | 'CANCEL';
 
 /** Transitions, reported to an optional listener (audit log in production, metrics in simulation). */
 export type QueueEvent =
@@ -214,7 +238,12 @@ export type QueueEvent =
   | { readonly type: 'NO_SHOW'; readonly ticketId: string; readonly atMs: Millis }
   | { readonly type: 'ADMITTED'; readonly ticketId: string; readonly atMs: Millis }
   | { readonly type: 'REACTIVATED'; readonly ticketId: string; readonly atMs: Millis }
-  | { readonly type: 'EXPIRED'; readonly ticketId: string; readonly atMs: Millis };
+  | { readonly type: 'EXPIRED'; readonly ticketId: string; readonly atMs: Millis }
+  /** Staff hold the ticket for a review (S15). */
+  | { readonly type: 'REVIEW'; readonly ticketId: string; readonly atMs: Millis }
+  /** The review is resolved: the ticket is back in the queue at its place. */
+  | { readonly type: 'RELEASED'; readonly ticketId: string; readonly atMs: Millis }
+  | { readonly type: 'CANCELLED'; readonly ticketId: string; readonly atMs: Millis };
 
 export type QueueListener = (event: QueueEvent) => void;
 

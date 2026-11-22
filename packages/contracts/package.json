@@ -1,6 +1,6 @@
 {
   "name": "@gateflow/contracts",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Contracts of the GateFlow API: request, response and event schemas (Zod), from which the OpenAPI document is generated (pure).",
   "type": "module",
@@ -16,5 +16,8 @@
   "dependencies": {
     "@gateflow/domain": "workspace:*",
     "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@gateflow/queue-core": "workspace:*"
   }
 }

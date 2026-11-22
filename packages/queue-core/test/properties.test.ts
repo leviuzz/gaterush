@@ -9,6 +9,8 @@ import type {
 import { describe, expect, it } from 'vitest';
 import { CheckpointQueue, PRIORITY_V0_POLICY, classificationOf } from '../src';
 import type { Policy, QueueEvent, QueueStats, TicketState, VirtualQueue } from '../src';
+import { ACTIONS, TRANSITIONS, act, statesAfter } from './staff-actions';
+import type { Action } from './staff-actions';
 
 const MIN = MS_PER_MINUTE;
 const RUNS = { numRuns: 1000 };
@@ -91,7 +93,18 @@ type Op =
   | { readonly kind: 'present'; readonly pick: number; readonly dt: number }
   /** A called (or no-show) passenger presents. */
   | { readonly kind: 'respond'; readonly pick: number; readonly dt: number }
-  | { readonly kind: 'advance'; readonly dt: number };
+  | { readonly kind: 'advance'; readonly dt: number }
+  /**
+   * A staff action of the live product (S15) on a ticket: one whose state allows it when
+   * `targeted` (and there is one), any ticket otherwise.
+   */
+  | {
+      readonly kind: 'staff';
+      readonly action: Action;
+      readonly pick: number;
+      readonly targeted: boolean;
+      readonly dt: number;
+    };
 
 // Weighted so that queues grow, deadlines become tight and called passengers respond: otherwise
 // priority commitments, the cap and the overtake guard would almost never be exercised.
@@ -140,6 +153,16 @@ const opArb: fc.Arbitrary<Op> = fc.oneof(
     }),
   },
   {
+    weight: 2,
+    arbitrary: fc.record({
+      kind: fc.constant('staff' as const),
+      action: fc.constantFrom(...ACTIONS),
+      pick: fc.nat(),
+      targeted: fc.boolean(),
+      dt: fc.integer({ min: 0, max: MIN }),
+    }),
+  },
+  {
     weight: 1,
     arbitrary: fc.record({
       kind: fc.constant('update' as const),
@@ -158,6 +181,8 @@ interface Trace {
   readonly events: QueueEvent[];
   readonly snapshots: string[];
   readonly stats: QueueStats;
+  /** Staff actions that changed a ticket, by action. */
+  readonly done: Readonly<Record<Action, number>>;
 }
 
 /** Runs `ops` and checks the invariants after every operation. */
@@ -180,6 +205,7 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
   const overtaken = new Map<string, number>();
   /** One flag per person committed: whether by priority. */
   const personFlags: boolean[] = [];
+  const done = Object.fromEntries(ACTIONS.map((a) => [a, 0])) as Record<Action, number>;
   let seen = 0;
   let now = 0;
   for (const op of ops) {
@@ -252,14 +278,42 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
       case 'advance':
         q.advance(now);
         break;
+      case 'staff': {
+        // Timeouts due by now first, so that the ticket's state is the one the action meets.
+        q.advance(now);
+        const allowed = ids.filter((t) => TRANSITIONS[q.ticket(t)!.state][op.action] !== undefined);
+        const pool = op.targeted && allowed.length > 0 ? allowed : ids;
+        if (pool.length === 0) break;
+        const id = pool[op.pick % pool.length]!;
+        const state = q.ticket(id)!.state;
+        const reported = events.length;
+        const snapshot = JSON.stringify([ids.map((t) => q.ticket(t)), q.stats()]);
+        const outcome = act(q, op.action, id, now, EST);
+        const target = TRANSITIONS[state][op.action];
+        if (target === undefined) {
+          // Refused: nothing changed and nothing was reported.
+          expect(outcome).toBe('NOT_ALLOWED');
+          expect(events.length).toBe(reported);
+          expect(JSON.stringify([ids.map((t) => q.ticket(t)), q.stats()])).toBe(snapshot);
+        } else {
+          expect(outcome).toBe('DONE');
+          expect(statesAfter(target)).toContain(q.ticket(id)!.state);
+          done[op.action]++;
+        }
+        break;
+      }
     }
     const after = q.prepareWindow().map((t) => t.id);
 
-    // Window: never above M; a committed ticket leaves only by being called (zero churn), and the
-    // remaining tickets keep their order. New tickets are appended at the end, except fast-track
-    // priority commitments, which go ahead of every ticket that is not fast-tracked.
+    // Window: never above M; a committed ticket leaves only by being called or taken out by
+    // staff (zero churn), and the remaining tickets keep their order. New tickets are appended at
+    // the end, except fast-track priority commitments, which go ahead of every ticket that is not
+    // fast-tracked.
     expect(after.length).toBeLessThanOrEqual(windowSize);
-    const remaining = calledId !== null && before[0] === calledId ? before.slice(1) : before;
+    const byStaff = (id: string) => ['REVIEW', 'CANCELLED'].includes(q.ticket(id)!.state);
+    const remaining = (
+      calledId !== null && before[0] === calledId ? before.slice(1) : before
+    ).filter((id) => !byStaff(id));
     expect(after.filter((id) => remaining.includes(id))).toEqual(remaining);
     const fastInWindow = after.filter((id) => q.ticket(id)!.fastTracked);
     expect(after.slice(0, fastInWindow.length)).toEqual(fastInWindow);
@@ -267,9 +321,18 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
 
     for (; seen < events.length; seen++) {
       const e = events[seen]!;
-      if (e.type === 'ISSUED' || e.type === 'REACTIVATED') {
+      if (e.type === 'ISSUED' || e.type === 'REACTIVATED' || e.type === 'RELEASED') {
+        // Back from a review, a ticket waits at its place again and keeps its overtakes.
         queuedKeys.set(e.ticketId, q.ticket(e.ticketId)!.fifoKey);
-        if (e.type === 'ISSUED' || backOnReactivation) overtaken.set(e.ticketId, 0);
+        if (e.type === 'ISSUED' || (e.type === 'REACTIVATED' && backOnReactivation)) {
+          overtaken.set(e.ticketId, 0);
+        }
+      } else if (e.type === 'REVIEW' || e.type === 'CANCELLED') {
+        // Out of the order of calls: nobody can overtake it there.
+        queuedKeys.delete(e.ticketId);
+        const at = modelWindow.indexOf(e.ticketId);
+        if (at >= 0) modelWindow.splice(at, 1);
+        modelFast.delete(e.ticketId);
       } else if (e.type === 'COMMITTED') {
         const key = queuedKeys.get(e.ticketId)!;
         const size = q.ticket(e.ticketId)!.partySize;
@@ -372,7 +435,7 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
       expect(window.filter(Boolean).length).toBeLessThanOrEqual(selection.capMaxPriorityCalls);
     }
   }
-  return { events, snapshots, stats: q.stats() };
+  return { events, snapshots, stats: q.stats(), done };
 }
 
 describe('queue state machine properties', () => {
@@ -402,7 +465,7 @@ describe('queue state machine properties', () => {
         for (const e of events) {
           const previous = lastState.get(e.ticketId);
           if (e.type === 'ADMITTED') expect(['CALLED', 'RECALLED']).toContain(previous);
-          if (previous === 'ADMITTED' || previous === 'EXPIRED') {
+          if (previous === 'ADMITTED' || previous === 'EXPIRED' || previous === 'CANCELLED') {
             throw new Error(`event ${e.type} after terminal ${previous} for ${e.ticketId}`);
           }
           if (e.type !== 'COMMITTED') lastState.set(e.ticketId, e.type);
@@ -412,7 +475,7 @@ describe('queue state machine properties', () => {
     );
   });
 
-  it('exercises priority commitments, the cap, the overtake guard and reactivations', () => {
+  it('exercises priority commitments, the cap, the overtake guard, reactivations and staff', () => {
     // Guards against vacuous properties: the generated scenarios must reach the limits above.
     const samples = fc.sample(fc.tuple(policyArb, opsArb), { numRuns: 500, seed: 20261121 });
     const hits = {
@@ -426,8 +489,11 @@ describe('queue state machine properties', () => {
       classChanges: 0,
       classReversals: 0,
     };
+    /** Runs in which each staff action changed a ticket at least once (S15). */
+    const staffHits = Object.fromEntries(ACTIONS.map((a) => [a, 0])) as Record<Action, number>;
     for (const [policy, ops] of samples) {
-      const { stats, events } = run(policy, ops);
+      const { stats, events, done } = run(policy, ops);
+      for (const action of ACTIONS) if (done[action] > 0) staffHits[action]++;
       const windowSize = policy.queue.kind === 'virtual' ? policy.queue.prepareWindowSize : 0;
       const fastTrack = policy.selection.kind === 'constrained-edf' && policy.selection.fastTrack;
       // A fast-track commitment while the window was not empty passed somebody.
@@ -451,6 +517,7 @@ describe('queue state machine properties', () => {
       if (stats.classChanges > 0) hits.classChanges++;
       if (stats.classReversals > 0) hits.classReversals++;
     }
+
     // Thresholds at about half of the counts observed with this seed.
     expect(hits.priority).toBeGreaterThanOrEqual(60);
     expect(hits.cap).toBeGreaterThanOrEqual(30);
@@ -461,5 +528,19 @@ describe('queue state machine properties', () => {
     expect(hits.fastTrackPasses).toBeGreaterThanOrEqual(15);
     expect(hits.classChanges).toBeGreaterThanOrEqual(50);
     expect(hits.classReversals).toBeGreaterThanOrEqual(10);
+    // Each staff action changes tickets in many runs (observed: recall 70, no-show 72,
+    // reactivate 24, hold 174, release 29, reject 32, cancel 205).
+    const thresholds: Record<Action, number> = {
+      recall: 35,
+      noShow: 35,
+      reactivate: 12,
+      hold: 85,
+      release: 14,
+      reject: 15,
+      cancel: 100,
+    };
+    for (const action of ACTIONS) {
+      expect(staffHits[action], action).toBeGreaterThanOrEqual(thresholds[action]);
+    }
   });
 });

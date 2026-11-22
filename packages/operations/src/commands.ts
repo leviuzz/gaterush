@@ -1,6 +1,13 @@
 import type { KnownDeadline, Millis, Segment } from '@gateflow/domain';
 import type { ClassificationParams } from '@gateflow/priority-engine';
-import type { Policy, PresentOutcome, QueueEvent, TicketState } from '@gateflow/queue-core';
+import type {
+  Policy,
+  PresentOutcome,
+  QueueEvent,
+  ReviewDecision,
+  StaffActionOutcome,
+  TicketState,
+} from '@gateflow/queue-core';
 
 /**
  * How a checkpoint runs for one service day. Fixed when the day opens and recorded in the log, so
@@ -62,15 +69,34 @@ export interface IssueTicket {
    * itself is never recorded. Null for a ticket issued by staff.
    */
   readonly dedupKey: string | null;
+  /**
+   * Why staff issued the ticket by hand (S15): a coded reason, never free text. Absent from
+   * kiosk tickets, and from staff tickets of logs written before S15.
+   */
+  readonly reason?: ManualReason;
 }
+
+/** Why staff issue a ticket by hand (S15). */
+export const MANUAL_REASONS = [
+  /** The passenger has no boarding pass to scan (a paper ticket, a pass on a dead phone). */
+  'NO_BOARDING_PASS',
+  /** The kiosk could not read the pass, or sent the passenger to staff. */
+  'PASS_UNREADABLE',
+  /** A passenger who needs assistance. */
+  'ASSISTANCE',
+  /** A group or family on one number. */
+  'GROUP',
+  'OTHER',
+] as const;
+export type ManualReason = (typeof MANUAL_REASONS)[number];
 
 /** Staff call the next passenger: the engine chooses who. */
 export interface CallNext {
   readonly type: 'CALL_NEXT';
 }
 
-/** How a ticket was identified at the access point. */
-export const PRESENT_METHODS = ['NUMBER', 'REF'] as const;
+/** How a ticket was identified at the access point: its number, its QR code, its boarding pass. */
+export const PRESENT_METHODS = ['NUMBER', 'REF', 'PASS'] as const;
 export type PresentMethod = (typeof PRESENT_METHODS)[number];
 
 /** A passenger presents their ticket at the access point. */
@@ -80,7 +106,41 @@ export interface Present {
   readonly method: PresentMethod;
 }
 
-export type Command = OpenDay | IssueTicket | CallNext | Present;
+/**
+ * Applies the timeouts due by now: second calls, no-shows, the expiry of no-shows (S15). The
+ * server's scheduler sends it when the day's next timeout is due, so that tickets change state
+ * on time even when nobody acts.
+ */
+export interface Advance {
+  readonly type: 'ADVANCE';
+}
+
+/** What staff can do to one ticket (S15), and who may reactivate it (a kiosk too). */
+export const STAFF_ACTIONS = ['RECALL', 'MARK_NO_SHOW', 'REACTIVATE', 'HOLD', 'CANCEL'] as const;
+export type StaffAction = (typeof STAFF_ACTIONS)[number];
+
+/**
+ * A staff action on a ticket (S15):
+ * - RECALL: call a called passenger again now; the no-show timeout counts from this call;
+ * - MARK_NO_SHOW: a called passenger is absent, now;
+ * - REACTIVATE: a no-show comes back within its window (by staff, or by a rescan at a kiosk);
+ * - HOLD: a waiting ticket is held for a review, keeping its place;
+ * - CANCEL: the ticket is cancelled.
+ */
+export interface ActOnTicket {
+  readonly type: StaffAction;
+  readonly ticketId: string;
+}
+
+/** Staff end a review: back to the queue at its place, or cancelled (S15). */
+export interface ResolveReview {
+  readonly type: 'RESOLVE_REVIEW';
+  readonly ticketId: string;
+  readonly decision: ReviewDecision;
+}
+
+export type Command =
+  OpenDay | IssueTicket | CallNext | Present | Advance | ActOnTicket | ResolveReview;
 export type CommandType = Command['type'];
 
 /** A command as recorded in a checkpoint's log: its place in the log and its time. */
@@ -108,6 +168,8 @@ export interface TicketSummary {
   readonly calls: number;
   readonly issuedAtMs: Millis;
   readonly firstCalledAtMs: Millis | null;
+  /** The latest call (a reactivated ticket is called again). */
+  readonly lastCalledAtMs: Millis | null;
   readonly admittedAtMs: Millis | null;
 }
 
@@ -125,6 +187,14 @@ export type CommandResult =
   | {
       readonly type: 'PRESENTED';
       readonly outcome: PresentOutcome;
+      readonly ticket: TicketSummary;
+    }
+  /** The timeouts due were applied; `nextDueMs` is the next one, or null when none is pending. */
+  | { readonly type: 'ADVANCED'; readonly nextDueMs: Millis | null }
+  | {
+      readonly type: 'ACTED';
+      readonly action: StaffAction | 'RESOLVE_REVIEW';
+      readonly outcome: StaffActionOutcome;
       readonly ticket: TicketSummary;
     };
 

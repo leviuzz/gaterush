@@ -5,6 +5,7 @@ import {
   check,
   date,
   foreignKey,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -66,6 +67,11 @@ export interface CheckpointSettings {
   readonly lanesOpen: number;
   readonly ratePerLanePerHour: number;
   readonly processEstimateMs: number;
+  /**
+   * A boarding pass whose flight's boarding has closed, as GateFlow knows it (S15): `ASSIST` sends
+   * the passenger to staff (the default), `ISSUE` gives a ticket all the same.
+   */
+  readonly afterBoardingClose?: 'ASSIST' | 'ISSUE';
 }
 
 export const checkpoint = pgTable(
@@ -211,6 +217,8 @@ export const queueToken = pgTable(
     calls: integer('calls').notNull(),
     issuedAtMs: ms('issued_at_ms').notNull(),
     firstCalledAtMs: ms('first_called_at_ms'),
+    /** The latest call (S15): a reactivated ticket is called again. */
+    lastCalledAtMs: ms('last_called_at_ms'),
     admittedAtMs: ms('admitted_at_ms'),
     /** The command that last changed the ticket. */
     updatedSeq: bigint('updated_seq', { mode: 'number' }).notNull(),
@@ -229,7 +237,7 @@ export const queueToken = pgTable(
     check('queue_token_source', sql`${t.source} IN ('STAFF', 'KIOSK')`),
     check(
       'queue_token_state',
-      sql`${t.state} IN ('QUEUED', 'PREPARE', 'CALLED', 'RECALLED', 'NO_SHOW', 'ADMITTED', 'EXPIRED')`,
+      sql`${t.state} IN ('QUEUED', 'PREPARE', 'CALLED', 'RECALLED', 'NO_SHOW', 'ADMITTED', 'EXPIRED', 'REVIEW', 'CANCELLED')`,
     ),
   ],
 );
@@ -243,11 +251,33 @@ export const admission = pgTable(
       .references(() => queueToken.id),
     checkpointId: uuid('checkpoint_id').notNull(),
     atMs: ms('at_ms').notNull(),
-    /** How the ticket was identified: `NUMBER` or `REF`. */
+    /** How the ticket was identified: `NUMBER`, `REF` (its QR code) or `PASS` (its boarding pass). */
     method: text('method').notNull(),
     commandSeq: bigint('command_seq', { mode: 'number' }).notNull(),
   },
-  (t) => [check('admission_method', sql`${t.method} IN ('NUMBER', 'REF')`)],
+  (t) => [check('admission_method', sql`${t.method} IN ('NUMBER', 'REF', 'PASS')`)],
+);
+
+/**
+ * When each checkpoint's next timeout is due (S15): a second call, a no-show, an expiry. Written
+ * with every command; the scheduler reads it and sends ADVANCE when it is due. Current state, not
+ * history: the log has the commands.
+ */
+export const checkpointTimer = pgTable(
+  'checkpoint_timer',
+  {
+    checkpointId: uuid('checkpoint_id')
+      .primaryKey()
+      .references(() => checkpoint.id),
+    serviceDay: date('service_day').notNull(),
+    nextDueMs: ms('next_due_ms'),
+    updatedSeq: bigint('updated_seq', { mode: 'number' }).notNull(),
+  },
+  (t) => [
+    index('checkpoint_timer_due')
+      .on(t.nextDueMs)
+      .where(sql`${t.nextDueMs} IS NOT NULL`),
+  ],
 );
 
 /**
@@ -283,7 +313,7 @@ export const scan = pgTable(
       .notNull()
       .references(() => checkpoint.id),
     atMs: ms('at_ms').notNull(),
-    /** `ISSUED`, `RETRIEVED`, `REJECTED` or `NEEDS_ASSISTANCE`. */
+    /** `ISSUED`, `RETRIEVED`, `REACTIVATED` (S15), `REJECTED` or `NEEDS_ASSISTANCE`. */
     outcome: text('outcome').notNull(),
     reason: text('reason'),
     ticketId: uuid('ticket_id'),
@@ -294,7 +324,7 @@ export const scan = pgTable(
   (t) => [
     check(
       'scan_outcome',
-      sql`${t.outcome} IN ('ISSUED', 'RETRIEVED', 'REJECTED', 'NEEDS_ASSISTANCE')`,
+      sql`${t.outcome} IN ('ISSUED', 'RETRIEVED', 'REACTIVATED', 'REJECTED', 'NEEDS_ASSISTANCE')`,
     ),
   ],
 );

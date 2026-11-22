@@ -657,9 +657,15 @@ input {
   color: var(--ok);
 }
 
-.ticket-page[data-state='EXPIRED'] .state {
+.ticket-page[data-state='EXPIRED'] .state,
+.ticket-page[data-state='CANCELLED'] .state {
   background: var(--stop-soft);
   color: var(--stop);
+}
+
+.ticket-page[data-state='REVIEW'] .state {
+  background: var(--warn-soft);
+  color: var(--warn);
 }
 
 .updated {

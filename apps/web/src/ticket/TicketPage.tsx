@@ -13,7 +13,7 @@ import { LanguageSwitch } from '../common/LanguageSwitch';
  */
 
 const POLL_MS = 15_000;
-const FINAL: ReadonlySet<TicketState> = new Set(['ADMITTED', 'EXPIRED']);
+const FINAL: ReadonlySet<TicketState> = new Set(['ADMITTED', 'EXPIRED', 'CANCELLED']);
 const LOCALE_KEY = 'gateflow.locale';
 
 function storedLocale(): Locale | null {

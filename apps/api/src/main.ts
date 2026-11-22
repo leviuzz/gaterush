@@ -147,6 +147,7 @@ async function main(argv: string[]): Promise<number> {
       const app = buildApp({
         db: database.db,
         logger: true,
+        timers: 'auto',
         ...(webRoot === undefined ? {} : { webRoot }),
       });
       const stop = () => {

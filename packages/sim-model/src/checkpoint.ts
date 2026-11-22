@@ -443,6 +443,11 @@ export function simulateCheckpoint(
       case 'ADMITTED':
       case 'EXPIRED':
         break;
+      // Staff actions of the live product (S15): nobody takes them in a simulated day.
+      case 'REVIEW':
+      case 'RELEASED':
+      case 'CANCELLED':
+        throw new Error(`staff action ${event.type} in a simulated day`);
     }
   };
   const observe = options.listener;
@@ -806,6 +811,8 @@ export function simulateCheckpoint(
       case 'NOT_CALLED':
       case 'ALREADY_ADMITTED':
       case 'UNKNOWN_TICKET':
+      case 'UNDER_REVIEW':
+      case 'CANCELLED':
         throw new Error(`unexpected presentation outcome ${outcome} for ticket ${s.ticketId}`);
     }
     noteMaxima();

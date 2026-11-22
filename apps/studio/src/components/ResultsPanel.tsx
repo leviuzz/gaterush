@@ -3,7 +3,8 @@ import { renderHtmlReport, renderReport, stringifyResults } from '@gateflow/sim-
 import type { ResultsDocument } from '@gateflow/sim-metrics';
 import type { Scenario } from '@gateflow/sim-scenarios';
 import { scenarioFileText } from '@gateflow/studio-core';
-import { copyText, download } from '../exports';
+import { copyText, saveFile } from '../exports';
+import type { SaveOutcome } from '../exports';
 import { interval, num, thousands } from '../format';
 import { policyName } from '../policies';
 import { ReportView } from './ReportView';
@@ -18,8 +19,15 @@ export interface Run {
 
 interface Props {
   readonly run: Run;
-  readonly downloads: boolean;
+  /** True when the page can save files (itself, or through the viewer). */
+  readonly canSave: boolean;
 }
+
+const SAVE_MESSAGES: Readonly<Record<SaveOutcome, string>> = {
+  saved: '',
+  declined: 'Not saved.',
+  unavailable: 'Saving files is not available here: copy the text instead.',
+};
 
 interface Export {
   readonly id: string;
@@ -68,10 +76,11 @@ function exportsOf(run: Run): Export[] {
   ];
 }
 
-export function ResultsPanel({ run, downloads }: Props) {
+export function ResultsPanel({ run, canSave }: Props) {
   const { doc } = run;
   const { manifest, summary } = doc;
   const [copied, setCopied] = useState<{ id: string; ok: boolean; text?: string } | null>(null);
+  const [saveMessage, setSaveMessage] = useState('');
   const comparisons = Object.values(summary.comparisons);
   return (
     <section id="results" className="panel" aria-labelledby="h-results" data-run-id={run.id}>
@@ -167,19 +176,21 @@ export function ResultsPanel({ run, downloads }: Props) {
       </div>
       <div className="field">
         <span className="label">
-          {downloads ? 'Save or copy' : 'Copy'} the results, the report or the scenario (the CLI
-          gives the same results from the same scenario)
+          {canSave ? 'Save or copy' : 'Copy'} the results, the report or the scenario (the CLI gives
+          the same results from the same scenario)
         </span>
         <div className="row">
           {exportsOf(run).map((item) => (
             <span key={item.id} className="row">
-              {downloads && (
+              {canSave && (
                 <button
                   id={`download-${item.id}`}
                   type="button"
                   className="btn btn-small"
                   onClick={() => {
-                    download(item.file, item.text(), item.type);
+                    void saveFile(item.file, item.text(), item.type).then((outcome) => {
+                      setSaveMessage(SAVE_MESSAGES[outcome]);
+                    });
                   }}
                 >
                   Save {item.label}
@@ -203,6 +214,7 @@ export function ResultsPanel({ run, downloads }: Props) {
             </span>
           ))}
         </div>
+        {saveMessage !== '' && <p className="hint">{saveMessage}</p>}
         {copied !== null && !copied.ok && copied.text !== undefined && (
           <>
             <p className="hint">

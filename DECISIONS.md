@@ -1216,8 +1216,9 @@ founder on 2026-11-21 together with all of its recommendations.
     1.6 MB). It holds the scenario library, React 19, the simulator and the worker code, and
     loads nothing. Its Content Security Policy forbids every connection, so files a person adds
     stay in the browser. The same build gives the body of a claude.ai page
-    (`gateflow-studio.artifact.html`): that frame blocks downloads, so it offers copying
-    instead.
+    (`gateflow-studio.artifact.html`). That frame lets a page save a file only through the
+    viewer's `downloads` capability, which asks the person to confirm: the page is published with
+    it, and its own download code is left out of that build.
   - **Next.js is kept for the operational interfaces** (ADR-013), which need a server from M3
     on. The Studio's components are React, so the Next.js application can host them at `/sim`
     when that server exists (S10: persisted runs).

@@ -17,7 +17,8 @@ CLI's results (ADR-040). First slice of milestone M2.
 ### Added
 
 - `apps/studio`: GateFlow Simulator Studio, built into `dist/gateflow-studio.html` (about
-  1.6 MB, no external resource, no network access) and into the body of a claude.ai page:
+  1.6 MB, no external resource, no network access) and into the body of a claude.ai page, which
+  saves files through the viewer's `downloads` capability:
   - the scenario library, or a person's own airport configuration, days and flight lists, which
     stay in the browser;
   - ten what-if settings and every labelled parameter, edited with its source;

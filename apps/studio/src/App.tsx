@@ -20,8 +20,8 @@ import type { Run } from './components/ResultsPanel';
 import { RunPanel } from './components/RunPanel';
 import type { ActiveRun, RunStatus } from './components/RunPanel';
 import { ScenarioPanel } from './components/ScenarioPanel';
-import { COMMIT, DOWNLOADS, LIBRARY_FILES, STUDIO_VERSION, WORKER_SOURCE } from './env';
-import { readFiles } from './exports';
+import { COMMIT, LIBRARY_FILES, STUDIO_VERSION, WORKER_SOURCE } from './env';
+import { canSaveFiles, readFiles } from './exports';
 import { orderedPolicyIds } from './policies';
 import { RunCancelled, planRun, resultsOfRun, runDays } from './pool';
 
@@ -101,7 +101,12 @@ export function App() {
   const [active, setActive] = useState<ActiveRun | null>(null);
   const [status, setStatus] = useState<RunStatus>({ kind: 'idle' });
   const [fileErrors, setFileErrors] = useState<string[]>([]);
+  const [canSave, setCanSave] = useState(false);
   const nextRunId = useRef(1);
+
+  useEffect(() => {
+    void canSaveFiles().then(setCanSave);
+  }, []);
 
   const derived = useMemo(
     () =>
@@ -347,7 +352,7 @@ export function App() {
               <p className="hint">The results of a run appear here, with the full report.</p>
             </section>
           ) : (
-            <ResultsPanel run={shown} downloads={DOWNLOADS} />
+            <ResultsPanel run={shown} canSave={canSave} />
           )}
           <ComparePanel
             runs={runs}

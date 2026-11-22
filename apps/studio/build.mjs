@@ -4,7 +4,9 @@
 // dist/gateflow-studio.html           the downloadable page (a complete document, with a Content
 //                                     Security Policy that forbids any connection)
 // dist/gateflow-studio.artifact.html  the same page as the body of a claude.ai artifact, whose
-//                                     frame provides the document and blocks downloads
+//                                     frame provides the document; it saves files through the
+//                                     viewer's `downloads` capability (publish it with
+//                                     capabilities: { downloads: true })
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { build } from 'esbuild';
@@ -75,12 +77,15 @@ const { PAGE_STYLE } = await import(
   `data:text/javascript;base64,${Buffer.from(style.outputFiles[0].text).toString('base64')}`
 );
 
-async function app(downloads) {
+async function app(directDownloads) {
   const result = await build({
     ...common,
     entryPoints: [new URL('src/main.tsx', here).pathname],
     format: 'iife',
     jsx: 'automatic',
+    // The claude.ai page saves through the viewer's `downloads` capability only: its own download
+    // code is left out of that build.
+    define: { ...common.define, __STUDIO_DIRECT_DOWNLOADS__: JSON.stringify(directDownloads) },
     plugins: [
       {
         name: 'studio-build-constants',
@@ -96,7 +101,6 @@ async function app(downloads) {
               `export const WORKER_SOURCE = ${JSON.stringify(workerSource)};`,
               `export const STUDIO_VERSION = ${JSON.stringify(version)};`,
               `export const COMMIT = ${JSON.stringify(commit())};`,
-              `export const DOWNLOADS = ${JSON.stringify(downloads)};`,
             ].join('\n'),
           }));
         },

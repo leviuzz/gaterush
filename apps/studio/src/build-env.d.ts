@@ -7,6 +7,4 @@ declare module 'studio:build' {
   /** Version of the Studio and source revision it was built from (ADR-014). */
   export const STUDIO_VERSION: string;
   export const COMMIT: string;
-  /** False in the variant published as a claude.ai page, whose frame blocks downloads. */
-  export const DOWNLOADS: boolean;
 }

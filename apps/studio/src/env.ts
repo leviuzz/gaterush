@@ -1,1 +1,1 @@
-export { COMMIT, DOWNLOADS, LIBRARY_FILES, STUDIO_VERSION, WORKER_SOURCE } from 'studio:build';
+export { COMMIT, LIBRARY_FILES, STUDIO_VERSION, WORKER_SOURCE } from 'studio:build';

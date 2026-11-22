@@ -36,6 +36,8 @@ forecasts against the full simulator's days, horizon by horizon (ADR-054).
   texts in the three languages.
 - CI: the forecast from the bundle; the backtest byte for byte the same on 1 and 4 worker
   threads; the backtest of the demo and of the scenario library, 200 days each, in the reports.
+- `docs/reports/slice-21`: the error report per horizon of the demo and of the scenario library,
+  200 days each, from a clean checkout of the S21 commit.
 
 ## [0.20.0] - 2026-11-22: Slice S20, the operations overview
 

@@ -1375,12 +1375,25 @@ of them changed with what the backtest showed (below). Two parts: the forecast a
   people admitted a minute are 28.3 for a capacity of 28.5; absences leave the queue without a
   lane (1.7 % of the drain) and assisted passengers take 0.7 % of the lanes: both left out.
 
-**Limits found** (the library's backtest gives the figures): the bands of the wait are too narrow
-when there is a queue, more of the truths fall below them than above; the queue tends to be
-forecast high at long horizons on the VCE-like days; the arrivals' bands hold about 75 % of the
-truths (whole people: a band between two whole numbers loses part of the truths at its ends).
-**[to confirm]** Next step: recalibrate the bands from a backtest on days apart from the
-reports', per quantity and horizon, before the console reads them as "8 in 10".
+**The error report** of the scenario library, 200 days each (`docs/reports/slice-21`, from a
+clean checkout of the S21 commit):
+- arrivals in 5 minutes within 11 to 22 % (WAPE), bands holding 76 to 79 % of the truths: close
+  to calibrated (whole people: a band between two whole numbers loses part of the truths at its
+  ends);
+- the queue's bands hold 78 to 88 % of the truths when there is a queue; on the VCE-like days its
+  median is high, by 6 people at 15 minutes and by 19 at 90 minutes on the peak and disrupted
+  days;
+- **the wait's bands are too narrow** when there is a queue: 37 to 77 % of the truths across the
+  horizons, most misses below the band on the VCE-like days and the MX-like hub, where the median
+  is high by 0.4 to 2.6 minutes.
+
+Part of the high queue is the simulator's call-ahead: when people wait to be called, about 1.6 to
+1.8 minutes of the lanes' capacity stay admitted at the lanes, which the forecast counts as not
+yet admitted. Modelling that buffer from the policy (its call-ahead less its response estimate,
+1.5 minutes) was tried on the tuning days: the queue's bias turned negative (-5 to -8 people) and
+its MAE rose by 30 to 60 %, so it was not adopted. **[to confirm]** Next step: recalibrate the
+bands per quantity and horizon from a backtest on days apart from the reports', before the
+console reads them as "8 in 10".
 
 Acceptance (kickoff): an error report per horizon; p10/p50/p90 bands. **Evidence:**
 - forecast: S8's scaling rule and its fading, the projection (a queue that grows, one that

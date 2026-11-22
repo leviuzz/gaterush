@@ -1,0 +1,318 @@
+{
+  "schema": "gateflow.forecast.backtest/1",
+  "disclaimer": "SIMULATED RESULTS ON SYNTHETIC OR HYPOTHETICAL DATA. These numbers are model outputs, not measurements, and must not be presented as evidence of operational performance.",
+  "manifest": {
+    "generator": {
+      "name": "gateflow-sim",
+      "version": "0.12.0"
+    },
+    "commit": "8f3e19552ec27f4b60318968985e3a873486362e",
+    "versions": {
+      "forecast": "0.1.0",
+      "model": "0.6.0",
+      "populationGenerator": "0.6.0"
+    },
+    "scenario": {
+      "id": "tsf-like-peak-day",
+      "title": "TSF-like low-cost base, summer peak day (synthetic)",
+      "hash": "sha256:d305399bbbdf94f7f8d6f51ac2bdc95e28ae264f990090c55c6706ddd79aed8e",
+      "dataClassification": "SYNTHETIC"
+    },
+    "policy": {
+      "id": "priority-v3",
+      "version": "0.2.0"
+    },
+    "seeds": {
+      "count": 200,
+      "ranges": "1-200"
+    },
+    "profile": {
+      "days": 50,
+      "firstSeed": 1000001
+    },
+    "originEveryMinutes": 15,
+    "horizonsMinutes": [
+      15,
+      30,
+      60,
+      90
+    ],
+    "units": {
+      "arrivals": "people arriving in the 5 minutes before the horizon",
+      "backlog": "people not yet admitted at the horizon",
+      "wait": "minutes from arrival to admission, the median of the people arriving in those 5 minutes"
+    }
+  },
+  "summary": {
+    "arrivals": {
+      "15": {
+        "all": {
+          "n": 13145,
+          "mae": 5.9131,
+          "wape": 0.2011,
+          "bias": -0.3503,
+          "coverage": 0.7585,
+          "below": 0.1214,
+          "above": 0.1201,
+          "width": 17.7004
+        },
+        "busy": {
+          "n": 13145,
+          "mae": 5.9131,
+          "wape": 0.2011,
+          "bias": -0.3503,
+          "coverage": 0.7585,
+          "below": 0.1214,
+          "above": 0.1201,
+          "width": 17.7004
+        }
+      },
+      "30": {
+        "all": {
+          "n": 12945,
+          "mae": 5.8809,
+          "wape": 0.1981,
+          "bias": -0.3577,
+          "coverage": 0.7661,
+          "below": 0.1187,
+          "above": 0.1153,
+          "width": 17.8248
+        },
+        "busy": {
+          "n": 12945,
+          "mae": 5.8809,
+          "wape": 0.1981,
+          "bias": -0.3577,
+          "coverage": 0.7661,
+          "below": 0.1187,
+          "above": 0.1153,
+          "width": 17.8248
+        }
+      },
+      "60": {
+        "all": {
+          "n": 12545,
+          "mae": 5.8852,
+          "wape": 0.196,
+          "bias": -0.3221,
+          "coverage": 0.7739,
+          "below": 0.1145,
+          "above": 0.1115,
+          "width": 17.891
+        },
+        "busy": {
+          "n": 12545,
+          "mae": 5.8852,
+          "wape": 0.196,
+          "bias": -0.3221,
+          "coverage": 0.7739,
+          "below": 0.1145,
+          "above": 0.1115,
+          "width": 17.891
+        }
+      },
+      "90": {
+        "all": {
+          "n": 12145,
+          "mae": 5.8441,
+          "wape": 0.1962,
+          "bias": -0.2983,
+          "coverage": 0.7745,
+          "below": 0.1154,
+          "above": 0.1101,
+          "width": 17.7667
+        },
+        "busy": {
+          "n": 12145,
+          "mae": 5.8441,
+          "wape": 0.1962,
+          "bias": -0.2983,
+          "coverage": 0.7745,
+          "below": 0.1154,
+          "above": 0.1101,
+          "width": 17.7667
+        }
+      }
+    },
+    "backlog": {
+      "15": {
+        "all": {
+          "n": 13145,
+          "mae": 3.071,
+          "wape": 0.1832,
+          "bias": 0.2153,
+          "coverage": 0.9477,
+          "below": 0.0246,
+          "above": 0.0278,
+          "width": 12.9945
+        },
+        "busy": {
+          "n": 3759,
+          "mae": 10.6526,
+          "wape": 0.1817,
+          "bias": 0.6662,
+          "coverage": 0.817,
+          "below": 0.0859,
+          "above": 0.0971,
+          "width": 32.7697
+        }
+      },
+      "30": {
+        "all": {
+          "n": 12945,
+          "mae": 4.1949,
+          "wape": 0.2464,
+          "bias": 0.2971,
+          "coverage": 0.952,
+          "below": 0.0202,
+          "above": 0.0277,
+          "width": 16.8088
+        },
+        "busy": {
+          "n": 3763,
+          "mae": 14.3265,
+          "wape": 0.2446,
+          "bias": 0.9181,
+          "coverage": 0.835,
+          "below": 0.0696,
+          "above": 0.0954,
+          "width": 43.958
+        }
+      },
+      "60": {
+        "all": {
+          "n": 12545,
+          "mae": 5.2964,
+          "wape": 0.3025,
+          "bias": 0.4122,
+          "coverage": 0.9393,
+          "below": 0.0335,
+          "above": 0.0273,
+          "width": 19.9519
+        },
+        "busy": {
+          "n": 3568,
+          "mae": 18.5108,
+          "wape": 0.3007,
+          "bias": 1.3381,
+          "coverage": 0.7864,
+          "below": 0.1177,
+          "above": 0.0959,
+          "width": 55.5473
+        }
+      },
+      "90": {
+        "all": {
+          "n": 12145,
+          "mae": 5.9246,
+          "wape": 0.3276,
+          "bias": 0.4993,
+          "coverage": 0.9528,
+          "below": 0.0218,
+          "above": 0.0254,
+          "width": 22.0088
+        },
+        "busy": {
+          "n": 3712,
+          "mae": 19.3092,
+          "wape": 0.3263,
+          "bias": 1.5585,
+          "coverage": 0.8456,
+          "below": 0.0714,
+          "above": 0.083,
+          "width": 58.6164
+        }
+      }
+    },
+    "wait": {
+      "15": {
+        "all": {
+          "n": 13124,
+          "mae": 0.5026,
+          "wape": 0.2133,
+          "bias": -0.0644,
+          "coverage": 0.9364,
+          "below": 0.0245,
+          "above": 0.0392,
+          "width": 1.8313
+        },
+        "busy": {
+          "n": 2738,
+          "mae": 2.2476,
+          "wape": 0.1992,
+          "bias": -0.4592,
+          "coverage": 0.7148,
+          "below": 0.0982,
+          "above": 0.187,
+          "width": 5.545
+        }
+      },
+      "30": {
+        "all": {
+          "n": 12924,
+          "mae": 0.679,
+          "wape": 0.2838,
+          "bias": -0.0652,
+          "coverage": 0.9393,
+          "below": 0.0235,
+          "above": 0.0371,
+          "width": 2.394
+        },
+        "busy": {
+          "n": 2885,
+          "mae": 2.9052,
+          "wape": 0.2713,
+          "bias": -0.4175,
+          "coverage": 0.7289,
+          "below": 0.1054,
+          "above": 0.1657,
+          "width": 7.4596
+        }
+      },
+      "60": {
+        "all": {
+          "n": 12524,
+          "mae": 0.8672,
+          "wape": 0.3522,
+          "bias": -0.0914,
+          "coverage": 0.9264,
+          "below": 0.0395,
+          "above": 0.0341,
+          "width": 2.8575
+        },
+        "busy": {
+          "n": 2833,
+          "mae": 3.7292,
+          "wape": 0.3428,
+          "bias": -0.4976,
+          "coverage": 0.676,
+          "below": 0.1747,
+          "above": 0.1493,
+          "width": 9.4431
+        }
+      },
+      "90": {
+        "all": {
+          "n": 12124,
+          "mae": 0.9453,
+          "wape": 0.3716,
+          "bias": -0.0491,
+          "coverage": 0.9422,
+          "below": 0.0263,
+          "above": 0.0315,
+          "width": 3.1796
+        },
+        "busy": {
+          "n": 2825,
+          "mae": 3.9587,
+          "wape": 0.3629,
+          "bias": -0.2978,
+          "coverage": 0.7526,
+          "below": 0.1129,
+          "above": 0.1345,
+          "width": 10.3413
+        }
+      }
+    }
+  }
+}

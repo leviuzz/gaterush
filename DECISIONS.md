@@ -2464,9 +2464,12 @@ founder on 2026-11-21 together with all of its recommendations.
 - **Consequences:**
   - The forecasts are a scenario's: SIMULATED, said on the card. With an airport's data (M5) the
     profile and the fading are estimated again from its days.
-  - The bands of the wait are too narrow when there is a queue, and the queue tends to be
-    forecast high at long horizons on the VCE-like days; arrivals' bands hold about 75 % of the
-    truths. **[to confirm]** recalibrate the bands per quantity and horizon from a backtest on
-    days apart from the reports', before the console reads them as "8 in 10".
+  - The library's backtest (200 days, six scenarios): arrivals within 11 to 22 % (WAPE), bands
+    holding 76 to 79 % of the truths; the queue's bands 78 to 88 % when there is a queue, its
+    median high on the VCE-like days (by 19 people at 90 minutes on the peak); the wait's bands
+    too narrow, 37 to 77 %. A buffer at the lanes modelled from the policy's call-ahead made the
+    queue worse and was not adopted. **[to confirm]** recalibrate the bands per quantity and
+    horizon from a backtest on days apart from the reports', before the console reads them as
+    "8 in 10".
   - S22's recommendations project the same model with the lanes varied.
 

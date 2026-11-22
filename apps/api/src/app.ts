@@ -5,12 +5,13 @@ import fastifyStatic from '@fastify/static';
 import { and, asc, desc, eq, gte, inArray, lte } from 'drizzle-orm';
 import Fastify from 'fastify';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { ZodError } from 'zod';
-import type { z } from 'zod';
+import { ZodError, z } from 'zod';
 import {
+  ActivatePolicyRequest,
   AdmissionRequest,
   IssueTicketRequest,
   OverrideRequest,
+  PublishPolicyRequest,
   ResolveReviewRequest,
   ScanRequest,
   SetLanesRequest,
@@ -19,12 +20,16 @@ import {
   openApiDocument,
 } from '@gateflow/contracts';
 import type {
+  ActivatePolicyResponse,
+  AuditResponse,
   CheckpointResponse,
   FlightsResponse,
   KioskStatus,
   MeResponse,
   OverrideResponse,
+  PolicyStatusResponse,
   PublicTicketResponse,
+  PublishPolicyResponse,
   QueueResponse,
   SetLanesResponse,
   SetModeResponse,
@@ -33,8 +38,11 @@ import type {
   Ticket,
 } from '@gateflow/contracts';
 import { MAX_PARTY_SIZE, OperationError } from '@gateflow/operations';
+import type { Policy } from '@gateflow/queue-core';
 import type { Command, CommandResult, TicketSummary } from '@gateflow/operations';
+import { auditOf } from './audit';
 import { requestHash } from './chain';
+import { activatePolicy, policyHash, policyStatus, publishPolicy } from './policies';
 import { readPass, recordScan, ticketOfPass } from './intake';
 import { TimerScheduler } from './scheduler';
 import {
@@ -1316,6 +1324,90 @@ export function buildApp(options: AppOptions): FastifyInstance {
         lanesOpen: await lanesOf(options.db, cp, serviceDay),
         tickets: rows.map(ticketOfRow),
       } satisfies QueueResponse;
+    },
+  );
+
+  /** The audit view (S17, ADR-050): a service day's commands, the latest first. */
+  const AuditQuery = z.strictObject({
+    day: z.iso.date().optional(),
+    number: z.string().min(1).max(10).optional(),
+    before: z.coerce.number().int().min(1).optional(),
+    limit: z.coerce.number().int().min(1).max(50).optional(),
+  });
+  app.get<{ Params: { checkpointId: string } }>(
+    '/v1/checkpoints/:checkpointId/audit',
+    async (request): Promise<AuditResponse> => {
+      const { checkpoint: cp } = await requireStaff(
+        options.db,
+        clock,
+        request,
+        'SUPERVISOR',
+        request.params.checkpointId,
+      );
+      const query = parse(AuditQuery, request.query);
+      const day = query.day ?? serviceDayOf(clock.now(), cp.timeZone, cp.dayStartsAt);
+      return auditOf(options.db, cp, day, {
+        ...(query.number === undefined ? {} : { number: query.number }),
+        ...(query.before === undefined ? {} : { before: query.before }),
+        ...(query.limit === undefined ? {} : { limit: query.limit }),
+      });
+    },
+  );
+
+  /** The checkpoint's policies (S17, ADR-050): today's, the next day's, versions, activations. */
+  app.get<{ Params: { checkpointId: string } }>(
+    '/v1/checkpoints/:checkpointId/policy',
+    async (request): Promise<PolicyStatusResponse> => {
+      const { checkpoint: cp } = await requireStaff(
+        options.db,
+        clock,
+        request,
+        'SUPERVISOR',
+        request.params.checkpointId,
+      );
+      return policyStatus(options.db, cp, clock.now());
+    },
+  );
+
+  /** An administrator publishes a version of a policy for the airport (S17): immutable. */
+  app.post<{ Params: { checkpointId: string } }>(
+    '/v1/checkpoints/:checkpointId/policy/versions',
+    async (request, reply) => {
+      const { member, checkpoint: cp } = await requireStaff(
+        options.db,
+        clock,
+        request,
+        'ADMIN',
+        request.params.checkpointId,
+      );
+      const body = parse(PublishPolicyRequest, request.body);
+      const policy = body.policy as unknown as Policy;
+      const published = await publishPolicy(
+        options.db,
+        cp.airportId,
+        policy,
+        `staff:${member.id}`,
+        ids,
+        clock.now(),
+      );
+      const answer: PublishPolicyResponse = { ...published, hash: policyHash(policy) };
+      return reply.status(published.created ? 201 : 200).send(answer);
+    },
+  );
+
+  /** An administrator activates a version from the next service day that has not started. */
+  app.post<{ Params: { checkpointId: string } }>(
+    '/v1/checkpoints/:checkpointId/policy/activations',
+    async (request): Promise<ActivatePolicyResponse> => {
+      const { member, checkpoint: cp } = await requireStaff(
+        options.db,
+        clock,
+        request,
+        'ADMIN',
+        request.params.checkpointId,
+      );
+      const body = parse(ActivatePolicyRequest, request.body);
+      return activatePolicy(options.db, cp, body.versionId, `staff:${member.id}`, ids, clock.now());
     },
   );
 

@@ -4,12 +4,14 @@ import { Home } from './common/Home';
 import { Display } from './display/Display';
 import { Kiosk } from './kiosk/Kiosk';
 import { Lane } from './lane/Lane';
+import { Console } from './supervisor/Console';
 import { TicketPage } from './ticket/TicketPage';
 
 export type Route =
   | { readonly page: 'kiosk'; readonly checkpointId: string }
   | { readonly page: 'display'; readonly checkpointId: string }
   | { readonly page: 'lane'; readonly checkpointId: string }
+  | { readonly page: 'supervisor'; readonly checkpointId: string }
   | { readonly page: 'ticket'; readonly ref: string }
   | { readonly page: 'home' };
 
@@ -19,14 +21,14 @@ const REF = /^[A-Za-z0-9_-]{16,64}$/;
 
 /**
  * The page of an address: /kiosk/<checkpoint id>, /display/<checkpoint id>, /lane/<checkpoint
- * id>, /t/<ticket reference>, or the home page.
+ * id>, /supervisor/<checkpoint id>, /t/<ticket reference>, or the home page.
  */
 export function routeOf(pathname: string): Route {
-  const station = /^\/(kiosk|display|lane)\/([^/]+)\/?$/.exec(pathname);
+  const station = /^\/(kiosk|display|lane|supervisor)\/([^/]+)\/?$/.exec(pathname);
   const page = station?.[1];
   const id = station?.[2];
   if (
-    (page === 'kiosk' || page === 'display' || page === 'lane') &&
+    (page === 'kiosk' || page === 'display' || page === 'lane' || page === 'supervisor') &&
     id !== undefined &&
     UUID.test(id)
   ) {
@@ -61,6 +63,8 @@ export function App() {
       return <Display checkpointId={route.checkpointId} locale={locale} />;
     case 'lane':
       return <Lane checkpointId={route.checkpointId} defaultLocale={locale} />;
+    case 'supervisor':
+      return <Console checkpointId={route.checkpointId} defaultLocale={locale} />;
     case 'ticket':
       return <TicketPage ticketRef={route.ref} defaultLocale={locale} />;
     case 'home':

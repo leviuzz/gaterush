@@ -441,3 +441,56 @@ export const partyPass = pgTable(
     check('party_pass_dedup_key', sql`${t.dedupKey} ~ '^[0-9a-f]{64}$'`),
   ],
 );
+
+/**
+ * The versions of the queue's policies of an airport (S17, ADR-050): immutable, named by the
+ * SHA-256 of their canonical JSON, so that the same content is the same version. A service day
+ * runs the version active for it, and its log records the policy it opened with.
+ */
+export const policyVersion = pgTable(
+  'policy_version',
+  {
+    id: uuid('id').primaryKey(),
+    airportId: uuid('airport_id')
+      .notNull()
+      .references(() => airport.id),
+    hash: text('hash').notNull(),
+    /** The policy's own id, version and title (e.g. `priority-v3`, `3`). */
+    policyId: text('policy_id').notNull(),
+    version: text('version').notNull(),
+    title: text('title').notNull(),
+    content: jsonb('content').notNull(),
+    createdAtMs: ms('created_at_ms').notNull(),
+    /** Who published it: `staff:<id>`, or `system` for the product's own presets. */
+    createdBy: text('created_by').notNull(),
+  },
+  (t) => [
+    unique('policy_version_hash').on(t.airportId, t.hash),
+    check('policy_version_hash_hex', sql`${t.hash} ~ '^[0-9a-f]{64}$'`),
+  ],
+);
+
+/**
+ * The activations of policy versions at a checkpoint (S17, ADR-050), each from a service day that
+ * had not started when it was decided. Append-only: a later activation for the same day replaces
+ * an earlier one, and the record of both stays.
+ */
+export const policyActivation = pgTable(
+  'policy_activation',
+  {
+    id: uuid('id').primaryKey(),
+    /** The order of the activations, whatever the clocks of the servers that wrote them. */
+    seq: bigint('seq', { mode: 'number' }).generatedAlwaysAsIdentity().notNull(),
+    checkpointId: uuid('checkpoint_id')
+      .notNull()
+      .references(() => checkpoint.id),
+    policyVersionId: uuid('policy_version_id')
+      .notNull()
+      .references(() => policyVersion.id),
+    /** The first service day it applies to. */
+    fromServiceDay: date('from_service_day').notNull(),
+    activatedAtMs: ms('activated_at_ms').notNull(),
+    activatedBy: text('activated_by').notNull(),
+  },
+  (t) => [index('policy_activation_checkpoint').on(t.checkpointId, t.fromServiceDay)],
+);

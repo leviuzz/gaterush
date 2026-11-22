@@ -670,7 +670,7 @@ here once, for the product. The slices follow the kickoff (section 3, M3), renum
 | **S14** | Web application, kiosk and ticket: scan (paste, sample, HID scanner), outcomes, digital and printable ticket, ticket page, Italian, English and Spanish, privacy notice, kiosk credentials | A rescan returns the same ticket; another airport's boarding pass is refused with a reason (both already true of the API since S13); no personal data on screen | **Done** |
 | **S15** | Queue life cycle and lane station: timers on a scheduler, recall, no-show, reactivation, admission, manual ticket, review; staff users and roles. From S14: a party's number (at the lane; at the kiosk since 0.15.1), and the rule for a pass whose boarding has closed | The state machine is covered by tests; every transition is idempotent | **Done** |
 | **S16** | Display over SSE: called and prepare numbers, data freshness, reconnection with `Last-Event-ID` | No event lost after a disconnection; "data not up to date" within the timeout | **Done** |
-| S17 | Supervisor: modes (FIFO only, paused, emergency), overrides with a reason, lanes, audit view; versioned policies and their activation | Overrides and mode changes are always in the audit; in FIFO only the order is pure FIFO | In progress (parts 1 and 2 done: modes, overrides and lanes) |
+| S17 | Supervisor: modes (FIFO only, paused, emergency), overrides with a reason, lanes, audit view; versioned policies and their activation | Overrides and mode changes are always in the audit; in FIFO only the order is pure FIFO | **Done** |
 | S18 | Digital twin: the simulator drives the live system at accelerated time; demo page | Same scenario and seed: the live system calls passengers in the same order as the offline simulator | Planned |
 | S19 | Simulations through the API (from S10): saved scenarios and runs, history, export; the Studio saves its runs | `POST /v1/simulations` gives a run reproducible from its manifest | Planned |
 
@@ -936,7 +936,7 @@ Verification beyond the criteria:
   most); two lane stations show at once what the other, or a kiosk, does; no request to another
   server.
 
-## S17: the supervisor's console (in progress)
+## S17: the supervisor's console (done)
 
 Proposed on 2026-11-22, from the kickoff (FR-11, FR-14, FR-17, L-02, 2.4.6, 2.6 F7 to F12, 2.11).
 The founder confirmed every proposal the same day ("ok a tutto"): the marks **[to confirm]**
@@ -1004,6 +1004,21 @@ FIFO_ONLY the order is pure FIFO.
     simulator's queue's events;
   - API on PostgreSQL: 5 tests (rights and reasons, a boost on the board, a call now, the modes,
     the lanes across two days);
+  - no simulated number changes.
+
+### S17.3: policies, the audit view and the console (done, ADR-050)
+
+- **Built:** immutable policy versions named by their hash, activated by an administrator from
+  the next service day under the checkpoint's lock; the audit view of a day with who, what,
+  when and why; the console `/supervisor/<checkpoint>` with the modes, the lanes, the overrides,
+  the policies, the audit and the chain's check. Four-eyes approval waits for the pilot.
+- **Evidence:**
+  - API on PostgreSQL: 5 tests (versions, rights, activation from the next day, a late server
+    clock, the audit), and the policy tables append-only;
+  - Chromium: the console for a supervisor and an administrator, refused to an operator, fitting
+    1366, 768 and 390 pixels;
+  - the acceptance of S17: every mode change and override is a command of the log with who made
+    it (and refused ones too), and in FIFO_ONLY every commitment is pure FIFO (property tests);
   - no simulated number changes.
 
 ## Later milestones (summary)

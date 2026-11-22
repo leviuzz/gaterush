@@ -818,7 +818,8 @@ input {
 
 /* The lane station (S15): staff at a desk or a tablet, by the access point. */
 
-.lane {
+.lane,
+.console {
   display: grid;
   grid-template-rows: auto auto 1fr;
   min-height: 100vh;
@@ -837,7 +838,8 @@ input {
   color: var(--muted);
 }
 
-.lane-main {
+.lane-main,
+.console-main {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
   align-items: start;
@@ -845,7 +847,8 @@ input {
   padding: 0.5rem clamp(0.75rem, 2vw, 1.5rem) 2rem;
 }
 
-.lane .card {
+.lane .card,
+.console .card {
   width: auto;
   padding: 1rem 1.1rem;
   text-align: left;
@@ -880,7 +883,9 @@ input {
 }
 
 .lane input,
-.lane select {
+.lane select,
+.console input,
+.console select {
   min-height: 2.75rem;
   padding: 0.35em 0.6em;
   border: 1.5px solid var(--line);
@@ -982,6 +987,194 @@ input {
 .small-button.danger {
   border-color: var(--stop);
   color: var(--stop);
+}
+
+.small-button:disabled {
+  border-color: var(--line);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+/* The supervisor's console (S17): the same frame as the lane station. */
+
+/* On a phone the cards shrink with the screen: no content sets a wider minimum. */
+.console-main,
+.console-main > .card,
+.console .card > * {
+  min-width: 0;
+}
+
+.console .card {
+  display: grid;
+  align-content: start;
+  gap: 0.6rem;
+}
+
+.console h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.console h3 {
+  margin: 0.4rem 0 0;
+  font-size: 0.98rem;
+}
+
+.console ul,
+.console ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.console label {
+  color: var(--ink-2);
+  font-size: 0.92rem;
+}
+
+.console code {
+  font-size: 0.85em;
+  color: var(--muted);
+}
+
+.mode-buttons,
+.console .actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.button.danger {
+  border-color: var(--stop);
+  background: var(--stop);
+  color: var(--surface);
+}
+
+.confirm {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.75rem 0.9rem;
+  border: 2px solid var(--stop);
+  border-radius: 12px;
+  background: var(--stop-soft);
+  color: var(--ink);
+}
+
+.resume {
+  display: grid;
+  gap: 0.5rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
+}
+
+.policy-days {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.3rem 0.8rem;
+  margin: 0;
+}
+
+.policy-days dt {
+  color: var(--muted);
+}
+
+.policy-days dd {
+  margin: 0;
+  font-weight: 650;
+}
+
+.versions li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.3rem 0.75rem;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.console-audit {
+  grid-column: 1 / -1;
+}
+
+/*
+ * A desk's screen: the mode, the lanes and the policy on the left, the queue on the right as tall
+ * as it needs, the audit below across the page.
+ */
+@media (min-width: 1100px) {
+  .console-main {
+    grid-template-columns: 1fr 1fr 1.25fr;
+    /* The queue's height goes to the policy's row: the first row stays as tall as its cards. */
+    grid-template-rows: auto 1fr auto;
+    grid-template-areas:
+      'mode lanes queue'
+      'policy policy queue'
+      'audit audit audit';
+  }
+
+  .console-mode {
+    grid-area: mode;
+  }
+
+  .console-lanes {
+    grid-area: lanes;
+  }
+
+  .console-policy {
+    grid-area: policy;
+  }
+
+  .console-queue {
+    grid-area: queue;
+  }
+
+  .console-audit {
+    grid-area: audit;
+  }
+}
+
+.audit-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.8rem;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.audit-when {
+  min-width: 3.2em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.audit-what {
+  flex: 1 1 16em;
+  font-weight: 600;
+}
+
+.audit-who {
+  color: var(--ink-2);
+}
+
+.audit-why {
+  padding: 0.05em 0.5em;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 0.9em;
+}
+
+.audit-outcome {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82em;
+  color: var(--muted);
+}
+
+.audit-outcome[data-outcome='NOT_ALLOWED'] {
+  color: var(--warn);
 }
 
 .manual form,

@@ -211,6 +211,10 @@ describe('the API contracts', () => {
       [`get ${cp}`]: 'OPERATOR',
       [`get ${cp}/flights`]: 'OPERATOR',
       [`get ${cp}/queue`]: 'OPERATOR',
+      [`get ${cp}/audit`]: 'SUPERVISOR',
+      [`get ${cp}/policy`]: 'SUPERVISOR',
+      [`post ${cp}/policy/versions`]: 'ADMIN',
+      [`post ${cp}/policy/activations`]: 'ADMIN',
       [`get ${cp}/audit/verify`]: 'SUPERVISOR',
       [`get ${cp}/stream`]: 'OPERATOR',
     });

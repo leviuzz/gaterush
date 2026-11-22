@@ -664,6 +664,9 @@ flowchart LR
     was given or joined.
   - Displays (ADR-047): `display_board`, what the displays show after each checkpoint's latest
     command (the numbers called and the prepare window), written with it, at its sequence number.
+  - Policies (ADR-050): `policy_version` (immutable, per airport, named by the SHA-256 of the
+    policy's canonical JSON) and `policy_activation` (a version for a checkpoint from a service
+    day, in the order written); both append-only.
 - **Timers (ADR-045).** `serve` runs a scheduler: every second it sends `ADVANCE` to each
   checkpoint whose next timeout is due. The command goes through the log like any other; its
   idempotency key names the timeout, so it applies once whichever servers see it due. A rescan at
@@ -690,6 +693,10 @@ flowchart LR
   coded reason, is the queue's event `OVERRIDDEN`, counted apart from the engine's commitments;
   `queue_token.overridden` keeps the mark. `SET_LANES` changes the engine's estimates for the
   rest of the service day; the queue's answer reads the lanes open from the day's log.
+- **Policies and the audit view (ADR-050).** A day opens with the version activated for it,
+  read under the checkpoint's lock, as activations are written; the day keeps it to its end. The
+  audit view reads a day's commands and their events and shows coded values only: who, what,
+  when, why, the tickets by number.
 - **Staff (ADR-045).** Every staff route checks, in this order: the request comes from this site,
   a session (401), the checkpoint (404), the role and the checkpoints of the member (403). The
   log records the member as the actor (`staff:<id>`).
@@ -704,6 +711,8 @@ flowchart LR
     kiosk's stream of the mode (ADR-048);
   - `POST /v1/checkpoints/{id}/tickets/{ticket}/boost` and `/call-now` with a coded reason, and
     `POST /v1/checkpoints/{id}/lanes`, for supervisors (ADR-049);
+  - `GET /v1/checkpoints/{id}/audit` and `/policy` for supervisors, `POST .../policy/versions`
+    and `.../policy/activations` for administrators (ADR-050);
   - `POST /v1/auth/sign-in`, `GET /v1/auth/me`, `POST /v1/auth/sign-out` (ADR-045);
   - `POST /v1/checkpoints/{id}/tickets/{ticket}/recall`, `no-show`, `reactivate`, `review`,
     `resolve` and `cancel` (ADR-045);
@@ -719,7 +728,7 @@ flowchart LR
   the library), `device add` and `device revoke`, `user add`, `user password` and `user disable`,
   and `serve`, which also serves the web application and runs the timers.
 
-## 14. The screens (`apps/web`, `@gateflow/i18n`, ADR-044, ADR-045, ADR-047, ADR-048)
+## 14. The screens (`apps/web`, `@gateflow/i18n`, ADR-044, ADR-045, ADR-047 to ADR-050)
 
 One React application, built by esbuild into static files and served by the API: one process,
 one origin, one Content Security Policy.
@@ -782,6 +791,12 @@ flowchart LR
   changes, and every 20 seconds in case the stream is down. It shows the mode the supervisor set,
   and its call button is off while calls are paused or stopped (ADR-048); a ticket the supervisor
   moved up says so (ADR-049).
+- **The supervisor's console** (`/supervisor/<checkpoint>`, ADR-050), for supervisors and
+  administrators: the mode (an emergency confirmed first, resuming in the same order or in order
+  of arrival), the lanes open, the queue with "Move up" and "Call now" and a reason asked each
+  time, today's and the next day's policy with the activation of a version for administrators,
+  and the day's audit with the check of the chain. It follows the stream as the lane station
+  does; both share the staff's sign-in form.
 - **Build** (`node build.mjs`): `index.html`, `assets/app.js` and `app.css` with Brotli and gzip
   copies, an icon, and `THIRD-PARTY-NOTICES.txt` with the licences of the bundled libraries.
 

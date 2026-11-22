@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, lte, sql } from 'drizzle-orm';
 import { CheckpointDay } from '@gateflow/operations';
 import type {
   Applied,
@@ -19,6 +19,8 @@ import {
   checkpointTimer,
   displayBoard,
   partyPass,
+  policyActivation,
+  policyVersion,
   queueCommand,
   queueEvent,
   queueToken,
@@ -103,8 +105,8 @@ export function dayConfigOf(
   cp: CheckpointRow,
   serviceDay: string,
   mode: CheckpointMode = 'NORMAL',
+  policy: Policy = cp.settings.policy as Policy,
 ): DayConfig {
-  const policy = cp.settings.policy as Policy;
   return {
     checkpointId: cp.id,
     serviceDay,
@@ -116,6 +118,31 @@ export function dayConfigOf(
     processEstimateMs: cp.settings.processEstimateMs,
     ...(mode === 'NORMAL' ? {} : { mode }),
   };
+}
+
+/**
+ * The policy a service day of a checkpoint opens with (S17, ADR-050): the version activated for
+ * the latest day not after it (the latest activation written, for the same day, whatever the
+ * clocks of the servers that wrote them), else the checkpoint's own policy.
+ */
+export async function policyForDay(
+  db: Db | Tx,
+  cp: CheckpointRow,
+  serviceDay: string,
+): Promise<Policy> {
+  const rows = await db
+    .select({ content: policyVersion.content })
+    .from(policyActivation)
+    .innerJoin(policyVersion, eq(policyVersion.id, policyActivation.policyVersionId))
+    .where(
+      and(
+        eq(policyActivation.checkpointId, cp.id),
+        lte(policyActivation.fromServiceDay, serviceDay),
+      ),
+    )
+    .orderBy(desc(policyActivation.fromServiceDay), desc(policyActivation.seq))
+    .limit(1);
+  return (rows[0]?.content ?? cp.settings.policy) as Policy;
 }
 
 export async function loadCheckpoint(db: Db | Tx, checkpointId: string): Promise<CheckpointRow> {
@@ -212,10 +239,12 @@ export class Runtime {
     const serviceDay = serviceDayOf(atMs, cp.timeZone, cp.dayStartsAt);
     let day = memory.day;
     if (day?.config.serviceDay !== serviceDay) {
+      // The policy activated for this day, read under the lock that activations take too.
+      const policy = await policyForDay(tx, cp, serviceDay);
       const record: CommandRecord = {
         seq: memory.seq + 1,
         atMs,
-        command: { type: 'OPEN_DAY', config: dayConfigOf(cp, serviceDay, day?.mode) },
+        command: { type: 'OPEN_DAY', config: dayConfigOf(cp, serviceDay, day?.mode, policy) },
       };
       const opened = CheckpointDay.open(record);
       day = opened.day;

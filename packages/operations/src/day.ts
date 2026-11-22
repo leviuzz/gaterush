@@ -7,8 +7,9 @@ import {
   QueueError,
   fastTrackResponseEstimateMs,
   responseEstimateMs,
+  validatePolicy,
 } from '@gateflow/queue-core';
-import type { CheckpointMode, TicketView } from '@gateflow/queue-core';
+import type { CheckpointMode, Policy, TicketView } from '@gateflow/queue-core';
 import { MANUAL_REASONS, PASS_INFANTS, PRESENT_METHODS, TICKET_SOURCES } from './commands';
 import type {
   Applied,
@@ -99,18 +100,32 @@ function validateMode(mode: CheckpointMode): void {
   if (!(CHECKPOINT_MODES as readonly string[]).includes(value)) invalid(`unknown mode ${value}`);
 }
 
+/**
+ * Checks that a policy can run a live checkpoint (S17): a valid policy of a virtual queue, without
+ * the simulated lane management. Refused with `INVALID_COMMAND`.
+ */
+export function validateLivePolicy(policy: Policy): void {
+  try {
+    validatePolicy(policy);
+  } catch (error) {
+    // A policy from a request is not trusted to have the shape of one: any failure refuses it.
+    invalid(error instanceof Error ? error.message : String(error));
+  }
+  if (policy.queue.kind !== 'virtual') {
+    invalid('the live system runs a virtual queue: a physical queue is only simulated');
+  }
+  if (policy.lanes !== undefined) {
+    invalid('extra lanes are simulated; in the live system staff open and close lanes');
+  }
+}
+
 function validateConfig(config: DayConfig): void {
   if (config.checkpointId.length === 0) invalid('the checkpoint id is empty');
   if (config.mode !== undefined) validateMode(config.mode);
   if (!SERVICE_DAY.test(config.serviceDay)) invalid('the service day must be written YYYY-MM-DD');
   if (!PREFIX.test(config.ticketPrefix))
     invalid('the ticket prefix must be 1 to 3 capital letters');
-  if (config.policy.queue.kind !== 'virtual') {
-    invalid('the live system runs a virtual queue: a physical queue is only simulated');
-  }
-  if (config.policy.lanes !== undefined) {
-    invalid('extra lanes are simulated; in the live system staff open and close lanes');
-  }
+  validateLivePolicy(config.policy);
   requireInteger(config.lanesOpen, 'lanes open', 1, 200);
   if (!(config.ratePerLanePerHour > 0) || !Number.isFinite(config.ratePerLanePerHour)) {
     invalid('the screening rate of a lane must be a positive number');

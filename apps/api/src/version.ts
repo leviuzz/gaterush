@@ -1,2 +1,2 @@
 /** Keep in sync with package.json (checked by a test). */
-export const API_VERSION = '0.16.0';
+export const API_VERSION = '0.17.0';

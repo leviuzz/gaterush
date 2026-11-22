@@ -25,10 +25,13 @@ export type {
   IssueTicket,
   ManualReason,
   OpenDay,
+  OverrideTicket,
   PassInfant,
   Present,
   PresentMethod,
   ResolveReview,
+  SetLanes,
+  SetMode,
   StaffAction,
   TicketSource,
   TicketSummary,
@@ -39,5 +42,6 @@ export {
   OPERATION_ERRORS,
   OperationError,
   estimatesOf,
+  validateLivePolicy,
 } from './day';
 export type { OperationErrorCode } from './day';

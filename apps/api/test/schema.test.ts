@@ -63,6 +63,37 @@ describe('the operational schema', () => {
     ).rejects.toThrow(/queue_command_hash/);
   });
 
+  it('keeps the versions of policies and their activations as they were written (S17)', async () => {
+    const version = '0193a0b2-7c1d-7e5f-8a9b-0c1d2e3f4a5c';
+    const hash = 'b'.repeat(64);
+    await sql(
+      `INSERT INTO policy_version (id, airport_id, hash, policy_id, version, title, content,
+         created_at_ms, created_by)
+       VALUES ($1, $2, $3, 'p', '1', 'P', '{}', 0, 'system')`,
+      [version, AIRPORT, hash],
+    );
+    // The same content twice at an airport is one version; a hash must be one.
+    await expect(
+      sql(
+        `INSERT INTO policy_version (id, airport_id, hash, policy_id, version, title, content,
+           created_at_ms, created_by)
+         VALUES ('0193a0b2-7c1d-7e5f-8a9b-0c1d2e3f4a5d', $1, $2, 'p', '1', 'P', '{}', 0, 'system')`,
+        [AIRPORT, hash],
+      ),
+    ).rejects.toThrow(/policy_version_hash/);
+    await sql(
+      `INSERT INTO policy_activation (id, checkpoint_id, policy_version_id, from_service_day,
+         activated_at_ms, activated_by)
+       VALUES ('0193a0b2-7c1d-7e5f-8a9b-0c1d2e3f4a5e', $1, $2, '2026-11-24', 0, 'system')`,
+      [CHECKPOINT, version],
+    );
+    for (const table of ['policy_version', 'policy_activation']) {
+      await expect(sql(`UPDATE ${table} SET id = id`)).rejects.toThrow(/append-only/);
+      await expect(sql(`DELETE FROM ${table}`)).rejects.toThrow(/append-only/);
+      await expect(sql(`TRUNCATE ${table} CASCADE`)).rejects.toThrow(/append-only/);
+    }
+  });
+
   it('checks the values of flights and tickets', async () => {
     await expect(
       sql(

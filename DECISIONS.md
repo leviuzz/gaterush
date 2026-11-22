@@ -2060,3 +2060,73 @@ founder on 2026-11-21 together with all of its recommendations.
     and its reason.
   - Fairness reports of the live product (S19, M4) show the engine's priority calls and the
     supervisor's overrides side by side.
+
+## ADR-050: Versioned policies, the audit view and the supervisor's console
+
+- **Status:** Accepted (2026-11-22). Slice S17, part 3, as the founder confirmed it; with
+  ADR-048 and ADR-049, slice S17 is done. API and web 0.17.0, contracts 0.9.0, migration
+  `0010_policies`. No simulated number changes.
+- **Context:**
+  - The kickoff asks for versioned policies, activated with an approval (FR-13), and for an audit
+    of every change (FR-14), for the supervisor and the administrator, on a console (FR-12).
+  - A checkpoint's day must run one policy from its start to its end: its log records the policy
+    it opened with (ADR-042), and a replay must give the same day.
+  - Several servers serve a checkpoint, and their clocks may disagree by seconds or worse.
+- **Decision:**
+  - **Versions.** A policy version is immutable and named by the SHA-256 of its canonical JSON:
+    the same content is the same version, per airport (`policy_version`, append-only by
+    trigger). An administrator publishes one; it is checked as a live checkpoint runs it (a
+    virtual queue, without the simulator's lane management, a valid policy of the engine). The
+    demo data publishes GateFlow priority v3 and the virtual queue in order of arrival.
+  - **Activation.** An administrator activates a version for a checkpoint from the next service
+    day that has not started (`policy_activation`, append-only, ordered by its own sequence, not
+    by a server's clock). The day under way keeps the policy it opened with. The activation and
+    the opening of a day take the checkpoint's advisory lock: a day never opens with one policy
+    while an activation says another, and an activation that a server with a late clock would
+    date to a day already open goes to the day after. `FIFO_ONLY` is the fallback at hand
+    meanwhile (ADR-048). A second person's approval (four eyes) comes with the pilot, as the
+    founder decided.
+  - **The audit view** (`GET /v1/checkpoints/{id}/audit`, supervisors): a service day's commands,
+    the latest first, 50 at a time; for each, who (a member's login, a kiosk's label, or GateFlow
+    and its timer), what (the command, its outcome, its coded values, and the tickets its events
+    changed, by number), when, and why (the coded reason of an override or a manual ticket).
+    `number` gives one ticket's history. Never a ticket's reference nor a pass's HMAC. The chain
+    of hashes is checked by `/audit/verify`, from the console.
+  - **The console**, `/supervisor/<checkpoint>`, for supervisors and administrators (an operator
+    is told it is not for them):
+    - the mode, with an emergency confirmed first, and on resuming the choice between the same
+      order and the order of arrival;
+    - the lanes open;
+    - the queue, the numbers to get ready and those waiting, with "Move up" and "Call now", which
+      need a reason chosen each time;
+    - today's policy and the next day's, the airport's versions and, for administrators, "Activate
+      from <next day>";
+    - the audit of the day, by number too, with the check of the chain;
+    - it follows the checkpoint's stream, as the lane station does, in the three languages.
+- **Alternatives considered:**
+  - **Activation at once:** a day would run two policies, and its log could not say which
+    decided what without reading the activations; the fallback at once is `FIFO_ONLY`.
+  - **Versions numbered by the administrator:** two different contents could carry the same
+    number; a hash cannot.
+  - **The raw log as the audit view:** it holds the tickets' references (bearer keys to the
+    passengers' pages) and the passes' HMACs; the view keeps only coded values and numbers.
+  - **Ordering activations by time:** a server with a late clock would make an earlier decision
+    win; the table's sequence follows the order of the writes, under the lock.
+- **Evidence:**
+  - **API on PostgreSQL:** 5 tests: today's policy among the versions by its hash; only
+    administrators publish, a physical queue or a malformed policy is refused, the same content
+    gives the same version; an activation from the next day, while today's commands keep their
+    policy and the next day opens with the new one; a server a day late cannot activate for a day
+    already open; the audit's entries (who, what, why, the events by number), one ticket's
+    history, pages, no reference in the answer, supervisors only. The policy tables refuse any
+    change or removal.
+  - **In Chromium, on the product:** an operator is turned away; a supervisor pauses and starts
+    again in order of arrival, cancels then confirms an emergency and resumes, moves a passenger
+    up and calls one now with a reason asked each time, sets the lanes, reads the audit with who
+    and why and a number's history, checks the chain; the console fits 1366, 768 and 390 pixels
+    wide; an administrator activates the virtual queue in order of arrival from the next day,
+    while today keeps priority v3.
+- **Consequences:**
+  - The pilot adds the second person's approval of an activation, and the airport's identity
+    provider for staff (ADR-045).
+  - The console's live KPIs and alerts come with M4 (operations and Predict).

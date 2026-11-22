@@ -1,5 +1,5 @@
 import { t } from '@gateflow/i18n';
-import type { Locale, MessageKey } from '@gateflow/i18n';
+import type { Locale } from '@gateflow/i18n';
 import type {
   AdmissionResponse,
   CallNextResponse,
@@ -21,6 +21,7 @@ import { timeOfDay, useDocumentLanguage } from '../common/format';
 import { LanguageSwitch } from '../common/LanguageSwitch';
 import { follow } from '../common/stream';
 import { QrCode } from '../common/QrCode';
+import { SignIn } from '../common/SignIn';
 import { presented } from './scan';
 
 /*
@@ -47,77 +48,6 @@ type Member = StaffMemberResponse['member'];
 type Outcome = { readonly kind: 'ok' | 'warn' | 'stop'; readonly text: string } | null;
 
 const supervises = (m: Member) => m.role === 'SUPERVISOR' || m.role === 'ADMIN';
-
-function SignIn({
-  locale,
-  onSignedIn,
-}: {
-  readonly locale: Locale;
-  readonly onSignedIn: (member: Member) => void;
-}) {
-  const [login, setLogin] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<MessageKey | null>(null);
-  const [busy, setBusy] = useState(false);
-  const submit = async (event: SyntheticEvent) => {
-    event.preventDefault();
-    setBusy(true);
-    const answer = await api<StaffMemberResponse>('/v1/auth/sign-in', {
-      method: 'POST',
-      body: { login: login.trim(), password },
-      session: true,
-    });
-    setBusy(false);
-    setPassword('');
-    if (answer.ok) onSignedIn(answer.body.member);
-    else
-      setError(
-        answer.status === 429
-          ? 'lane.signIn.wait'
-          : answer.status === 401
-            ? 'lane.signIn.failed'
-            : 'lane.error',
-      );
-  };
-  return (
-    <section className="card sign-in" id="lane-sign-in">
-      <h1>{t(locale, 'lane.signIn.title')}</h1>
-      <form onSubmit={(e) => void submit(e)}>
-        <label htmlFor="lane-login">{t(locale, 'lane.signIn.login')}</label>
-        <input
-          id="lane-login"
-          value={login}
-          autoComplete="username"
-          autoCapitalize="off"
-          spellCheck={false}
-          onChange={(e) => {
-            setLogin(e.target.value);
-          }}
-          required
-        />
-        <label htmlFor="lane-password">{t(locale, 'lane.signIn.password')}</label>
-        <input
-          id="lane-password"
-          type="password"
-          value={password}
-          autoComplete="current-password"
-          onChange={(e) => {
-            setPassword(e.target.value);
-          }}
-          required
-        />
-        {error === null ? null : (
-          <p className="form-error" role="alert" id="lane-sign-in-error">
-            {t(locale, error)}
-          </p>
-        )}
-        <button type="submit" className="button primary" disabled={busy} id="lane-sign-in-submit">
-          {t(locale, 'lane.signIn.submit')}
-        </button>
-      </form>
-    </section>
-  );
-}
 
 function TicketRow({
   ticket,
@@ -414,7 +344,7 @@ export function Lane({
             <div className="spinner" role="progressbar" aria-label="GateFlow" />
           ) : null}
           {phase === 'sign-in' ? (
-            <SignIn locale={locale} onSignedIn={(m) => void enter(m)} />
+            <SignIn locale={locale} prefix="lane" onSignedIn={(m) => void enter(m)} />
           ) : null}
           {phase === 'not-allowed' ? (
             <section className="card message-card" id="lane-not-allowed">

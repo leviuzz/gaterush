@@ -4,10 +4,10 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Any change that alters simulated numbers
 must be listed, together with the component versions it bumps.
 
-## [Unreleased]
+## [0.17.0] - 2026-11-22: Slice S17, the supervisor's console
 
-Slice S17 in progress, the supervisor's console. Part 1: the modes of a checkpoint (ADR-048).
-Part 2: a supervisor's overrides and the lanes open (ADR-049).
+The supervisor's console: the modes of a checkpoint (ADR-048), a supervisor's overrides and the
+lanes open (ADR-049), versioned policies, the audit view and the console's page (ADR-050).
 
 ### Simulated numbers change
 
@@ -60,8 +60,23 @@ Part 2: a supervisor's overrides and the lanes open (ADR-049).
   - contracts 0.8.0: `Override`, `OverrideReason`, `OverrideRequest`, `OverrideResponse`,
     `SetLanesRequest`, `SetLanesResponse`; `overridden` on a ticket, `lanesOpen` in the queue;
   - the lane station marks a ticket the supervisor moved up, in the three languages.
-
-### Fixed
+- Part 3 (ADR-050):
+  - API 0.17.0: versions of policies, immutable and named by the SHA-256 of their content, per
+    airport (`POST /v1/checkpoints/{id}/policy/versions`, administrators); activation from the
+    next service day that has not started, under the checkpoint's lock
+    (`POST /v1/checkpoints/{id}/policy/activations`, administrators); the policy a day opens with
+    is the version activated for it; `GET /v1/checkpoints/{id}/policy`; the audit view,
+    `GET /v1/checkpoints/{id}/audit` (supervisors), with who, what, when and why, by number too;
+    migration `0010_policies` (`policy_version`, `policy_activation`, append-only); the demo
+    data publishes priority v3 and the virtual queue in order of arrival;
+  - operations: `validateLivePolicy`, what a live checkpoint runs;
+  - contracts 0.9.0: `AuditEntry`, `AuditResponse`, `PolicySummary`, `PolicyStatusResponse`,
+    `PublishPolicyRequest`/`Response`, `ActivatePolicyRequest`/`Response`;
+  - web 0.17.0: the supervisor's console, `/supervisor/<checkpoint>`: the mode (an emergency
+    confirmed first; resuming in the same order or in order of arrival), the lanes, the queue with
+    "Move up" and "Call now" and a reason asked each time, the policies (administrators activate
+    a version from the next day), the audit and the check of the chain; the staff's sign-in form
+    is shared with the lane station; texts in the three languages.
 
 - A test of the API read five tables at once on one connection (a deprecation warning of `pg`).
 - Studio: a chart of the replay was drawn 600 pixels wide until its width was measured, so a

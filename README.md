@@ -12,7 +12,7 @@ border procedures: it organises the flow before they start.
 > **Status: M1 done (S1 to S8); M2: the Simulator Studio (S9) and the replay of a day (S11); M3,
 > the product an airport installs: its operational core (S12), boarding passes (S13), the kiosk
 > and the passenger's page (S14), the queue's life cycle with staff who sign in and the lane
-> station (S15), the displays (S16).**
+> station (S15), the displays (S16), the supervisor's console (S17).**
 > This repository contains the simulation foundations:
 > - the priority engine;
 > - the queue state machine that the operational product will share;
@@ -47,12 +47,13 @@ border procedures: it organises the flow before they start.
 > - **The modes of a checkpoint** (S17, part 1): a supervisor pauses the calls, or declares an
 >   emergency that stops calls, kiosks and the call timers, and on resuming may announce the
 >   prepare window again in order of arrival; displays, kiosks, stations and phones say so at once.
-> - **A supervisor's overrides and the lanes open** (S17, part 2): a boost or a call now, with a
->   coded reason, counted apart from the engine's priority calls.
+> - **The supervisor's console** (S17): the modes of a checkpoint (a pause, an emergency that
+>   stops calls, kiosks and the call timers, resuming in the same order or in order of arrival),
+>   moving a passenger up or calling one now with a coded reason, the lanes open, versioned
+>   policies activated from the next service day, and the day's audit with who, what and why.
 >
-> The rest of the supervisor's console (S17: versioned policies, the audit view and its page)
-> comes next; staff sign in with local passwords until the pilot brings the airport's
-> identity provider. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+> The digital twin (S18) comes next; staff sign in with local passwords until the pilot brings
+> the airport's identity provider. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 > **All results in this repository are SIMULATED on synthetic assumptions.** They are not
 > measurements and must not be presented as evidence of operational performance.
@@ -145,6 +146,10 @@ node apps/api/dist/gateflow-api.mjs user add --airport vce-like --login m.rossi 
 This prints the member's password once. `user password --login <login>` gives a new one and
 `user disable --login <login>` ends their access; both end their sessions at once.
 
+Supervisors and administrators use the console, `/supervisor/<checkpoint id>`: the mode of the
+checkpoint, the lanes open, moving a passenger up or calling one now with a reason, the policies
+(an administrator activates a version from the next service day) and the day's audit.
+
 The endpoints:
 - `POST /v1/checkpoints/{id}/scans`: a kiosk scans a boarding pass (with its token). The answer
   is a ticket, the same ticket again, or a reason. The pass is read in memory and never stored.
@@ -175,6 +180,10 @@ The endpoints:
   supervisor puts a waiting ticket in the prepare window at once, or calls a ticket at once
   (S17). Counted apart from the engine's priority calls; never in `FIFO_ONLY` or an emergency.
 - `POST /v1/checkpoints/{id}/lanes`: a supervisor sets the lanes open for the rest of the day.
+- `GET /v1/checkpoints/{id}/audit`: the day's log as people read it (`day`, `number`, `before`,
+  `limit`); `GET /v1/checkpoints/{id}/policy`: today's policy, the next day's, the versions.
+- `POST /v1/checkpoints/{id}/policy/versions` and `/policy/activations`: an administrator
+  publishes a version of a policy, and activates one from the next service day.
 
 Send an `Idempotency-Key` header with each command. The OpenAPI document is at
 `/v1/openapi.json`. The API's tests (`pnpm test`) start a throwaway PostgreSQL from the binaries
@@ -360,7 +369,7 @@ How to read these numbers:
 | `packages/sim-trace` | The trace of one day: every event, replay views, the explanation of every call (pure) |
 | `packages/studio-core` | What the Studio adds in the browser: SHA-256, files, library, what-if settings, comparison of runs, traces (pure) |
 | `apps/api` | `gateflow-api`: the operational core on PostgreSQL (Fastify, Drizzle); serves the screens |
-| `apps/web` | The product's screens: the kiosk, the passenger's ticket page, the display and the lane station (React) |
+| `apps/web` | The product's screens: the kiosk, the passenger's ticket page, the display, the lane station and the supervisor's console (React) |
 | `apps/sim-cli` | `gateflow-sim` command-line interface |
 | `apps/studio` | GateFlow Simulator Studio: the simulator in one offline HTML page |
 | `airports/` | Airport configurations: the parameters of each airport and checkpoint ([guide](airports/README.md)) |

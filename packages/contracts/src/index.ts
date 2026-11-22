@@ -6,7 +6,7 @@ import { z } from 'zod';
  * ticket is a number, a state and a flight, never a name.
  */
 
-export const CONTRACTS_VERSION = '0.8.0';
+export const CONTRACTS_VERSION = '0.9.0';
 
 export const Segment = z.enum(['DEPARTING', 'TRANSFER']);
 
@@ -227,6 +227,104 @@ export const OverrideResponse = z.object({
   ticket: Ticket,
 });
 
+/**
+ * One command of a checkpoint's log, as the audit view shows it (S17, ADR-050): who, what, when and
+ * why, with the tickets its events changed. Coded values only: no ticket reference, no HMAC.
+ */
+export const AuditEntry = z.object({
+  seq: z.int().min(1),
+  at: Instant,
+  /** The command, e.g. `CALL_NEXT`, `OVERRIDE`, `SET_MODE`. */
+  command: z.string(),
+  /** A member of staff (their login), a device (its label), or GateFlow itself (`timer`). */
+  by: z.object({ kind: z.enum(['STAFF', 'DEVICE', 'SYSTEM']), label: z.string() }),
+  /** The number of the ticket the command names, or called. */
+  ticket: z.string().nullable(),
+  /** What it did: `DONE`, `NOT_ALLOWED`, `ADMITTED`, `NOBODY_WAITING`... */
+  outcome: z.string().nullable(),
+  /** The coded reason of an override or a manual ticket. */
+  reason: z.string().nullable(),
+  /** The coded values that read the command: the mode, the lanes, the override, the policy... */
+  detail: z.object({
+    mode: CheckpointMode.optional(),
+    previous: CheckpointMode.optional(),
+    reset: z.boolean().optional(),
+    lanesOpen: z.int().optional(),
+    previousLanes: z.int().optional(),
+    override: Override.optional(),
+    policy: z.string().optional(),
+    source: z.string().optional(),
+    partySize: z.int().optional(),
+    method: z.string().optional(),
+    people: z.int().optional(),
+    decision: z.string().optional(),
+  }),
+  /** The events of the command, in order, with the number of the ticket each changed. */
+  events: z.array(z.object({ type: z.string(), ticket: z.string().nullable() })),
+});
+
+/** A page of the audit view, the latest command first; `more` when older ones remain. */
+export const AuditResponse = z.object({
+  checkpointId: z.uuid(),
+  serviceDay: z.iso.date(),
+  entries: z.array(AuditEntry),
+  more: z.boolean(),
+});
+
+/** A policy as the console shows it (S17): its name, version and the hash of its content. */
+export const PolicySummary = z.object({
+  policyId: z.string(),
+  version: z.string(),
+  title: z.string(),
+  /** The SHA-256 of the policy's canonical JSON. */
+  hash: z.string().regex(/^[0-9a-f]{64}$/),
+});
+
+/**
+ * The policies of a checkpoint (S17, ADR-050): today's, as its day opened; the next service
+ * day's; the airport's versions; the latest activations.
+ */
+export const PolicyStatusResponse = z.object({
+  checkpointId: z.uuid(),
+  today: z.object({ serviceDay: z.iso.date(), policy: PolicySummary }),
+  next: z.object({ serviceDay: z.iso.date(), policy: PolicySummary }),
+  versions: z.array(
+    PolicySummary.extend({ id: z.uuid(), createdAt: Instant, createdBy: z.string() }),
+  ),
+  activations: z.array(
+    z.object({
+      versionId: z.uuid(),
+      hash: z.string(),
+      fromServiceDay: z.iso.date(),
+      activatedAt: Instant,
+      activatedBy: z.string(),
+    }),
+  ),
+});
+
+/**
+ * An administrator publishes a version of a policy (S17): a policy of the queue engine, checked as
+ * a live checkpoint runs it. The same content gives the same version.
+ */
+export const PublishPolicyRequest = z.strictObject({
+  policy: z.looseObject({ id: z.string(), version: z.string(), title: z.string() }),
+});
+
+export const PublishPolicyResponse = z.object({
+  id: z.uuid(),
+  hash: z.string(),
+  /** False when the same content was published already. */
+  created: z.boolean(),
+});
+
+/** An administrator activates a version for the checkpoint, from the next service day (S17). */
+export const ActivatePolicyRequest = z.strictObject({ versionId: z.uuid() });
+
+export const ActivatePolicyResponse = z.object({
+  fromServiceDay: z.iso.date(),
+  policy: PolicySummary,
+});
+
 /** The supervisor sets the lanes open (S17). */
 export const SetLanesRequest = z.strictObject({ lanesOpen: z.int().min(1).max(200) });
 
@@ -441,6 +539,12 @@ export type CheckpointMode = z.infer<typeof CheckpointMode>;
 export type OverrideReason = z.infer<typeof OverrideReason>;
 export type OverrideResponse = z.infer<typeof OverrideResponse>;
 export type SetLanesResponse = z.infer<typeof SetLanesResponse>;
+export type AuditEntry = z.infer<typeof AuditEntry>;
+export type AuditVerifyResponse = z.infer<typeof AuditVerifyResponse>;
+export type AuditResponse = z.infer<typeof AuditResponse>;
+export type PolicyStatusResponse = z.infer<typeof PolicyStatusResponse>;
+export type PublishPolicyResponse = z.infer<typeof PublishPolicyResponse>;
+export type ActivatePolicyResponse = z.infer<typeof ActivatePolicyResponse>;
 export type KioskStatus = z.infer<typeof KioskStatus>;
 export type SetModeResponse = z.infer<typeof SetModeResponse>;
 export type DemoFlightsResponse = z.infer<typeof DemoFlightsResponse>;
@@ -779,6 +883,64 @@ export const ROUTES: readonly Route[] = [
     staff: 'OPERATOR',
     responses: {
       '200': { description: 'The queue', schema: QueueResponse },
+      ...errors,
+      ...staffErrors,
+    },
+  },
+  {
+    method: 'get',
+    path: '/v1/checkpoints/{checkpointId}/audit',
+    summary:
+      "The audit view (S17): a service day's commands, the latest first, with who, what, when and why; `day`, `number`, `before` and `limit` in the query",
+    command: false,
+    staff: 'SUPERVISOR',
+    responses: {
+      '200': { description: 'A page of the log', schema: AuditResponse },
+      ...errors,
+      ...staffErrors,
+    },
+  },
+  {
+    method: 'get',
+    path: '/v1/checkpoints/{checkpointId}/policy',
+    summary:
+      "The checkpoint's policies (S17): today's, the next service day's, the airport's versions and the latest activations",
+    command: false,
+    staff: 'SUPERVISOR',
+    responses: {
+      '200': { description: 'The policies', schema: PolicyStatusResponse },
+      ...errors,
+      ...staffErrors,
+    },
+  },
+  {
+    method: 'post',
+    path: '/v1/checkpoints/{checkpointId}/policy/versions',
+    summary:
+      "An administrator publishes a version of a policy for the checkpoint's airport (S17): immutable, named by its hash",
+    command: false,
+    staff: 'ADMIN',
+    body: PublishPolicyRequest,
+    responses: {
+      '201': { description: 'Published', schema: PublishPolicyResponse },
+      '200': {
+        description: 'The same content was published already',
+        schema: PublishPolicyResponse,
+      },
+      ...errors,
+      ...staffErrors,
+    },
+  },
+  {
+    method: 'post',
+    path: '/v1/checkpoints/{checkpointId}/policy/activations',
+    summary:
+      'An administrator activates a version for the checkpoint, from the next service day that has not started (S17)',
+    command: false,
+    staff: 'ADMIN',
+    body: ActivatePolicyRequest,
+    responses: {
+      '200': { description: 'Activated, from the day said', schema: ActivatePolicyResponse },
       ...errors,
       ...staffErrors,
     },

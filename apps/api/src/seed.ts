@@ -1,10 +1,11 @@
 import { and, eq } from 'drizzle-orm';
-import { PRIORITY_V3_POLICY } from '@gateflow/queue-core';
+import { PRIORITY_V3_POLICY, VIRTUAL_FIFO_POLICY } from '@gateflow/queue-core';
 import { applyScenarioSettings } from '@gateflow/sim-metrics';
 import { generatePopulation, generateSchedule } from '@gateflow/sim-scenarios';
 import type { Scenario } from '@gateflow/sim-scenarios';
 import type { Db } from './db/client';
-import { airport, checkpoint, flight, organization } from './db/schema';
+import { airport, checkpoint, flight, organization, policyVersion } from './db/schema';
+import { policyHash } from './policies';
 import type { Ids } from './ids';
 import { localDate, serviceDayOf, zonedEpoch } from './time';
 
@@ -101,6 +102,27 @@ export async function seedDemo(
       )[0];
     }
     if (checkpointRow === undefined) throw new Error('the checkpoint could not be created');
+    // The policies an administrator can activate (S17): GateFlow priority v3 and a virtual queue
+    // in order of arrival, with the airport's settings, published by GateFlow itself.
+    for (const policy of applyScenarioSettings(
+      [PRIORITY_V3_POLICY, VIRTUAL_FIFO_POLICY],
+      scenario,
+    )) {
+      await tx
+        .insert(policyVersion)
+        .values({
+          id: options.ids.uuid(),
+          airportId: airportRow.id,
+          hash: policyHash(policy),
+          policyId: policy.id,
+          version: policy.version,
+          title: policy.title,
+          content: policy,
+          createdAtMs: options.now,
+          createdBy: 'system',
+        })
+        .onConflictDoNothing();
+    }
     const flights = generateSchedule(scenario);
     const at = (msOfDay: number) => zonedEpoch(serviceDay, msOfDay, timeZone);
     const two = (n: number) => String(n).padStart(2, '0');

@@ -29,7 +29,10 @@ export interface Product {
   readonly staffCookie: string;
   /** Members of staff of the airport, to sign in at the lane station (S15). */
   readonly staff: Readonly<
-    Record<'supervisor' | 'operator', { readonly login: string; readonly password: string }>
+    Record<
+      'supervisor' | 'operator' | 'admin',
+      { readonly login: string; readonly password: string }
+    >
   >;
   /** Runs a command of gateflow-api on the product's database. */
   cli(args: readonly string[]): string;
@@ -132,6 +135,17 @@ export async function startProduct(serverUrl: string, scenario: string): Promise
     checkpointId,
   ]);
   const operatorPassword = /^password (\S+)$/m.exec(operatorAdded)?.[1] ?? '';
+  const adminAdded = cli([
+    'user',
+    'add',
+    '--airport',
+    'vce-like',
+    '--login',
+    'e2e.admin',
+    '--role',
+    'admin',
+  ]);
+  const adminPassword = /^password (\S+)$/m.exec(adminAdded)?.[1] ?? '';
 
   const port = await freePort();
   const base = `http://127.0.0.1:${String(port)}`;
@@ -188,6 +202,7 @@ export async function startProduct(serverUrl: string, scenario: string): Promise
     staff: {
       supervisor: { login: 'e2e.supervisor', password },
       operator: { login: 'e2e.operator', password: operatorPassword },
+      admin: { login: 'e2e.admin', password: adminPassword },
     },
     cli,
     stopServer,

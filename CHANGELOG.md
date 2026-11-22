@@ -4,6 +4,44 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Any change that alters simulated numbers
 must be listed, together with the component versions it bumps.
 
+## [0.22.0] - 2026-11-22: Slice S22, lane recommendations with the decision and its outcome
+
+GateFlow reviews a checkpoint's lanes every 5 minutes and when they change: when the forecast puts
+the wait above 10 minutes within the hour it recommends opening lanes, saying why, how soon, the
+interval and the expected benefit; it recommends closing a lane beyond the plan that the hour does
+not need. The supervisor accepts, postpones or declines with a reason, and GateFlow records what
+happened. The recommendation, the decision and the outcome are commands of the checkpoint's log
+(ADR-056).
+
+### Simulated numbers change
+
+- None. The forecasts do not change: the calibration module differs only in the forecast's
+  version.
+
+### Added
+
+- forecast 0.3.0: `adviseLanes`, `LANE_ADVICE`, `roomForLanes`, `laneChangePossible`; a profile
+  carries the scenario's staffing beyond its plan (`CheckpointStaffing`); a state may carry a
+  change of lanes from a time (`laneChange`); the paths give every 5-minute step of the 90 minutes.
+- operations 0.10.0: the commands `ADVISE_LANES`, `DECIDE_ADVICE` and `RECORD_OUTCOME`, which
+  never touch the queue; the day keeps the rules (one open at a time, 15 minutes of cooldown, 10
+  after a postponement, none while calls are paused or in an emergency, expiry after 15 minutes,
+  a coded reason to decline, the outcome once when due); `advicesOfLog` reads them back from the
+  log.
+- sim-metrics 0.13.0: `planOf` (the lane plan and the staffing of a simulated day); the profile
+  carries the staffing.
+- twin 0.1.1: the twin's script knows the new answers.
+- Contracts 0.15.0: `Advice`, `AdviceBand`, `AdviceResponse`, `AdviceDecisionRequest`,
+  `AdviceDecisionResponse`, `AdviceDecisionValue`, `AdviceDeclineReason`; the audit's detail of a
+  recommendation (`action`, `lanes`, `leadMinutes`).
+- API 0.22.0: GateFlow's reviews (every 30 seconds with the timers, at once after the lanes are
+  set, at the virtual time of a twin's checkpoint, the command-line twin included);
+  `GET /v1/checkpoints/{id}/advice` and `POST /v1/checkpoints/{id}/advice/{adviceId}/decision`
+  for supervisors (404 `UNKNOWN_ADVICE`, 409 `ADVICE_NOT_OPEN`).
+- Web 0.22.0: the recommendations card in the supervisor's console (the open one with Accept,
+  "Ask again in 10 min" and Decline with a reason; the day's with their decisions and outcomes),
+  the three commands in the audit; texts in the three languages.
+
 ## [0.21.1] - 2026-11-22: Slice S21.3, the forecasts' bands calibrated
 
 The bands' edges read the paths where the truths fell on simulated days set apart for it: the

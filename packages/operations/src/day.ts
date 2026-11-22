@@ -10,6 +10,8 @@ import {
   validatePolicy,
 } from '@gateflow/queue-core';
 import type { CheckpointMode, Policy, TicketView } from '@gateflow/queue-core';
+import { AdviceBook, AdviceRuleError } from './advice';
+import type { AdviceSummary } from './advice';
 import { MANUAL_REASONS, PASS_INFANTS, PRESENT_METHODS, TICKET_SOURCES } from './commands';
 import type {
   Applied,
@@ -203,6 +205,8 @@ export class CheckpointDay {
    * cancelled. The only ones a command can change without an event of their own.
    */
   private readonly inPlay = new Set<string>();
+  /** GateFlow's recommendations of lanes (S22): they never touch the queue. */
+  private readonly advice = new AdviceBook();
   private seq: number;
   private atMs: number;
 
@@ -393,9 +397,19 @@ export class CheckpointDay {
           return this.setLanes(command);
         case 'UPDATE_FLIGHT':
           return this.updateFlight(command, nowMs);
+        case 'ADVISE_LANES':
+          // The forecast assumes the lanes screen: none while calls are paused or in an emergency.
+          if (this.queue.mode === 'PAUSED' || this.queue.mode === 'EMERGENCY') {
+            invalid('no recommendation while calls are paused or in an emergency');
+          }
+          return { type: 'ADVISED', advice: this.advice.advise(command, nowMs) };
+        case 'DECIDE_ADVICE':
+          return { type: 'ADVICE_DECIDED', advice: this.advice.decide(command, nowMs) };
+        case 'RECORD_OUTCOME':
+          return { type: 'OUTCOME_RECORDED', advice: this.advice.recordOutcome(command, nowMs) };
       }
     } catch (error) {
-      if (error instanceof QueueError) invalid(error.message);
+      if (error instanceof QueueError || error instanceof AdviceRuleError) invalid(error.message);
       throw error;
     }
   }
@@ -673,5 +687,19 @@ export class CheckpointDay {
   /** When the next timeout of the queue is due (a second call, a no-show, an expiry). */
   nextDueMs(): number | null {
     return this.queue.nextDueMs();
+  }
+
+  /** GateFlow's recommendations of the day as they stand at `atMs` (S22), in the order made. */
+  advices(atMs: number = this.atMs): AdviceSummary[] {
+    return this.advice.all(atMs);
+  }
+
+  /**
+   * Whether GateFlow may recommend at `atMs`: calls running (neither paused nor in an emergency),
+   * none open, past the cooldown and a postponement.
+   */
+  canAdvise(atMs: number): boolean {
+    if (this.queue.mode === 'PAUSED' || this.queue.mode === 'EMERGENCY') return false;
+    return this.advice.canAdvise(atMs);
   }
 }

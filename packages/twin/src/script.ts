@@ -235,6 +235,9 @@ function answered(result: CommandResult): string {
     case 'MODE_SET':
     case 'OVERRIDDEN':
     case 'FLIGHT_UPDATED':
+    case 'ADVISED':
+    case 'ADVICE_DECIDED':
+    case 'OUTCOME_RECORDED':
       return result.type;
   }
 }

@@ -40,6 +40,13 @@ function outcomeOf(result: CommandResult): string | null {
     case 'LANES_SET':
     case 'FLIGHT_UPDATED':
       return 'DONE';
+    // GateFlow's recommendations (S22): what it advised, what was decided, the outcome.
+    case 'ADVISED':
+      return result.advice.advice.action;
+    case 'ADVICE_DECIDED':
+      return result.advice.decision?.decision ?? null;
+    case 'OUTCOME_RECORDED':
+      return 'RECORDED';
   }
 }
 
@@ -82,6 +89,17 @@ function detailOf(command: Command, result: CommandResult): AuditEntry['detail']
       return { people: command.people };
     case 'RESOLVE_REVIEW':
       return { decision: command.decision };
+    case 'ADVISE_LANES':
+      return {
+        action: command.advice.action,
+        lanes: command.advice.lanes,
+        lanesOpen: command.advice.lanesOpen,
+        leadMinutes: command.advice.leadMinutes,
+      };
+    case 'DECIDE_ADVICE':
+      return { decision: command.decision };
+    case 'RECORD_OUTCOME':
+      return { lanesOpen: command.outcome.lanesOpen };
     case 'CALL_NEXT':
     case 'ADVANCE':
     case 'RECALL':
@@ -97,6 +115,7 @@ function detailOf(command: Command, result: CommandResult): AuditEntry['detail']
 function reasonOf(command: Command): string | null {
   if (command.type === 'OVERRIDE') return command.reason;
   if (command.type === 'ISSUE_TICKET') return command.reason ?? null;
+  if (command.type === 'DECIDE_ADVICE') return command.reason;
   return null;
 }
 
@@ -209,6 +228,7 @@ export async function auditOf(
     if (actor === 'system:timer') return { kind: 'SYSTEM', label: 'timer' };
     // The digital twin (S18): its simulated passengers and staff.
     if (actor === 'system:twin') return { kind: 'SYSTEM', label: 'twin' };
+    // GateFlow itself: the day it opens, its recommendations of lanes and their outcomes (S22).
     return { kind: 'SYSTEM', label: 'GateFlow' };
   };
   const entries: AuditEntry[] = page.map((r) => {

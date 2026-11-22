@@ -24,6 +24,7 @@ const profile = (days: readonly (readonly number[])[]): CheckpointProfile => ({
   bucketMs: 5 * MIN,
   days,
   lanePlan: [],
+  staffing: null,
 });
 
 const state = (overrides: Partial<LiveState> = {}): LiveState => ({
@@ -144,7 +145,10 @@ describe('the forecast of a checkpoint (S21)', () => {
       /not yet admitted/,
     );
     expect(() =>
-      forecastFrom({ startMs: 0, bucketMs: 90_000, days: [flatDay(1)], lanePlan: [] }, state()),
+      forecastFrom(
+        { startMs: 0, bucketMs: 90_000, days: [flatDay(1)], lanePlan: [], staffing: null },
+        state(),
+      ),
     ).toThrow(/whole number of minutes/);
     const unsorted = [
       { fromMs: 60 * MIN, lanes: 2 },

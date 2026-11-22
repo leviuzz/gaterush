@@ -14,8 +14,9 @@ border procedures: it organises the flow before they start.
 > and the passenger's page (S14), the queue's life cycle with staff who sign in and the lane
 > station (S15), the displays (S16), the supervisor's console (S17), the digital twin (S18) and
 > simulations through the API (S19); M4, the operations console and a preview of Predict: the
-> day's overview, checked against the log (S20), and forecasts of the next 90 minutes measured
-> against the simulator (S21).**
+> day's overview, checked against the log (S20), forecasts of the next 90 minutes measured
+> against the simulator (S21), and lane recommendations with the supervisor's decision and their
+> outcome (S22).**
 > This repository contains the simulation foundations:
 > - the priority engine;
 > - the queue state machine that the operational product will share;
@@ -71,6 +72,11 @@ border procedures: it organises the flow before they start.
 >   people not yet admitted and the wait of a party arriving in 15, 30, 60 and 90 minutes, each the
 >   median of simulated paths with a band calibrated to hold 8 outcomes in 10; the backtest
 >   measures them against the full simulator's days, horizon by horizon.
+> - **Lane recommendations** (S22): when the forecast puts the wait above 10 minutes within the
+>   hour, GateFlow recommends opening lanes, saying why, how soon, the interval and the expected
+>   benefit; it recommends closing a lane beyond the plan that the hour does not need. The
+>   supervisor accepts, postpones or declines with a reason; GateFlow records what happened. All
+>   three are in the checkpoint's log; one at a time, none within 15 minutes of the previous one.
 >
 > Staff sign in with local passwords until the pilot brings the airport's identity provider. See
 > [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
@@ -171,8 +177,10 @@ This prints the member's password once. `user password --login <login>` gives a 
 
 Supervisors and administrators use the console, `/supervisor/<checkpoint id>`: the day's
 overview (waiting now, waits of the last hour and the day, people at risk, lanes, fairness, flight
-data, alerts, and the check of every figure against the log), the forecast of the next 90 minutes
-(a SIMULATED preview, from the scenario the checkpoint was seeded from), the mode of the
+data, alerts, and the check of every figure against the log), GateFlow's lane recommendations
+(accept, ask again in 10 minutes, or decline with a reason; the day's, with their outcomes), the
+forecast of the next 90 minutes (a SIMULATED preview, from the scenario the checkpoint was seeded
+from), the mode of the
 checkpoint, the lanes open, moving a passenger up or calling one now with a reason, the policies
 (an administrator activates a version from the next service day) and the day's audit.
 
@@ -262,6 +270,12 @@ The endpoints:
 - `GET /v1/checkpoints/{id}/forecast`: GateFlow Predict, a preview (S21): arrivals, people not yet
   admitted and the wait at 15, 30, 60 and 90 minutes, with their bands, SIMULATED from the days of
   the checkpoint's scenario; 409 `NO_SCENARIO` when the checkpoint names none.
+- `GET /v1/checkpoints/{id}/advice`: GateFlow's lane recommendations of the day (S22), the latest
+  first, each with its reason, lead time, interval, expected benefit, decision and outcome, and
+  the rule; `POST /v1/checkpoints/{id}/advice/{adviceId}/decision` (`ACCEPT`, `POSTPONE`, or
+  `DECLINE` with `NO_STAFF`, `NOT_NEEDED` or `OTHER`): 404 `UNKNOWN_ADVICE`, 409
+  `ADVICE_NOT_OPEN` once decided or expired. GateFlow reviews every 5 minutes (with `serve`'s
+  timers) and when the lanes are set; the twin's checkpoints at their virtual time.
 - `GET /v1/twin/options`, `GET /v1/twin`, `POST /v1/twin/runs`, and `/v1/twin/runs/{run}/speed`,
   `/stop`, `/display`: the digital twin, for the administrators of a synthetic airport, on a
   server started with `--twin` (S18).
@@ -456,7 +470,7 @@ How to read these numbers:
 | Path | Content |
 |---|---|
 | `packages/domain` | Shared domain types and units |
-| `packages/forecast` | GateFlow Predict: a Monte Carlo of a checkpoint's next 90 minutes from its live state, and the errors of forecasts (pure) |
+| `packages/forecast` | GateFlow Predict: a Monte Carlo of a checkpoint's next 90 minutes from its live state, the errors of forecasts, and the lane recommendations made from them (pure) |
 | `packages/bcbp` | IATA boarding passes: parser (never the name), encoder, synthetic passes, flight date, leg for a checkpoint (pure) |
 | `packages/contracts` | The API's request and answer schemas (Zod) and its OpenAPI document (pure) |
 | `packages/i18n` | Every text of the passengers' screens in Italian, English and Mexican Spanish (pure) |

@@ -10,7 +10,12 @@ import {
   TwinOptionsResponse,
   TwinRun,
 } from '@gateflow/contracts';
-import { LIBRARY_CALIBRATION, LIBRARY_CALIBRATION_SOURCE, forecastFrom } from '@gateflow/forecast';
+import {
+  FORECAST_VERSION,
+  LIBRARY_CALIBRATION,
+  LIBRARY_CALIBRATION_SOURCE,
+  forecastFrom,
+} from '@gateflow/forecast';
 import { PRIORITY_V3_POLICY } from '@gateflow/queue-core';
 import {
   SimulatedDay,
@@ -173,7 +178,7 @@ describe('the forecast of a checkpoint (S21)', () => {
     }
     expect(f.buckets).toHaveLength(18);
     expect(f.model).toMatchObject({
-      version: '0.2.0',
+      version: FORECAST_VERSION,
       paths: 200,
       days: 50,
       calibration: LIBRARY_CALIBRATION_SOURCE,

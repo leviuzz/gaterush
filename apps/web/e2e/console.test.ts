@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { syntheticBoardingPass } from '@gateflow/bcbp';
 import type {
+  AdviceResponse,
   DemoFlightsResponse,
   ForecastResponse,
   OverviewResponse,
@@ -21,6 +22,8 @@ import type { Product } from './product';
  * declares an emergency after a confirmation and resumes, moves a passenger up and calls one now
  * with a coded reason, sets the lanes open, reads the day's audit with who, what and why, and
  * checks the log's chain; an administrator activates another policy from the next service day.
+ * With one lane for a queue, GateFlow recommends opening lanes, saying why, when, the interval and
+ * the benefit, and the supervisor accepts (S22).
  */
 
 declare module 'vitest' {
@@ -196,8 +199,11 @@ describe("the supervisor's console (S17)", () => {
     await page.click('#console-lanes-set');
     await page.waitForSelector('#console-audit-list [data-command="SET_LANES"]');
 
-    // The audit: who, what and why, the latest first.
-    const latest = page.locator('#console-audit-list li').first();
+    // The audit: who, what and why, the latest first (GateFlow may follow the change of the lanes
+    // with a recommendation of its own, S22).
+    const latest = page
+      .locator('#console-audit-list li:not([data-command="ADVISE_LANES"])')
+      .first();
     expect(await latest.getAttribute('data-command')).toBe('SET_LANES');
     expect(await latest.textContent()).toContain(product.staff.supervisor.login);
     const boosted = page.locator('#console-audit-list [data-command="OVERRIDE"]', {
@@ -327,6 +333,74 @@ describe("the supervisor's console (S17)", () => {
       t('it', 'supervisor.forecast.title'),
     );
     expect(await page.textContent('#console-forecast-note')).toMatch(/^SIMULATO: /);
+    expect(errors).toEqual([]);
+    await page.context().close();
+  });
+
+  it('recommends lanes with a reason, a lead time, an interval and the benefit; the supervisor decides (S22)', async () => {
+    // A queue that one lane cannot keep up with, at any time of day: one lane screens about 2.5
+    // people a minute, so 50 people waiting alone keep the wait above 10 minutes for a while.
+    for (let i = 0; i < 50; i++) await passenger();
+    const { page, errors } = await open();
+    await signIn(page, 'supervisor');
+    await page.waitForSelector('.console[data-phase="ready"] #console-advice[data-state="ready"]');
+    await page.fill('#console-lanes-input', '1');
+    await page.click('#console-lanes-set');
+    // GateFlow reviews the lanes at once: the card shows the recommendation awaiting a decision.
+    await page.waitForSelector('#console-advice-open[data-action="OPEN"]', { timeout: 60_000 });
+    const answer = await fetch(`${product.base}/v1/checkpoints/${product.checkpointId}/advice`, {
+      headers: { cookie: product.staffCookie },
+    });
+    expect(answer.status).toBe(200);
+    const api = (await answer.json()) as AdviceResponse;
+    const advice = api.advices.find((a) => a.status === 'OPEN');
+    if (advice === undefined) throw new Error('no recommendation awaiting a decision');
+    expect(await page.getAttribute('#console-advice-open', 'data-advice')).toBe(advice.id);
+    // What an alert says: the action, why and how soon, the interval, the expected benefit.
+    expect(await page.textContent('#console-advice-action')).toBe(
+      advice.lanes === 1
+        ? en['supervisor.advice.openOne']
+        : t('en', 'supervisor.advice.openMany', { lanes: advice.lanes }),
+    );
+    expect(await page.textContent('#console-advice-open [data-figure="why"]')).toContain(
+      `above ${String(api.rule.targetWaitMinutes)} minutes in ${String(advice.leadMinutes)} minutes`,
+    );
+    expect(await page.textContent('#console-advice-open [data-figure="interval"]')).toMatch(
+      /: \d+ \(\d+–\d+\) min as things are, \d+ \(\d+–\d+\) min with the change\.$/,
+    );
+    expect(await page.textContent('#console-advice-open [data-figure="benefit"]')).toBe(
+      t('en', 'supervisor.advice.benefit', {
+        without: Math.round(advice.peakWithoutMinutes),
+        with: Math.round(advice.peakWithMinutes),
+      }),
+    );
+    // Declining takes a reason.
+    expect(await page.locator('#console-advice-decline').isDisabled()).toBe(true);
+    await shot(page, 'console-advice');
+    // Accepted: in the day's list and in the audit, by the supervisor after GateFlow.
+    await page.click('#console-advice-accept');
+    await page.waitForSelector(
+      `#console-advice-history li[data-advice="${advice.id}"][data-status="ACCEPTED"]`,
+    );
+    expect(await page.textContent('#console-advice-notice')).toBe(en['supervisor.advice.accepted']);
+    await page.waitForSelector('#console-audit-list [data-command="DECIDE_ADVICE"]');
+    const decided = page.locator('#console-audit-list [data-command="DECIDE_ADVICE"]').first();
+    expect(await decided.textContent()).toContain(product.staff.supervisor.login);
+    expect(await decided.textContent()).toContain(en['supervisor.advice.status.ACCEPTED']);
+    const advised = page.locator('#console-audit-list [data-command="ADVISE_LANES"]').first();
+    expect(await advised.textContent()).toContain('GateFlow');
+    // In Italian.
+    await page.click('button[lang="it"]');
+    expect(await page.textContent('#advice-title')).toContain(t('it', 'supervisor.advice.title'));
+    expect(await page.textContent('#console-advice-note')).toContain('SIMULATO: ');
+    // Wide or narrow, nothing scrolls sideways.
+    for (const width of [1366, 768, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+        String(width),
+      ).toBe(true);
+    }
     expect(errors).toEqual([]);
     await page.context().close();
   });

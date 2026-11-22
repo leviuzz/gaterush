@@ -70,6 +70,10 @@ jobs:
           curl -sf -b jar.txt "http://127.0.0.1:18080/v1/checkpoints/$CP/forecast" | tee forecast.json
           grep -q '"paths":200' forecast.json
           grep -q '"minutes":90' forecast.json
+          # GateFlow's lane recommendations of the day (S22), with the rule that makes them.
+          curl -sf -b jar.txt "http://127.0.0.1:18080/v1/checkpoints/$CP/advice" | tee advice.json
+          grep -q '"targetWaitMinutes":10' advice.json
+          grep -q '"cooldownMinutes":15' advice.json
           # The same bundle serves the web application (S14), under its security policy.
           curl -sfD headers.txt "http://127.0.0.1:18080/kiosk/$CP" | grep -q '<div id="root">'
           grep -qi '^content-security-policy:' headers.txt

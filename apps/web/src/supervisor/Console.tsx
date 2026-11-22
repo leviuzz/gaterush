@@ -2,6 +2,11 @@ import { MESSAGES, t } from '@gateflow/i18n';
 import type { Locale, MessageKey } from '@gateflow/i18n';
 import type {
   ActivatePolicyResponse,
+  Advice,
+  AdviceDecisionResponse,
+  AdviceDecisionValue,
+  AdviceDeclineReason,
+  AdviceResponse,
   AuditEntry,
   AuditResponse,
   AuditVerifyResponse,
@@ -33,7 +38,9 @@ import { follow } from '../common/stream';
 /*
  * The supervisor's console (S17, ADR-048 to ADR-050), `/supervisor/<checkpoint>`: the overview of
  * the day (S20, ADR-053: waiting, waits, at risk, lanes, fairness, flight data, alerts, and their
- * check against the log), the mode of the checkpoint (an emergency asks for a confirmation, and
+ * check against the log), GateFlow's recommendations of lanes (S22, ADR-056: why, when, the
+ * interval and the expected benefit; accept, postpone or decline with a reason; the outcome), the
+ * mode of the checkpoint (an emergency asks for a confirmation, and
  * resuming chooses between the same order and the order of arrival), the lanes open, the queue
  * with the overrides and their coded reason, today's and the next day's policy (administrators
  * activate a version from the next service day), and the audit view of the day with the check of
@@ -53,6 +60,9 @@ const REASONS: readonly OverrideReason[] = [
   'OPERATIONAL',
   'OTHER',
 ];
+const DECLINE_REASONS: readonly AdviceDeclineReason[] = ['NO_STAFF', 'NOT_NEEDED', 'OTHER'];
+/** The status a decision gives a recommendation. */
+const DECIDED = { ACCEPT: 'ACCEPTED', POSTPONE: 'POSTPONED', DECLINE: 'DECLINED' } as const;
 
 type Member = StaffMemberResponse['member'];
 type Notice = { readonly kind: 'ok' | 'warn' | 'stop'; readonly text: string } | null;
@@ -72,6 +82,14 @@ const bandText = (
     p10: Math.round(band.p10),
     p90: Math.round(band.p90),
   });
+
+/** What a recommendation asks: open one lane or more, or close one. */
+function adviceAction(locale: Locale, action: Advice['action'], lanes: number): string {
+  if (action === 'CLOSE') return t(locale, 'supervisor.advice.close');
+  return lanes === 1
+    ? t(locale, 'supervisor.advice.openOne')
+    : t(locale, 'supervisor.advice.openMany', { lanes });
+}
 
 /** A share in per cent, rounded; 0 of nothing. */
 const percent = (part: number, whole: number) =>
@@ -94,17 +112,27 @@ function auditWhat(locale: Locale, entry: AuditEntry): string {
   if (d.override !== undefined) {
     parts.push(t(locale, d.override === 'BOOST' ? 'supervisor.boost' : 'supervisor.callNow'));
   }
-  if (d.lanesOpen !== undefined && entry.command !== 'OPEN_DAY') parts.push(String(d.lanesOpen));
+  if (d.action !== undefined) parts.push(adviceAction(locale, d.action, d.lanes ?? 1));
+  if (d.decision !== undefined && entry.command === 'DECIDE_ADVICE') {
+    const status = DECIDED[d.decision as AdviceDecisionValue] as string | undefined;
+    parts.push(label(locale, `supervisor.advice.status.${status ?? ''}`, d.decision));
+  }
+  const lanesShown = entry.command !== 'OPEN_DAY' && entry.command !== 'ADVISE_LANES';
+  if (d.lanesOpen !== undefined && lanesShown) parts.push(String(d.lanesOpen));
   if (d.policy !== undefined) parts.push(d.policy);
   return parts.join(' · ');
 }
 
-/** The reason of an audit entry: an override's, or a manual ticket's. */
+/** The reason of an audit entry: an override's, a manual ticket's, or a declined recommendation's. */
 function auditWhy(locale: Locale, entry: AuditEntry): string | null {
   if (entry.reason === null) return null;
-  return entry.command === 'OVERRIDE'
-    ? label(locale, `supervisor.reason.${entry.reason}`, entry.reason)
-    : label(locale, `lane.manual.reason.${entry.reason}`, entry.reason);
+  if (entry.command === 'OVERRIDE') {
+    return label(locale, `supervisor.reason.${entry.reason}`, entry.reason);
+  }
+  if (entry.command === 'DECIDE_ADVICE') {
+    return label(locale, `supervisor.advice.reason.${entry.reason}`, entry.reason);
+  }
+  return label(locale, `lane.manual.reason.${entry.reason}`, entry.reason);
 }
 
 export function Console({
@@ -135,6 +163,10 @@ export function Console({
   const [check, setCheck] = useState<OverviewVerifyResponse | null>(null);
   /** The forecast (S21); `none` when the checkpoint names no scenario, `failed` otherwise. */
   const [forecast, setForecast] = useState<ForecastResponse | 'none' | 'failed' | null>(null);
+  /** GateFlow's recommendations of lanes of the day (S22). */
+  const [advice, setAdvice] = useState<AdviceResponse | null>(null);
+  const [declineReason, setDeclineReason] = useState<AdviceDeclineReason | ''>('');
+  const [adviceNotice, setAdviceNotice] = useState<Notice>(null);
   useDocumentLanguage(locale);
 
   const base = `/v1/checkpoints/${checkpointId}`;
@@ -188,10 +220,11 @@ export function Console({
   );
 
   const refresh = useCallback(async () => {
-    const [q, p, o] = await Promise.all([
+    const [q, p, o, a] = await Promise.all([
       api<QueueResponse>(`${base}/queue?inPlay=true`, { session: true }),
       api<PolicyStatusResponse>(`${base}/policy`, { session: true }),
       api<OverviewResponse>(`${base}/overview`, { session: true }),
+      api<AdviceResponse>(`${base}/advice`, { session: true }),
     ]);
     if (!q.ok && q.status === 401) {
       setPhase('sign-in');
@@ -203,6 +236,7 @@ export function Console({
     }
     if (p.ok) setPolicy(p.body);
     if (o.ok) setOverview(o.body);
+    if (a.ok) setAdvice(a.body);
     await loadAudit(shown);
   }, [base, loadAudit, shown]);
 
@@ -303,6 +337,26 @@ export function Console({
     else setLanes(String(answer.body.lanesOpen));
   };
 
+  /** The supervisor's decision on the open recommendation (S22): declining takes a reason. */
+  const decide = async (adviceId: string, decision: AdviceDecisionValue) => {
+    if (decision === 'DECLINE' && declineReason === '') return;
+    setAdviceNotice(null);
+    const answer = await command<AdviceDecisionResponse>(
+      `advice/${adviceId}/decision`,
+      decision === 'DECLINE' ? { decision, reason: declineReason } : { decision },
+    );
+    setDeclineReason('');
+    if (!answer.ok) {
+      setAdviceNotice(
+        answer.status === 409
+          ? { kind: 'warn', text: t(locale, 'supervisor.advice.notOpen') }
+          : { kind: 'stop', text: t(locale, 'lane.error') },
+      );
+    } else if (decision === 'ACCEPT') {
+      setAdviceNotice({ kind: 'ok', text: t(locale, 'supervisor.advice.accepted') });
+    }
+  };
+
   const activate = async (versionId: string) => {
     const answer = await command<ActivatePolicyResponse>('policy/activations', { versionId });
     if (!answer.ok) setNotice({ kind: 'stop', text: t(locale, 'lane.error') });
@@ -394,6 +448,37 @@ export function Console({
   const admin = member.role === 'ADMIN';
   /** Now, for ages: the figures' time (a twin's virtual time), else the device's. */
   const nowMs = overview === null ? Date.now() : Date.parse(overview.at);
+  /** The open recommendation, if any, and the day's, the latest first. */
+  const advices = advice?.advices ?? [];
+  const openAdvice = advices.find((a) => a.status === 'OPEN');
+  const hhmm = (iso: string) => timeOfDay(Date.parse(iso), locale, timeZone);
+  const adviceWhy = (a: Advice) =>
+    a.reason === 'WAIT_ABOVE_TARGET'
+      ? t(locale, 'supervisor.advice.why.WAIT_ABOVE_TARGET', {
+          target: advice?.rule.targetWaitMinutes ?? 10,
+          lead: a.leadMinutes,
+          time: hhmm(a.crossesAt),
+        })
+      : t(locale, 'supervisor.advice.why.WAIT_LOW_WITH_FEWER_LANES', {
+          below: advice?.rule.closeBelowMinutes ?? 2,
+        });
+  const adviceOutcome = (a: Advice) => {
+    const o = a.outcome;
+    if (o === null) return t(locale, 'supervisor.advice.outcomeDue', { time: hhmm(a.outcomeDue) });
+    return o.waitMinutes === null
+      ? t(locale, 'supervisor.advice.outcomeNobody', {
+          time: hhmm(a.outcomeDue),
+          lanes: o.lanesOpen,
+          backlog: o.backlog,
+        })
+      : t(locale, 'supervisor.advice.outcome', {
+          time: hhmm(a.outcomeDue),
+          lanes: o.lanesOpen,
+          backlog: o.backlog,
+          wait: Math.round(o.waitMinutes),
+          admitted: o.admitted,
+        });
+  };
   const row = (x: Ticket, boost: boolean) => (
     <li key={x.id} className="ticket-row" data-ticket={x.number} data-risk={x.riskClass}>
       <span className="row-number">{x.number}</span>
@@ -651,6 +736,169 @@ export function Console({
                   )}
                 </div>
               )}
+            </>
+          )}
+        </section>
+
+        <section
+          className="card console-advice"
+          id="console-advice"
+          aria-labelledby="advice-title"
+          data-state={advice === null ? 'loading' : 'ready'}
+          data-open={openAdvice?.id ?? ''}
+        >
+          <h2 id="advice-title">
+            {t(locale, 'supervisor.advice.title')}{' '}
+            <span className="badge">{t(locale, 'supervisor.forecast.preview')}</span>
+          </h2>
+          {advice === null ? (
+            <p className="muted">…</p>
+          ) : (
+            <>
+              {openAdvice === undefined ? (
+                <p className="muted" id="console-advice-none">
+                  {t(
+                    locale,
+                    advices.length === 0 ? 'supervisor.advice.none' : 'supervisor.advice.noneOpen',
+                  )}
+                </p>
+              ) : (
+                <div
+                  className="advice-open"
+                  id="console-advice-open"
+                  data-advice={openAdvice.id}
+                  data-action={openAdvice.action}
+                  role="status"
+                >
+                  <p className="advice-action" id="console-advice-action">
+                    {adviceAction(locale, openAdvice.action, openAdvice.lanes)}
+                  </p>
+                  <p data-figure="why">{adviceWhy(openAdvice)}</p>
+                  <p data-figure="interval">
+                    {t(locale, 'supervisor.advice.interval', {
+                      time: hhmm(openAdvice.benefitAt),
+                      without: bandText(locale, openAdvice.waitWithout),
+                      with: bandText(locale, openAdvice.waitWith),
+                    })}
+                  </p>
+                  <p data-figure="benefit">
+                    {t(locale, 'supervisor.advice.benefit', {
+                      without: Math.round(openAdvice.peakWithoutMinutes),
+                      with: Math.round(openAdvice.peakWithMinutes),
+                    })}
+                  </p>
+                  <p className="muted" data-figure="lanes">
+                    {t(locale, 'supervisor.advice.lanesOpen', { lanes: openAdvice.lanesOpen })}
+                    {' · '}
+                    {t(locale, 'supervisor.advice.validUntil', {
+                      time: hhmm(openAdvice.validUntil),
+                    })}
+                  </p>
+                  {twin ? (
+                    <p className="muted" id="console-advice-twin">
+                      {t(locale, 'supervisor.advice.twin')}
+                    </p>
+                  ) : (
+                    <div className="advice-actions">
+                      <button
+                        type="button"
+                        className="button primary"
+                        id="console-advice-accept"
+                        onClick={() => void decide(openAdvice.id, 'ACCEPT')}
+                      >
+                        {t(locale, 'supervisor.advice.accept')}
+                      </button>
+                      <button
+                        type="button"
+                        className="button secondary"
+                        id="console-advice-postpone"
+                        onClick={() => void decide(openAdvice.id, 'POSTPONE')}
+                      >
+                        {t(locale, 'supervisor.advice.postpone', {
+                          minutes: advice.rule.postponeMinutes,
+                        })}
+                      </button>
+                      <span className="advice-decline">
+                        <label className="visually-hidden" htmlFor="console-advice-reason">
+                          {t(locale, 'supervisor.advice.declineReason')}
+                        </label>
+                        <select
+                          id="console-advice-reason"
+                          value={declineReason}
+                          onChange={(e) => {
+                            setDeclineReason(e.target.value as AdviceDeclineReason | '');
+                          }}
+                        >
+                          <option value="">{t(locale, 'supervisor.advice.reason.none')}</option>
+                          {DECLINE_REASONS.map((r) => (
+                            <option key={r} value={r}>
+                              {t(locale, `supervisor.advice.reason.${r}`)}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          className="button secondary"
+                          id="console-advice-decline"
+                          disabled={declineReason === ''}
+                          onClick={() => void decide(openAdvice.id, 'DECLINE')}
+                        >
+                          {t(locale, 'supervisor.advice.decline')}
+                        </button>
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+              <p
+                className="outcome"
+                role="status"
+                id="console-advice-notice"
+                data-kind={adviceNotice?.kind ?? ''}
+              >
+                {adviceNotice?.text ?? ''}
+              </p>
+              {advices.length === 0 ? null : (
+                <>
+                  <h3 id="advice-history-title">{t(locale, 'supervisor.advice.history')}</h3>
+                  <ul
+                    className="advice-history"
+                    id="console-advice-history"
+                    aria-labelledby="advice-history-title"
+                  >
+                    {advices.map((a) => (
+                      <li
+                        key={a.id}
+                        data-advice={a.id}
+                        data-status={a.status}
+                        data-action={a.action}
+                      >
+                        <span className="audit-when">{hhmm(a.at)}</span>
+                        <span className="advice-what">
+                          {adviceAction(locale, a.action, a.lanes)}
+                        </span>
+                        <span className="advice-status" data-status={a.status}>
+                          {t(locale, `supervisor.advice.status.${a.status}`)}
+                          {a.decision?.reason === undefined || a.decision.reason === null
+                            ? ''
+                            : ` · ${t(locale, `supervisor.advice.reason.${a.decision.reason}`)}`}
+                        </span>
+                        <span className="advice-outcome muted" data-outcome={a.outcome !== null}>
+                          {adviceOutcome(a)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              <p className="muted forecast-note" id="console-advice-note">
+                {t(locale, 'supervisor.advice.note', {
+                  every: advice.rule.reviewEveryMinutes,
+                  target: advice.rule.targetWaitMinutes,
+                  below: advice.rule.closeBelowMinutes,
+                  cooldown: advice.rule.cooldownMinutes,
+                })}
+              </p>
             </>
           )}
         </section>

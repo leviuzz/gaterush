@@ -5,16 +5,18 @@ import { fileURLToPath } from 'node:url';
 import { dirname, isAbsolute, join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { parseArgs } from 'node:util';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { Policy } from '@gateflow/queue-core';
 import { parseScenarioText } from '@gateflow/sim-scenarios';
 import type { Scenario } from '@gateflow/sim-scenarios';
 import { expectedCallNumbers, twinDay } from '@gateflow/twin';
+import { LaneAdvisor } from './advice';
 import { buildApp } from './app';
 import { connect, runMigrations } from './db/client';
 import { addDevice, revokeDevice } from './devices';
-import { airport, policyVersion } from './db/schema';
+import { airport, policyVersion, queueCommand } from './db/schema';
 import { Runtime } from './runtime';
+import { ProfileCache } from './forecast';
 import { addStaff, disableStaff, resetPassword } from './staff';
 import { randomIds } from './ids';
 import { seedDemo } from './seed';
@@ -400,9 +402,21 @@ async function twin(args: string[]): Promise<number> {
       .limit(1);
     if (version === undefined) throw new Error(`no policy ${values.policy} at ${place.code}`);
     const policy = version.content as Policy;
-    const runner = new TwinRunner(db, new Runtime(db, systemClock), ids, systemClock, (error) => {
-      process.stderr.write(`error: ${error instanceof Error ? error.message : String(error)}\n`);
-    });
+    const runtime = new Runtime(db, systemClock);
+    // GateFlow reviews the lanes on the virtual day too (S22): its recommendations never touch
+    // the queue, so the calls are still the simulator's.
+    const advisor = new LaneAdvisor(db, runtime, new ProfileCache(), systemClock, ids);
+    const runner = new TwinRunner(
+      db,
+      runtime,
+      ids,
+      systemClock,
+      (error) => {
+        process.stderr.write(`error: ${error instanceof Error ? error.message : String(error)}\n`);
+      },
+      systemClock,
+      advisor,
+    );
     const runId = await runner.start({
       airportId: place.id,
       timeZone: place.timeZone,
@@ -448,9 +462,20 @@ async function twin(args: string[]): Promise<number> {
       run.state === 'FINISHED' &&
       live.length === expected.length &&
       live.every((number, i) => number === expected[i]);
+    // GateFlow's recommendations of lanes on the virtual day (S22): they never touch the queue.
+    const [advised] = await db
+      .select({ count: sql<string>`count(*)` })
+      .from(queueCommand)
+      .where(
+        and(eq(queueCommand.checkpointId, run.checkpointId), eq(queueCommand.type, 'ADVISE_LANES')),
+      );
     if (same) {
       process.stdout.write(
-        `SAME ORDER: the live system called ${String(live.length)} numbers in the simulator's order (SIMULATED data)\n`,
+        [
+          `SAME ORDER: the live system called ${String(live.length)} numbers in the simulator's order (SIMULATED data)`,
+          `GateFlow recommended lanes ${advised?.count ?? '0'} times on the virtual day; the calls are the same`,
+          '',
+        ].join('\n'),
       );
       return 0;
     }

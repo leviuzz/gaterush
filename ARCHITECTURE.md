@@ -31,7 +31,8 @@ apps/
 packages/
   bcbp/             IATA boarding passes: a parser that never throws or returns the name, encoder, generator (pure)
   domain/           shared domain types and units (integer milliseconds, segments, risk classes)
-  forecast/         GateFlow Predict: the next 90 minutes of a checkpoint from its live state; forecast errors (pure)
+  forecast/         GateFlow Predict: the next 90 minutes of a checkpoint from its live state; forecast errors;
+                    the lane recommendations made from them (pure)
   contracts/        the API's request, answer and OpenAPI schemas (Zod, pure)
   i18n/             every text of the passengers' screens in Italian, English and Mexican Spanish (pure)
   operations/       one service day of a live checkpoint on the simulator's queue, rebuilt from its log (pure)
@@ -787,6 +788,30 @@ flowchart LR
   bands --> errors
 ```
 
+- **Lane recommendations (ADR-056).** `adviseLanes` (forecast, pure) runs S8's rule on the
+  forecast's paths in 5-minute steps over the next hour: open when the median wait of a party
+  arriving passes 10 minutes (the fewest lanes, within the lanes the checkpoint has and the staff
+  of the plan and on call, staffed after the scenario's opening delay), close a lane beyond the
+  plan when one fewer keeps the wait below 2 minutes; every recommendation carries its reason, lead
+  time, calibrated interval and expected benefit. The checkpoint's day keeps their rules
+  (operations, pure, `AdviceBook`): `ADVISE_LANES`, `DECIDE_ADVICE` and `RECORD_OUTCOME` are
+  commands of the log that never touch the queue; the day refuses a recommendation while one is
+  open, within the cooldown or a postponement, or while calls are paused or in an emergency, and
+  reads its recommendations back from those commands alone (`advicesOfLog`). In the API the
+  `LaneAdvisor` reviews every checkpoint with a scenario once per 5-minute slot (a pass every 30
+  seconds with the timers), at once after the lanes are set, and records the outcomes when due;
+  the twin's runner calls it at the virtual time. A review with nothing to open or close reads no
+  forecast; its commands go through the runtime like any other, under the checkpoint's lock.
+
+```mermaid
+flowchart LR
+  review["review: every 5 minutes,<br/>when the lanes change"] --> rule["adviseLanes:<br/>paths with the lanes varied"]
+  rule -- "ADVISE_LANES<br/>(reason, lead time,<br/>interval, benefit)" --> day["the day's rules:<br/>one open, cooldown,<br/>postponement, mode"]
+  supervisor["supervisor"] -- "DECIDE_ADVICE<br/>(accept, postpone,<br/>decline with a reason)" --> day
+  due["15 minutes after<br/>the interval's time"] -- "RECORD_OUTCOME" --> day
+  day --> log[("the checkpoint's log:<br/>chain of hashes, audit")]
+```
+
 - **Simulations (ADR-052).** Analysts (and administrators) save an airport's scenarios and ask
   for runs, from settings as the CLI's command line or from the manifest of results. Each server
   with a runner takes the oldest run that waits (`FOR UPDATE SKIP LOCKED`), one at a time, and
@@ -829,6 +854,8 @@ flowchart LR
     and `.../policy/activations` for administrators (ADR-050);
   - `GET /v1/checkpoints/{id}/overview` and `/overview/verify`, for supervisors (ADR-053);
   - `GET /v1/checkpoints/{id}/forecast`, for supervisors: SIMULATED bands (ADR-054);
+  - `GET /v1/checkpoints/{id}/advice` and `POST .../advice/{adviceId}/decision`, for
+    supervisors: GateFlow's lane recommendations and the decision on the open one (ADR-056);
   - with `serve --twin`, for the administrators of a synthetic airport: `GET /v1/twin/options`,
     `GET /v1/twin`, `POST /v1/twin/runs`, `POST /v1/twin/runs/{run}/speed`, `/stop` and
     `/display` (ADR-051);

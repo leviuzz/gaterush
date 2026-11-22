@@ -2397,8 +2397,10 @@ founder on 2026-11-21 together with all of its recommendations.
 
 ## ADR-054: GateFlow Predict preview, a Monte Carlo of the queue's flow measured against the simulator
 
-- **Status:** Proposed (2026-11-22). Slice S21. The choices marked **[to confirm]** are for the
-  founder. forecast 0.1.0, sim-metrics 0.11.0, command line 0.12.0, API and web 0.21.0, contracts
+- **Status:** Accepted (2026-11-22). Slice S21, as the founder confirmed it ("Confermo vai
+  avanti"): the flow model, the lanes following the plan with today's difference from it, the
+  scaling fading in 15 minutes, the scenario named in the checkpoint's settings, the console's
+  card. forecast 0.1.0, sim-metrics 0.11.0, command line 0.12.0, API and web 0.21.0, contracts
   0.13.0. No simulated number changes.
 - **Context:**
   - The kickoff's M4: an arrival forecast in 5-minute buckets, horizons 15/30/60/90, a Monte
@@ -2474,9 +2476,10 @@ founder on 2026-11-21 together with all of its recommendations.
 
 ## ADR-055: Calibrated bands, edges read where the truths fell on the scenario library
 
-- **Status:** Proposed (2026-11-22). Slice S21.3, on "vai pure avanti". The choices marked
-  **[to confirm]** are for the founder. forecast 0.2.0, sim-metrics 0.12.0, command line 0.13.0,
-  API and web 0.21.1, contracts 0.14.0. No simulated number changes; the forecasts' bands do.
+- **Status:** Accepted (2026-11-22). Slice S21.3, on "vai pure avanti", as the founder confirmed
+  it ("Confermo vai avanti"): the edges calibrated, the median kept, one calibration for the
+  library. forecast 0.2.0, sim-metrics 0.12.0, command line 0.13.0, API and web 0.21.1, contracts
+  0.14.0. No simulated number changes; the forecasts' bands do.
 - **Context:**
   - S21's backtest (ADR-054): the bands of the wait held 37 to 77 % of the truths when there was a
     queue, not 80 %; the queue's 78 to 88 %, the arrivals' 76 to 79 %. The console was to say
@@ -2522,3 +2525,86 @@ founder on 2026-11-21 together with all of its recommendations.
   - Any change to the forecasts, the simulator or the library's scenarios changes the calibration:
     CI fails until `pnpm calibrate:library` is run and its module committed.
 
+
+## ADR-056: Lane recommendations from the forecast, with the decision and its outcome in the log
+
+- **Status:** Proposed (2026-11-22). Slice S22, on "Confermo vai avanti" (the outline confirmed).
+  The choices marked **[to confirm]** are for the founder. forecast 0.3.0, operations 0.10.0,
+  sim-metrics 0.13.0, twin 0.1.1, contracts 0.15.0, API and web 0.22.0. No simulated number
+  changes; the forecasts do not change either.
+- **Context:**
+  - The kickoff's F10: a forecast beyond capacity for N blocks gives an alert with its lead time,
+    interval and expected benefit; the supervisor accepts, postpones or declines with a reason;
+    the outcome is recorded. Its acceptance: cooldown and deduplication tested; every alert has a
+    reason, a lead time, an interval and the expected benefit.
+  - S8 simulated GateFlow's recommendations (reports slice-8): every 5 minutes, open when the
+    projected wait passes 10 minutes, the fewest lanes within the staff on call, the time staff
+    need to open one, an extra lane open at least 30 minutes, closed when the wait stays low.
+  - S21's forecast (ADR-054, ADR-055) projects the queue's flow from the live state, with the
+    lanes as they will be and calibrated bands.
+- **Decision:**
+  - **The rule: S8's, on S21's forecast [to confirm]** (`adviseLanes`, forecast, pure). The next
+    hour in 5-minute steps. Open when the paths' median wait of a party arriving at a step passes
+    10 minutes: the first such step is the lead time (N = 1 block); the fewest lanes that keep the
+    median within 10 minutes over the hour, or all the room allows, staffed after the scenario's
+    opening delay. Close one lane beyond the plan when, with one fewer from now, the median stays
+    below 2 minutes over the hour, once the lanes have been as they are for the scenario's minimum.
+    The plan's own lanes are never advised closed.
+  - **The room [to confirm]:** the lanes the checkpoint has, and the plan's staff plus the staff on
+    call: below the plan, the plan's staff are on duty (S8 never ran below its plan; the live
+    checkpoint can). A review with no lane to open and none to close runs no forecast.
+  - **What an alert says:** the action and the lanes, the reason, the lanes open, the lead time and
+    the time the wait crosses the target, the interval (the calibrated band of the wait of a party
+    arriving at the step of the longest wait, as things are and with the change), the expected
+    benefit (that median, and the longest over the hour, as things are and with the change), the
+    forecast's version and calibration.
+  - **The day keeps the rules [to confirm]** (operations, pure): `ADVISE_LANES` and
+    `RECORD_OUTCOME` (by GateFlow) and `DECIDE_ADVICE` (by a supervisor) are commands of the
+    checkpoint's log that never touch the queue. The day refuses a recommendation while one is
+    open, within 15 minutes of the previous one, within 10 minutes of a postponement, and while
+    calls are paused or in an emergency (the forecast assumes the lanes screen); one not decided in
+    15 minutes expires; a decline takes a coded reason (no staff, not needed, other) and nothing
+    else does; the outcome is recorded once, when due. Whoever sends the command.
+  - **The outcome [to confirm]:** 15 minutes after the time the interval speaks of, the lanes open
+    and the people not yet admitted then, the median wait per person of the people admitted in
+    those 15 minutes, and how many.
+  - **In the API:** every 30 seconds GateFlow passes over the checkpoints with a scenario (one
+    review per 5-minute slot, the outcomes due) and reviews at once when the supervisor sets the
+    lanes, before answering; the change of lanes stands if the review fails. Its commands take the
+    checkpoint's lock with idempotency keys: a second server's review is refused by the day, an
+    outcome recorded twice is a replay. A twin's runner reviews its checkpoint at the virtual time,
+    once every command of an instant is in, in each new slot; nobody decides there, so its
+    recommendations expire. `GET /v1/checkpoints/{id}/advice`, `POST
+    .../advice/{adviceId}/decision` (supervisors and administrators): 404 `UNKNOWN_ADVICE`, 409
+    `ADVICE_NOT_OPEN`, 409 `TWIN_CHECKPOINT`, 400 for a reason missing or out of place.
+  - **In the console [to confirm]:** a card under the overview: the open recommendation first,
+    Accept, "Ask again in 10 min", Decline with its reason; the day's list with decisions and
+    outcomes; the rule and SIMULATED in a note. Accepting opens no lane: staff do, and the
+    supervisor sets the lanes open (S17).
+- **Alternatives considered:**
+  - **A table of alerts beside the log** (the kickoff's data model has an `alert`): a second source
+    of truth, outside the chain of hashes and the audit view; the log already orders, chains and
+    shows them, and commands that never touch the queue keep the replay, the twin and the overview
+    as they are.
+  - **Accepting sets the lanes:** the lanes open are what staff have opened; a click is not a
+    staffed lane.
+  - **The review after a change of lanes in the background:** the console would show it only at
+    its next refresh; the review costs a few tens of milliseconds once the scenario's profile is
+    in memory.
+  - **Recommending during a pause or an emergency:** the forecast's flow assumes the lanes screen;
+    the advice would be wrong when it matters least.
+- **Evidence:** the S22 section of IMPLEMENTATION_PLAN.md: the rule's worked cases; the day's
+  rules on worked examples and on 300 random sequences of commands at random times; on
+  PostgreSQL, a live checkpoint's recommendation exactly the rule's on what the forecast reads,
+  then the cooldown, the postponement, a decline, an expiry and an outcome through the API with
+  the log and the overview's replay intact; a twin's morning whose five recommendations are those
+  the rule gives on the same simulated day at the same times, its calls still the simulator's;
+  the console's card in Chromium; `pnpm calibrate:check` unchanged.
+- **Consequences:**
+  - The recommendations are a scenario's, SIMULATED until the pilot; with an airport's days (M5)
+    the profile, the opening delay and the room are its own.
+  - At most four recommendations an hour per checkpoint, each followed by a decision and an
+    outcome: a dozen commands an hour in the log.
+  - What following the recommendations buys was measured by S8 on simulated days with S8's
+    projection; measuring this rule's recommendations in the simulator (followed or not, as S8's
+    operator model does) is the next step for the pitch's figures.

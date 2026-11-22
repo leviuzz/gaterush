@@ -125,6 +125,7 @@ export {
   calibrationOfDays,
   checkpointProfile,
   planBacktest,
+  planOf,
   profileOf,
   renderBacktestReport,
   stringifyBacktest,
@@ -133,6 +134,7 @@ export {
 export type {
   BacktestDocument,
   BacktestJob,
+  CheckpointPlan,
   BacktestObservation,
   BacktestSummary,
   HorizonErrors,

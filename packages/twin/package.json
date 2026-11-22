@@ -1,6 +1,6 @@
 {
   "name": "@gateflow/twin",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "The digital twin: the simulator's day of a scenario as the commands the live system receives, at their virtual times, and the check of every call against the simulator's (pure).",
   "type": "module",

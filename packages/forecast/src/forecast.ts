@@ -52,6 +52,23 @@ export interface CheckpointProfile {
    * before it. Empty: no plan, the lanes open now stay open.
    */
   readonly lanePlan: readonly PlannedLanes[];
+  /**
+   * The lanes and staff the checkpoint has beyond its plan (S8), for recommendations (S22); null
+   * when the scenario gives none.
+   */
+  readonly staffing: CheckpointStaffing | null;
+}
+
+/** What a checkpoint has beyond its lane plan (S8): the room for extra lanes. */
+export interface CheckpointStaffing {
+  /** Lanes the checkpoint physically has. */
+  readonly lanesAvailable: number;
+  /** Extra lanes beyond the plan that staff on call can open at the same time. */
+  readonly maxExtraLanes: number;
+  /** The estimate of the time from a decision to a lane screening. */
+  readonly openDelayMs: number;
+  /** An extra lane stays open at least this long. */
+  readonly minOpenMs: number;
 }
 
 /** What a forecast reads of a checkpoint now: what the live system knows. */
@@ -64,6 +81,11 @@ export interface LiveState {
   readonly backlog: number;
   readonly lanesOpen: number;
   readonly ratePerLanePerHour: number;
+  /**
+   * Lanes opened (or closed, when negative) from `fromMs` on, beyond what the plan and today's
+   * difference from it give (S22: what a recommendation would change). None: no change.
+   */
+  readonly laneChange?: { readonly fromMs: number; readonly lanes: number };
 }
 
 /** Arrivals in a 5-minute bucket from now. */
@@ -146,6 +168,13 @@ function validateState(state: LiveState): void {
   }
   if (!Number.isFinite(state.ratePerLanePerHour) || state.ratePerLanePerHour <= 0) {
     throw new ForecastError('the rate per lane is positive');
+  }
+  const change = state.laneChange;
+  if (
+    change !== undefined &&
+    (!Number.isSafeInteger(change.fromMs) || !Number.isSafeInteger(change.lanes))
+  ) {
+    throw new ForecastError('a change of lanes is a whole number of lanes from a time');
   }
 }
 
@@ -232,6 +261,9 @@ export interface ForecastPaths {
   readonly lanesAt: readonly { readonly minutes: number; readonly lanes: number }[];
   /** People arriving in each 5-minute bucket from now. */
   readonly buckets: readonly (readonly number[])[];
+  /** Every 5 minutes from now to 90: the paths at the end of each bucket (S22). */
+  readonly steps: readonly HorizonPaths[];
+  /** The steps at 15, 30, 60 and 90 minutes. */
   readonly horizons: readonly HorizonPaths[];
 }
 
@@ -249,10 +281,14 @@ export function forecastPaths(profile: CheckpointProfile, state: LiveState): For
   const scale = arrivalScale(state.arrivalsLastHour, expected);
   const plannedNow = plannedLanesAt(profile.lanePlan, state.nowMs);
   /** The lanes at `t`: the plan's, with the difference between the lanes open now and the plan. */
+  const change = state.laneChange;
   const lanesAt = (t: number): number => {
     const planned = plannedLanesAt(profile.lanePlan, t);
-    if (planned === null || plannedNow === null) return state.lanesOpen;
-    return Math.max(1, state.lanesOpen + planned - plannedNow);
+    const base =
+      planned === null || plannedNow === null
+        ? state.lanesOpen
+        : state.lanesOpen + planned - plannedNow;
+    return Math.max(1, base + (change !== undefined && t >= change.fromMs ? change.lanes : 0));
   };
   const capacityAt = (t: number): number => (lanesAt(t) * state.ratePerLanePerHour) / 60;
   /** Minutes until the lanes from `t` have served `people`, at their expected capacity. */
@@ -269,8 +305,10 @@ export function forecastPaths(profile: CheckpointProfile, state: LiveState): For
   const bucketMinutes = BUCKET_MS / MS_PER_MINUTE;
   const buckets = minutes / bucketMinutes;
   const arrivalsByBucket: number[][] = Array.from({ length: buckets }, () => []);
-  const backlogAt = new Map<number, number[]>(HORIZONS_MIN.map((h) => [h, []]));
-  const waitAt = new Map<number, number[]>(HORIZONS_MIN.map((h) => [h, []]));
+  /** The minutes of every 5-minute step: the horizons are some of them. */
+  const stepMinutes = Array.from({ length: buckets }, (_, i) => (i + 1) * bucketMinutes);
+  const backlogAt = new Map<number, number[]>(stepMinutes.map((m) => [m, []]));
+  const waitAt = new Map<number, number[]>(stepMinutes.map((m) => [m, []]));
   const capacities = Array.from({ length: minutes }, (_, m) =>
     capacityAt(state.nowMs + m * MS_PER_MINUTE),
   );
@@ -305,6 +343,12 @@ export function forecastPaths(profile: CheckpointProfile, state: LiveState): For
     }
   });
   const sortedBuckets = arrivalsByBucket.map((values) => values.sort(ascending));
+  const steps = stepMinutes.map((m) => ({
+    minutes: m,
+    arrivals: sortedBuckets[m / bucketMinutes - 1] ?? [0],
+    backlog: (backlogAt.get(m) ?? [0]).sort(ascending),
+    waitMs: (waitAt.get(m) ?? [0]).sort(ascending),
+  }));
   return {
     nowMs: state.nowMs,
     expectedLastHour: expected,
@@ -316,12 +360,11 @@ export function forecastPaths(profile: CheckpointProfile, state: LiveState): For
       lanes: lanesAt(state.nowMs + h * MS_PER_MINUTE),
     })),
     buckets: sortedBuckets,
-    horizons: HORIZONS_MIN.map((h) => ({
-      minutes: h,
-      arrivals: sortedBuckets[h / bucketMinutes - 1] ?? [0],
-      backlog: (backlogAt.get(h) ?? [0]).sort(ascending),
-      waitMs: (waitAt.get(h) ?? [0]).sort(ascending),
-    })),
+    steps,
+    horizons: HORIZONS_MIN.map(
+      (h) =>
+        steps[h / bucketMinutes - 1] ?? { minutes: h, arrivals: [0], backlog: [0], waitMs: [0] },
+    ),
   };
 }
 

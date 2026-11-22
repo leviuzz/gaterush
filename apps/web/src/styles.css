@@ -1117,9 +1117,10 @@ input {
   .console-main {
     grid-template-columns: 1fr 1fr 1.25fr;
     /* The queue's height goes to the policy's row: the first row stays as tall as its cards. */
-    grid-template-rows: auto auto auto 1fr auto;
+    grid-template-rows: auto auto auto auto 1fr auto;
     grid-template-areas:
       'overview overview overview'
+      'advice advice advice'
       'forecast forecast forecast'
       'mode lanes queue'
       'policy policy queue'
@@ -1128,6 +1129,10 @@ input {
 
   .console-overview {
     grid-area: overview;
+  }
+
+  .console-advice {
+    grid-area: advice;
   }
 
   .console-forecast {
@@ -1996,6 +2001,80 @@ input {
 
 .forecast-note {
   margin: 0.6rem 0 0;
+  font-size: 0.85rem;
+}
+
+/* GateFlow's recommendation of lanes (S22): what to do first, then why, when and how much. */
+.advice-open {
+  margin: 0.4rem 0 0;
+  padding: 0.8rem 1rem;
+  border-left: 6px solid var(--warn);
+  border-radius: 14px;
+  background: var(--warn-soft);
+  color: var(--ink);
+}
+
+.advice-open[data-action='CLOSE'] {
+  border-left-color: var(--ok);
+  background: var(--ok-soft);
+}
+
+.advice-open p {
+  margin: 0.25rem 0;
+}
+
+.advice-action {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.advice-actions,
+.advice-decline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.advice-actions {
+  margin-top: 0.6rem;
+}
+
+.advice-decline select {
+  max-width: 100%;
+}
+
+.advice-history {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.advice-history li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.8rem;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.advice-what {
+  font-weight: 600;
+}
+
+.advice-status[data-status='OPEN'] {
+  color: var(--warn);
+  font-weight: 650;
+}
+
+.advice-status[data-status='ACCEPTED'] {
+  color: var(--ok);
+  font-weight: 650;
+}
+
+.advice-outcome {
+  flex-basis: 100%;
   font-size: 0.85rem;
 }
 

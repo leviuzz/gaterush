@@ -1229,7 +1229,7 @@ synthetic data until the pilot: forecasts and recommendations are a preview, for
 |---|---|---|---|
 | **S20** | Operations overview: cards (waiting now, waits P50/P90, at risk, lanes, alerts), the live queue by number with class, age and exceptions, a fairness monitor, a data-quality panel | The live figures equal those recomputed from the log | **Done** |
 | **S21** | Arrival forecast baseline (5-minute buckets, horizons 15/30/60/90) and Monte Carlo of the simulator from the live state; backtest on the simulated truth (MAE, WAPE, calibration of the intervals) | An error report per horizon; p10/p50/p90 bands | **Done** |
-| S22 | Lane-opening recommendations in the console, with the decision and its outcome | Cooldown and deduplication tested; every alert has a reason, a lead time, an interval and the expected benefit | **Next** |
+| **S22** | Lane-opening recommendations in the console, with the decision and its outcome | Cooldown and deduplication tested; every alert has a reason, a lead time, an interval and the expected benefit | **Done** |
 | S23 (optional) | A passenger widget prototype (Connect) | Intervals with their freshness only; no promise of priority | Planned |
 
 **Gate R3** follows M4: discovery with the airport. M5 starts only when the checkpoint, the data
@@ -1300,9 +1300,10 @@ Acceptance (kickoff): the live figures equal those recomputed from the log. **Ev
 ## S21: forecasts of arrivals and of the queue (done)
 
 Proposed on 2026-11-22 from the kickoff (2.5 Predict, 2.7 `/ops/forecast`, 2.12 "Riuso" point 3),
-on "ok a tutto, vai con S21". The choices marked **[to confirm]** are mine, for the founder; two
-of them changed with what the backtest showed (below). Two parts: the forecast and its backtest
-(S21.1), the forecast in the product (S21.2). ADR-054.
+on "ok a tutto, vai con S21", and confirmed by the founder with S21.3 ("Confermo vai avanti"):
+the marks **[to confirm]** below are kept to show what was decided; two of the choices changed
+with what the backtest showed (below). Two parts: the forecast and its backtest (S21.1), the
+forecast in the product (S21.2). ADR-054.
 
 - **What is forecast.** At a checkpoint, from now to 90 minutes ahead: the people arriving (taking
   a number) in each 5-minute bucket; the people not yet admitted (waiting, announced, called); the
@@ -1476,6 +1477,92 @@ Evidence:
   short queues: most truths are nobody waiting). The bands are wider for it (on the VCE-like
   peak, 4.3 minutes at 15 minutes instead of 3.2); the medians, and so the MAE and the bias, do
   not change.
+
+## S22: lane-opening recommendations, with the decision and its outcome (done)
+
+Proposed on 2026-11-22 from the kickoff (F10, the `alert` of the data model, `/ops/forecast`), and
+confirmed in its outline by the founder ("Confermo vai avanti"): the recommendation from S21's
+forecast with the lanes varied, open above 10 minutes of wait and close below 2, a reason, a lead
+time, an interval and the expected benefit, a cooldown of 15 minutes and no repeat while one is
+open, the recommendation, the decision and the outcome in the checkpoint's log, a card in the
+console. The details marked **[to confirm]** are mine. ADR-056.
+
+- **The rule [to confirm]: S8's GateFlow recommendation, on S21's forecast** (`adviseLanes`,
+  forecast, pure). Every 5 minutes of the checkpoint's clock, and at once when the lanes open
+  change, GateFlow forecasts the next hour in 5-minute steps with the lanes as they will be (S21)
+  and:
+  - **opens** when the median wait of a party arriving at a step is forecast above 10 minutes:
+    the first such step gives the lead time (so the kickoff's "N blocks above capacity" is one
+    block); it advises the fewest lanes that keep the median within 10 minutes over the hour, or
+    all it has room for, counting the time staff need to open a lane (the scenario's estimate, 10
+    minutes in the library);
+  - **the room [to confirm]:** the lanes the checkpoint has, and the plan's staff plus the staff
+    on call (S8's room); below the plan, the plan's staff count as on duty, so GateFlow can
+    advise going back to the plan and beyond;
+  - **closes** one lane beyond the plan when, with one lane fewer from now, the median wait stays
+    below 2 minutes over the hour, once the lanes have been as they are for the scenario's
+    minimum (30 minutes). The plan's own lanes are the airport's: never advised closed.
+  - With no lane to open and none to close, the review runs no forecast at all.
+- **Every recommendation** says why (the wait above the target, or low with one lane fewer), when
+  (minutes until the wait crosses the target, and the time), the interval (the calibrated band of
+  the wait of a party arriving at the step of the longest wait, without and with the change) and
+  the expected benefit (the median wait then, and the longest over the hour, without and with the
+  change), with the lanes open, the lanes advised and the forecast that made it (version and
+  calibration).
+- **Cooldown and deduplication [to confirm], kept by the day itself** (operations, pure): no
+  recommendation while one is open; none within 15 minutes of the previous one; after "postpone",
+  none before 10 minutes; one not decided within 15 minutes expires; **none while calls are
+  paused or in an emergency** (the forecast assumes the lanes screen; an open one may still be
+  decided). A command that would break them is refused, whoever sends it.
+- **The decision [to confirm]:** accept, postpone (asked again in 10 minutes) or decline with a
+  coded reason (no staff, not needed, other), by a supervisor or an administrator. Accepting does
+  not open a lane: staff do, and the supervisor sets the lanes open when it is (S17).
+- **The outcome [to confirm]:** 15 minutes after the time the recommendation's interval speaks of,
+  GateFlow records the lanes open then, the people not yet admitted then, and the median wait per
+  person of the people admitted in those 15 minutes (and how many).
+- **The log:** the recommendation, the decision and the outcome are commands of the checkpoint's
+  log (`ADVISE_LANES` and `RECORD_OUTCOME` by GateFlow, `DECIDE_ADVICE` by the supervisor), in its
+  chain of hashes and its audit view; they never touch the queue, so a replay, the twin's calls and
+  the overview stay as they are. The day's recommendations are read back from these commands alone.
+- **In the API:** every 30 seconds GateFlow passes over the checkpoints with a scenario (a review
+  in each new 5-minute slot, the outcomes due), and reviews at once after the supervisor sets the
+  lanes, before answering (a review that fails never undoes the change). Its commands go through
+  the checkpoint's lock with idempotency keys: a second server's review is refused by the day, its
+  outcome is a replay. The twin's runner reviews its checkpoint at the virtual time, once every
+  command of a virtual instant is in, in each new slot; nobody decides on a twin's checkpoint
+  (409 `TWIN_CHECKPOINT`), so its recommendations expire. `GET /v1/checkpoints/{id}/advice` (the
+  day's, the latest first, with the rule) and `POST .../advice/{adviceId}/decision` (404
+  `UNKNOWN_ADVICE`, 409 `ADVICE_NOT_OPEN`, 400 for a decline without a reason), for supervisors and
+  administrators. The command-line twin reviews too.
+- **In the console:** a card under the overview: the open recommendation first (what to do; why and
+  when; the interval; the benefit; the lanes open and until when it waits), Accept, "Ask again in
+  10 min", Decline with its reason; the day's list with the decisions and the outcomes; the rule
+  and SIMULATED in a note; read-only on a twin's checkpoint. Texts in the three languages; the
+  audit shows the three commands with the action, the decision and the reason.
+
+Acceptance (kickoff): cooldown and deduplication tested; every alert has a reason, a lead time, an
+interval and the expected benefit. Evidence:
+- forecast: the rule on worked cases (a wait rising above the target with its lead time, interval
+  and benefit; the fewest lanes; the room, below and above the plan; the opening delay; closing an
+  extra lane once open its minimum; nothing to advise; no forecast when nothing can change) (4
+  tests);
+- operations: the cooldown, the deduplication, postpone, decline with a reason, expiry, the
+  outcome once and when due, none while paused or in an emergency, the alert's contents refused
+  when missing, the queue untouched (same tickets, board and timeouts with recommendations or
+  without), and on 300 random sequences of commands at random times: never two open, never two
+  within the cooldown or a postponement (8 tests);
+- the API on PostgreSQL (TSF-like peak day): on a live checkpoint with twenty people and two lanes
+  where the plan has five, GateFlow recommends at once exactly what the rule gives on the state
+  the forecast reads; not again in the same slot nor while it is open; postponed, none until the
+  cooldown and the postponement are over (04:35), declined with a reason, the next expires; the
+  outcome recorded once, when due; the queue, the chain of hashes and the overview's replay intact;
+  on a twin's checkpoint, the five recommendations of its morning (04:10 to 05:20) are those the
+  rule gives on the same simulated day at the same times, the outcomes due recorded with the
+  people admitted, the twin's calls still the simulator's; roles (5 tests);
+- Chromium: with one lane for fifty people, the card shows the recommendation with its reason,
+  lead time, interval and benefit; declining needs a reason; accepted, it is in the day's list and
+  in the audit after GateFlow's; in Italian; no sideways scroll;
+- the forecasts' calibration unchanged (`pnpm calibrate:check`): the forecasts are the same.
 
 ## Later milestones (summary)
 

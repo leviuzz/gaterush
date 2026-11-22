@@ -6,7 +6,7 @@ import { z } from 'zod';
  * ticket is a number, a state and a flight, never a name.
  */
 
-export const CONTRACTS_VERSION = '0.14.0';
+export const CONTRACTS_VERSION = '0.15.0';
 
 export const Segment = z.enum(['DEPARTING', 'TRANSFER']);
 
@@ -273,6 +273,10 @@ export const AuditEntry = z.object({
     decision: z.string().optional(),
     /** The tickets of a flight that took what the feed knows (S18). */
     tickets: z.int().optional(),
+    /** A recommendation of lanes (S22): open or close, how many, how soon. */
+    action: z.enum(['OPEN', 'CLOSE']).optional(),
+    lanes: z.int().optional(),
+    leadMinutes: z.number().optional(),
   }),
   /** The events of the command, in order, with the number of the ticket each changed. */
   events: z.array(z.object({ type: z.string(), ticket: z.string().nullable() })),
@@ -861,6 +865,93 @@ export const ForecastResponse = z.object({
 });
 
 export type ForecastResponse = z.infer<typeof ForecastResponse>;
+
+/** A wait in minutes (S22): the median, and the interval that held 8 outcomes in 10. */
+export const AdviceBand = z.object({
+  p10: z.number().min(0),
+  p50: z.number().min(0),
+  p90: z.number().min(0),
+});
+
+export const AdviceDecisionValue = z.enum(['ACCEPT', 'POSTPONE', 'DECLINE']);
+export type AdviceDecisionValue = z.infer<typeof AdviceDecisionValue>;
+/** Why a supervisor declines a recommendation. */
+export const AdviceDeclineReason = z.enum(['NO_STAFF', 'NOT_NEEDED', 'OTHER']);
+export type AdviceDeclineReason = z.infer<typeof AdviceDeclineReason>;
+
+/**
+ * GateFlow's recommendation of lanes (S22, ADR-056): what to do, why, when, the interval and the
+ * expected benefit, from the forecast of S21; the supervisor's decision; what then happened.
+ * SIMULATED until the pilot: the forecast is a scenario's.
+ */
+export const Advice = z.object({
+  id: z.string(),
+  /** When GateFlow advised it. */
+  at: Instant,
+  action: z.enum(['OPEN', 'CLOSE']),
+  lanes: z.int().min(1),
+  reason: z.enum(['WAIT_ABOVE_TARGET', 'WAIT_LOW_WITH_FEWER_LANES']),
+  lanesOpen: z.int().min(1),
+  /** The lead time: minutes until the wait passes the target (0: close now). */
+  leadMinutes: z.number().min(0),
+  /** When the wait passes the target, as forecast (to close: when advised). */
+  crossesAt: Instant,
+  /** The time the interval and the benefit speak of. */
+  benefitAt: Instant,
+  /** The wait of a party arriving then (minutes), as things are and with the change. */
+  waitWithout: AdviceBand,
+  waitWith: AdviceBand,
+  /** The longest median wait over the next hour (minutes), as things are and with the change. */
+  peakWithoutMinutes: z.number().min(0),
+  peakWithMinutes: z.number().min(0),
+  /** The forecast that made it: its version and calibration. */
+  forecast: z.string(),
+  status: z.enum(['OPEN', 'ACCEPTED', 'POSTPONED', 'DECLINED', 'EXPIRED']),
+  /** Until when it waits for a decision. */
+  validUntil: Instant,
+  decision: z
+    .object({ decision: AdviceDecisionValue, reason: AdviceDeclineReason.nullable(), at: Instant })
+    .nullable(),
+  /** When the outcome is recorded: 15 minutes after the time the benefit speaks of. */
+  outcomeDue: Instant,
+  /** What happened: the lanes open, the people not yet admitted, the waits of those admitted. */
+  outcome: z
+    .object({
+      lanesOpen: z.int().min(1),
+      backlog: z.int().min(0),
+      waitMinutes: z.number().min(0).nullable(),
+      admitted: z.int().min(0),
+    })
+    .nullable(),
+});
+export type Advice = z.infer<typeof Advice>;
+
+/** The day's recommendations of a checkpoint, the latest first, and the rule that makes them. */
+export const AdviceResponse = z.object({
+  checkpointId: z.uuid(),
+  serviceDay: z.iso.date(),
+  /** Now: the server's time; for a twin's checkpoint, its virtual time. */
+  at: Instant,
+  rule: z.object({
+    targetWaitMinutes: z.number().positive(),
+    closeBelowMinutes: z.number().positive(),
+    reviewEveryMinutes: z.number().positive(),
+    cooldownMinutes: z.number().positive(),
+    postponeMinutes: z.number().positive(),
+    validForMinutes: z.number().positive(),
+  }),
+  advices: z.array(Advice),
+});
+export type AdviceResponse = z.infer<typeof AdviceResponse>;
+
+/** A supervisor decides on the open recommendation; declining takes a coded reason. */
+export const AdviceDecisionRequest = z.strictObject({
+  decision: AdviceDecisionValue,
+  reason: AdviceDeclineReason.nullable().optional(),
+});
+export type AdviceDecisionRequest = z.infer<typeof AdviceDecisionRequest>;
+export const AdviceDecisionResponse = z.object({ advice: Advice });
+export type AdviceDecisionResponse = z.infer<typeof AdviceDecisionResponse>;
 
 /**
  * The fingerprint of results (S19): the SHA-256 of their canonical JSON without the generator and
@@ -1465,6 +1556,38 @@ export const ROUTES: readonly Route[] = [
       '200': { description: 'The forecast (SIMULATED)', schema: ForecastResponse },
       ...errors,
       ...staffErrors,
+    },
+  },
+  {
+    method: 'get',
+    path: '/v1/checkpoints/{checkpointId}/advice',
+    summary:
+      "GateFlow's recommendations of lanes of the service day (S22): reason, lead time, interval, expected benefit, decision, outcome",
+    command: false,
+    staff: 'SUPERVISOR',
+    responses: {
+      '200': { description: 'The recommendations (SIMULATED)', schema: AdviceResponse },
+      ...errors,
+      ...staffErrors,
+    },
+  },
+  {
+    method: 'post',
+    path: '/v1/checkpoints/{checkpointId}/advice/{adviceId}/decision',
+    summary:
+      'A supervisor accepts, postpones or declines (with a reason) the open recommendation (S22)',
+    command: true,
+    staff: 'SUPERVISOR',
+    body: AdviceDecisionRequest,
+    responses: {
+      '200': { description: 'The recommendation, decided', schema: AdviceDecisionResponse },
+      ...errors,
+      ...staffErrors,
+      '409': {
+        description:
+          'Not open any more (decided or expired), a checkpoint of the twin, or the key reused',
+        schema: ErrorResponse,
+      },
     },
   },
   {

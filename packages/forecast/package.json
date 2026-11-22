@@ -1,6 +1,6 @@
 {
   "name": "@gateflow/forecast",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "GateFlow Predict, preview: forecasts of arrivals and of the queue from the live state (a Monte Carlo of the queue's flow, p10/p50/p90 bands) and their errors against what happened (pure).",
   "type": "module",

@@ -1,4 +1,7 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   BUCKET_MS,
   HORIZONS_MIN,
@@ -28,6 +31,14 @@ import {
 
 const load = (file: string) =>
   parseScenarioText(readFileSync(new URL(`../../../scenarios/${file}`, import.meta.url), 'utf8'));
+/** A scenario that names other files: its airport, its flight list. */
+const loadWithFiles = (file: string) => {
+  const path = fileURLToPath(new URL(`../../../scenarios/${file}`, import.meta.url));
+  return parseScenarioText(readFileSync(path, 'utf8'), 'yaml', {
+    read: (other) => readFileSync(join(dirname(path), other), 'utf8'),
+    sha256: (text) => createHash('sha256').update(text).digest('hex'),
+  });
+};
 const demo = load('single-checkpoint-demo.yaml');
 const staffed = load('single-checkpoint-staffed.yaml');
 const classification = classificationOf(PRIORITY_V3_POLICY)!;
@@ -46,6 +57,14 @@ describe('the profile forecasts read of a scenario (S21)', () => {
     expect(profile.days[0]?.reduce((a, b) => a + b, 0)).toBe(people);
     expect(checkpointProfile(demo).days).toHaveLength(FORECAST_DAYS);
     expect(checkpointProfile(staffed, 1).lanePlan.length).toBeGreaterThan(5);
+    // The staff beyond the plan (S8), for recommendations (S22): the demo has none.
+    expect(profile.staffing).toBeNull();
+    expect(checkpointProfile(loadWithFiles('vce-like-peak-day.yaml'), 1).staffing).toEqual({
+      lanesAvailable: 14,
+      maxExtraLanes: 2,
+      openDelayMs: 10 * 60_000,
+      minOpenMs: 30 * 60_000,
+    });
     expect(() => checkpointProfile(demo, 0)).toThrow(RangeError);
   });
 });

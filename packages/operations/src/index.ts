@@ -1,5 +1,5 @@
 /** Version of the operational checkpoint. Bump on any change to commands, results or events. */
-export const OPERATIONS_VERSION = '0.9.0';
+export const OPERATIONS_VERSION = '0.10.0';
 
 export {
   MANUAL_REASONS,
@@ -59,3 +59,23 @@ export type {
   OverviewTicket,
   Spread,
 } from './overview';
+export {
+  ADVICE_DECISIONS,
+  ADVICE_DECLINE_REASONS,
+  ADVICE_RULES,
+  ADVICE_STATUSES,
+  AdviceBook,
+  advicesOfLog,
+} from './advice';
+export type {
+  AdviceBand,
+  AdviceDecision,
+  AdviceDeclineReason,
+  AdviceOutcome,
+  AdviceStatus,
+  AdviceSummary,
+  AdviseLanes,
+  DecideAdvice,
+  LaneAdviceRecord,
+  RecordAdviceOutcome,
+} from './advice';

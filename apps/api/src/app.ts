@@ -9,6 +9,7 @@ import { ZodError, z } from 'zod';
 import {
   ActivatePolicyRequest,
   AdmissionRequest,
+  AdviceDecisionRequest,
   IssueTicketRequest,
   OverrideRequest,
   PublishPolicyRequest,
@@ -21,6 +22,8 @@ import {
 } from '@gateflow/contracts';
 import type {
   ActivatePolicyResponse,
+  AdviceDecisionResponse,
+  AdviceResponse,
   AuditResponse,
   CheckpointResponse,
   FlightsResponse,
@@ -44,6 +47,7 @@ import { MAX_PARTY_SIZE, OperationError } from '@gateflow/operations';
 import type { Policy } from '@gateflow/queue-core';
 import type { Scenario } from '@gateflow/sim-scenarios';
 import type { Command, CommandResult, TicketSummary } from '@gateflow/operations';
+import { LaneAdvisor, adviceOf, adviceResponseOf } from './advice';
 import { auditOf } from './audit';
 import { requestHash } from './chain';
 import { activatePolicy, policyHash, policyStatus, publishPolicy } from './policies';
@@ -79,7 +83,7 @@ import { deviceOf, requireDevice } from './devices';
 import type { Ids } from './ids';
 import { randomIds } from './ids';
 import { ApiError, Runtime, loadCheckpoint, serviceDayNow } from './runtime';
-import type { BuildContext, CheckpointRow } from './runtime';
+import type { BuildContext, CheckpointRow, Executed } from './runtime';
 import { localDate, systemClock } from './time';
 import type { Clock } from './time';
 import { TwinRunner, twinFlightsOf } from './twin';
@@ -106,8 +110,9 @@ export interface AppOptions {
    */
   readonly studioPage?: string;
   /**
-   * The timers of the queue (S15): `auto` applies them every second while the server listens;
-   * `manual` (the default, for tests) leaves it to `app.timers.tick()`.
+   * The timers of the queue (S15): `auto` applies them every second while the server listens, and
+   * GateFlow reviews the lanes every 30 seconds (S22); `manual` (the default, for tests) leaves
+   * them to `app.timers.tick()` and `app.advisor.tick()`.
    */
   readonly timers?: 'auto' | 'manual';
   /**
@@ -142,6 +147,8 @@ declare module 'fastify' {
   interface FastifyInstance {
     /** The scheduler of the queue's timeouts (S15). */
     readonly timers: TimerScheduler;
+    /** GateFlow's reviews of the lanes (S22): recommendations and their outcomes. */
+    readonly advisor: LaneAdvisor;
     /** The runs of the digital twin on this server (S18), when the server has the twin. */
     readonly twin: TwinRunner | null;
     /** The simulations this server runs (S19), when it runs them. */
@@ -343,15 +350,21 @@ export function buildApp(options: AppOptions): FastifyInstance {
   void app.register(fastifyCookie);
   const timers = new TimerScheduler(options.db, runtime, clock);
   app.decorate('timers', timers);
+  const advisor = new LaneAdvisor(options.db, runtime, profiles, clock, ids);
+  app.decorate('advisor', advisor);
   if (options.timers === 'auto') {
     app.addHook('onReady', () => {
       timers.start((error) => {
+        app.log.error(error);
+      });
+      advisor.start((error) => {
         app.log.error(error);
       });
     });
   }
   app.addHook('onClose', async () => {
     await timers.stop();
+    await advisor.stop();
   });
 
   /** The digital twin (S18): only on a server started with it, for demos. */
@@ -367,6 +380,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
             app.log.error(error);
           },
           options.twin.realClock,
+          advisor,
         );
   app.decorate('twin', twin);
   if (twin !== null && options.twin !== undefined) {
@@ -475,6 +489,8 @@ export function buildApp(options: AppOptions): FastifyInstance {
     body: unknown,
     build: (context: BuildContext) => Promise<Command> | Command,
     answer: (result: CommandResult) => { status: number; body: unknown },
+    /** What follows a command applied (not a replay) before the answer. */
+    after?: (executed: Executed) => Promise<void>,
   ) => {
     const executed = await runtime.execute({
       checkpointId: request.params.checkpointId,
@@ -486,6 +502,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
     if (executed.result === null) throw new Error('the command applied nothing');
     const { status, body: payload } = answer(executed.result);
     if (executed.replayed) void reply.header('Idempotent-Replayed', 'true');
+    else if (after !== undefined) await after(executed);
     return reply.status(status).send(payload);
   };
 
@@ -1371,6 +1388,15 @@ export function buildApp(options: AppOptions): FastifyInstance {
           if (result.type !== 'LANES_SET') throw new Error(`unexpected result ${result.type}`);
           return { status: 200, body: { lanesOpen: result.lanesOpen, previous: result.previous } };
         },
+        // The lanes changed: GateFlow reviews them at once (S22). The change stands even if the
+        // review fails.
+        async ({ checkpoint: cp }) => {
+          try {
+            await advisor.review(cp, clock.now());
+          } catch (error) {
+            app.log.error(error);
+          }
+        },
       );
     },
   );
@@ -1628,6 +1654,62 @@ export function buildApp(options: AppOptions): FastifyInstance {
         request.params.checkpointId,
       );
       return liveForecast(options.db, profiles, cp, clock.now());
+    },
+  );
+
+  /** GateFlow's recommendations of lanes of the day (S22, ADR-056), the latest first. */
+  app.get<{ Params: { checkpointId: string } }>(
+    '/v1/checkpoints/:checkpointId/advice',
+    async (request): Promise<AdviceResponse> => {
+      const { checkpoint: cp } = await requireStaff(
+        options.db,
+        clock,
+        request,
+        'SUPERVISOR',
+        request.params.checkpointId,
+      );
+      return adviceResponseOf(options.db, cp, clock.now());
+    },
+  );
+
+  /** A supervisor accepts, postpones or declines with a reason the open recommendation (S22). */
+  app.post<{ Params: { checkpointId: string; adviceId: string } }>(
+    '/v1/checkpoints/:checkpointId/advice/:adviceId/decision',
+    async (request, reply) => {
+      const member = await staffFor(request, 'SUPERVISOR');
+      const { adviceId } = request.params;
+      const body = parse(AdviceDecisionRequest, request.body);
+      const reason = body.reason ?? null;
+      if (body.decision === 'DECLINE' && reason === null) {
+        throw new ApiError(400, 'INVALID_REQUEST', 'a recommendation is declined with a reason');
+      }
+      if (body.decision !== 'DECLINE' && reason !== null) {
+        throw new ApiError(400, 'INVALID_REQUEST', 'only a decline gives a reason');
+      }
+      return command(
+        request,
+        reply,
+        member,
+        { ...body, adviceId },
+        ({ day, atMs }) => {
+          const advice = day.advices(atMs).find((a) => a.adviceId === adviceId);
+          if (advice === undefined) {
+            throw new ApiError(404, 'UNKNOWN_ADVICE', 'no such recommendation today');
+          }
+          if (advice.status !== 'OPEN') {
+            throw new ApiError(
+              409,
+              'ADVICE_NOT_OPEN',
+              `the recommendation is ${advice.status.toLowerCase()}`,
+            );
+          }
+          return { type: 'DECIDE_ADVICE', adviceId, decision: body.decision, reason };
+        },
+        (result): { status: number; body: AdviceDecisionResponse } => {
+          if (result.type !== 'ADVICE_DECIDED') throw new Error(`unexpected result ${result.type}`);
+          return { status: 200, body: { advice: adviceOf(result.advice) } };
+        },
+      );
     },
   );
 

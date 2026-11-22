@@ -11,6 +11,7 @@ import type {
   StaffActionOutcome,
   TicketState,
 } from '@gateflow/queue-core';
+import type { AdviceSummary, AdviseLanes, DecideAdvice, RecordAdviceOutcome } from './advice';
 
 /**
  * How a checkpoint runs for one service day. Fixed when the day opens and recorded in the log, so
@@ -256,7 +257,10 @@ export type Command =
   | SetMode
   | OverrideTicket
   | SetLanes
-  | UpdateFlight;
+  | UpdateFlight
+  | AdviseLanes
+  | DecideAdvice
+  | RecordAdviceOutcome;
 export type CommandType = Command['type'];
 
 /** A command as recorded in a checkpoint's log: its place in the log and its time. */
@@ -365,7 +369,12 @@ export type CommandResult =
   /** The lanes open now, and before the command. */
   | { readonly type: 'LANES_SET'; readonly lanesOpen: number; readonly previous: number }
   /** The flight's tickets took what the feed knows (S18): `tickets` of them. */
-  | { readonly type: 'FLIGHT_UPDATED'; readonly flightId: string; readonly tickets: number };
+  | { readonly type: 'FLIGHT_UPDATED'; readonly flightId: string; readonly tickets: number }
+  /** A recommendation of lanes was made, decided, or its outcome recorded (S22). */
+  | {
+      readonly type: 'ADVISED' | 'ADVICE_DECIDED' | 'OUTCOME_RECORDED';
+      readonly advice: AdviceSummary;
+    };
 
 /** An event of the day: the queue's own events, and the opening of the day. */
 export type DayLogEvent =

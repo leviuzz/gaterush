@@ -85,6 +85,7 @@ describe('the calibration of the bands (S21.3)', () => {
       bucketMs: 5 * MIN,
       days: Array.from({ length: 30 }, (_, d) => flatDay(8 + (d % 7))),
       lanePlan: [],
+      staffing: null,
     };
     const state = {
       nowMs: 8 * 60 * MIN,

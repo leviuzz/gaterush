@@ -170,6 +170,11 @@ function virtualNowOf(run: Playing, nowMs: number): number {
   return Math.max(run.virtualMs, Math.min(nextMs, paced));
 }
 
+/** What the twin asks of GateFlow's recommendations of lanes (S22): a look at a virtual time. */
+export interface TwinAdvisor {
+  atVirtualTime(checkpointId: string, atMs: number): Promise<void>;
+}
+
 /**
  * The runs of the twin on this server: each plays in the background, one step after the other,
  * paced by the real clock at its speed.
@@ -186,6 +191,8 @@ export class TwinRunner {
     private readonly onError: (error: unknown) => void,
     /** The real time of the pacing. */
     private readonly realClock: Clock = systemClock,
+    /** GateFlow's recommendations of lanes on the virtual day (S22), when the server makes them. */
+    private readonly advisor: TwinAdvisor | null = null,
   ) {}
 
   /**
@@ -402,6 +409,11 @@ export class TwinRunner {
         run.applied++;
         run.next++;
         run.virtualMs = step.atMs;
+        // GateFlow looks once every command of a virtual time is in (S22).
+        const next = steps[run.next];
+        if (step.command !== null && (next === undefined || next.atMs > step.atMs)) {
+          await this.advise(run, step.atMs);
+        }
         await this.progress(run);
       }
       if (run.state === 'RUNNING') run.state = run.stopping ? 'STOPPED' : 'FINISHED';
@@ -416,6 +428,20 @@ export class TwinRunner {
       this.onError(error);
     }
     this.playing.delete(run.runId);
+  }
+
+  /**
+   * GateFlow reviews the lanes at the virtual time of a command (S22). Its recommendations never
+   * touch the queue, so the calls still follow the simulator's; a review that fails is reported
+   * and the day goes on.
+   */
+  private async advise(run: Playing, atMs: number): Promise<void> {
+    if (this.advisor === null) return;
+    try {
+      await this.advisor.atVirtualTime(run.checkpointId, atMs);
+    } catch (error) {
+      this.onError(error);
+    }
   }
 
   /** Sends a step's command at its virtual time, as the twin's simulated passengers and staff. */

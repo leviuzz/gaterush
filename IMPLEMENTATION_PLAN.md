@@ -672,7 +672,7 @@ here once, for the product. The slices follow the kickoff (section 3, M3), renum
 | **S16** | Display over SSE: called and prepare numbers, data freshness, reconnection with `Last-Event-ID` | No event lost after a disconnection; "data not up to date" within the timeout | **Done** |
 | S17 | Supervisor: modes (FIFO only, paused, emergency), overrides with a reason, lanes, audit view; versioned policies and their activation | Overrides and mode changes are always in the audit; in FIFO only the order is pure FIFO | **Done** |
 | S18 | Digital twin: the simulator drives the live system at accelerated time; demo page | Same scenario and seed: the live system calls passengers in the same order as the offline simulator | **Done** |
-| S19 | Simulations through the API (from S10): saved scenarios and runs, history, export; the Studio saves its runs | `POST /v1/simulations` gives a run reproducible from its manifest | Planned |
+| S19 | Simulations through the API (from S10): saved scenarios and runs, history, export; the Studio saves its runs | `POST /v1/simulations` gives a run reproducible from its manifest | **Done** |
 
 ## S12: acceptance criteria and evidence
 
@@ -1024,9 +1024,9 @@ FIFO_ONLY the order is pure FIFO.
 ## S18: the digital twin (done)
 
 Proposed on 2026-11-22 from the kickoff (F14, the `/demo` page, 2.12 "Riuso"), on "ok a tutto, vai
-con S18". The choices marked **[to confirm]** are mine, for the founder. Three parts: the
-simulator's tape and what the live system had to align (S18.1), the twin in the API (S18.2), the
-demo page (S18.3).
+con S18". The founder confirmed every proposal the same day ("ok a tutto, vai con S19"): the marks
+**[to confirm]** below are kept to show what was decided. Three parts: the simulator's tape and
+what the live system had to align (S18.1), the twin in the API (S18.2), the demo page (S18.3).
 
 - **How the twin drives the live system.** The simulator runs the day (scenario, seed, policy)
   and records, in order, every operation on its queue: the tape. A party takes a number; the
@@ -1144,6 +1144,77 @@ differ only in the queue's version.
   simulator", the twin's display shows its called numbers, its lane station and console only
   show; again at 300×, the virtual clock moves, the speed goes to 1000×, the run stops; the page
   fits 1366, 768 and 390 pixels; no request elsewhere. 34 tests in Chromium in all.
+
+## S19: simulations through the API (done)
+
+Proposed on 2026-11-22 from the kickoff (S9 of the proposal, the Analyst role of 2.6, the
+simulations of 2.7, NFR-08), on "ok a tutto, vai con S19". The choices marked **[to confirm]**
+are mine, for the founder (ADR-052). Two parts: the simulations on the server (S19.1), the Studio
+that saves its runs (S19.2).
+
+- **Analysts [to confirm].** A new role of an airport's staff, `ANALYST`: simulations only, no live
+  command, no ticket, no audit of a checkpoint. Administrators may simulate too; operators and
+  supervisors may not.
+- **Saved scenarios.** An airport's scenarios live on the server, immutable, named by the hash the
+  CLI and the Studio record (`sha256:` of the canonical JSON). A scenario is self-contained (its
+  airport configuration and flight list inline), as the Studio saves it and the CLI runs it; it
+  must read back from that file with the same hash. `POST /v1/simulation-scenarios` saves one,
+  `gateflow-api scenario add --airport <code> --scenario <file>` imports a file, and `seed` saves
+  the demo airport's own.
+- **Runs.** `POST /v1/simulations` takes either settings, as the CLI's command line (the saved
+  scenario's hash, the days as seeds, the presets, the status quo, the comparisons, the
+  bootstrap's resamples, with the CLI's defaults), or the manifest of results (the policies
+  whole). It answers at once with the run, queued. Each server simulates the runs waiting one at a
+  time **[to confirm]**, on worker threads of its bundle (the plan, the days, the statistics),
+  never on the thread that serves the checkpoints, and says how many days are done. A run whose
+  server went quiet for a minute waits again; a server that stops puts its run back: its days
+  give the same results wherever they run. A run can be cancelled.
+- **Limits [to confirm].** Up to 1,000 days, 8 policies and 10,000 resamples per run, as the
+  Studio; 20 runs of an airport waiting at once.
+- **Results and export.** The CLI's `results.json`, byte for byte except the generator
+  (`gateflow-api`) and the source revision (the bundle's, written at build), and the Markdown and
+  HTML reports made from it: the same as the CLI's for the same inputs. All downloadable; the
+  HTML report runs no script.
+- **Reproducible from its manifest.** `POST /v1/simulations/{id}/reproduce` runs what the manifest
+  records again (scenario, seeds, policies, comparisons, classification, bootstrap) and says
+  whether the results are the same: their fingerprint, the SHA-256 of their canonical JSON
+  without the generator and the revision, is the same in the CLI, the Studio and the API. A
+  manifest from elsewhere with its `expectedFingerprint` does the same. The manifest's
+  `reproduce` line does it with the CLI.
+- **History.** The airport's runs, the latest first: who, the scenario, days, policies, state, and
+  whether a reproduction or a saved Studio run matched.
+- **The Studio saves its runs [to confirm].** The server serves the Studio at `/sim`: the same page
+  as the offline file plus a GateFlow panel, allowed to talk to its own server only, its script
+  allowed by its hash. Signed in as an analyst or an administrator, "Save this run" sends the
+  scenario and the manifest of a run made in the browser with the fingerprint of its results;
+  the server simulates it again and says whether it found the page's results. The panel lists
+  the airport's runs and opens them in the page. The page itself is served without signing in,
+  as the kiosk's is: it holds the synthetic library only, and every request it makes needs a
+  session **[to confirm]**. The offline file stays offline and does not contain the panel.
+
+Acceptance (kickoff): `POST /v1/simulations` gives a run reproducible from its manifest.
+**Evidence:**
+- sim-metrics: results computed again from their manifest, read back as JSON, are the same bytes;
+  another generator and revision give the same fingerprint, other days another; manifests the
+  tools would not write are refused;
+- the API on PostgreSQL, 13 tests: a run asked with the CLI's settings gives the results of the
+  CLI's experiment byte for byte (the API as generator) and the fingerprint of the CLI's own
+  file; reproduced from its manifest, the same bytes and `matches: true`; from the CLI's
+  manifest with its fingerprint, `true`, with another `false`; the Markdown and HTML reports;
+  the history, of the airport only; scenarios saved once, read back, append-only; settings and
+  manifests refused; at most 20 runs waiting; analysts and administrators only, and an analyst
+  nothing of a live checkpoint; a run cancelled while it simulates keeps nothing; a run whose
+  server went quiet is simulated again; a server that stops puts its run back. 87 API tests in
+  all;
+- CI, with the bundles on PostgreSQL: `serve --sim-workers 2`; 20 days of the VCE-like peak with
+  three policies through HTTP give `gateflow-sim run`'s file but for the generator and the
+  revision (rehearsed here: 6 s through the API with two threads, polled every second; 4 s for
+  the CLI on four); the reproduction is the same file and says so; the report runs no script;
+- Chromium, on the product: the Studio at `/sim` simulates 3 days, an analyst signs in and saves
+  the run, GateFlow simulates it again on its threads and finds the page's results, the run
+  opens back in the page; a wrong password and an operator are told; the page's policy allows
+  its own script only, and nothing is requested elsewhere;
+- no simulated number changes.
 
 ## Later milestones (summary)
 

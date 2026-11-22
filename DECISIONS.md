@@ -2134,8 +2134,9 @@ founder on 2026-11-21 together with all of its recommendations.
 
 ## ADR-051: The digital twin
 
-- **Status:** Proposed (2026-11-22), slice S18, on "ok a tutto, vai con S18"; the choices marked
-  [to confirm] in the plan wait for the founder. API and web 0.18.0, contracts 0.10.0, operations
+- **Status:** Accepted (2026-11-22). Slice S18, as the founder confirmed it ("ok a tutto, vai con
+  S19"): tickets from the simulator's inputs, the lanes at the next decision, the first
+  presentation kept, a twin checkpoint per run. API and web 0.18.0, contracts 0.10.0, operations
   0.8.0, queue-core 0.11.0, the new package `@gateflow/twin` 0.1.0, migration `0011_twin`. No
   simulated number changes.
 - **Context:**
@@ -2226,3 +2227,97 @@ founder on 2026-11-21 together with all of its recommendations.
   - The feed adapter (M5) sends `UPDATE_FLIGHT`, already in the log's vocabulary.
   - Predict (M4) can trust that the simulator forecasts what the live system will do.
   - A demo server keeps its twin checkpoints and their logs; a reset starts a new one.
+
+## ADR-052: Simulations through the API
+
+- **Status:** Proposed (2026-11-22), slice S19, on "ok a tutto, vai con S19"; the choices marked
+  [to confirm] in the plan wait for the founder. API and web 0.19.0, contracts 0.11.0,
+  sim-metrics 0.10.0, Studio 0.12.0, migration `0012_simulations`. No simulated number changes.
+- **Context:**
+  - The kickoff moves S10 into M3: "simulations through the API: saved scenarios and runs,
+    history, export; the Studio saves its runs"; its acceptance: `POST /v1/simulations` gives a
+    run reproducible from its manifest. The Analyst of 2.6 creates, runs and exports simulations,
+    and gives no live command.
+  - Until now a simulation ran in the CLI or in a browser, and its results lived in files: nothing
+    kept who ran what, nothing checked a number a page showed.
+- **Decision:**
+  - **Analysts.** A role of an airport's staff, `ANALYST`, outside the order of the live roles
+    (operator, supervisor, administrator): simulations of the airport only, no command, no ticket,
+    no audit of a checkpoint. Administrators may simulate too; operators and supervisors may not.
+    Routes say `x-gateflow-role: ANALYST`.
+  - **Saved scenarios.** An airport's scenarios live on the server, named by the hash results
+    record (`sha256:` of the canonical JSON), kept as the JSON file the CLI runs (airport and
+    flight list inline), append-only. A scenario must read back to the same hash before it is
+    kept. `POST /v1/simulation-scenarios`, `gateflow-api scenario add`, and the seed (its
+    scenario) save them; the file comes back by `GET /v1/simulation-scenarios/{id}/file`.
+  - **Runs.** `POST /v1/simulations` takes either settings, as the CLI's command line (the saved
+    scenario's hash, the seeds, the presets, the status quo, the comparisons, the resamples, with
+    the CLI's defaults), or the manifest of results to compute again (the policies whole). Both
+    become the experiment of a manifest (seeds, whole policies, status quo, comparisons,
+    classification, bootstrap), stored as JSON text so that the policies keep the order of their
+    fields. The run waits its turn.
+  - **The runner.** Each server takes the oldest run that waits (`FOR UPDATE SKIP LOCKED`), one at
+    a time, and computes it on worker threads of its own bundle: the plan with the forecast of
+    arrivals, the days, the statistics. Nothing of a simulation runs on the thread that serves
+    the live checkpoints. `serve --sim-workers <n>` (all the processors but one; 0: another
+    server simulates). A heartbeat every 2 seconds says the server is at it and learns of a
+    cancellation; a run whose server went quiet for a minute waits again, and a server that stops
+    puts its run back. The results do not depend on the server or the threads. An airport that
+    wants its checkpoints' servers to keep every processor runs them with `--sim-workers 0` and
+    a server of its own for simulations, on the same database.
+  - **Results.** The results document as written (`gateflow.sim.results/7`), naming the API as
+    its generator and the bundle's source revision (written at build, ADR-014), with its SHA-256
+    and its **fingerprint**: the SHA-256 of its canonical JSON without the generator and the
+    revision. The same experiment has the same fingerprint, whichever tool computed it. The
+    reports are rendered from it: Markdown, and HTML with no script under a policy of its own.
+    Everything downloads.
+  - **Reproducible.** `POST /v1/simulations/{id}/reproduce` computes the manifest again; the run
+    says whether it gave the same fingerprint. A manifest from elsewhere with its
+    `expectedFingerprint` (a results file of the CLI, a run of the Studio) does the same. The
+    manifest is checked as GateFlow's tools make it: valid policies, the classification of the
+    first priority policy, comparisons among them, seeds written as results write them.
+  - **Limits.** 1,000 days, 8 policies and 10,000 resamples per run; 20 runs of an airport
+    waiting at once; the 100 latest listed.
+  - **The Studio at `/sim`.** A third build of the same page: its GateFlow panel signs an analyst
+    in, saves the run on screen (its scenario, then its manifest with the fingerprint of the
+    page's results), lists the airport's runs and opens them. It connects to its own server only
+    (`connect-src 'self'`), and its script is allowed by its hash, not as any inline script; the
+    server sends the same policy as a header, with `frame-ancestors 'none'`. The offline pages do
+    not contain the panel at all, and still never use the network.
+- **Alternatives considered:**
+  - **Simulating on the server's thread:** 200 days of a library scenario take minutes of
+    processor time; kiosks and the displays' stream would wait. Worker threads, as the CLI.
+  - **A queue service of its own (Redis, a job runner):** one more service at an airport, for a
+    queue PostgreSQL already gives (`SKIP LOCKED`, a heartbeat).
+  - **Results in `jsonb`:** PostgreSQL reorders keys; the file would not be the CLI's byte for
+    byte. Text, with its hash.
+  - **Keeping the Studio's numbers as sent:** a page can be changed; the server computes them
+    again and says whether they are the same.
+  - **The hash of the whole file as the fingerprint:** the generator and the revision differ by
+    construction between the CLI, the Studio and the API.
+  - **Reproducing from the presets' names:** a preset can change from one version to the next;
+    the manifest's whole policies are what was simulated.
+- **Evidence:**
+  - sim-metrics: results computed again from their manifest, read back as JSON, are the same
+    bytes; another generator and revision give the same fingerprint, other days another; a
+    manifest the tools would not write is refused (seeds, counts, policies, classification,
+    statistics, limits);
+  - the API on PostgreSQL (13 tests): a run asked with settings gives the results of the CLI's
+    experiment, byte for byte with the API as generator, and the fingerprint of the CLI's file;
+    reproduced, the same bytes and `matches: true`; from the CLI's manifest with its fingerprint,
+    `true`, with a wrong one `false`; the reports, the HTML with no script; the history, of the
+    airport only; scenarios saved once, read back, append-only; settings and manifests refused;
+    20 runs waiting at most; analysts and administrators only, and an analyst nothing of a live
+    checkpoint; a run cancelled while it simulates keeps nothing; a run whose server went quiet
+    is simulated again; a server that stops puts its run back;
+  - CI, with the bundles: `serve --sim-workers 2`, a simulation of 20 days of the VCE-like peak
+    with three policies through HTTP gives `gateflow-sim run`'s file but for the generator and
+    the revision; its reproduction is the same file and says so; the report runs no script;
+  - Chromium, on the product: the Studio at `/sim` simulates a run, an analyst saves it, GateFlow
+    simulates it again on its threads and finds the page's results, the run opens back in the
+    page; a wrong password and an operator are told; no request elsewhere.
+- **Consequences:**
+  - Predict (M4) can run its forecasts on the same runner.
+  - Results stay SIMULATED: every document carries the disclaimer; a scenario's data
+    classification goes with its runs, and an airport's scenarios are its analysts' only.
+  - M5: analysts sign in as staff do (OIDC and MFA then).

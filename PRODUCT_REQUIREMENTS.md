@@ -62,11 +62,11 @@ without disproportionate harm to passengers who are not prioritised (ADR-002).
 | FR-15 | Data quality: every datum has a source, observation time, validity and confidence; stale data leaves automatic mode for the affected criterion. |
 | FR-16 | Dedicated paths for assisted passengers, groups and families, without penalising existing rights. Since S15, staff give a party one number at the lane (ADR-045), and people travelling together take one number at the kiosk by scanning each of their boarding passes onto it; an infant on its parent's boarding pass counts too, once (0.15.1, ADR-046). |
 | FR-17 | Defined degraded modes for network or device failure; never disable security barriers. Since S16 a display that loses the server sends passengers to the staff (ADR-047); since S17 the supervisor's emergency stops calls, kiosks and the call timers, so nobody becomes a no-show (ADR-048). |
-| FR-18 | Simulator: scenarios (synthetic or from the airport's flight list, with the source and licence of every datum), policies (FIFO, rules, variants, lane opening by a supervisor or by recommendation, with the staff on call and a duty manager who may not follow), multi-seed batches, KPIs, reports, comparisons; in the command line and in the Simulator Studio, a page that runs offline in the browser (ADR-040); the replay of a day with each passenger's journey, the paired outcome and the reason for every call (ADR-041). |
+| FR-18 | Simulator: scenarios (synthetic or from the airport's flight list, with the source and licence of every datum), policies (FIFO, rules, variants, lane opening by a supervisor or by recommendation, with the staff on call and a duty manager who may not follow), multi-seed batches, KPIs, reports, comparisons; in the command line and in the Simulator Studio, a page that runs offline in the browser (ADR-040); the replay of a day with each passenger's journey, the paired outcome and the reason for every call (ADR-041). Since S19 also through the API: an airport's analysts save its scenarios and ask the server for runs, which it simulates on worker threads and keeps with their history; the Studio served by GateFlow saves its runs (ADR-052). |
 | FR-19 | Forecasts at 15/30/60/90 min, saturation, lane-opening recommendations with logged decisions and outcomes (simulated in S8: ADR-039). |
 | FR-20 | Passenger information: current waits, forecast at arrival time, flight-based estimate, indicative priority only. Since S14 the passenger's page shows the ticket's state and what to do now; waits and estimates are not shown yet. |
 | FR-21 | Coordination between checkpoints: informative first, operator-driven later, never automatic reassignment. |
-| FR-22 | Analytics and exports, with simulated and observed results clearly separated. Since S18 the digital twin's tickets (source TWIN) and flights (SIMULATED) live on checkpoints of their own, which staff and kiosks cannot write to, never mixed with an airport's (ADR-051). |
+| FR-22 | Analytics and exports, with simulated and observed results clearly separated. Since S18 the digital twin's tickets (source TWIN) and flights (SIMULATED) live on checkpoints of their own, which staff and kiosks cannot write to, never mixed with an airport's (ADR-051). Since S19 a simulation's results, Markdown report and HTML report download from the API, every document marked SIMULATED (ADR-052). |
 
 ## 5. Non-functional requirements
 
@@ -79,7 +79,7 @@ without disproportionate harm to passengers who are not prioritised (ADR-002).
 | NFR-05 | Performance targets (hypotheses to negotiate): state propagation < 3 s on a healthy network; device heartbeat < 60 s. |
 | NFR-06 | Resilience: defined degraded modes, tested backup and restore; fail-safe never grants access to restricted areas. |
 | NFR-07 | Idempotent commands; no duplicates. |
-| NFR-08 | Reproducible simulations: seeds, versions, explicit assumptions, byte-identical outputs. |
+| NFR-08 | Reproducible simulations: seeds, versions, explicit assumptions, byte-identical outputs. Since S19 a run of the API is reproducible from its manifest and says so: its results' fingerprint (without the generator and the revision) is the same in the CLI, the Studio and the API (ADR-052). |
 | NFR-09 | Scalable from small to large airports; multi-airport and multi-tenant from day one in the data model. |
 | NFR-10 | Sellable in Italy and Mexico: IT, EN and ES; IANA time zones only; data residency options. The passengers' screens are in Italian, English and Mexican Spanish since S14. |
 | NFR-11 | Accessibility of kiosk, display and passenger pages (WCAG 2.2 AA / EN 301 549 target). Since S14 the pages set their language, announce changes of state, keep a visible focus and large touch targets; a formal audit is still to do. |
@@ -122,7 +122,9 @@ decision core, mandatory pre-booking.
 Passenger (anonymous), lane operator, supervisor, airport administrator, policy approver
 (four-eyes), analyst, auditor, service engineer (time-limited access), platform administrator
 (break-glass only), and device principals (kiosk, display, access reader). The full permission
-matrix is in section 2.6 of the kickoff proposal.
+matrix is in section 2.6 of the kickoff proposal. Since S19 the analyst exists: simulations of
+the airport (scenarios, runs, exports), with no command and no view of a live checkpoint
+(ADR-052).
 
 ## 8. Regulatory and compliance constraints
 

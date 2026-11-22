@@ -8,3 +8,6 @@ declare module 'studio:build' {
   export const STUDIO_VERSION: string;
   export const COMMIT: string;
 }
+
+/** True in the page GateFlow serves at `/sim` (S19), false in the offline pages (build.mjs). */
+declare const __STUDIO_SERVER__: boolean;

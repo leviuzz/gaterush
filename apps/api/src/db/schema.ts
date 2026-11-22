@@ -8,6 +8,7 @@ import {
   foreignKey,
   index,
   integer,
+  json,
   jsonb,
   pgTable,
   primaryKey,
@@ -417,7 +418,7 @@ export const staffUser = pgTable(
   },
   (t) => [
     unique('staff_user_login').on(t.login),
-    check('staff_user_role', sql`${t.role} IN ('OPERATOR', 'SUPERVISOR', 'ADMIN')`),
+    check('staff_user_role', sql`${t.role} IN ('OPERATOR', 'SUPERVISOR', 'ADMIN', 'ANALYST')`),
     check('staff_user_login_format', sql`${t.login} ~ '^[a-z0-9][a-z0-9._-]{2,62}$'`),
     check('staff_user_password_hash', sql`${t.passwordHash} LIKE 'scrypt$%'`),
   ],
@@ -582,5 +583,93 @@ export const twinRun = pgTable(
       sql`${t.state} IN ('RUNNING', 'STOPPED', 'FINISHED', 'DIVERGED', 'FAILED')`,
     ),
     check('twin_run_speed', sql`${t.speed} IS NULL OR ${t.speed} >= 1`),
+  ],
+);
+
+/**
+ * The scenarios of an airport's simulations (S19): immutable, named by the hash the CLI and the
+ * Studio record (`sha256:` of the canonical JSON), self-contained (the airport's configuration and
+ * the flight list inline). The content is the scenario as a JSON file the CLI runs, kept as text.
+ */
+export const simScenario = pgTable(
+  'sim_scenario',
+  {
+    id: uuid('id').primaryKey(),
+    airportId: uuid('airport_id')
+      .notNull()
+      .references(() => airport.id),
+    hash: text('hash').notNull(),
+    /** The scenario's own id and title. */
+    scenarioId: text('scenario_id').notNull(),
+    title: text('title').notNull(),
+    /** `SYNTHETIC`, `AIRPORT_PROVIDED`...: what its data are. */
+    dataClassification: text('data_classification').notNull(),
+    content: text('content').notNull(),
+    createdAtMs: ms('created_at_ms').notNull(),
+    /** Who saved it: `staff:<id>`, `cli` or `system`. */
+    createdBy: text('created_by').notNull(),
+  },
+  (t) => [
+    unique('sim_scenario_hash').on(t.airportId, t.hash),
+    check('sim_scenario_hash_format', sql`${t.hash} ~ '^sha256:[0-9a-f]{64}$'`),
+  ],
+);
+
+/**
+ * A simulation (S19): what to simulate, how far the server went, and the results document,
+ * exactly as written. A run can be asked to give known results: those of the run it reproduces,
+ * or those the Studio computed in a browser; it then says whether it gave them.
+ */
+export const simRun = pgTable(
+  'sim_run',
+  {
+    id: uuid('id').primaryKey(),
+    /** The order runs were asked for, whatever the clocks of the servers. */
+    seq: bigint('seq', { mode: 'number' }).generatedAlwaysAsIdentity().notNull(),
+    airportId: uuid('airport_id')
+      .notNull()
+      .references(() => airport.id),
+    scenarioRef: uuid('scenario_ref')
+      .notNull()
+      .references(() => simScenario.id),
+    /** What the analyst called it. */
+    label: text('label'),
+    /**
+     * Seeds, whole policies, status quo, comparisons, classification, bootstrap: JSON as written
+     * (not jsonb), so that the policies keep the order of their fields in the results.
+     */
+    request: json('request').notNull(),
+    /** QUEUED, RUNNING, DONE, FAILED or CANCELLED. */
+    state: text('state').notNull(),
+    daysTotal: integer('days_total').notNull(),
+    daysDone: integer('days_done').notNull().default(0),
+    /** The results document as written, its SHA-256, and the fingerprint of what it simulated. */
+    results: text('results'),
+    resultsHash: text('results_hash'),
+    fingerprint: text('fingerprint'),
+    /** The run this one reproduces from its manifest. */
+    reproduces: uuid('reproduces').references((): AnyPgColumn => simRun.id),
+    /** The fingerprint of the results it must give: the reproduced run's, or the Studio's. */
+    expectedFingerprint: text('expected_fingerprint'),
+    /** Whether it gave them: null when nothing was expected, or until it is done. */
+    matches: boolean('matches'),
+    error: text('error'),
+    createdBy: text('created_by').notNull(),
+    createdAtMs: ms('created_at_ms').notNull(),
+    startedAtMs: ms('started_at_ms'),
+    endedAtMs: ms('ended_at_ms'),
+    /** When the server simulating it last wrote its progress, and which server. */
+    updatedAtMs: ms('updated_at_ms').notNull(),
+    runner: text('runner'),
+  },
+  (t) => [
+    index('sim_run_airport').on(t.airportId, t.seq),
+    index('sim_run_waiting').on(t.state, t.seq),
+    check('sim_run_state', sql`${t.state} IN ('QUEUED', 'RUNNING', 'DONE', 'FAILED', 'CANCELLED')`),
+    check('sim_run_days', sql`${t.daysDone} >= 0 AND ${t.daysDone} <= ${t.daysTotal}`),
+    check(
+      'sim_run_done',
+      sql`(${t.state} = 'DONE') = (${t.results} IS NOT NULL AND ${t.fingerprint} IS NOT NULL)`,
+    ),
   ],
 );

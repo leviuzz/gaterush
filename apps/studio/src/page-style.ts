@@ -52,7 +52,7 @@ body {
 .hint { margin: 0; font-size: 13px; color: var(--text-secondary); }
 .field { display: grid; gap: 4px; min-width: 0; }
 .field > label, .label { font-size: 13px; color: var(--text-secondary); }
-select, input[type="number"], input[type="text"], textarea {
+select, input[type="number"], input[type="text"], input[type="password"], textarea {
   font: inherit; font-size: 14px; color: var(--text-primary); background: var(--page);
   border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; width: 100%; min-width: 0;
 }
@@ -86,6 +86,12 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
 .progress { height: 6px; background: var(--grid); border-radius: 999px; overflow: hidden; }
 .progress > div { height: 100%; background: var(--accent); transition: width 0.2s ease; }
 .status { font-size: 13px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+#gateflow h3 { margin: 4px 0 0; font-weight: 600; }
+.gateflow-runs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.gateflow-runs li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; padding: 6px 0; border-top: 1px solid var(--grid); }
+.gateflow-runs li:first-child { border-top: 0; }
+.gateflow-run-title { font-size: 14px; min-width: 0; overflow-wrap: anywhere; flex: 1 1 14em; }
+.gateflow-runs li[data-matches="false"] .status { color: var(--danger); font-weight: 600; }
 .error { margin: 0; color: var(--danger); background: var(--danger-soft); border-radius: 6px; padding: 8px 10px; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .facts { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--text-secondary); }
 .facts b { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }

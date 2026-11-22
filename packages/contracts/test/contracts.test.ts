@@ -184,6 +184,17 @@ describe('the API contracts', () => {
     expect(DisplayMessage.parse(message)).toEqual(message);
   });
 
+  it('describe the reports of simulations as what they are (S19)', () => {
+    const doc = openApiDocument('0.19.0') as {
+      paths: Record<string, Record<string, { responses: Record<string, { content: object }> }>>;
+    };
+    const content = (path: string) =>
+      Object.keys(doc.paths[path]?.get?.responses['200']?.content ?? {});
+    expect(content('/v1/simulations/{runId}/report')).toEqual(['text/markdown']);
+    expect(content('/v1/simulations/{runId}/report.html')).toEqual(['text/html']);
+    expect(content('/v1/simulations/{runId}/results')).toEqual(['application/json']);
+  });
+
   it('mark the routes only staff may call, with the role each needs (S15)', () => {
     const doc = openApiDocument('0.15.0') as {
       paths: Record<string, Record<string, { 'x-gateflow-role'?: string }>>;
@@ -224,6 +235,18 @@ describe('the API contracts', () => {
       'post /v1/twin/runs/{runId}/speed': 'ADMIN',
       'post /v1/twin/runs/{runId}/stop': 'ADMIN',
       'post /v1/twin/runs/{runId}/display': 'ADMIN',
+      // Simulations (S19): analysts and administrators of the airport.
+      'post /v1/simulation-scenarios': 'ANALYST',
+      'get /v1/simulation-scenarios': 'ANALYST',
+      'get /v1/simulation-scenarios/{scenarioId}/file': 'ANALYST',
+      'post /v1/simulations': 'ANALYST',
+      'get /v1/simulations': 'ANALYST',
+      'get /v1/simulations/{runId}': 'ANALYST',
+      'get /v1/simulations/{runId}/results': 'ANALYST',
+      'get /v1/simulations/{runId}/report': 'ANALYST',
+      'get /v1/simulations/{runId}/report.html': 'ANALYST',
+      'post /v1/simulations/{runId}/reproduce': 'ANALYST',
+      'post /v1/simulations/{runId}/cancel': 'ANALYST',
     });
     for (const [key, role] of Object.entries(roles)) {
       const [method = '', path = ''] = key.split(' ');

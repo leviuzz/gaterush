@@ -20,9 +20,20 @@ import type { Clock } from './time';
  * - Repeated failures for one login are slowed down (per server).
  */
 
-/** The roles of the MVP, each with what the previous one may do (kickoff 2.6). */
-export const STAFF_ROLES = ['OPERATOR', 'SUPERVISOR', 'ADMIN'] as const;
+/** The roles of the live checkpoints, each with what the previous one may do (kickoff 2.6). */
+export const LIVE_ROLES = ['OPERATOR', 'SUPERVISOR', 'ADMIN'] as const;
+export type LiveRole = (typeof LIVE_ROLES)[number];
+/**
+ * Every role of an airport's staff: the live ones, and the analysts (S19), who simulate and have
+ * no right on a live checkpoint.
+ */
+export const STAFF_ROLES = [...LIVE_ROLES, 'ANALYST'] as const;
 export type StaffRole = (typeof STAFF_ROLES)[number];
+
+/** Whether a member may simulate (S19): analysts and administrators. */
+export function simulates(member: StaffMember): boolean {
+  return member.role === 'ANALYST' || member.role === 'ADMIN';
+}
 
 export interface StaffMember {
   readonly id: string;
@@ -264,7 +275,7 @@ export async function requireStaff(
   db: Db,
   clock: Clock,
   request: FastifyRequest,
-  role: StaffRole,
+  role: LiveRole,
   checkpointId: string,
 ): Promise<{ readonly member: StaffMember; readonly checkpoint: CheckpointRow }> {
   requireSameOrigin(request);
@@ -272,7 +283,8 @@ export async function requireStaff(
   if (member === null) throw new ApiError(401, 'SIGN_IN_REQUIRED', 'sign in as staff first');
   const checkpoint = await loadCheckpoint(db, checkpointId);
   const allowed =
-    STAFF_ROLES.indexOf(member.role) >= STAFF_ROLES.indexOf(role) &&
+    // An analyst has no live role: indexOf gives -1.
+    (LIVE_ROLES as readonly string[]).indexOf(member.role) >= LIVE_ROLES.indexOf(role) &&
     member.airportId === checkpoint.airportId &&
     (member.checkpointIds === null || member.checkpointIds.includes(checkpoint.id));
   if (!allowed) {

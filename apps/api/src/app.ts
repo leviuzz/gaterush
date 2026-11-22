@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import fastifyCookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
 import { and, asc, desc, eq, gte, inArray, isNull, lte, notInArray } from 'drizzle-orm';
@@ -68,7 +68,7 @@ import {
   signOut,
   staffOf,
 } from './staff';
-import type { StaffMember, StaffRole } from './staff';
+import type { LiveRole, StaffMember } from './staff';
 import type { Accepted, ScanOutcome, ScanReason } from './intake';
 import type { Db } from './db/client';
 import { airport, checkpoint, flight, queueCommand, queueToken } from './db/schema';
@@ -80,6 +80,9 @@ import type { BuildContext, CheckpointRow } from './runtime';
 import { localDate, systemClock } from './time';
 import type { Clock } from './time';
 import { TwinRunner, twinFlightsOf } from './twin';
+import { registerSimulationRoutes } from './simulation-routes';
+import { SimulationRunner } from './simulations';
+import type { SimulationThreads } from './simulations';
 import { registerTwinRoutes } from './twin-routes';
 import { verifyChain } from './verify';
 import { API_VERSION } from './version';
@@ -92,6 +95,11 @@ export interface AppOptions {
   readonly logger?: boolean | { readonly stream: { write(line: string): void } };
   /** The built web application (kiosk, ticket page...), served at `/` when given. */
   readonly webRoot?: string;
+  /**
+   * The Simulator Studio's page for GateFlow (`gateflow-studio.server.html`, S19), served at
+   * `/sim` when given, under its own security policy.
+   */
+  readonly studioPage?: string;
   /**
    * The timers of the queue (S15): `auto` applies them every second while the server listens;
    * `manual` (the default, for tests) leaves it to `app.timers.tick()`.
@@ -111,6 +119,18 @@ export interface AppOptions {
     /** The real time of the pacing (tests): the system's clock by default. */
     readonly realClock?: Clock;
   };
+  /**
+   * The simulations this server runs (S19): where it simulates, and whether it looks for runs
+   * waiting by itself (`auto`, every second while it listens) or leaves it to
+   * `app.simulations.runNext()` (`manual`, tests). Without it, the server answers the routes of
+   * simulations but another server simulates.
+   */
+  readonly simulations?: {
+    readonly threads: SimulationThreads;
+    readonly runs?: 'auto' | 'manual';
+    readonly heartbeatMs?: number;
+    readonly staleMs?: number;
+  };
 }
 
 declare module 'fastify' {
@@ -119,6 +139,8 @@ declare module 'fastify' {
     readonly timers: TimerScheduler;
     /** The runs of the digital twin on this server (S18), when the server has the twin. */
     readonly twin: TwinRunner | null;
+    /** The simulations this server runs (S19), when it runs them. */
+    readonly simulations: SimulationRunner | null;
   }
 }
 
@@ -352,6 +374,36 @@ export function buildApp(options: AppOptions): FastifyInstance {
     });
   }
 
+  /** Simulations (S19): the routes on every server, the work on those that run it. */
+  const simulations =
+    options.simulations === undefined
+      ? null
+      : new SimulationRunner(options.db, clock, {
+          threads: options.simulations.threads,
+          ...(options.simulations.heartbeatMs === undefined
+            ? {}
+            : { heartbeatMs: options.simulations.heartbeatMs }),
+          ...(options.simulations.staleMs === undefined
+            ? {}
+            : { staleMs: options.simulations.staleMs }),
+          onError: (error) => {
+            app.log.error(error);
+          },
+        });
+  app.decorate('simulations', simulations);
+  registerSimulationRoutes(app, { db: options.db, clock, ids, runner: simulations });
+  if (simulations !== null) {
+    if (options.simulations?.runs === 'auto') {
+      app.addHook('onReady', () => {
+        simulations.start();
+      });
+    }
+    // Before the server stops: the run under way waits again, for another server.
+    app.addHook('preClose', async () => {
+      await simulations.stop();
+    });
+  }
+
   /** The streams of the checkpoints: displays and lane stations follow the queue (S16). */
   const hub = new StreamHub(options.db, options.streams?.pollMs ?? POLL_MS);
   const heartbeatMs = options.streams?.heartbeatMs ?? HEARTBEAT_MS;
@@ -402,7 +454,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
    */
   const staffFor = async (
     request: FastifyRequest<{ Params: { checkpointId: string } }>,
-    role: StaffRole,
+    role: LiveRole,
   ): Promise<StaffMember> =>
     (await requireStaff(options.db, clock, request, role, request.params.checkpointId)).member;
 
@@ -433,7 +485,10 @@ export function buildApp(options: AppOptions): FastifyInstance {
     void reply.header('Referrer-Policy', 'no-referrer');
     const type = reply.getHeader('content-type');
     if (typeof type === 'string' && type.startsWith('text/html')) {
-      void reply.header('Content-Security-Policy', WEB_CSP);
+      // A page with a policy of its own keeps it (a simulation's report, S19).
+      if (reply.getHeader('content-security-policy') === undefined) {
+        void reply.header('Content-Security-Policy', WEB_CSP);
+      }
       // A ticket's address is its key: no search engine may keep one.
       void reply.header('X-Robots-Tag', 'noindex, nofollow');
     }
@@ -465,6 +520,23 @@ export function buildApp(options: AppOptions): FastifyInstance {
     }
     return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'no such route' } });
   });
+
+  // The Simulator Studio (S19): its page allows its own script, by hash, and connects to this
+  // server only. A meta element cannot forbid framing: the header adds it.
+  if (options.studioPage !== undefined && existsSync(options.studioPage)) {
+    const page = readFileSync(options.studioPage, 'utf8');
+    const policy = /<meta http-equiv="Content-Security-Policy" content="([^"]+)">/.exec(page)?.[1];
+    if (policy === undefined) throw new Error('the Studio page has no security policy');
+    const csp = `${policy}; frame-ancestors 'none'`;
+    app.get('/sim', (_request, reply) =>
+      reply
+        .type('text/html; charset=utf-8')
+        .header('Content-Security-Policy', csp)
+        .header('Cache-Control', 'no-cache')
+        .header('X-Robots-Tag', 'noindex, nofollow')
+        .send(page),
+    );
+  }
 
   app.get('/v1/health', () => ({ status: 'ok', version: API_VERSION }));
 

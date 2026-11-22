@@ -4,6 +4,62 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Any change that alters simulated numbers
 must be listed, together with the component versions it bumps.
 
+## [0.19.0] - 2026-11-22: Slice S19, simulations through the API
+
+Analysts save an airport's scenarios and ask the server for simulations; the servers simulate
+them on worker threads and keep the results file as the CLI writes it, with a fingerprint that
+any tool can compute. A run is reproducible from its manifest, and says so. The Simulator Studio,
+served by GateFlow at `/sim`, saves its runs and opens the airport's (ADR-052).
+
+### Simulated numbers change
+
+- None.
+
+### Added
+
+- The role `ANALYST`: simulations of the airport only, no right on a live checkpoint;
+  administrators may simulate too (`gateflow-api user add --role analyst`).
+- API 0.19.0:
+  - `POST /v1/simulation-scenarios` (a scenario whole, checked and named by its hash; the same
+    content once), `GET /v1/simulation-scenarios`, `GET /v1/simulation-scenarios/{id}/file`;
+  - `POST /v1/simulations` from settings as the CLI's command line, or from the manifest of
+    results (with `expectedFingerprint`, results to compare with); `GET /v1/simulations` (the
+    latest 100), `GET /v1/simulations/{id}`, `/results` (the file as written), `/report`
+    (Markdown), `/report.html` (no script), `POST /v1/simulations/{id}/reproduce` and `/cancel`;
+  - the runner: the oldest run that waits, one at a time per server, on worker threads of the
+    bundle (`serve --sim-workers <n>`; all the processors but one by default, 0 for none); a
+    heartbeat, cancellation, a run whose server went quiet waits again, a server that stops puts
+    its run back;
+  - the results name `gateflow-api` and the bundle's source revision, written at build;
+  - `gateflow-api scenario add --airport <code> --scenario <file>`; `seed` saves its scenario;
+  - `serve --studio <file>`: the Studio's page at `/sim` (by default the one built next to the
+    API), under its own security policy;
+  - limits: 1,000 days, 8 policies, 10,000 resamples per run; 20 runs of an airport waiting;
+  - migration `0012_simulations`: `sim_scenario` (append-only), `sim_run`; the role `ANALYST`.
+- Contracts 0.11.0: `ScenarioHash`, `ResultsFingerprint`, `SimulationScenario`,
+  `AddSimulationScenarioRequest`/`Response`, `SimulationScenariosResponse`, `SimulationState`,
+  `SimulationSettings`, `SimulationManifest`, `CreateSimulationRequest`, `SimulationRun`,
+  `SimulationsResponse`, `SimulationResults`; `ANALYST` among the staff roles; a route's response
+  may say its content type (the reports).
+- sim-metrics 0.10.0: `experimentFromManifest` (the experiment of a manifest, checked as the
+  tools make them), `parseSeedRanges`, `fingerprintMaterial` (the canonical JSON of results
+  without their generator and revision), `resolveComparisons` exported.
+- Studio 0.12.0: `dist/gateflow-studio.server.html`, the page GateFlow serves: sign in, save the
+  run on screen, the airport's runs (with whether GateFlow found the page's results), open one.
+  It connects to its own server only; its script is allowed by its hash. The offline pages do
+  not contain it.
+- Web 0.19.0: the analyst's role in the three languages.
+- CI: a simulation through the bundle on two threads against `gateflow-sim run`, and its
+  reproduction; the Studio at `/sim` in Chromium.
+
+### Changed
+
+- A page of the API with a security policy of its own keeps it (the report, the Studio).
+
+### Fixed
+
+- The console's end-to-end test waits for the answer of an override as well as the list.
+
 ## [0.18.0] - 2026-11-22: Slice S18, the digital twin
 
 The simulator drives the live system at an accelerated time (ADR-051): a scenario's day, played

@@ -72,6 +72,49 @@ jobs:
           grep -q '^SAME ORDER' twin.txt
           node apps/api/dist/gateflow-api.mjs twin --scenario scenarios/mx-like-transfer-hub.yaml --seed 2 --policy virtual-fifo | tee twin-mx.txt
           grep -q '^SAME ORDER' twin-mx.txt
+      - name: Simulations through the API (S19) - a run on worker threads gives the CLI's results, and its reproduction the same
+        run: |
+          API="node apps/api/dist/gateflow-api.mjs"
+          $API user add --airport vce-like --login ci.analyst --role analyst | tee analyst.txt
+          PASSWORD=$(sed -n 's/^password //p' analyst.txt)
+          $API serve --port 18081 --sim-workers 2 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:18081/v1/health && break; sleep 1; done
+          curl -sf -c sim-jar.txt -X POST http://127.0.0.1:18081/v1/auth/sign-in -H 'Content-Type: application/json' \
+            -d "{\"login\":\"ci.analyst\",\"password\":\"$PASSWORD\"}"
+          json() { node -e "const v = JSON.parse(require('fs').readFileSync(0, 'utf8')); process.stdout.write(String($1))"; }
+          # The seed saved its scenario for the airport's simulations.
+          HASH=$(curl -sf -b sim-jar.txt http://127.0.0.1:18081/v1/simulation-scenarios \
+            | json "v.scenarios.find((s) => s.scenarioId === 'vce-like-peak-day').hash")
+          RUN=$(curl -sf -b sim-jar.txt -X POST http://127.0.0.1:18081/v1/simulations -H 'Content-Type: application/json' \
+            -d "{\"settings\":{\"scenarioHash\":\"$HASH\",\"seeds\":\"1-20\",\"policies\":[\"fifo\",\"fifo-manual\",\"priority-v3\"]}}" \
+            | json v.id)
+          done_or_fail() {
+            for i in $(seq 1 600); do
+              STATE=$(curl -sf -b sim-jar.txt "http://127.0.0.1:18081/v1/simulations/$1" | json v.state)
+              [ "$STATE" = DONE ] && return 0
+              [ "$STATE" = FAILED ] || [ "$STATE" = CANCELLED ] && { echo "$1 $STATE"; return 1; }
+              sleep 1
+            done
+            return 1
+          }
+          done_or_fail "$RUN"
+          curl -sf -b sim-jar.txt "http://127.0.0.1:18081/v1/simulations/$RUN/results" > api-results.json
+          node apps/sim-cli/dist/gateflow-sim.mjs run --scenario scenarios/vce-like-peak-day.yaml --seeds 1-20 \
+            --policies fifo,fifo-manual,priority-v3 --out out/ci-api-sim --quiet
+          # The same file but for the generator and the revision.
+          node -e '
+            const fs = require("fs");
+            const strip = (f) => { const d = JSON.parse(fs.readFileSync(f, "utf8")); delete d.manifest.generator; delete d.manifest.commit; return JSON.stringify(d, null, 2); };
+            if (strip("api-results.json") !== strip("out/ci-api-sim/results.json")) { console.error("the API and the CLI differ"); process.exit(1); }'
+          # Reproduced from its manifest: the same results, byte for byte, and the run says so.
+          AGAIN=$(curl -sf -b sim-jar.txt -X POST "http://127.0.0.1:18081/v1/simulations/$RUN/reproduce" | json v.id)
+          done_or_fail "$AGAIN"
+          test "$(curl -sf -b sim-jar.txt "http://127.0.0.1:18081/v1/simulations/$AGAIN" | json v.expected.matches)" = true
+          curl -sf -b sim-jar.txt "http://127.0.0.1:18081/v1/simulations/$AGAIN/results" | cmp - api-results.json
+          # The report page runs no script.
+          curl -sfD report-headers.txt -b sim-jar.txt "http://127.0.0.1:18081/v1/simulations/$RUN/report.html" -o report.html
+          grep -qi "^content-security-policy: default-src 'none'" report-headers.txt
+          if grep -q '<script' report.html; then echo 'the report has a script'; exit 1; fi
       - name: End-to-end determinism of the CLI, whatever the number of worker threads
         run: |
           node apps/sim-cli/dist/gateflow-sim.mjs run --scenario scenarios/single-checkpoint-demo.yaml --seeds 1-20 --out out/a --quiet --workers 1

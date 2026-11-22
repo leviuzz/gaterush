@@ -9,6 +9,7 @@ export {
   needsForecast,
   normaliseSeeds,
   planExperiment,
+  resolveComparisons,
   runDay,
   runExperiment,
 } from './experiment';
@@ -42,6 +43,8 @@ export type {
   ResultsDocument,
 } from './results';
 export { renderReport } from './report';
+export { experimentFromManifest, fingerprintMaterial, parseSeedRanges } from './reproduce';
+export type { ExperimentManifest, ManifestLimits } from './reproduce';
 export {
   SWEEP_PARAMETERS,
   SweepConfigError,

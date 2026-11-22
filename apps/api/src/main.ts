@@ -1,4 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { availableParallelism } from 'node:os';
+import { isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
 import { dirname, isAbsolute, join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -16,6 +18,8 @@ import { Runtime } from './runtime';
 import { addStaff, disableStaff, resetPassword } from './staff';
 import { randomIds } from './ids';
 import { seedDemo } from './seed';
+import { SIM_WORKER_MARKER, serveSimTasks } from './sim-tasks';
+import { saveScenario } from './simulations';
 import { systemClock } from './time';
 import { TWIN_PREFIX, TwinRunner, liveCallNumbers } from './twin';
 import { API_VERSION } from './version';
@@ -29,16 +33,23 @@ Usage (DATABASE_URL names the database):
   gateflow-api device add --checkpoint <id> --kind kiosk|display|lane --name <name>
                                              Add a device; prints its token once
   gateflow-api device revoke --id <id>       Revoke a device: its token stops working
-  gateflow-api user add --airport <code> --login <login> --role operator|supervisor|admin
+  gateflow-api user add --airport <code> --login <login> --role operator|supervisor|admin|analyst
                     [--checkpoint <id>]...   Add a member of staff (every checkpoint of the
                                              airport, or those given); prints a password once
   gateflow-api user password --login <login> A new password, printed once; sessions end
   gateflow-api user disable --login <login>  Disable a member of staff: sessions end at once
+  gateflow-api scenario add --airport <code> --scenario <file>
+                                             Save a scenario for the airport's simulations;
+                                             prints its hash
   gateflow-api serve [--port 8080] [--host 127.0.0.1] [--web <dir>] [--twin <dir>]
+                    [--studio <file>] [--sim-workers <n>]
                                              Serve the API (OpenAPI at /v1/openapi.json) and
                                              the web application (kiosk, ticket page); with
                                              --twin, the digital twin of the scenarios in <dir>
-                                             for the demo page (synthetic airports only)
+                                             for the demo page (synthetic airports only); the
+                                             Simulator Studio at /sim; the simulations waiting
+                                             run on <n> threads (all the processors but one;
+                                             0: another server runs them)
   gateflow-api twin --scenario <file> [--seed 1] [--policy priority-v3|virtual-fifo]
                     [--speed <x>] [--until HH:MM] [--day YYYY-MM-DD]
                                              The digital twin: plays the scenario's simulated
@@ -52,6 +63,14 @@ Usage (DATABASE_URL names the database):
 function defaultWebRoot(): string | undefined {
   const dir = fileURLToPath(new URL('../../web/dist/', import.meta.url));
   return existsSync(`${dir}index.html`) ? dir : undefined;
+}
+
+/** The Simulator Studio's page for GateFlow next to the API, when it was built (S19). */
+function defaultStudioPage(): string | undefined {
+  const file = fileURLToPath(
+    new URL('../../studio/dist/gateflow-studio.server.html', import.meta.url),
+  );
+  return existsSync(file) ? file : undefined;
 }
 
 /** A scenario file, with the files it includes (its airport, its flights). */
@@ -82,6 +101,17 @@ function databaseUrl(): string {
   if (url === undefined || url === '')
     throw new Error('set DATABASE_URL to the PostgreSQL database');
   return url;
+}
+
+/** An airport by its code or its id. */
+async function airportIdOf(db: ReturnType<typeof connect>['db'], code: string): Promise<string> {
+  const found = await db
+    .select({ id: airport.id })
+    .from(airport)
+    .where(/^[0-9a-f-]{36}$/.test(code) ? eq(airport.id, code) : eq(airport.code, code));
+  const id = found[0]?.id;
+  if (id === undefined) throw new Error(`no airport ${code}`);
+  return id;
 }
 
 async function main(argv: string[]): Promise<number> {
@@ -187,17 +217,16 @@ async function main(argv: string[]): Promise<number> {
       try {
         if (action === 'add') {
           const role = values.role?.toUpperCase();
-          if (role !== 'OPERATOR' && role !== 'SUPERVISOR' && role !== 'ADMIN') {
-            throw new Error('--role is operator, supervisor or admin');
+          if (
+            role !== 'OPERATOR' &&
+            role !== 'SUPERVISOR' &&
+            role !== 'ADMIN' &&
+            role !== 'ANALYST'
+          ) {
+            throw new Error('--role is operator, supervisor, admin or analyst');
           }
           if (values.airport === undefined) throw new Error('--airport is required');
-          const code = values.airport;
-          const found = await database.db
-            .select({ id: airport.id })
-            .from(airport)
-            .where(/^[0-9a-f-]{36}$/.test(code) ? eq(airport.id, code) : eq(airport.code, code));
-          const airportId = found[0]?.id;
-          if (airportId === undefined) throw new Error(`no airport ${code}`);
+          const airportId = await airportIdOf(database.db, values.airport);
           const added = await addStaff(database.db, randomIds(systemClock), {
             airportId,
             login: values.login,
@@ -232,6 +261,34 @@ async function main(argv: string[]): Promise<number> {
         await database.close();
       }
     }
+    case 'scenario': {
+      const [action, ...args] = rest;
+      const { values } = parseArgs({
+        args,
+        options: { airport: { type: 'string' }, scenario: { type: 'string' } },
+        strict: true,
+      });
+      if (action !== 'add') throw new Error('scenario add');
+      if (values.airport === undefined || values.scenario === undefined) {
+        throw new Error('--airport and --scenario are required');
+      }
+      const scenario = readScenario(values.scenario);
+      const database = connect(databaseUrl(), { maxConnections: 1 });
+      try {
+        const saved = await saveScenario(database.db, randomIds(systemClock), {
+          airportId: await airportIdOf(database.db, values.airport),
+          scenario,
+          by: 'cli',
+          nowMs: systemClock.now(),
+        });
+        process.stdout.write(
+          `${saved.created ? 'saved' : 'saved already'} ${saved.row.scenarioId} ${saved.row.hash} (${saved.row.id})\n`,
+        );
+        return 0;
+      } finally {
+        await database.close();
+      }
+    }
     case 'serve': {
       const { values } = parseArgs({
         args: rest,
@@ -240,18 +297,38 @@ async function main(argv: string[]): Promise<number> {
           host: { type: 'string', default: '127.0.0.1' },
           web: { type: 'string' },
           twin: { type: 'string' },
+          studio: { type: 'string' },
+          'sim-workers': { type: 'string' },
         },
         strict: true,
       });
+      const workers =
+        values['sim-workers'] === undefined
+          ? Math.max(1, availableParallelism() - 1)
+          : Number(values['sim-workers']);
+      if (!Number.isSafeInteger(workers) || workers < 0 || workers > 256) {
+        throw new Error('--sim-workers is a number of threads from 0 to 256');
+      }
       const database = connect(databaseUrl());
       await runMigrations(database.db);
       const webRoot = values.web ?? defaultWebRoot();
+      const studioPage = values.studio ?? defaultStudioPage();
       const app = buildApp({
         db: database.db,
         logger: true,
         timers: 'auto',
         ...(webRoot === undefined ? {} : { webRoot }),
+        ...(studioPage === undefined ? {} : { studioPage }),
         ...(values.twin === undefined ? {} : { twin: { library: readLibrary(values.twin) } }),
+        // The bundle simulates on threads of itself (S19).
+        ...(workers === 0
+          ? {}
+          : {
+              simulations: {
+                threads: { workers, script: new URL(import.meta.url) },
+                runs: 'auto' as const,
+              },
+            }),
       });
       const stop = () => {
         void app.close().then(() => database.close());
@@ -401,12 +478,17 @@ async function twin(args: string[]): Promise<number> {
   }
 }
 
-main(process.argv.slice(2)).then(
-  (code) => {
-    if (code >= 0) process.exitCode = code;
-  },
-  (error: unknown) => {
-    process.stderr.write(`error: ${error instanceof Error ? error.message : String(error)}\n`);
-    process.exitCode = 1;
-  },
-);
+if (!isMainThread && workerData === SIM_WORKER_MARKER && parentPort !== null) {
+  // A thread of the simulations (S19): this file is the bundle, started again as a worker.
+  serveSimTasks(parentPort);
+} else {
+  main(process.argv.slice(2)).then(
+    (code) => {
+      if (code >= 0) process.exitCode = code;
+    },
+    (error: unknown) => {
+      process.stderr.write(`error: ${error instanceof Error ? error.message : String(error)}\n`);
+      process.exitCode = 1;
+    },
+  );
+}

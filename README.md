@@ -12,7 +12,8 @@ border procedures: it organises the flow before they start.
 > **Status: M1 done (S1 to S8); M2: the Simulator Studio (S9) and the replay of a day (S11); M3,
 > the product an airport installs: its operational core (S12), boarding passes (S13), the kiosk
 > and the passenger's page (S14), the queue's life cycle with staff who sign in and the lane
-> station (S15), the displays (S16), the supervisor's console (S17).**
+> station (S15), the displays (S16), the supervisor's console (S17), the digital twin (S18) and
+> simulations through the API (S19).**
 > This repository contains the simulation foundations:
 > - the priority engine;
 > - the queue state machine that the operational product will share;
@@ -56,9 +57,13 @@ border procedures: it organises the flow before they start.
 >   scenario's simulated day is played through the product's own commands to a checkpoint of its
 >   own, and the live system calls the same numbers in the same order as the offline simulator,
 >   checked call by call; the demo page `/demo` plays it, on the product's own screens.
+> - **Simulations through the API** (S19): an airport's analysts save its scenarios and ask the
+>   server for runs, simulated on worker threads, with their history and their exports; a run is
+>   reproducible from its manifest and says so. The Studio, served by GateFlow at `/sim`, saves
+>   its runs, and GateFlow checks it finds the page's results.
 >
-> Simulations through the API (S19) come next; staff sign in with local passwords until the
-> pilot brings the airport's identity provider. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+> Staff sign in with local passwords until the pilot brings the airport's identity provider. See
+> [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 > **All results in this repository are SIMULATED on synthetic assumptions.** They are not
 > measurements and must not be presented as evidence of operational performance.
@@ -97,6 +102,9 @@ The replay shows both policies at the same moment, the people standing, the flig
 the lanes open over the day, every call with the engine's reason, and the passengers saved, lost,
 or delayed by priority calls. Choose a passenger to follow their day under both policies, call by
 call. The page gives the trace's fingerprint and the CLI command that gives the same one.
+
+The build also writes `gateflow-studio.server.html`, the page GateFlow serves at `/sim` (S19):
+the same Studio, which can save its runs to the server and open the airport's.
 
 ### GateFlow API, kiosk and ticket page
 
@@ -177,6 +185,30 @@ board and the latest calls; and links to the twin's own display, lane station an
 only show. Its data are SIMULATED, on checkpoints of their own that staff and kiosks cannot
 write to.
 
+**Simulations through the API** (S19). An analyst (`user add --role analyst`; administrators
+may simulate too) saves the airport's scenarios and asks for runs; `serve` simulates the runs
+waiting on worker threads (`--sim-workers <n>`, all the processors but one by default, 0 to leave
+them to another server). The seed saves its scenario; another one is saved with:
+
+```bash
+node apps/api/dist/gateflow-api.mjs scenario add --airport vce-like --scenario scenarios/vce-like-peak-day.yaml
+```
+
+A run from the CLI's settings, then its results, as `gateflow-sim run` writes them but for the
+generator and the revision:
+
+```bash
+curl -b jar.txt -X POST http://127.0.0.1:8080/v1/simulations -H 'Content-Type: application/json' \
+  -d '{"settings":{"scenarioHash":"sha256:...","seeds":"1-200","policies":["fifo","fifo-manual","priority-v3"]}}'
+curl -b jar.txt http://127.0.0.1:8080/v1/simulations/<run>/results > results.json
+```
+
+`POST /v1/simulations/<run>/reproduce` computes it again from its manifest and says whether the
+results are the same. **The Studio at `/sim`** is the same page as the offline one, plus a
+GateFlow panel: sign in, save the run on screen (GateFlow simulates it again and says whether it
+found the page's results), and open the airport's runs. It connects to this server only. Every
+result is SIMULATED.
+
 The endpoints:
 - `POST /v1/checkpoints/{id}/scans`: a kiosk scans a boarding pass (with its token). The answer
   is a ticket, the same ticket again, or a reason. The pass is read in memory and never stored.
@@ -214,6 +246,12 @@ The endpoints:
 - `GET /v1/twin/options`, `GET /v1/twin`, `POST /v1/twin/runs`, and `/v1/twin/runs/{run}/speed`,
   `/stop`, `/display`: the digital twin, for the administrators of a synthetic airport, on a
   server started with `--twin` (S18).
+- `POST /v1/simulation-scenarios`, `GET /v1/simulation-scenarios` and `/{id}/file`: an
+  airport's scenarios for simulations, named by their hash (S19);
+- `POST /v1/simulations` (settings as the CLI's, or the `manifest` of results with an
+  `expectedFingerprint`), `GET /v1/simulations`, `GET /v1/simulations/{run}`, `/results`,
+  `/report`, `/report.html`, `POST /v1/simulations/{run}/reproduce` and `/cancel`: simulations,
+  for analysts and administrators (S19).
 
 Send an `Idempotency-Key` header with each command. The OpenAPI document is at
 `/v1/openapi.json`. The API's tests (`pnpm test`) start a throwaway PostgreSQL from the binaries
@@ -402,7 +440,7 @@ How to read these numbers:
 | `apps/api` | `gateflow-api`: the operational core on PostgreSQL (Fastify, Drizzle); serves the screens |
 | `apps/web` | The product's screens: the kiosk, the passenger's ticket page, the display, the lane station, the supervisor's console and the digital twin's demo page (React) |
 | `apps/sim-cli` | `gateflow-sim` command-line interface |
-| `apps/studio` | GateFlow Simulator Studio: the simulator in one offline HTML page |
+| `apps/studio` | GateFlow Simulator Studio: the simulator in one offline HTML page; a build of it is served by the API at `/sim` |
 | `airports/` | Airport configurations: the parameters of each airport and checkpoint ([guide](airports/README.md)) |
 | `scenarios/` | Scenario files, including the S7 library |
 | `scenarios/flights/` | Flight lists (CSV) and the generator of the synthetic ones |

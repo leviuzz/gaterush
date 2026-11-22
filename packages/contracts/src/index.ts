@@ -6,7 +6,7 @@ import { z } from 'zod';
  * ticket is a number, a state and a flight, never a name.
  */
 
-export const CONTRACTS_VERSION = '0.10.0';
+export const CONTRACTS_VERSION = '0.11.0';
 
 export const Segment = z.enum(['DEPARTING', 'TRANSFER']);
 
@@ -468,7 +468,7 @@ export const FlightsResponse = z.object({
 });
 
 /** The roles of airport staff (S15), each with what the previous one may do. */
-export const StaffRole = z.enum(['OPERATOR', 'SUPERVISOR', 'ADMIN']);
+export const StaffRole = z.enum(['OPERATOR', 'SUPERVISOR', 'ADMIN', 'ANALYST']);
 
 /** A member of staff signs in with their login and password (S15). */
 export const SignInRequest = z.strictObject({
@@ -682,6 +682,175 @@ export type TwinCall = z.infer<typeof TwinCall>;
 export type TwinResponse = z.infer<typeof TwinResponse>;
 export type TwinDisplayResponse = z.infer<typeof TwinDisplayResponse>;
 
+/** A scenario's name (S19): the SHA-256 of its canonical JSON, as results record it. */
+export const ScenarioHash = z.string().regex(/^sha256:[0-9a-f]{64}$/);
+
+/**
+ * The fingerprint of results (S19): the SHA-256 of their canonical JSON without the generator and
+ * the source revision. The same experiment has the same fingerprint, whichever tool computed it.
+ */
+export const ResultsFingerprint = z.string().regex(/^[0-9a-f]{64}$/);
+
+/** A scenario saved at an airport for its simulations (S19): kept whole, never changed. */
+export const SimulationScenario = z.object({
+  id: z.uuid(),
+  hash: ScenarioHash,
+  /** The scenario's own id and title. */
+  scenarioId: z.string(),
+  title: z.string(),
+  /** What its data are: `SYNTHETIC`, `AIRPORT_PROVIDED`... */
+  dataClassification: z.string(),
+  createdAt: Instant,
+  /** The login of who saved it, or `cli` and `system`. */
+  createdBy: z.string(),
+});
+
+/**
+ * An analyst saves a scenario (S19): a scenario of the simulator, whole (as the Studio exports it,
+ * its flight list included), checked as the simulator reads it. The same content is the same
+ * scenario.
+ */
+export const AddSimulationScenarioRequest = z.strictObject({
+  scenario: z.record(z.string(), z.unknown()),
+});
+
+export const AddSimulationScenarioResponse = z.object({
+  scenario: SimulationScenario,
+  /** False when the same scenario was saved already. */
+  created: z.boolean(),
+});
+
+export const SimulationScenariosResponse = z.object({ scenarios: z.array(SimulationScenario) });
+
+/** The states of a simulation (S19). */
+export const SimulationState = z.enum(['QUEUED', 'RUNNING', 'DONE', 'FAILED', 'CANCELLED']);
+
+/** Seeds as the CLI takes them, e.g. `1-200` or `1-10,42`. */
+const SeedRanges = z
+  .string()
+  .max(1000)
+  .regex(/^\d+(-\d+)?(,\d+(-\d+)?)*$/);
+
+const PolicyId = z.string().min(1).max(100);
+
+/** A paired comparison: what changes when the candidate replaces the reference. */
+export const SimulationComparison = z.strictObject({
+  candidateId: PolicyId,
+  referenceId: PolicyId,
+});
+
+/**
+ * What to simulate, as on the CLI's command line (S19): a saved scenario, the simulated days
+ * (one seed each), the policies (presets, possibly with a lane mode: `fifo-manual@reactive`), the
+ * status quo (the first policy by default), the comparisons (the recommended ones by default) and
+ * the bootstrap's resamples.
+ */
+export const SimulationSettings = z.strictObject({
+  scenarioHash: ScenarioHash,
+  seeds: SeedRanges,
+  policies: z.array(PolicyId).min(1).max(8),
+  baseline: PolicyId.optional(),
+  comparisons: z.array(SimulationComparison).min(1).max(56).optional(),
+  bootstrapResamples: z.int().min(100).max(10_000).optional(),
+});
+
+/**
+ * The manifest of results (S19), as their file has it: everything its experiment was. The server
+ * simulates it again on the saved scenario of its hash; the other fields of the manifest describe
+ * the results and are not read.
+ */
+export const SimulationManifest = z.looseObject({
+  scenario: z.looseObject({ hash: ScenarioHash }),
+  seeds: z.looseObject({ ranges: SeedRanges, count: z.int().min(1).optional() }),
+  baselinePolicyId: PolicyId,
+  policies: z.array(z.record(z.string(), z.unknown())).min(1).max(8),
+  comparisons: z.array(SimulationComparison).max(56),
+  classification: z.record(z.string(), z.unknown()),
+  statistics: z.looseObject({
+    bootstrapResamples: z.int(),
+    confidenceLevel: z.number(),
+    bootstrapSeed: z.int(),
+  }),
+});
+
+const SimulationLabel = z.string().trim().min(1).max(100);
+
+/**
+ * An analyst asks for a simulation (S19): from settings, or from the manifest of results to
+ * compute again. With `expectedFingerprint` (the Studio's results, for one), the run says whether
+ * it gave the same results.
+ */
+export const CreateSimulationRequest = z.union([
+  z.strictObject({
+    settings: SimulationSettings,
+    label: SimulationLabel.optional(),
+    expectedFingerprint: ResultsFingerprint.optional(),
+  }),
+  z.strictObject({
+    manifest: SimulationManifest,
+    label: SimulationLabel.optional(),
+    expectedFingerprint: ResultsFingerprint.optional(),
+  }),
+]);
+
+/** A simulation (S19): what it simulates, how far it went, and its results once done. */
+export const SimulationRun = z.object({
+  id: z.uuid(),
+  label: z.string().nullable(),
+  state: SimulationState,
+  scenario: SimulationScenario.pick({
+    id: true,
+    hash: true,
+    scenarioId: true,
+    title: true,
+    dataClassification: true,
+  }),
+  seeds: z.object({ count: z.int().min(1), ranges: z.string() }),
+  policies: z.array(z.string()),
+  baselinePolicyId: z.string(),
+  days: z.object({ done: z.int().min(0), total: z.int().min(1) }),
+  createdAt: Instant,
+  createdBy: z.string(),
+  startedAt: Instant.nullable(),
+  endedAt: Instant.nullable(),
+  error: z.string().nullable(),
+  /** Once done: the SHA-256 of the results file, its size and the results' fingerprint. */
+  results: z
+    .object({
+      sha256: z.string().regex(/^[0-9a-f]{64}$/),
+      bytes: z.int().min(1),
+      fingerprint: ResultsFingerprint,
+    })
+    .nullable(),
+  /**
+   * The results it had to give: those of the run it reproduces, or those of the Studio; whether it
+   * gave them, once done.
+   */
+  expected: z
+    .object({
+      fingerprint: ResultsFingerprint,
+      reproduces: z.uuid().nullable(),
+      matches: z.boolean().nullable(),
+    })
+    .nullable(),
+});
+
+export const SimulationsResponse = z.object({ runs: z.array(SimulationRun) });
+
+/** A results document of the simulator (`gateflow.sim.results/7`), as its file. */
+export const SimulationResults = z.looseObject({ schema: z.string(), disclaimer: z.string() });
+
+export type ScenarioHash = z.infer<typeof ScenarioHash>;
+export type SimulationScenario = z.infer<typeof SimulationScenario>;
+export type AddSimulationScenarioResponse = z.infer<typeof AddSimulationScenarioResponse>;
+export type SimulationScenariosResponse = z.infer<typeof SimulationScenariosResponse>;
+export type SimulationState = z.infer<typeof SimulationState>;
+export type SimulationSettings = z.infer<typeof SimulationSettings>;
+export type SimulationManifest = z.infer<typeof SimulationManifest>;
+export type CreateSimulationRequest = z.infer<typeof CreateSimulationRequest>;
+export type SimulationRun = z.infer<typeof SimulationRun>;
+export type SimulationsResponse = z.infer<typeof SimulationsResponse>;
+
 /** An endpoint of the API, for the OpenAPI document. */
 export interface Route {
   readonly method: 'get' | 'post';
@@ -691,7 +860,10 @@ export interface Route {
   readonly command: boolean;
   /** Only a registered device may call it, with its token (`Authorization: Bearer`). */
   readonly device?: boolean;
-  /** Only staff signed in with at least this role, at the checkpoint, may call it (S15). */
+  /**
+   * Only staff signed in with at least this role, at the checkpoint, may call it (S15). `ANALYST`
+   * (S19): analysts and administrators, of the airport; it gives no right on a live checkpoint.
+   */
   readonly staff?: z.infer<typeof StaffRole>;
   readonly body?: z.ZodType;
   /**
@@ -700,7 +872,15 @@ export interface Route {
    */
   readonly stream?: boolean;
   readonly responses: Readonly<
-    Record<string, { readonly description: string; readonly schema: z.ZodType }>
+    Record<
+      string,
+      {
+        readonly description: string;
+        readonly schema: z.ZodType;
+        /** `application/json` unless said (a report: `text/markdown`, `text/html`). */
+        readonly contentType?: string;
+      }
+    >
   >;
 }
 
@@ -715,6 +895,10 @@ const staffErrors = {
     description: 'Another site, or a role or checkpoint that does not allow it',
     schema: ErrorResponse,
   },
+} as const;
+
+const notDone = {
+  '409': { description: 'The simulation is not done', schema: ErrorResponse },
 } as const;
 
 const deviceErrors = {
@@ -1160,6 +1344,158 @@ export const ROUTES: readonly Route[] = [
     },
   },
   {
+    method: 'post',
+    path: '/v1/simulation-scenarios',
+    summary:
+      "An analyst saves a scenario for the airport's simulations (S19): kept whole, named by its hash",
+    command: false,
+    staff: 'ANALYST',
+    body: AddSimulationScenarioRequest,
+    responses: {
+      '201': { description: 'Saved', schema: AddSimulationScenarioResponse },
+      '200': { description: 'Saved already', schema: AddSimulationScenarioResponse },
+      ...errors,
+      ...staffErrors,
+    },
+  },
+  {
+    method: 'get',
+    path: '/v1/simulation-scenarios',
+    summary: "The scenarios saved for the airport's simulations (S19), the latest first",
+    command: false,
+    staff: 'ANALYST',
+    responses: {
+      '200': { description: 'The scenarios', schema: SimulationScenariosResponse },
+      ...errors,
+      ...staffErrors,
+    },
+  },
+  {
+    method: 'get',
+    path: '/v1/simulation-scenarios/{scenarioId}/file',
+    summary:
+      'A saved scenario as a file the CLI runs (S19): `gateflow-sim run --scenario <file>.json`',
+    command: false,
+    staff: 'ANALYST',
+    responses: {
+      '200': { description: 'The scenario file', schema: z.record(z.string(), z.unknown()) },
+      ...errors,
+      ...staffErrors,
+    },
+  },
+  {
+    method: 'post',
+    path: '/v1/simulations',
+    summary:
+      'An analyst asks for a simulation (S19): from settings, or from the manifest of results to compute again; it waits its turn',
+    command: false,
+    staff: 'ANALYST',
+    body: CreateSimulationRequest,
+    responses: {
+      '201': { description: 'Waiting its turn', schema: SimulationRun },
+      ...errors,
+      ...staffErrors,
+      '409': {
+        description: 'Too many simulations of the airport wait already',
+        schema: ErrorResponse,
+      },
+    },
+  },
+  {
+    method: 'get',
+    path: '/v1/simulations',
+    summary: "The airport's simulations (S19), the latest first",
+    command: false,
+    staff: 'ANALYST',
+    responses: {
+      '200': { description: 'The simulations', schema: SimulationsResponse },
+      ...errors,
+      ...staffErrors,
+    },
+  },
+  {
+    method: 'get',
+    path: '/v1/simulations/{runId}',
+    summary: 'A simulation (S19): its settings, how far it went, its results once done',
+    command: false,
+    staff: 'ANALYST',
+    responses: {
+      '200': { description: 'The simulation', schema: SimulationRun },
+      ...errors,
+      ...staffErrors,
+    },
+  },
+  {
+    method: 'get',
+    path: '/v1/simulations/{runId}/results',
+    summary:
+      'The results of a simulation (S19): the file, as written; SIMULATED RESULTS, not operational evidence',
+    command: false,
+    staff: 'ANALYST',
+    responses: {
+      '200': { description: 'The results document', schema: SimulationResults },
+      ...errors,
+      ...staffErrors,
+      ...notDone,
+    },
+  },
+  {
+    method: 'get',
+    path: '/v1/simulations/{runId}/report',
+    summary: 'The report of a simulation, in Markdown (S19), as the CLI writes it',
+    command: false,
+    staff: 'ANALYST',
+    responses: {
+      '200': { description: 'The report', schema: z.string(), contentType: 'text/markdown' },
+      ...errors,
+      ...staffErrors,
+      ...notDone,
+    },
+  },
+  {
+    method: 'get',
+    path: '/v1/simulations/{runId}/report.html',
+    summary: 'The report of a simulation, as a web page with its charts (S19)',
+    command: false,
+    staff: 'ANALYST',
+    responses: {
+      '200': { description: 'The report', schema: z.string(), contentType: 'text/html' },
+      ...errors,
+      ...staffErrors,
+      ...notDone,
+    },
+  },
+  {
+    method: 'post',
+    path: '/v1/simulations/{runId}/reproduce',
+    summary:
+      'Simulate a run again from its manifest (S19): the new run says whether it gave the same results',
+    command: false,
+    staff: 'ANALYST',
+    responses: {
+      '201': { description: 'Waiting its turn', schema: SimulationRun },
+      ...errors,
+      ...staffErrors,
+      '409': {
+        description: 'The simulation is not done, or too many wait already',
+        schema: ErrorResponse,
+      },
+    },
+  },
+  {
+    method: 'post',
+    path: '/v1/simulations/{runId}/cancel',
+    summary: 'Cancel a simulation that waits or runs (S19)',
+    command: false,
+    staff: 'ANALYST',
+    responses: {
+      '200': { description: 'The simulation', schema: SimulationRun },
+      ...errors,
+      ...staffErrors,
+      '409': { description: 'The simulation has ended already', schema: ErrorResponse },
+    },
+  },
+  {
     method: 'get',
     path: '/v1/tickets/{ref}',
     summary: "The passenger's view of a ticket",
@@ -1229,9 +1565,10 @@ export function openApiDocument(version: string): Record<string, unknown> {
           {
             description: r.description,
             content: {
-              [route.stream === true && status === '200'
+              [r.contentType ??
+              (route.stream === true && status === '200'
                 ? 'text/event-stream'
-                : 'application/json']: { schema: z.toJSONSchema(r.schema, { io: 'output' }) },
+                : 'application/json')]: { schema: z.toJSONSchema(r.schema, { io: 'output' }) },
             },
           },
         ]),
@@ -1274,7 +1611,7 @@ export function openApiDocument(version: string): Record<string, unknown> {
           in: 'cookie',
           name: 'gateflow_session',
           description:
-            'The session of a member of staff, from `POST /v1/auth/sign-in`: HttpOnly, SameSite=Strict. The role each route needs is in `x-gateflow-role`.',
+            'The session of a member of staff, from `POST /v1/auth/sign-in`: HttpOnly, SameSite=Strict. The role each route needs is in `x-gateflow-role`: OPERATOR, SUPERVISOR and ADMIN at least, at the checkpoint; ANALYST, analysts and administrators of the airport (simulations, S19).',
         },
       },
     },

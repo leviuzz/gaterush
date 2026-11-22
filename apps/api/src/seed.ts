@@ -7,6 +7,7 @@ import type { Db } from './db/client';
 import { airport, checkpoint, flight, organization, policyVersion } from './db/schema';
 import { policyHash } from './policies';
 import type { Ids } from './ids';
+import { saveScenario } from './simulations';
 import { localDate, serviceDayOf, zonedEpoch } from './time';
 
 /**
@@ -39,8 +40,9 @@ export interface Seeded {
 
 /**
  * Demo data from a scenario of the library: its airport, its checkpoint run with GateFlow priority
- * v3 and the airport's settings, and the scenario's flights on the service day of `now`. Running
- * it again adds what is missing and changes nothing else. Every flight is marked DEMO.
+ * v3 and the airport's settings, and the scenario's flights on the service day of `now`; the
+ * scenario is saved for the airport's simulations (S19). Running it again adds what is missing and
+ * changes nothing else. Every flight is marked DEMO.
  */
 export async function seedDemo(
   db: Db,
@@ -51,7 +53,7 @@ export async function seedDemo(
   const airportName = scenario.airport?.name ?? scenario.title;
   const timeZone = scenario.timeZone;
   const serviceDay = options.serviceDay ?? serviceDayOf(options.now, timeZone, '03:00');
-  return db.transaction(async (tx) => {
+  const seeded = await db.transaction(async (tx) => {
     let airportRow = (await tx.select().from(airport).where(eq(airport.code, airportCode)))[0];
     if (airportRow === undefined) {
       const orgId = options.ids.uuid();
@@ -157,4 +159,12 @@ export async function seedDemo(
       flights: flights.length,
     };
   });
+  // The scenario, for the airport's simulations (S19).
+  await saveScenario(db, options.ids, {
+    airportId: seeded.airportId,
+    scenario,
+    by: 'system',
+    nowMs: options.now,
+  });
+  return seeded;
 }

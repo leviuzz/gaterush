@@ -7,7 +7,11 @@
 //                                     frame provides the document; it saves files through the
 //                                     viewer's `downloads` capability (publish it with
 //                                     capabilities: { downloads: true })
+// dist/gateflow-studio.server.html    the page GateFlow serves at /sim (S19): it connects to that
+//                                     server only, to save runs and open the airport's; its
+//                                     script is allowed by its hash, not as any inline script
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { build } from 'esbuild';
 
@@ -77,15 +81,19 @@ const { PAGE_STYLE } = await import(
   `data:text/javascript;base64,${Buffer.from(style.outputFiles[0].text).toString('base64')}`
 );
 
-async function app(directDownloads) {
+async function app(directDownloads, server = false) {
   const result = await build({
     ...common,
     entryPoints: [new URL('src/main.tsx', here).pathname],
     format: 'iife',
     jsx: 'automatic',
     // The claude.ai page saves through the viewer's `downloads` capability only: its own download
-    // code is left out of that build.
-    define: { ...common.define, __STUDIO_DIRECT_DOWNLOADS__: JSON.stringify(directDownloads) },
+    // code is left out of that build. Only the page GateFlow serves talks to a server.
+    define: {
+      ...common.define,
+      __STUDIO_DIRECT_DOWNLOADS__: JSON.stringify(directDownloads),
+      __STUDIO_SERVER__: JSON.stringify(server),
+    },
     plugins: [
       {
         name: 'studio-build-constants',
@@ -143,6 +151,38 @@ const page = [
   '',
 ].join('\n');
 
+// GateFlow serves the same policy as a header, with `frame-ancestors 'none'` (a meta element
+// cannot say it).
+const serverScript = await app(true, true);
+const serverCsp = [
+  "default-src 'none'",
+  `script-src 'sha256-${createHash('sha256').update(serverScript).digest('base64')}' blob:`,
+  'worker-src blob:',
+  "style-src 'unsafe-inline'",
+  'img-src data: blob:',
+  "connect-src 'self'",
+  "base-uri 'none'",
+  "form-action 'none'",
+].join('; ');
+const server = [
+  '<!doctype html>',
+  '<html lang="en">',
+  '<head>',
+  '<meta charset="utf-8">',
+  '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">',
+  `<meta http-equiv="Content-Security-Policy" content="${serverCsp}">`,
+  `<title>${title}</title>`,
+  `<meta name="description" content="${description}">`,
+  `<style>${PAGE_STYLE}</style>`,
+  '</head>',
+  '<body>',
+  '<div id="root"></div>',
+  `<script>${serverScript}</script>`,
+  '</body>',
+  '</html>',
+  '',
+].join('\n');
+
 const artifact = [
   `<title>${title}</title>`,
   '<meta name="claude:viewport-fit-sides" content="cover">',
@@ -155,7 +195,9 @@ const artifact = [
 mkdirSync(new URL('dist/', here), { recursive: true });
 writeFileSync(new URL('dist/gateflow-studio.html', here), page);
 writeFileSync(new URL('dist/gateflow-studio.artifact.html', here), artifact);
+writeFileSync(new URL('dist/gateflow-studio.server.html', here), server);
 const kb = (text) => `${Math.round(Buffer.byteLength(text) / 1024)} KB`;
 console.log(
-  `dist/gateflow-studio.html ${kb(page)}, dist/gateflow-studio.artifact.html ${kb(artifact)}`,
+  `dist/gateflow-studio.html ${kb(page)}, dist/gateflow-studio.artifact.html ${kb(artifact)}, ` +
+    `dist/gateflow-studio.server.html ${kb(server)}`,
 );

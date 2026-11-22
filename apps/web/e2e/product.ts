@@ -15,6 +15,10 @@ import pg from 'pg';
 const API = fileURLToPath(new URL('../../api/dist/gateflow-api.mjs', import.meta.url));
 const WEB = fileURLToPath(new URL('../dist/', import.meta.url));
 const REPO = fileURLToPath(new URL('../../../', import.meta.url));
+/** The Simulator Studio's page for GateFlow (S19), which the bundle serves at /sim. */
+const STUDIO = fileURLToPath(
+  new URL('../../studio/dist/gateflow-studio.server.html', import.meta.url),
+);
 
 export interface Product {
   /** The server's address, e.g. http://127.0.0.1:43123. */
@@ -30,7 +34,7 @@ export interface Product {
   /** Members of staff of the airport, to sign in at the lane station (S15). */
   readonly staff: Readonly<
     Record<
-      'supervisor' | 'operator' | 'admin',
+      'supervisor' | 'operator' | 'admin' | 'analyst',
       { readonly login: string; readonly password: string }
     >
   >;
@@ -82,7 +86,7 @@ export async function startProduct(
     readonly twin?: boolean;
   } = {},
 ): Promise<Product> {
-  for (const file of [API, join(WEB, 'index.html')]) {
+  for (const file of [API, join(WEB, 'index.html'), STUDIO]) {
     if (!existsSync(file)) throw new Error(`${file} is missing: run pnpm build first`);
   }
   const name = `gateflow_web_${randomBytes(6).toString('hex')}`;
@@ -153,6 +157,18 @@ export async function startProduct(
     'admin',
   ]);
   const adminPassword = /^password (\S+)$/m.exec(adminAdded)?.[1] ?? '';
+  // Simulations (S19): an analyst of the airport.
+  const analystAdded = cli([
+    'user',
+    'add',
+    '--airport',
+    'vce-like',
+    '--login',
+    'e2e.analyst',
+    '--role',
+    'analyst',
+  ]);
+  const analystPassword = /^password (\S+)$/m.exec(analystAdded)?.[1] ?? '';
 
   const port = await freePort();
   const base = `http://127.0.0.1:${String(port)}`;
@@ -169,6 +185,11 @@ export async function startProduct(
         '127.0.0.1',
         '--web',
         WEB,
+        '--studio',
+        STUDIO,
+        // Simulations on two threads of the bundle (S19).
+        '--sim-workers',
+        '2',
         ...(options.twin === true ? ['--twin', join(REPO, 'scenarios')] : []),
       ],
       { env, stdio: ['ignore', 'pipe', 'pipe'] },
@@ -220,6 +241,7 @@ export async function startProduct(
       supervisor: { login: 'e2e.supervisor', password },
       operator: { login: 'e2e.operator', password: operatorPassword },
       admin: { login: 'e2e.admin', password: adminPassword },
+      analyst: { login: 'e2e.analyst', password: analystPassword },
     },
     cli,
     stopServer,

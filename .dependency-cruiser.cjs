@@ -71,6 +71,14 @@ module.exports = {
       to: { path: '^packages/contracts/', dependencyTypesNot: ['type-only'] },
     },
     {
+      name: 'studio-takes-only-types-of-contracts',
+      severity: 'error',
+      comment:
+        'The Studio served by GateFlow (S19) gets only the types of the API contracts: no Zod in the page.',
+      from: { path: '^apps/studio/src/' },
+      to: { path: '^packages/contracts/', dependencyTypesNot: ['type-only'] },
+    },
+    {
       name: 'src-does-not-import-tests',
       severity: 'error',
       from: { path: '/src/' },

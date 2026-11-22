@@ -142,6 +142,9 @@ importers:
 
   apps/studio:
     dependencies:
+      '@gateflow/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@gateflow/priority-engine':
         specifier: workspace:*
         version: link:../../packages/priority-engine

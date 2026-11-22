@@ -98,7 +98,8 @@ const staffRoutes = (answered = false) =>
     url: r.path
       .replace('{checkpointId}', checkpointId)
       .replace('{ticketId}', TICKET)
-      .replace('{runId}', TICKET),
+      .replace('{runId}', TICKET)
+      .replace('{scenarioId}', TICKET),
     role: r.staff,
   }));
 

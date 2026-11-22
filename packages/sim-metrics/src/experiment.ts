@@ -93,7 +93,11 @@ export function defaultComparisons(
     .map((p) => ({ candidateId: p.id, referenceId: baselinePolicyId }));
 }
 
-function resolveComparisons(config: ExperimentConfig): PolicyComparison[] {
+/**
+ * Checks an experiment without simulating anything (its policies' ids, the status quo, the seeds,
+ * the comparisons) and gives the comparisons it reports. Throws {@link ExperimentConfigError}.
+ */
+export function resolveComparisons(config: ExperimentConfig): PolicyComparison[] {
   const ids = config.policies.map((p) => p.id);
   if (new Set(ids).size !== ids.length) throw new ExperimentConfigError('duplicate policy ids');
   if (!ids.includes(config.baselinePolicyId)) {

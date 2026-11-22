@@ -12,6 +12,7 @@ import {
 } from '@gateflow/studio-core';
 import type { LibraryEntry, ParameterChange } from '@gateflow/studio-core';
 import { ComparePanel } from './components/ComparePanel';
+import { GateFlowPanel } from './components/GateFlowPanel';
 import { LeversPanel } from './components/LeversPanel';
 import { ParametersPanel } from './components/ParametersPanel';
 import { PoliciesPanel } from './components/PoliciesPanel';
@@ -329,6 +330,16 @@ export function App() {
           />
         </div>
         <div className="column">
+          {/* In the page GateFlow serves only: the build leaves it out of the offline pages. */}
+          {__STUDIO_SERVER__ && (
+            <GateFlowPanel
+              shown={runs.find((r) => r.id === shownRun) ?? runs[0]}
+              onOpen={(doc, label) => {
+                const id = nextRunId.current++;
+                addRun({ id, label: `#${id} ${label}`, doc, scenario: null, job: null });
+              }}
+            />
+          )}
           {runs.length > 1 && (
             <section className="panel" aria-labelledby="h-runs">
               <h2 id="h-runs">Runs of this session</h2>
@@ -373,7 +384,11 @@ export function App() {
       <footer className="footer">
         <span>GateFlow Simulator Studio {STUDIO_VERSION}</span>
         <span className="mono">source {COMMIT}</span>
-        <span>Runs offline: the page never connects to the network.</span>
+        <span>
+          {__STUDIO_SERVER__
+            ? 'Served by GateFlow: the page connects to this server only, when you sign in and save.'
+            : 'Runs offline: the page never connects to the network.'}
+        </span>
       </footer>
     </div>
   );

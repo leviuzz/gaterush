@@ -25,7 +25,8 @@ referenced as ADR-nnn ([DECISIONS.md](DECISIONS.md)).
 apps/
   api/              gateflow-api: the operational checkpoint behind HTTP (Fastify) on PostgreSQL (Drizzle)
   sim-cli/          gateflow-sim: experiments and sweeps on worker threads; JSON, Markdown, HTML (bundled)
-  studio/           GateFlow Simulator Studio: the simulator in one offline HTML page (React, Web Workers)
+  studio/           GateFlow Simulator Studio: the simulator in one offline HTML page (React, Web Workers);
+                    a build of it is served by the API at /sim, to save runs (S19)
   web/              the product's screens, served by the API: kiosk, ticket page, display, lane, console, demo (React)
 packages/
   bcbp/             IATA boarding passes: a parser that never throws or returns the name, encoder, generator (pure)
@@ -592,6 +593,13 @@ The simulator in the browser, as one self-contained page that works offline and 
 - **Same results as the CLI.** The page's `results.json` equals the CLI's byte for byte, except
   the generator. End-to-end tests in Chromium check it with and without workers, and for a
   scenario changed in the page and saved for the CLI.
+- **Served by GateFlow (ADR-052).** A third build, `gateflow-studio.server.html`, is the page the
+  API serves at `/sim`. Its GateFlow panel signs an analyst in, saves the run on screen (its
+  scenario, then its manifest with the fingerprint of the page's results: GateFlow computes it
+  again and says whether it is the same), lists the airport's runs and opens them. It connects to
+  its own server only (`connect-src 'self'`) and its script is allowed by its hash; the API
+  sends the page's policy as a header too, with `frame-ancestors 'none'`. The build constant
+  `__STUDIO_SERVER__` leaves the panel out of the offline pages entirely.
 
 ## 12. Trace and replay of a day (`@gateflow/sim-trace`, ADR-041)
 
@@ -679,6 +687,11 @@ flowchart LR
     matched; one running per airport by a partial unique index) and `flight.twin_run_id`, the
     run's own flights, SIMULATED, which kiosks and real checkpoints never read; a twin's
     checkpoint is marked in its settings (`twin`).
+  - Simulations (ADR-052): `sim_scenario` (an airport's scenarios, append-only, named by the hash
+    results record, kept as the JSON file the CLI runs) and `sim_run` (the experiment of a run as
+    a manifest has it, in a `json` column that keeps the order of the policies' fields; its
+    state, its days done, the server at it and its heartbeat; the results file as written, its
+    SHA-256 and its fingerprint; the fingerprint it had to give and whether it did).
 - **Timers (ADR-045).** `serve` runs a scheduler: every second it sends `ADVANCE` to each
   checkpoint whose next timeout is due. The command goes through the log like any other; its
   idempotency key names the timeout, so it applies once whichever servers see it due. A rescan at
@@ -731,9 +744,33 @@ flowchart LR
   runtime --> screens["Its display, lane station,<br/>console, audit"]
 ```
 
+- **Simulations (ADR-052).** Analysts (and administrators) save an airport's scenarios and ask
+  for runs, from settings as the CLI's command line or from the manifest of results. Each server
+  with a runner takes the oldest run that waits (`FOR UPDATE SKIP LOCKED`), one at a time, and
+  computes it on worker threads of its own bundle (the bundle started again with a marker in
+  `workerData`): the plan with the forecast of arrivals, the days, then the statistics and the
+  results file. The thread that serves the checkpoints only reads and writes the database. A
+  heartbeat says the server is at the run and learns of a cancellation; a run whose server went
+  quiet for a minute waits again. The results name `gateflow-api` and the bundle's revision; their
+  fingerprint (`fingerprintMaterial` in sim-metrics: the canonical JSON without the generator and
+  the revision) is the same whichever tool computed them, so a run reproduced from its manifest,
+  or a run of the Studio, says whether it gave the same results.
+
+```mermaid
+flowchart LR
+  studio["Studio at /sim<br/>(analyst)"] -- "scenario, manifest,<br/>fingerprint" --> routes["/v1/simulations"]
+  cli["HTTP clients"] -- "settings" --> routes
+  routes --> runs[("sim_run<br/>QUEUED")]
+  runs -- "SKIP LOCKED" --> runner["SimulationRunner<br/>(each server)"]
+  runner --> threads["worker threads:<br/>plan, days, statistics"]
+  threads --> done[("sim_run DONE:<br/>results file, fingerprint")]
+  done --> exports["results.json, report.md,<br/>report.html"]
+```
+
 - **Staff (ADR-045).** Every staff route checks, in this order: the request comes from this site,
   a session (401), the checkpoint (404), the role and the checkpoints of the member (403). The
-  log records the member as the actor (`staff:<id>`).
+  log records the member as the actor (`staff:<id>`). Analysts (ADR-052) have no live role: the
+  routes of simulations check the airport only.
 - **Endpoints** (OpenAPI at `/v1/openapi.json`):
   - `POST /v1/checkpoints/{id}/scans`: a boarding pass gives a ticket, the same ticket again, or
     a reason (ADR-043). Only a kiosk of the checkpoint may send one (ADR-044). With `party`, the
@@ -750,6 +787,12 @@ flowchart LR
   - with `serve --twin`, for the administrators of a synthetic airport: `GET /v1/twin/options`,
     `GET /v1/twin`, `POST /v1/twin/runs`, `POST /v1/twin/runs/{run}/speed`, `/stop` and
     `/display` (ADR-051);
+  - for analysts and administrators (ADR-052): `POST` and `GET /v1/simulation-scenarios`,
+    `GET /v1/simulation-scenarios/{id}/file`, `POST` and `GET /v1/simulations`,
+    `GET /v1/simulations/{run}`, `/results`, `/report`, `/report.html`, and
+    `POST /v1/simulations/{run}/reproduce` and `/cancel`;
+  - `GET /sim`, the Simulator Studio's page for GateFlow, under its own security policy (its
+    script by hash, `connect-src 'self'`);
   - `POST /v1/auth/sign-in`, `GET /v1/auth/me`, `POST /v1/auth/sign-out` (ADR-045);
   - `POST /v1/checkpoints/{id}/tickets/{ticket}/recall`, `no-show`, `reactivate`, `review`,
     `resolve` and `cancel` (ADR-045);

@@ -365,6 +365,103 @@ describe('the modes of the checkpoint (S17)', () => {
   });
 });
 
+describe('what the digital twin needs (S18)', () => {
+  it("gives a flight's tickets what the feed now knows, in every mode", () => {
+    const { day, applied } = run(
+      log([
+        { type: 'OPEN_DAY', config: config() },
+        issue(1),
+        issue(2),
+        issue(4),
+        { type: 'CALL_NEXT' },
+        { type: 'PRESENT', ticketId: 't-1', method: 'REF' },
+        { type: 'SET_MODE', mode: 'EMERGENCY', reset: false },
+        {
+          type: 'UPDATE_FLIGHT',
+          flightId: 'F1',
+          deadline: { atMs: DAY_START + 30 * MIN, source: 'FEED' },
+        },
+        { type: 'UPDATE_FLIGHT', flightId: 'F2', walkEstimateMs: 8 * MIN },
+        { type: 'UPDATE_FLIGHT', flightId: 'nobody', walkEstimateMs: 0 },
+      ]),
+    );
+    // t-1 (flight F1) was admitted: only t-4 takes the delay; no event, the log keeps the command.
+    expect(applied[7]!.result).toEqual({ type: 'FLIGHT_UPDATED', flightId: 'F1', tickets: 1 });
+    expect(applied[7]!.events).toEqual([]);
+    expect(applied[8]!.result).toEqual({ type: 'FLIGHT_UPDATED', flightId: 'F2', tickets: 1 });
+    expect(applied[9]!.result).toEqual({ type: 'FLIGHT_UPDATED', flightId: 'nobody', tickets: 0 });
+    const code = (command: Command) => {
+      try {
+        day.apply({ seq: 11, atMs: DAY_START + 2 * MIN, command });
+      } catch (error) {
+        return error instanceof OperationError ? error.code : 'other';
+      }
+      return 'none';
+    };
+    const bad = [
+      { type: 'UPDATE_FLIGHT', flightId: '', walkEstimateMs: 0 },
+      { type: 'UPDATE_FLIGHT', flightId: 'F1' },
+      { type: 'UPDATE_FLIGHT', flightId: 'F1', walkEstimateMs: -1 },
+      { type: 'UPDATE_FLIGHT', flightId: 'F1', walkEstimateMs: 1.5 },
+      { type: 'UPDATE_FLIGHT', flightId: 'F1', deadline: { atMs: 5, source: 'NONE' } },
+      { type: 'UPDATE_FLIGHT', flightId: 'F1', deadline: { atMs: null, source: 'FEED' } },
+      { type: 'UPDATE_FLIGHT', flightId: 'F1', deadline: { atMs: 5, source: 'GUESS' } },
+    ] as unknown as Command[];
+    for (const command of bad) expect(code(command)).toBe('INVALID_COMMAND');
+  });
+
+  it('keeps the first presentation of a ticket issued again, never later than the issue', () => {
+    const earlier = DAY_START - 20 * MIN;
+    const { day } = run(
+      log([{ type: 'OPEN_DAY', config: config() }, issue(1, { presentedAtMs: earlier }), issue(2)]),
+    );
+    expect(day.presentedAtMs('t-1')).toBe(earlier);
+    expect(day.presentedAtMs('t-2')).toBe(DAY_START + 20_000);
+    expect(day.presentedAtMs('nobody')).toBeUndefined();
+    const code = (command: Command) => {
+      try {
+        day.apply({ seq: 4, atMs: DAY_START + MIN, command });
+      } catch (error) {
+        return error instanceof OperationError ? error.code : 'other';
+      }
+      return 'none';
+    };
+    expect(code(issue(3, { presentedAtMs: DAY_START + MIN + 1 }))).toBe('INVALID_COMMAND');
+    expect(code(issue(3, { presentedAtMs: -1 }))).toBe('INVALID_COMMAND');
+    expect(code(issue(3, { presentedAtMs: 0.5 }))).toBe('INVALID_COMMAND');
+    expect(code(issue(3, { source: 'TWIN', presentedAtMs: DAY_START + MIN }))).toBe('none');
+    expect(day.ticket('t-3')?.source).toBe('TWIN');
+  });
+
+  it('changes the estimates with the lanes, and the classes at the next decision only', () => {
+    // Twelve families fill the prepare window (ten) and wait ahead of a flight closing in 40
+    // minutes: in time with six lanes, at risk with one.
+    const crowd = Array.from({ length: 12 }, (_, i) =>
+      issue(i + 1, { deadline: { atMs: DAY_START + 300 * MIN, source: 'FEED' }, partySize: 4 }),
+    );
+    const late = issue(13, { deadline: { atMs: DAY_START + 40 * MIN, source: 'FEED' } });
+    const { day, applied } = run(
+      log(
+        [
+          { type: 'OPEN_DAY', config: config(PRIORITY_V3_POLICY, { lanesOpen: 6 }) },
+          ...crowd,
+          late,
+          { type: 'SET_LANES', lanesOpen: 1 },
+        ],
+        Array.from({ length: 15 }, () => DAY_START),
+      ),
+    );
+    expect(day.ticket('t-13')).toMatchObject({ state: 'QUEUED', riskClass: 'NORMAL' });
+    // The lanes changed: no event, and the class of the waiting ticket as at its last decision.
+    expect(applied[14]!.result).toEqual({ type: 'LANES_SET', lanesOpen: 1, previous: 6 });
+    expect(applied[14]!.events).toEqual([]);
+    expect(day.ticket('t-13')?.riskClass).toBe('NORMAL');
+    // The next decision sees one lane.
+    day.apply({ seq: 16, atMs: DAY_START + MIN, command: issue(14) });
+    expect(day.ticket('t-13')?.riskClass).toBe('ATTENTION');
+  });
+});
+
 /** Random days: tickets with deadlines close enough for priority calls, calls and presentations. */
 const dayArb = fc
   .tuple(
@@ -379,6 +476,8 @@ const dayArb = fc
             source: fc.constantFrom('FEED', 'RULE', 'NONE'),
             partySize: fc.integer({ min: 1, max: 4 }),
             transfer: fc.boolean(),
+            // A ticket issued again keeps an earlier first presentation (S18).
+            earlierMin: fc.option(fc.integer({ min: 0, max: 60 }), { freq: 4 }),
           }),
         },
         { weight: 3, arbitrary: fc.record({ kind: fc.constant('call' as const) }) },
@@ -411,6 +510,16 @@ const dayArb = fc
           arbitrary: fc.record({
             kind: fc.constant('lanes' as const),
             lanesOpen: fc.integer({ min: 1, max: 4 }),
+          }),
+        },
+        // The flight feed (S18).
+        {
+          weight: 1,
+          arbitrary: fc.record({
+            kind: fc.constant('flight' as const),
+            flight: fc.integer({ min: 0, max: 2 }),
+            deadlineMin: fc.option(fc.integer({ min: 5, max: 120 })),
+            walkMin: fc.option(fc.integer({ min: 0, max: 15 })),
           }),
         },
         {
@@ -455,6 +564,16 @@ const dayArb = fc
         });
       } else if (step.kind === 'lanes') {
         commands.push({ type: 'SET_LANES', lanesOpen: step.lanesOpen });
+      } else if (step.kind === 'flight') {
+        if (step.deadlineMin === null && step.walkMin === null) return;
+        commands.push({
+          type: 'UPDATE_FLIGHT',
+          flightId: `F${String(step.flight)}`,
+          ...(step.deadlineMin === null
+            ? {}
+            : { deadline: { atMs: t + step.deadlineMin * MIN, source: 'FEED' as const } }),
+          ...(step.walkMin === null ? {} : { walkEstimateMs: step.walkMin * MIN }),
+        });
       } else if (step.kind === 'mode') {
         const allowed = step.reset ? stopped(mode) && !stopped(step.mode) : step.mode !== mode;
         if (allowed) mode = step.mode;
@@ -472,6 +591,7 @@ const dayArb = fc
                 ? { atMs: null, source: 'NONE' }
                 : { atMs, source: step.source },
             scheduledDepartureMs: atMs + 20 * MIN,
+            ...(step.earlierMin === null ? {} : { presentedAtMs: t - step.earlierMin * MIN }),
           }),
         );
       } else if (step.kind === 'call') {
@@ -660,7 +780,7 @@ describe('the log of a day', () => {
                 deadline: command.deadline,
                 walkEstimateMs: command.walkEstimateMs,
                 partySize: command.partySize,
-                presentedAtMs: atMs,
+                presentedAtMs: command.presentedAtMs ?? atMs,
                 scheduledDepartureMs: command.scheduledDepartureMs,
                 flightId: command.flightId,
               },
@@ -692,8 +812,20 @@ describe('the log of a day', () => {
           } else if (command.type === 'OVERRIDE') {
             queue.override(command.ticketId, command.override, command.reason, atMs, estimates);
           } else if (command.type === 'SET_LANES') {
+            // The estimates follow; the queue is not touched, as in the simulator (S18).
             estimates = estimatesOf({ ...open.config, lanesOpen: command.lanesOpen });
-            queue.reassess(atMs, estimates);
+          } else if (command.type === 'UPDATE_FLIGHT') {
+            queue.updateFlight(
+              command.flightId,
+              {
+                ...(command.deadline === undefined ? {} : { deadline: command.deadline }),
+                ...(command.walkEstimateMs === undefined
+                  ? {}
+                  : { walkEstimateMs: command.walkEstimateMs }),
+              },
+              atMs,
+              estimates,
+            );
           }
         }
         expect(applied.slice(1).flatMap((a) => a.events)).toEqual(events);

@@ -458,6 +458,8 @@ export function simulateCheckpoint(
   const observe = options.listener;
   /** Observer of the day (S11): told everything, it never changes the run. */
   const observer = options.observer;
+  /** Recorder of the tape (S18): told every operation on the queue, it never changes the run. */
+  const recorder = options.recorder;
   const queue = new CheckpointQueue(policy, options.classification, {
     listener:
       observe === undefined && observer === undefined
@@ -629,21 +631,19 @@ export function simulateCheckpoint(
     ticketOwner.set(s.ticketId, passengerIndex);
     const flight = at(flights, passenger.flightIndex, 'flight');
     const known = at(knowledge, flight.index, 'flight');
-    const view = queue.issue(
-      {
-        id: s.ticketId,
-        segment: passenger.segment,
-        deadline: known.deadline,
-        walkEstimateMs: known.walkEstimateMs ?? passenger.walkEstimateMs,
-        partySize: passenger.partySize,
-        // A new ticket after an expiry keeps the first presentation at the checkpoint.
-        presentedAtMs: passenger.arrivalMs,
-        scheduledDepartureMs: known.deadline.atMs === null ? null : flight.stdMs,
-        flightId: flight.id,
-      },
-      now,
-      estimates,
-    );
+    const input = {
+      id: s.ticketId,
+      segment: passenger.segment,
+      deadline: known.deadline,
+      walkEstimateMs: known.walkEstimateMs ?? passenger.walkEstimateMs,
+      partySize: passenger.partySize,
+      // A new ticket after an expiry keeps the first presentation at the checkpoint.
+      presentedAtMs: passenger.arrivalMs,
+      scheduledDepartureMs: known.deadline.atMs === null ? null : flight.stdMs,
+      flightId: flight.id,
+    };
+    const view = queue.issue(input, now, estimates);
+    recorder?.({ type: 'ISSUE', atMs: now, party: passengerIndex, input });
     s.classAtArrival ??= view.classAtIssue;
   };
 
@@ -659,15 +659,12 @@ export function simulateCheckpoint(
         walkEstimateMs: known.walkEstimateMs,
       });
     }
-    queue.updateFlight(
-      flight.id,
-      {
-        deadline: known.deadline,
-        ...(known.walkEstimateMs === null ? {} : { walkEstimateMs: known.walkEstimateMs }),
-      },
-      now,
-      estimates,
-    );
+    const told = {
+      deadline: known.deadline,
+      ...(known.walkEstimateMs === null ? {} : { walkEstimateMs: known.walkEstimateMs }),
+    };
+    queue.updateFlight(flight.id, told, now, estimates);
+    recorder?.({ type: 'UPDATE_FLIGHT', atMs: now, flightId: flight.id, knowledge: told });
   };
 
   /** A message of the flight feed: delivered now, or held until the feed recovers. */
@@ -753,6 +750,7 @@ export function simulateCheckpoint(
       bufferPeople + assistedPeople + queue.outstandingPeople < freeOpen + target
     ) {
       const view = queue.callNext(now, estimates);
+      recorder?.({ type: 'CALL_NEXT', atMs: now, ticketId: view?.id ?? null });
       if (view === null) break;
       const passengerIndex = ticketOwner.get(view.id);
       if (passengerIndex === undefined) throw new Error(`unknown ticket ${view.id}`);
@@ -799,6 +797,7 @@ export function simulateCheckpoint(
     const s = at(state, passengerIndex, 'passenger');
     s.presented = true;
     const outcome = queue.present(s.ticketId, now, estimates);
+    recorder?.({ type: 'PRESENT', atMs: now, ticketId: s.ticketId, outcome });
     switch (outcome) {
       case 'ADMITTED':
         s.admittedAtMs = now;
@@ -859,7 +858,10 @@ export function simulateCheckpoint(
     if (lanes > lanesAvailable) throw new Error('more lanes open than the checkpoint has');
     const before = open;
     const extraBefore = extraEffective;
-    if (lanes !== open) changeLanes(lanes);
+    if (lanes !== open) {
+      changeLanes(lanes);
+      recorder?.({ type: 'LANES', atMs: now, lanes: open });
+    }
     extraEffective = open - lanesAt(now, 0);
     maxOpenLanes = Math.max(maxOpenLanes, open);
     if (observer !== undefined && (open !== before || extraEffective !== extraBefore)) {
@@ -1034,6 +1036,7 @@ export function simulateCheckpoint(
     outOfService: outAt(startMs),
     extra: 0,
   });
+  recorder?.({ type: 'LANES', atMs: startMs, lanes: open });
   sim.run((event) => {
     const now = event.timeMs;
     const payload = event.payload;
@@ -1102,6 +1105,7 @@ export function simulateCheckpoint(
       case TIMEOUT:
         scheduledTimeouts.delete(now);
         queue.advance(now);
+        recorder?.({ type: 'ADVANCE', atMs: now });
         break;
     }
     callTickets(now);

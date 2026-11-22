@@ -6,7 +6,7 @@ import { z } from 'zod';
  * ticket is a number, a state and a flight, never a name.
  */
 
-export const CONTRACTS_VERSION = '0.9.0';
+export const CONTRACTS_VERSION = '0.10.0';
 
 export const Segment = z.enum(['DEPARTING', 'TRANSFER']);
 
@@ -53,7 +53,8 @@ export const Ticket = z.object({
   id: z.uuid(),
   number: z.string(),
   state: TicketState,
-  source: z.enum(['STAFF', 'KIOSK']),
+  /** Staff, a kiosk, or the digital twin's simulated passengers (S18). */
+  source: z.enum(['STAFF', 'KIOSK', 'TWIN']),
   flightId: z.uuid(),
   segment: Segment,
   partySize: z.int().min(1).max(20),
@@ -210,6 +211,11 @@ export const QueueResponse = z.object({
   mode: CheckpointMode,
   /** The lanes open (S17): the day's configuration, until the supervisor sets them. */
   lanesOpen: z.int().min(1),
+  /**
+   * The time of the checkpoint's latest command, null before its first (S18): for a checkpoint of
+   * the digital twin, its virtual clock.
+   */
+  updatedAt: z.iso.datetime().nullable(),
   tickets: z.array(Ticket),
 });
 
@@ -258,6 +264,8 @@ export const AuditEntry = z.object({
     method: z.string().optional(),
     people: z.int().optional(),
     decision: z.string().optional(),
+    /** The tickets of a flight that took what the feed knows (S18). */
+    tickets: z.int().optional(),
   }),
   /** The events of the command, in order, with the number of the ticket each changed. */
   events: z.array(z.object({ type: z.string(), ticket: z.string().nullable() })),
@@ -427,7 +435,16 @@ export const ErrorResponse = z.object({
 
 /** A checkpoint as its staff see it (S15): where it is, how its tickets are numbered. */
 export const CheckpointResponse = z.object({
-  checkpoint: z.object({ id: z.uuid(), label: z.string(), ticketPrefix: z.string() }),
+  checkpoint: z.object({
+    id: z.uuid(),
+    label: z.string(),
+    ticketPrefix: z.string(),
+    /**
+     * A checkpoint of the digital twin (S18): the twin drives it on its virtual day, staff only
+     * watch it. Null for a real checkpoint.
+     */
+    twin: z.object({ runId: z.uuid(), serviceDay: z.iso.date() }).nullable(),
+  }),
   airport: z.object({
     label: z.string(),
     iata: z.string().length(3),
@@ -560,6 +577,110 @@ export type IssueTicketResponse = z.infer<typeof IssueTicketResponse>;
 export type StaffMemberResponse = z.infer<typeof StaffMemberResponse>;
 export type MeResponse = z.infer<typeof MeResponse>;
 export type ErrorResponse = z.infer<typeof ErrorResponse>;
+
+/** The states of a run of the digital twin (S18). */
+export const TwinState = z.enum(['RUNNING', 'STOPPED', 'FINISHED', 'DIVERGED', 'FAILED']);
+
+/**
+ * How fast the twin plays (S18): virtual time per real time, from 1 to 10,000; null, as fast as the
+ * server goes.
+ */
+export const TwinSpeed = z.int().min(1).max(10_000).nullable();
+
+/** What the twin can play at this airport (S18): the server's scenarios, the airport's policies. */
+export const TwinOptionsResponse = z.object({
+  scenarios: z.array(z.object({ id: z.string(), title: z.string() })),
+  /** The airport's versions that the live system runs. */
+  policies: z.array(PolicySummary.extend({ id: z.uuid() })),
+});
+
+/** An administrator starts the twin (S18): a scenario's day, a seed, a policy, a speed. */
+export const StartTwinRequest = z.strictObject({
+  scenarioId: z.string().min(1).max(100),
+  seed: z.int().min(1).max(1_000_000),
+  policyVersionId: z.uuid(),
+  speed: TwinSpeed,
+  /** The last time of the day to play, `HH:MM`; the whole day when absent. */
+  until: z
+    .string()
+    .regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/)
+    .optional(),
+});
+
+/** The speed of a run, changed while it plays (S18). */
+export const TwinSpeedRequest = z.strictObject({ speed: TwinSpeed });
+
+/** A run of the twin (S18): what it plays, how far it went, and whether it matched. */
+export const TwinRun = z.object({
+  id: z.uuid(),
+  checkpointId: z.uuid(),
+  /** The twin checkpoint's name. */
+  checkpoint: z.string(),
+  scenarioId: z.string(),
+  seed: z.int(),
+  policy: PolicySummary,
+  serviceDay: z.iso.date(),
+  state: TwinState,
+  speed: TwinSpeed,
+  /** The virtual clock: where the run is in its day. */
+  virtualNow: Instant,
+  /** The first and the last operation the run plays. */
+  from: Instant,
+  to: Instant,
+  /** The operations played, of all; the calls made in the simulator's order, of all. */
+  applied: z.int().min(0),
+  steps: z.int().min(0),
+  matchedCalls: z.int().min(0),
+  expectedCalls: z.int().min(0),
+  /** The first answer of the live system that was not the simulator's: numbers or outcomes. */
+  divergence: z
+    .object({
+      at: Instant,
+      operation: z.string(),
+      expected: z.string(),
+      actual: z.string(),
+    })
+    .nullable(),
+  error: z.string().nullable(),
+  startedAt: Instant,
+  endedAt: Instant.nullable(),
+});
+
+/** A call of the twin, with the engine's reasons for the ticket (S18). */
+export const TwinCall = z.object({
+  number: z.string(),
+  at: Instant,
+  /** Called out of the order of arrival by the engine. */
+  priority: z.boolean(),
+  reasons: z.array(z.string()),
+});
+
+/** The twin of the airport (S18): its latest run, and what its checkpoint shows now. */
+export const TwinResponse = z.object({
+  run: TwinRun.nullable(),
+  /** What the twin's displays show. */
+  board: DisplayBoard.nullable(),
+  /** The latest calls, the latest first. */
+  calls: z.array(TwinCall),
+  /** The twin's tickets of the day: issued, waiting (or announced), called, admitted. */
+  counts: z.object({
+    issued: z.int().min(0),
+    waiting: z.int().min(0),
+    called: z.int().min(0),
+    admitted: z.int().min(0),
+  }),
+});
+
+/** A display device made for the twin's checkpoint (S18): its token, given once. */
+export const TwinDisplayResponse = z.object({ checkpointId: z.uuid(), token: z.string() });
+
+export type TwinState = z.infer<typeof TwinState>;
+export type TwinOptionsResponse = z.infer<typeof TwinOptionsResponse>;
+export type StartTwinRequest = z.infer<typeof StartTwinRequest>;
+export type TwinRun = z.infer<typeof TwinRun>;
+export type TwinCall = z.infer<typeof TwinCall>;
+export type TwinResponse = z.infer<typeof TwinResponse>;
+export type TwinDisplayResponse = z.infer<typeof TwinDisplayResponse>;
 
 /** An endpoint of the API, for the OpenAPI document. */
 export interface Route {
@@ -878,7 +999,8 @@ export const ROUTES: readonly Route[] = [
   {
     method: 'get',
     path: '/v1/checkpoints/{checkpointId}/queue',
-    summary: "The day's tickets, as staff see them",
+    summary:
+      "The day's tickets, as staff see them; with `inPlay=true`, those still in play only: not admitted, expired or cancelled (S18)",
     command: false,
     staff: 'OPERATOR',
     responses: {
@@ -953,6 +1075,86 @@ export const ROUTES: readonly Route[] = [
     staff: 'SUPERVISOR',
     responses: {
       '200': { description: 'The check', schema: AuditVerifyResponse },
+      ...errors,
+      ...staffErrors,
+    },
+  },
+  {
+    method: 'get',
+    path: '/v1/twin/options',
+    summary:
+      "What the digital twin can play at the administrator's airport (S18): the server's scenarios and the airport's policies",
+    command: false,
+    staff: 'ADMIN',
+    responses: {
+      '200': { description: 'The options', schema: TwinOptionsResponse },
+      ...errors,
+      ...staffErrors,
+    },
+  },
+  {
+    method: 'get',
+    path: '/v1/twin',
+    summary:
+      "The digital twin of the administrator's airport (S18): its latest run, the board, the latest calls and the counts",
+    command: false,
+    staff: 'ADMIN',
+    responses: {
+      '200': { description: 'The twin', schema: TwinResponse },
+      ...errors,
+      ...staffErrors,
+    },
+  },
+  {
+    method: 'post',
+    path: '/v1/twin/runs',
+    summary:
+      'An administrator starts the digital twin (S18): a new twin checkpoint plays the simulated day at its virtual time',
+    command: false,
+    staff: 'ADMIN',
+    body: StartTwinRequest,
+    responses: {
+      '201': { description: 'Started', schema: TwinRun },
+      ...errors,
+      ...staffErrors,
+      '409': { description: 'A run of the twin is playing already', schema: ErrorResponse },
+    },
+  },
+  {
+    method: 'post',
+    path: '/v1/twin/runs/{runId}/speed',
+    summary: 'Change the speed of a run of the twin while it plays (S18)',
+    command: false,
+    staff: 'ADMIN',
+    body: TwinSpeedRequest,
+    responses: {
+      '200': { description: 'The run', schema: TwinRun },
+      ...errors,
+      ...staffErrors,
+      '409': { description: 'The run does not play on this server', schema: ErrorResponse },
+    },
+  },
+  {
+    method: 'post',
+    path: '/v1/twin/runs/{runId}/stop',
+    summary: 'Stop a run of the twin (S18): its checkpoint keeps the day as far as it went',
+    command: false,
+    staff: 'ADMIN',
+    responses: {
+      '200': { description: 'The run', schema: TwinRun },
+      ...errors,
+      ...staffErrors,
+    },
+  },
+  {
+    method: 'post',
+    path: '/v1/twin/runs/{runId}/display',
+    summary:
+      "A display device for the twin's checkpoint (S18): its token, given once, for the display page",
+    command: false,
+    staff: 'ADMIN',
+    responses: {
+      '201': { description: 'The device', schema: TwinDisplayResponse },
       ...errors,
       ...staffErrors,
     },

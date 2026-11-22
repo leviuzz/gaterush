@@ -1,5 +1,5 @@
 /** Version of the operational checkpoint. Bump on any change to commands, results or events. */
-export const OPERATIONS_VERSION = '0.7.0';
+export const OPERATIONS_VERSION = '0.8.0';
 
 export {
   MANUAL_REASONS,
@@ -35,6 +35,7 @@ export type {
   StaffAction,
   TicketSource,
   TicketSummary,
+  UpdateFlight,
 } from './commands';
 export {
   CheckpointDay,
@@ -42,6 +43,7 @@ export {
   OPERATION_ERRORS,
   OperationError,
   estimatesOf,
+  ticketNumber,
   validateLivePolicy,
 } from './day';
 export type { OperationErrorCode } from './day';

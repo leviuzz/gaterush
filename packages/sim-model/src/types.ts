@@ -1,6 +1,11 @@
 import type { KnownDeadline, Millis, RiskClass, Segment } from '@gateflow/domain';
 import type { ClassificationParams, ReasonCode } from '@gateflow/priority-engine';
-import type { QueueEvent } from '@gateflow/queue-core';
+import type {
+  FlightKnowledge,
+  PresentOutcome,
+  QueueEvent,
+  TicketInput,
+} from '@gateflow/queue-core';
 
 /** A departing flight in a simulated service day. Times are ms since the start of the day. */
 export interface SimFlight {
@@ -366,6 +371,44 @@ export type DayEvent =
       readonly walkEstimateMs: Millis | null;
     };
 
+/**
+ * An operation of the simulator on its queue (S18), in the order it was made: the tape that the
+ * digital twin plays to the live system. Times are those of the run (ms since the start of the
+ * day); a ticket and a flight are named by their ids. The result an operation got (the ticket
+ * called, the outcome of a presentation) is what the live system must answer.
+ */
+export type TapeEntry =
+  /** A party takes a ticket: on arrival, or again after its ticket expired. */
+  | {
+      readonly type: 'ISSUE';
+      readonly atMs: Millis;
+      readonly party: number;
+      readonly input: TicketInput;
+    }
+  /** The queue is told what is now known of a flight (the feed, or the feed going down or up). */
+  | {
+      readonly type: 'UPDATE_FLIGHT';
+      readonly atMs: Millis;
+      readonly flightId: string;
+      readonly knowledge: FlightKnowledge;
+    }
+  /**
+   * The lanes open changed, and the engine's estimates with them; once at the start of the day
+   * too, with the lanes open then.
+   */
+  | { readonly type: 'LANES'; readonly atMs: Millis; readonly lanes: number }
+  /** Staff call the next ticket: the one the queue called, or null when it called none. */
+  | { readonly type: 'CALL_NEXT'; readonly atMs: Millis; readonly ticketId: string | null }
+  /** A passenger presents at the access point, with the outcome. */
+  | {
+      readonly type: 'PRESENT';
+      readonly atMs: Millis;
+      readonly ticketId: string;
+      readonly outcome: PresentOutcome;
+    }
+  /** The timeouts due are applied (second calls, no-shows, expiries). */
+  | { readonly type: 'ADVANCE'; readonly atMs: Millis };
+
 export interface SimulationOptions {
   /**
    * Parameters used to classify each ticket on arrival (`classAtArrival`). Using the same values
@@ -376,4 +419,9 @@ export interface SimulationOptions {
   readonly listener?: (event: QueueEvent) => void;
   /** Observer of the whole day (S11): it receives every `DayEvent` and must not change the run. */
   readonly observer?: (event: DayEvent) => void;
+  /**
+   * Recorder of the tape (S18): it receives every operation on the queue, in order, with its
+   * result, and must not change the run.
+   */
+  readonly recorder?: (entry: TapeEntry) => void;
 }

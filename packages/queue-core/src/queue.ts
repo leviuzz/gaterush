@@ -292,6 +292,14 @@ export class CheckpointQueue {
     return this.window.map(view);
   }
 
+  /**
+   * The tickets called (or called again) whose passengers have not presented yet, in the order of
+   * their calls: what displays show as called (S18: without reading every ticket of the day).
+   */
+  calledTickets(): TicketView[] {
+    return this.outstanding.map(view);
+  }
+
   /** Issues a ticket. Its risk class at issue is computed against everybody already ahead. */
   issue(input: TicketInput, nowMs: Millis, estimates: CheckpointEstimates): TicketView {
     if (typeof input.id !== 'string' || input.id.length === 0) {
@@ -370,18 +378,18 @@ export class CheckpointQueue {
 
   /**
    * New knowledge about a flight from the feed (a delay, a gate change, a stale or fresh deadline).
-   * It applies to every ticket of the flight that is not admitted or expired; the engine uses it
-   * from the next decision on.
+   * It applies to every ticket of the flight that is not admitted, expired or cancelled; the engine
+   * uses it from the next decision on. Returns how many tickets took it.
    */
   updateFlight(
     flightId: string,
     knowledge: FlightKnowledge,
     nowMs: Millis,
     estimates: CheckpointEstimates,
-  ): void {
+  ): number {
     this.begin(nowMs, estimates);
     const records = this.byFlight.get(flightId);
-    if (records === undefined) return;
+    if (records === undefined) return 0;
     let live = 0;
     for (const record of records) {
       if (
@@ -407,6 +415,7 @@ export class CheckpointQueue {
     }
     // Tickets that left for good are dropped from the index.
     records.length = live;
+    return live;
   }
 
   /**
@@ -502,15 +511,6 @@ export class CheckpointQueue {
     }
     this.reclassify(nowMs, estimates);
     return 'DONE';
-  }
-
-  /**
-   * The checkpoint's capacity changed (S17: lanes opened or closed): the waiting tickets are
-   * assessed again with the new estimates. Nothing else changes.
-   */
-  reassess(nowMs: Millis, estimates: CheckpointEstimates): void {
-    this.begin(nowMs, estimates);
-    this.reclassify(nowMs, estimates);
   }
 
   /** Calls a ticket now: its call timers start. */

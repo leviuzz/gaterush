@@ -671,7 +671,7 @@ here once, for the product. The slices follow the kickoff (section 3, M3), renum
 | **S15** | Queue life cycle and lane station: timers on a scheduler, recall, no-show, reactivation, admission, manual ticket, review; staff users and roles. From S14: a party's number (at the lane; at the kiosk since 0.15.1), and the rule for a pass whose boarding has closed | The state machine is covered by tests; every transition is idempotent | **Done** |
 | **S16** | Display over SSE: called and prepare numbers, data freshness, reconnection with `Last-Event-ID` | No event lost after a disconnection; "data not up to date" within the timeout | **Done** |
 | S17 | Supervisor: modes (FIFO only, paused, emergency), overrides with a reason, lanes, audit view; versioned policies and their activation | Overrides and mode changes are always in the audit; in FIFO only the order is pure FIFO | **Done** |
-| S18 | Digital twin: the simulator drives the live system at accelerated time; demo page | Same scenario and seed: the live system calls passengers in the same order as the offline simulator | Planned |
+| S18 | Digital twin: the simulator drives the live system at accelerated time; demo page | Same scenario and seed: the live system calls passengers in the same order as the offline simulator | **Done** |
 | S19 | Simulations through the API (from S10): saved scenarios and runs, history, export; the Studio saves its runs | `POST /v1/simulations` gives a run reproducible from its manifest | Planned |
 
 ## S12: acceptance criteria and evidence
@@ -1020,6 +1020,130 @@ FIFO_ONLY the order is pure FIFO.
   - the acceptance of S17: every mode change and override is a command of the log with who made
     it (and refused ones too), and in FIFO_ONLY every commitment is pure FIFO (property tests);
   - no simulated number changes.
+
+## S18: the digital twin (done)
+
+Proposed on 2026-11-22 from the kickoff (F14, the `/demo` page, 2.12 "Riuso"), on "ok a tutto, vai
+con S18". The choices marked **[to confirm]** are mine, for the founder. Three parts: the
+simulator's tape and what the live system had to align (S18.1), the twin in the API (S18.2), the
+demo page (S18.3).
+
+- **How the twin drives the live system.** The simulator runs the day (scenario, seed, policy)
+  and records, in order, every operation on its queue: the tape. A party takes a number; the
+  feed changes what is known of a flight; the lanes change; staff call the next number; a
+  passenger presents; a timeout falls due. The twin sends each operation to the live system at
+  its virtual time, through the commands staff and kiosks use, under the checkpoint's writer, in
+  the hash-chained log, the current-state tables and the displays' stream: `ISSUE_TICKET`,
+  `UPDATE_FLIGHT`, `SET_LANES`, `CALL_NEXT`, `PRESENT`, `ADVANCE`. `UPDATE_FLIGHT` is new: what
+  the feed now knows of a flight. The airport's feed adapter will send it too (M5).
+- **Every call is checked at once.** The ticket the live system calls must be the one the
+  simulator called, and a presentation must have the simulator's outcome. At the first
+  difference the twin stops and says where: the tape assumes the simulator's history.
+- **Tickets from the simulator's inputs [to confirm].** A simulated party does not scan a
+  boarding pass. Its ticket carries what the simulator knew:
+  - the boarding close, from the feed or from the rule;
+  - the walk after a gate change;
+  - the size of the party;
+  - the first presentation of a ticket issued again.
+
+  A scan would read the live flight table instead, one pass at a time. The ticket's source is
+  `TWIN`, and its actor `system:twin` in the audit.
+- **What the twin found, and the live system now does as the simulated model:**
+  - **lanes [to confirm]:** `SET_LANES` changes the engine's estimates at once, and the risk
+    classes follow at the next decision (a ticket issued or called), as in the simulator. It no
+    longer assesses every waiting ticket at once: that extra assessment moved the reference of
+    the hysteresis, and could change a later call. This amends ADR-049.
+  - **a ticket issued again after an expiry [to confirm]** keeps the passenger's first
+    presentation at the checkpoint, as in the simulator: for the twin, and at a kiosk that scans
+    the pass of an expired ticket. The presentation rule then sees when the passenger first came.
+  - **the time of day:** the engine's margins subtract whole milliseconds before any fractional
+    estimate, so a day moved to a real date decides exactly the same (a property test). The
+    flight-call practice rounds to its announcement interval, which divides a local midnight.
+- **A twin checkpoint per run [to confirm].** Each run opens a new checkpoint of the airport,
+  marked as a twin:
+  - with the scenario's lanes and screening rate, and the policy chosen;
+  - with ticket prefix `T`, and its log as the record of the run;
+  - left alone by the timer scheduler: the twin sends the timeouts;
+  - closed to staff and kiosks (409 `TWIN_CHECKPOINT`): its console and lane station only show;
+  - its screens show the twin's virtual day.
+
+  A reset starts a new checkpoint: logs are append-only.
+- **Virtual clock.** The virtual day is today at the airport, from local midnight. The twin's
+  commands carry their virtual time: only a twin checkpoint takes a time that is not the server's,
+  and never earlier than the last command of its log. Speeds: 1×, 10×, 60×, 300×, 1000× and as
+  fast as the server goes; the speed can change while it runs. A day that would not fit in one service
+  day moves to the next date: a late scenario on the day the clocks go forward.
+- **Who.** Administrators, for an airport whose data are synthetic, on a server started with the
+  twin (`gateflow-api serve --twin <scenarios folder>`): never on a real airport. One run at a
+  time per airport.
+- **Command line.** `gateflow-api twin --scenario <file> --seed <n> [--policy <id>] [--speed <x>]
+  [--until HH:MM]` runs a twin on the database. It prints whether the live order equals the
+  simulator's, and exits with 1 if not.
+- **The demo page `/demo`** (administrators):
+  - controls: scenario, policy, seed, speed; start, stop, reset;
+  - the run: the virtual clock and the progress; the board as the displays show it; the latest
+    calls with their reasons; the check, "N calls, in the simulator's order";
+  - links to the twin's display (a display device made for the run), lane station and console.
+
+Acceptance (kickoff): same scenario and seed: the live system calls passengers in the same order
+as the offline simulator. To be shown by:
+- the tape changes nothing in a run (property tests on random days);
+- library days through the operations day (pure): the same calls and the same events as the
+  simulator's queue. Among them, a day with feed changes, a day with lane changes, a transfer hub,
+  and tickets issued again;
+- twin runs through the API on PostgreSQL: the same order as the simulator, call by call and
+  over the day; the chain of hashes holds; twin checkpoints refuse staff and kiosks;
+- the command line on a whole library day, in CI;
+- Chromium: the demo page.
+
+Delivered as planned (ADR-051), in three parts. No simulated number changes: the golden files
+differ only in the queue's version.
+
+| # | Criterion (kickoff) | Evidence |
+|---|---|---|
+| 1 | Same scenario and seed: the live system calls passengers in the same order as the offline simulator | In memory, 18 library days (six scenarios, priority v3 and the virtual queue in order of arrival, up to 15,000 parties) played on the operations day: every call the simulator's, every event the simulator's queue's. On PostgreSQL through the API, a disrupted morning (9,648 operations): every answer checked as it came, then the numbers called over the day against those the simulator's day gives. In CI, two whole days through the command line: the disrupted demo day (17,767 operations, 4,720 calls) and the MX-like hub in Mexico City time with the virtual queue. |
+
+### S18.1: the tape, and what the live system aligned (done)
+
+- **Built:** the simulator's tape (`recorder`); `UPDATE_FLIGHT`; the first presentation of a ticket
+  issued again (for the twin and at the kiosk); `SET_LANES` without the extra assessment;
+  `@gateflow/twin`, the tape as commands at virtual times, with the check of every answer.
+- **Evidence:**
+  - sim-model: the tape changes no run and, played on a new queue, gives the same results and
+    events (300 random days with disruptions, fast track and congestion; lane management too);
+  - queue-core: the engine decides the same at any origin of the clock (300 random sequences with
+    fractional estimates); a test of the test shows a misaligned flight-call origin is caught;
+  - operations: the feed's updates in every mode, the first presentation never after the issue,
+    the classes following a change of lanes at the next decision; random days with flight
+    updates and earlier presentations replay to the same day and to the simulator's queue's
+    events;
+  - twin: the 18 library days above; a live day on another policy stops at the first call that
+    differs, and says which; a day played up to a time.
+
+### S18.2: the twin in the API (done)
+
+- **Built:** a twin checkpoint per run (its own flights, closed to staff, kiosks, activations and
+  the scheduler); the runner at a speed, with its progress written every second; the routes for
+  administrators of synthetic airports; `serve --twin`; `gateflow-api twin`; the displays' board
+  from the called tickets only (53 s to 52 ms over the busiest library day).
+- **Evidence:** API on PostgreSQL, 5 tests: the acceptance above, with the chain of hashes intact,
+  every ticket from the twin, the audit naming the twin; staff, a policy activation, the timer
+  scheduler, a time outside the virtual day or back in time all refused; operators, supervisors,
+  a non-synthetic airport and a server without the twin refused; one run at a time, the speed
+  observed (60× moves the virtual clock about a minute a second), changed, the run stopped, a
+  display made; a ticket issued behind the twin's back stops the run at the first call that
+  differs. The staff test walks the new routes too.
+
+### S18.3: the demo page (done)
+
+- **Built:** `/demo`; the twin's console and lane station with a banner, read-only, on the twin's
+  clock; the console and lane station ask for the tickets in play only, one request at a time;
+  texts in the three languages (never the word for priority, as the catalogue's rule wants).
+- **Evidence:** Chromium, on the product: a supervisor is turned away; an administrator plays the
+  VCE-like peak morning as fast as the server goes, the page says "same order as the offline
+  simulator", the twin's display shows its called numbers, its lane station and console only
+  show; again at 300×, the virtual clock moves, the speed goes to 1000×, the run stops; the page
+  fits 1366, 768 and 390 pixels; no request elsewhere. 34 tests in Chromium in all.
 
 ## Later milestones (summary)
 

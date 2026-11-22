@@ -28,6 +28,7 @@ import type {
   StaffAction,
   TicketSource,
   TicketSummary,
+  UpdateFlight,
 } from './commands';
 
 /** Why a command was refused. */
@@ -70,6 +71,11 @@ const SERVICE_DAY = /^\d{4}-\d{2}-\d{2}$/;
 const PREFIX = /^[A-Z]{1,3}$/;
 /** The largest group on one ticket: larger groups are split by staff. */
 export const MAX_PARTY_SIZE = 20;
+
+/** The public number of the `n`-th ticket of a day: `A001`, `A002`... (`A1000` after `A999`). */
+export function ticketNumber(prefix: string, n: number): string {
+  return `${prefix}${String(n).padStart(3, '0')}`;
+}
 
 function invalid(message: string): never {
   throw new OperationError('INVALID_COMMAND', message);
@@ -173,6 +179,8 @@ export class CheckpointDay {
   private lanes: number;
   private readonly info = new Map<string, TicketInfo>();
   private readonly issueOrder: string[] = [];
+  /** The position of each ticket in the order of issue, from 0. */
+  private readonly issueIndex = new Map<string, number>();
   private readonly byNumber = new Map<string, string>();
   private readonly byRef = new Map<string, string>();
   /**
@@ -353,7 +361,9 @@ export class CheckpointDay {
         case 'OVERRIDE':
           return this.override(command, nowMs);
         case 'SET_LANES':
-          return this.setLanes(command, nowMs);
+          return this.setLanes(command);
+        case 'UPDATE_FLIGHT':
+          return this.updateFlight(command, nowMs);
       }
     } catch (error) {
       if (error instanceof QueueError) invalid(error.message);
@@ -402,13 +412,42 @@ export class CheckpointDay {
     };
   }
 
-  private setLanes(command: SetLanes, nowMs: number): CommandResult {
+  /**
+   * The engine's estimates follow the lanes at once; the risk classes follow at its next decision
+   * (a ticket issued or called), as in the simulator (S18). An assessment here, which the simulator
+   * never makes, would move the reference of the hysteresis and could change a later call. The
+   * queue itself is not touched: its timeouts due wait for the next operation, as in the simulator.
+   */
+  private setLanes(command: SetLanes): CommandResult {
     requireInteger(command.lanesOpen, 'lanes open', 1, 200);
     const previous = this.lanes;
     this.lanes = command.lanesOpen;
     this.estimates = estimatesOf({ ...this.config, lanesOpen: command.lanesOpen });
-    this.queue.reassess(nowMs, this.estimates);
     return { type: 'LANES_SET', lanesOpen: this.lanes, previous };
+  }
+
+  /** What the feed now knows of a flight (S18), for every ticket of the flight still in play. */
+  private updateFlight(command: UpdateFlight, nowMs: number): CommandResult {
+    if (typeof command.flightId !== 'string' || command.flightId.length === 0) {
+      invalid('the flight id is empty');
+    }
+    if (command.deadline === undefined && command.walkEstimateMs === undefined) {
+      invalid('an update of a flight gives its boarding close, its walk, or both');
+    }
+    if (command.deadline !== undefined) validateDeadline(command.deadline);
+    if (command.walkEstimateMs !== undefined) {
+      requireInteger(command.walkEstimateMs, 'the walking time estimate', 0);
+    }
+    const tickets = this.queue.updateFlight(
+      command.flightId,
+      {
+        ...(command.deadline === undefined ? {} : { deadline: command.deadline }),
+        ...(command.walkEstimateMs === undefined ? {} : { walkEstimateMs: command.walkEstimateMs }),
+      },
+      nowMs,
+      this.estimates,
+    );
+    return { type: 'FLIGHT_UPDATED', flightId: command.flightId, tickets };
   }
 
   private requireTicket(ticketId: string): void {
@@ -449,6 +488,9 @@ export class CheckpointDay {
       requireInteger(command.scheduledDepartureMs, 'the scheduled departure', 0);
     }
     validateDeadline(command.deadline);
+    if (command.presentedAtMs !== undefined) {
+      requireInteger(command.presentedAtMs, 'the first presentation', 0, nowMs);
+    }
     if (command.dedupKey !== null && !/^[0-9a-f]{64}$/.test(command.dedupKey)) {
       invalid('the deduplication key must be a hexadecimal SHA-256 HMAC');
     }
@@ -457,7 +499,7 @@ export class CheckpointDay {
       if (!MANUAL_REASONS.includes(command.reason)) invalid('unknown reason for a manual ticket');
     }
     validateInfant(command.infant, command.partySize);
-    const number = `${this.config.ticketPrefix}${String(this.issueOrder.length + 1).padStart(3, '0')}`;
+    const number = ticketNumber(this.config.ticketPrefix, this.issueOrder.length + 1);
     const view = this.queue.issue(
       {
         id: command.ticketId,
@@ -465,7 +507,7 @@ export class CheckpointDay {
         deadline: command.deadline,
         walkEstimateMs: command.walkEstimateMs,
         partySize: command.partySize,
-        presentedAtMs: nowMs,
+        presentedAtMs: command.presentedAtMs ?? nowMs,
         scheduledDepartureMs: command.scheduledDepartureMs,
         flightId: command.flightId,
       },
@@ -479,6 +521,7 @@ export class CheckpointDay {
       flightId: command.flightId,
       segment: command.segment,
     });
+    this.issueIndex.set(command.ticketId, this.issueOrder.length);
     this.issueOrder.push(command.ticketId);
     this.byNumber.set(number, command.ticketId);
     this.byRef.set(command.opaqueRef, command.ticketId);
@@ -539,6 +582,14 @@ export class CheckpointDay {
     return this.info.has(ticketId) ? this.summaryOf(this.view(ticketId)) : undefined;
   }
 
+  /**
+   * When the passenger of a ticket first presented at the checkpoint (S18): the issue, or an
+   * earlier presentation that a ticket issued again kept. A new ticket after an expiry keeps it.
+   */
+  presentedAtMs(ticketId: string): number | undefined {
+    return this.info.has(ticketId) ? this.view(ticketId).presentedAtMs : undefined;
+  }
+
   /** The ticket with this public number, e.g. `A012`. */
   ticketByNumber(number: string): TicketSummary | undefined {
     const id = this.byNumber.get(number);
@@ -566,19 +617,21 @@ export class CheckpointDay {
    * first, and the prepare window in call order.
    */
   board(): Board {
-    const called: BoardCall[] = [];
-    for (const id of this.issueOrder) {
-      const view = this.view(id);
-      if (view.state !== 'CALLED' && view.state !== 'RECALLED') continue;
-      called.push({
-        number: this.info.get(id)?.number ?? '',
-        second: view.state === 'RECALLED',
-        calledAtMs: view.lastCalledAtMs ?? view.firstCalledAtMs ?? view.issuedAtMs,
-      });
-    }
-    // The latest call first; a tie in the order of issue, the latest number first.
-    called.reverse();
-    called.sort((a, b) => b.calledAtMs - a.calledAtMs);
+    // The tickets called whose passengers have not come yet: never every ticket of the day, which
+    // grows to thousands while a display shows a few (S18).
+    const called = this.queue
+      .calledTickets()
+      .map((view) => ({
+        index: this.issueIndex.get(view.id) ?? 0,
+        call: {
+          number: this.info.get(view.id)?.number ?? '',
+          second: view.state === 'RECALLED',
+          calledAtMs: view.lastCalledAtMs ?? view.firstCalledAtMs ?? view.issuedAtMs,
+        } satisfies BoardCall,
+      }))
+      // The latest call first; a tie in the order of issue, the latest number first.
+      .sort((a, b) => b.call.calledAtMs - a.call.calledAtMs || b.index - a.index)
+      .map((c) => c.call);
     return {
       called,
       prepare: this.queue.prepareWindow().map((view) => this.info.get(view.id)?.number ?? ''),

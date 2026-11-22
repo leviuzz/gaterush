@@ -1,9 +1,16 @@
 import { FIFO_MANUAL_POLICY, LANE_MODES, withLaneMode } from '@gateflow/queue-core';
-import type { Policy, PredictiveLanes, ReactiveLanes } from '@gateflow/queue-core';
+import type { Policy, PredictiveLanes, QueueEvent, ReactiveLanes } from '@gateflow/queue-core';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { PopulationError, simulateCheckpoint } from '../src';
-import type { ArrivalForecast, DayEvent, LaneStaffing, Population, RunResult } from '../src';
+import type {
+  ArrivalForecast,
+  DayEvent,
+  LaneStaffing,
+  Population,
+  RunResult,
+  TapeEntry,
+} from '../src';
 import {
   FIFO,
   MINUTE,
@@ -13,6 +20,7 @@ import {
   edfWith,
   flight,
   passenger,
+  playTape,
   withCallBehaviour,
   withPersonalDeadlines,
   mmcPopulation,
@@ -314,6 +322,26 @@ describe('lane management: properties (S8)', () => {
             observer: (e) => events.push(e),
           });
           expect(observed).toEqual(run);
+          // The tape (S18) too, and played on a new queue it follows the extra lanes.
+          const tape: TapeEntry[] = [];
+          const queueEvents: QueueEvent[] = [];
+          const taped = simulateCheckpoint(population, policy, {
+            ...OPTIONS,
+            listener: (e) => queueEvents.push(e),
+            recorder: (e) => tape.push(e),
+          });
+          expect(taped).toEqual(run);
+          expect(playTape(population, policy, tape, OPTIONS.classification)).toEqual(queueEvents);
+          // The lanes of the tape are those the observer saw open, at each change of their number.
+          const opened: { atMs: number; lanes: number }[] = [];
+          for (const e of events) {
+            if (e.type === 'LANES' && opened.at(-1)?.lanes !== e.open) {
+              opened.push({ atMs: e.atMs, lanes: e.open });
+            }
+          }
+          expect(
+            tape.flatMap((e) => (e.type === 'LANES' ? [{ atMs: e.atMs, lanes: e.lanes }] : [])),
+          ).toEqual(opened);
           const decided = events.filter((e) => e.type === 'LANE_DECISION');
           expect(decided.length).toBe(stats.laneDecisions);
           expect(decided.filter((e) => e.followed).length).toBe(stats.laneDecisionsFollowed);

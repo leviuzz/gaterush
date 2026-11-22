@@ -1,8 +1,8 @@
-import { and, asc, eq, isNotNull, lte } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, lte, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { sha256 } from './chain';
 import type { Db } from './db/client';
-import { checkpointTimer } from './db/schema';
+import { checkpoint, checkpointTimer } from './db/schema';
 import type { Runtime } from './runtime';
 import type { Clock } from './time';
 
@@ -71,9 +71,22 @@ export class TimerScheduler {
   private async advanceDue(only?: SQL): Promise<number> {
     const now = this.clock.now();
     const due = await this.db
-      .select()
+      .select({
+        checkpointId: checkpointTimer.checkpointId,
+        serviceDay: checkpointTimer.serviceDay,
+        nextDueMs: checkpointTimer.nextDueMs,
+      })
       .from(checkpointTimer)
-      .where(and(isNotNull(checkpointTimer.nextDueMs), lte(checkpointTimer.nextDueMs, now), only))
+      .innerJoin(checkpoint, eq(checkpoint.id, checkpointTimer.checkpointId))
+      .where(
+        and(
+          isNotNull(checkpointTimer.nextDueMs),
+          lte(checkpointTimer.nextDueMs, now),
+          // The digital twin applies the timeouts of its checkpoints itself, on their virtual day.
+          sql`${checkpoint.settings} -> 'twin' IS NULL`,
+          only,
+        ),
+      )
       .orderBy(asc(checkpointTimer.nextDueMs));
     for (const row of due) {
       // The same key for the same timeout, from any server or route: it is applied once.

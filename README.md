@@ -52,8 +52,13 @@ border procedures: it organises the flow before they start.
 >   moving a passenger up or calling one now with a coded reason, the lanes open, versioned
 >   policies activated from the next service day, and the day's audit with who, what and why.
 >
-> The digital twin (S18) comes next; staff sign in with local passwords until the pilot brings
-> the airport's identity provider. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+> - **The digital twin** (S18): the simulator drives the live system at an accelerated time. A
+>   scenario's simulated day is played through the product's own commands to a checkpoint of its
+>   own, and the live system calls the same numbers in the same order as the offline simulator,
+>   checked call by call; the demo page `/demo` plays it, on the product's own screens.
+>
+> Simulations through the API (S19) come next; staff sign in with local passwords until the
+> pilot brings the airport's identity provider. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 > **All results in this repository are SIMULATED on synthetic assumptions.** They are not
 > measurements and must not be presented as evidence of operational performance.
@@ -150,6 +155,28 @@ Supervisors and administrators use the console, `/supervisor/<checkpoint id>`: t
 checkpoint, the lanes open, moving a passenger up or calling one now with a reason, the policies
 (an administrator activates a version from the next service day) and the day's audit.
 
+**The digital twin** (S18) plays a scenario's simulated day through the live system, as fast as
+the server goes or at a chosen speed, to a new checkpoint of the scenario's airport, and checks
+every call against the offline simulator's:
+
+```bash
+node apps/api/dist/gateflow-api.mjs twin --scenario scenarios/single-checkpoint-disrupted.yaml --seed 1
+```
+
+It prints the twin's checkpoint, its progress and the verdict ("SAME ORDER", or the first
+difference, with exit code 1); `--policy virtual-fifo`, `--speed 60` (times real time) and
+`--until 12:00` vary it. For demos, start the server with the scenarios the twin may play:
+
+```bash
+node apps/api/dist/gateflow-api.mjs serve --port 8080 --twin scenarios
+```
+
+An administrator of the airport (synthetic airports only) opens `/demo`: a scenario of the
+airport, a policy, a day and a speed; the virtual clock, the check against the simulator, the
+board and the latest calls; and links to the twin's own display, lane station and console, which
+only show. Its data are SIMULATED, on checkpoints of their own that staff and kiosks cannot
+write to.
+
 The endpoints:
 - `POST /v1/checkpoints/{id}/scans`: a kiosk scans a boarding pass (with its token). The answer
   is a ticket, the same ticket again, or a reason. The pass is read in memory and never stored.
@@ -160,7 +187,7 @@ The endpoints:
 - `POST /v1/checkpoints/{id}/tickets`: issue a manual ticket, with its reason and party size;
 - `POST /v1/checkpoints/{id}/calls`: call the next passenger;
 - `POST /v1/checkpoints/{id}/admissions`: admit a passenger at the access point;
-- `GET /v1/checkpoints/{id}/queue`: the day's tickets;
+- `GET /v1/checkpoints/{id}/queue`: the day's tickets (`?inPlay=true`: those still in play);
 - `GET /v1/checkpoints/{id}/audit/verify`: check the hash chain of the log;
 - `GET /v1/tickets/{ref}`: the passenger's view of a ticket;
 - `POST /v1/checkpoints/{id}/tickets/{ticket}/recall`, `no-show`, `reactivate`, `review`,
@@ -184,6 +211,9 @@ The endpoints:
   `limit`); `GET /v1/checkpoints/{id}/policy`: today's policy, the next day's, the versions.
 - `POST /v1/checkpoints/{id}/policy/versions` and `/policy/activations`: an administrator
   publishes a version of a policy, and activates one from the next service day.
+- `GET /v1/twin/options`, `GET /v1/twin`, `POST /v1/twin/runs`, and `/v1/twin/runs/{run}/speed`,
+  `/stop`, `/display`: the digital twin, for the administrators of a synthetic airport, on a
+  server started with `--twin` (S18).
 
 Send an `Idempotency-Key` header with each command. The OpenAPI document is at
 `/v1/openapi.json`. The API's tests (`pnpm test`) start a throwaway PostgreSQL from the binaries
@@ -368,8 +398,9 @@ How to read these numbers:
 | `packages/sim-metrics` | Experiments, paired metrics, statistics, results and report (pure) |
 | `packages/sim-trace` | The trace of one day: every event, replay views, the explanation of every call (pure) |
 | `packages/studio-core` | What the Studio adds in the browser: SHA-256, files, library, what-if settings, comparison of runs, traces (pure) |
+| `packages/twin` | The digital twin: a simulated day as the live system's commands at virtual times, with the check of every answer (pure) |
 | `apps/api` | `gateflow-api`: the operational core on PostgreSQL (Fastify, Drizzle); serves the screens |
-| `apps/web` | The product's screens: the kiosk, the passenger's ticket page, the display, the lane station and the supervisor's console (React) |
+| `apps/web` | The product's screens: the kiosk, the passenger's ticket page, the display, the lane station, the supervisor's console and the digital twin's demo page (React) |
 | `apps/sim-cli` | `gateflow-sim` command-line interface |
 | `apps/studio` | GateFlow Simulator Studio: the simulator in one offline HTML page |
 | `airports/` | Airport configurations: the parameters of each airport and checkpoint ([guide](airports/README.md)) |

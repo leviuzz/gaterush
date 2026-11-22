@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import fastifyCookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
-import { and, asc, desc, eq, gte, inArray, lte } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lte, notInArray } from 'drizzle-orm';
 import Fastify from 'fastify';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ZodError, z } from 'zod';
@@ -39,6 +39,7 @@ import type {
 } from '@gateflow/contracts';
 import { MAX_PARTY_SIZE, OperationError } from '@gateflow/operations';
 import type { Policy } from '@gateflow/queue-core';
+import type { Scenario } from '@gateflow/sim-scenarios';
 import type { Command, CommandResult, TicketSummary } from '@gateflow/operations';
 import { auditOf } from './audit';
 import { requestHash } from './chain';
@@ -74,10 +75,12 @@ import { airport, checkpoint, flight, queueCommand, queueToken } from './db/sche
 import { deviceOf, requireDevice } from './devices';
 import type { Ids } from './ids';
 import { randomIds } from './ids';
-import { ApiError, Runtime, loadCheckpoint } from './runtime';
+import { ApiError, Runtime, loadCheckpoint, serviceDayNow } from './runtime';
 import type { BuildContext, CheckpointRow } from './runtime';
-import { localDate, serviceDayOf, systemClock } from './time';
+import { localDate, systemClock } from './time';
 import type { Clock } from './time';
+import { TwinRunner, twinFlightsOf } from './twin';
+import { registerTwinRoutes } from './twin-routes';
 import { verifyChain } from './verify';
 import { API_VERSION } from './version';
 
@@ -99,12 +102,23 @@ export interface AppOptions {
    * reads the commands of the other servers (1 second). Shorter in tests.
    */
   readonly streams?: { readonly heartbeatMs?: number; readonly pollMs?: number };
+  /**
+   * The digital twin (S18), for demos: the scenarios it may play. Without it, the server has no
+   * twin and no route of it.
+   */
+  readonly twin?: {
+    readonly library: readonly Scenario[];
+    /** The real time of the pacing (tests): the system's clock by default. */
+    readonly realClock?: Clock;
+  };
 }
 
 declare module 'fastify' {
   interface FastifyInstance {
     /** The scheduler of the queue's timeouts (S15). */
     readonly timers: TimerScheduler;
+    /** The runs of the digital twin on this server (S18), when the server has the twin. */
+    readonly twin: TwinRunner | null;
   }
 }
 
@@ -309,6 +323,35 @@ export function buildApp(options: AppOptions): FastifyInstance {
     await timers.stop();
   });
 
+  /** The digital twin (S18): only on a server started with it, for demos. */
+  const twin =
+    options.twin === undefined
+      ? null
+      : new TwinRunner(
+          options.db,
+          runtime,
+          ids,
+          clock,
+          (error) => {
+            app.log.error(error);
+          },
+          options.twin.realClock,
+        );
+  app.decorate('twin', twin);
+  if (twin !== null && options.twin !== undefined) {
+    registerTwinRoutes(app, {
+      db: options.db,
+      clock,
+      ids,
+      runner: twin,
+      library: options.twin.library,
+    });
+    // Before the server stops: a run playing would keep writing.
+    app.addHook('preClose', async () => {
+      await twin.close();
+    });
+  }
+
   /** The streams of the checkpoints: displays and lane stations follow the queue (S16). */
   const hub = new StreamHub(options.db, options.streams?.pollMs ?? POLL_MS);
   const heartbeatMs = options.streams?.heartbeatMs ?? HEARTBEAT_MS;
@@ -499,6 +542,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
           and(
             eq(flight.airportId, cp.airportId),
             eq(flight.environment, 'DEMO'),
+            isNull(flight.twinRunId),
             gte(flight.stdMs, now),
             lte(flight.stdMs, now + 24 * 60 * 60 * 1000),
           ),
@@ -533,7 +577,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
       const checkpointId = request.params.checkpointId;
       await requireDevice(options.db, request, checkpointId, 'DISPLAY');
       const cp = await loadCheckpoint(options.db, checkpointId);
-      const today = () => serviceDayOf(clock.now(), cp.timeZone, cp.dayStartsAt);
+      const today = () => serviceDayNow(cp, clock.now());
       const stream = new EventStream(reply);
       stream.onClose(hub.keep(stream));
       const failed = (error: unknown) => {
@@ -679,7 +723,8 @@ export function buildApp(options: AppOptions): FastifyInstance {
         async ({ tx, checkpoint: cp }) => {
           const rows = await tx.select().from(flight).where(eq(flight.id, body.flightId));
           const f = rows[0];
-          if (f?.airportId !== cp.airportId) {
+          // Never a flight of the digital twin (S18): those are its simulated passengers'.
+          if (f?.airportId !== cp.airportId || f.twinRunId !== null) {
             throw new ApiError(404, 'UNKNOWN_FLIGHT', 'no such flight at this airport');
           }
           return {
@@ -937,11 +982,20 @@ export function buildApp(options: AppOptions): FastifyInstance {
             }
             const ticketId = ids.uuid();
             await scanned('ISSUED', null, ticketId);
+            // A ticket issued again after an expiry keeps the passenger's first presentation at
+            // the checkpoint, which the presentation rule reads, as in the simulator (S18).
+            const firstPresented =
+              existing !== undefined && current?.state === 'EXPIRED'
+                ? day.presentedAtMs(existing.id)
+                : undefined;
             return {
               type: 'ISSUE_TICKET',
               ticketId,
               opaqueRef: ids.opaqueRef(),
               source: 'KIOSK',
+              ...(firstPresented === undefined || firstPresented >= atMs
+                ? {}
+                : { presentedAtMs: firstPresented }),
               flightId: f.id,
               segment: intake.segment,
               // An adult travelling with an infant is two people (ADR-046).
@@ -1252,7 +1306,12 @@ export function buildApp(options: AppOptions): FastifyInstance {
       const rows = await options.db.select().from(airport).where(eq(airport.id, cp.airportId));
       const a = rows[0];
       return {
-        checkpoint: { id: cp.id, label: cp.name, ticketPrefix: cp.ticketPrefix },
+        checkpoint: {
+          id: cp.id,
+          label: cp.name,
+          ticketPrefix: cp.ticketPrefix,
+          twin: cp.settings.twin ?? null,
+        },
         airport: {
           label: a?.name ?? '',
           iata: cp.iata,
@@ -1274,18 +1333,24 @@ export function buildApp(options: AppOptions): FastifyInstance {
         'OPERATOR',
         request.params.checkpointId,
       );
+      // A twin's checkpoint has the flights of its virtual day (S18).
       const now = clock.now();
-      const rows = await options.db
-        .select()
-        .from(flight)
-        .where(
-          and(
-            eq(flight.airportId, cp.airportId),
-            gte(flight.stdMs, now - 60 * 60 * 1000),
-            lte(flight.stdMs, now + 24 * 60 * 60 * 1000),
-          ),
-        )
-        .orderBy(asc(flight.stdMs));
+      const rows =
+        cp.settings.twin !== undefined
+          ? await twinFlightsOf(options.db, cp.settings.twin.runId)
+          : await options.db
+              .select()
+              .from(flight)
+              .where(
+                and(
+                  eq(flight.airportId, cp.airportId),
+                  // The digital twin's flights are its checkpoints' only (S18).
+                  isNull(flight.twinRunId),
+                  gte(flight.stdMs, now - 60 * 60 * 1000),
+                  lte(flight.stdMs, now + 24 * 60 * 60 * 1000),
+                ),
+              )
+              .orderBy(asc(flight.stdMs));
       return {
         flights: rows.map((f) => ({
           id: f.id,
@@ -1301,6 +1366,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
     },
   );
 
+  const QueueQuery = z.strictObject({ inPlay: z.enum(['true', 'false']).optional() });
   app.get<{ Params: { checkpointId: string } }>(
     '/v1/checkpoints/:checkpointId/queue',
     async (request) => {
@@ -1311,17 +1377,29 @@ export function buildApp(options: AppOptions): FastifyInstance {
         'OPERATOR',
         request.params.checkpointId,
       );
-      const serviceDay = serviceDayOf(clock.now(), cp.timeZone, cp.dayStartsAt);
+      const { inPlay } = parse(QueueQuery, request.query);
+      const serviceDay = serviceDayNow(cp, clock.now());
       const rows = await options.db
         .select()
         .from(queueToken)
-        .where(and(eq(queueToken.checkpointId, cp.id), eq(queueToken.serviceDay, serviceDay)))
+        .where(
+          and(
+            eq(queueToken.checkpointId, cp.id),
+            eq(queueToken.serviceDay, serviceDay),
+            // The screens of staff need the tickets still in play only: a day has thousands.
+            inPlay === 'true'
+              ? notInArray(queueToken.state, ['ADMITTED', 'EXPIRED', 'CANCELLED'])
+              : undefined,
+          ),
+        )
         .orderBy(asc(queueToken.issuedAtMs), asc(queueToken.number));
+      const board = await boardOf(options.db, cp.id);
       return {
         checkpointId: cp.id,
         serviceDay,
-        mode: await modeOf(options.db, cp.id),
+        mode: board?.board.mode ?? 'NORMAL',
         lanesOpen: await lanesOf(options.db, cp, serviceDay),
+        updatedAt: board === undefined ? null : new Date(board.atMs).toISOString(),
         tickets: rows.map(ticketOfRow),
       } satisfies QueueResponse;
     },
@@ -1345,7 +1423,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
         request.params.checkpointId,
       );
       const query = parse(AuditQuery, request.query);
-      const day = query.day ?? serviceDayOf(clock.now(), cp.timeZone, cp.dayStartsAt);
+      const day = query.day ?? serviceDayNow(cp, clock.now());
       return auditOf(options.db, cp, day, {
         ...(query.number === undefined ? {} : { number: query.number }),
         ...(query.before === undefined ? {} : { before: query.before }),

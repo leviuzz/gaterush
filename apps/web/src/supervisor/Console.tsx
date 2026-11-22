@@ -21,6 +21,7 @@ import type {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { SyntheticEvent } from 'react';
 import { api, randomKey } from '../api';
+import { coalesced } from '../common/coalesce';
 import { timeOfDay, useDocumentLanguage } from '../common/format';
 import { LanguageSwitch } from '../common/LanguageSwitch';
 import { SignIn } from '../common/SignIn';
@@ -159,7 +160,7 @@ export function Console({
 
   const refresh = useCallback(async () => {
     const [q, p] = await Promise.all([
-      api<QueueResponse>(`${base}/queue`, { session: true }),
+      api<QueueResponse>(`${base}/queue?inPlay=true`, { session: true }),
       api<PolicyStatusResponse>(`${base}/policy`, { session: true }),
     ]);
     if (!q.ok && q.status === 401) {
@@ -183,10 +184,12 @@ export function Console({
     const timer = window.setInterval(() => {
       void refresh();
     }, REFRESH_MS);
+    // One question at a time, however fast the checkpoint changes (S18).
+    const again = coalesced(refresh);
     const stop = follow(`${base}/stream`, {
       session: true,
       onMessage: (message) => {
-        if (message.event === 'changed') void refresh();
+        if (message.event === 'changed') void again();
       },
       onRefused: (status) => {
         setPhase(status === 401 ? 'sign-in' : 'not-allowed');
@@ -325,6 +328,8 @@ export function Console({
     );
   }
 
+  /** A checkpoint of the digital twin (S18): the console only shows it. */
+  const twin = (place?.checkpoint.twin ?? null) !== null;
   const tickets = queue?.tickets ?? [];
   const prepare = tickets.filter((x) => x.state === 'PREPARE');
   const waiting = tickets.filter((x) => x.state === 'QUEUED');
@@ -362,8 +367,13 @@ export function Console({
   );
 
   return (
-    <div className="console" data-phase="ready" data-mode={mode}>
+    <div className="console" data-phase="ready" data-mode={mode} data-twin={twin}>
       {header}
+      {twin ? (
+        <p className="twin-banner" role="note" id="console-twin">
+          {t(locale, 'twin.banner')}
+        </p>
+      ) : null}
       {mode === 'NORMAL' ? null : (
         <p className="mode-banner" role="status" id="console-mode-banner" data-mode={mode}>
           {t(locale, `lane.mode.${mode}`)}
@@ -371,176 +381,184 @@ export function Console({
       )}
       <main className="console-main">
         <section className="card console-mode" id="console-mode" aria-labelledby="mode-title">
-          <h2 id="mode-title">
-            {t(locale, 'supervisor.mode.title')}:{' '}
-            <span id="console-mode-now" data-mode={mode}>
-              {t(locale, `supervisor.mode.${mode}`)}
-            </span>
-          </h2>
-          <div className="mode-buttons">
-            {MODES.filter((m) => m !== mode && !(stopped && m === 'NORMAL')).map((m) => (
-              <button
-                key={m}
-                type="button"
-                className={m === 'EMERGENCY' ? 'button danger' : 'button secondary'}
-                id={`console-set-${m}`}
-                onClick={() => {
-                  if (m === 'EMERGENCY') setConfirming(true);
-                  else void setMode(m);
-                }}
-              >
-                {t(locale, `supervisor.set.${m}`)}
-              </button>
-            ))}
-          </div>
-          {confirming ? (
-            <div className="confirm" role="alertdialog" id="console-emergency-confirm">
-              <p>{t(locale, 'supervisor.emergency.confirm')}</p>
-              <div className="actions">
+          <fieldset className="plain" disabled={twin}>
+            <h2 id="mode-title">
+              {t(locale, 'supervisor.mode.title')}:{' '}
+              <span id="console-mode-now" data-mode={mode}>
+                {t(locale, `supervisor.mode.${mode}`)}
+              </span>
+            </h2>
+            <div className="mode-buttons">
+              {MODES.filter((m) => m !== mode && !(stopped && m === 'NORMAL')).map((m) => (
                 <button
+                  key={m}
                   type="button"
-                  className="button danger"
-                  id="console-emergency-yes"
-                  onClick={() => void setMode('EMERGENCY')}
-                >
-                  {t(locale, 'supervisor.emergency.yes')}
-                </button>
-                <button
-                  type="button"
-                  className="button secondary"
-                  id="console-emergency-cancel"
+                  className={m === 'EMERGENCY' ? 'button danger' : 'button secondary'}
+                  id={`console-set-${m}`}
                   onClick={() => {
-                    setConfirming(false);
+                    if (m === 'EMERGENCY') setConfirming(true);
+                    else void setMode(m);
                   }}
                 >
-                  {t(locale, 'supervisor.cancel')}
+                  {t(locale, `supervisor.set.${m}`)}
                 </button>
-              </div>
+              ))}
             </div>
-          ) : null}
-          {stopped ? (
-            <div className="resume" id="console-resume">
-              <h3>{t(locale, 'supervisor.resume.title')}</h3>
-              <div className="actions">
-                <button
-                  type="button"
-                  className="button primary"
-                  id="console-resume-same"
-                  onClick={() => void setMode('NORMAL')}
-                >
-                  {t(locale, 'supervisor.resume.same')}
-                </button>
-                <button
-                  type="button"
-                  className="button secondary"
-                  id="console-resume-reset"
-                  onClick={() => void setMode('NORMAL', true)}
-                >
-                  {t(locale, 'supervisor.resume.reset')}
-                </button>
+            {confirming ? (
+              <div className="confirm" role="alertdialog" id="console-emergency-confirm">
+                <p>{t(locale, 'supervisor.emergency.confirm')}</p>
+                <div className="actions">
+                  <button
+                    type="button"
+                    className="button danger"
+                    id="console-emergency-yes"
+                    onClick={() => void setMode('EMERGENCY')}
+                  >
+                    {t(locale, 'supervisor.emergency.yes')}
+                  </button>
+                  <button
+                    type="button"
+                    className="button secondary"
+                    id="console-emergency-cancel"
+                    onClick={() => {
+                      setConfirming(false);
+                    }}
+                  >
+                    {t(locale, 'supervisor.cancel')}
+                  </button>
+                </div>
               </div>
-              <p className="muted">{t(locale, 'supervisor.resume.hint')}</p>
-            </div>
-          ) : null}
+            ) : null}
+            {stopped ? (
+              <div className="resume" id="console-resume">
+                <h3>{t(locale, 'supervisor.resume.title')}</h3>
+                <div className="actions">
+                  <button
+                    type="button"
+                    className="button primary"
+                    id="console-resume-same"
+                    onClick={() => void setMode('NORMAL')}
+                  >
+                    {t(locale, 'supervisor.resume.same')}
+                  </button>
+                  <button
+                    type="button"
+                    className="button secondary"
+                    id="console-resume-reset"
+                    onClick={() => void setMode('NORMAL', true)}
+                  >
+                    {t(locale, 'supervisor.resume.reset')}
+                  </button>
+                </div>
+                <p className="muted">{t(locale, 'supervisor.resume.hint')}</p>
+              </div>
+            ) : null}
+          </fieldset>
         </section>
 
         <section className="card console-lanes" id="console-lanes" aria-labelledby="lanes-title">
-          <h2 id="lanes-title">{t(locale, 'supervisor.lanes.title')}</h2>
-          <form className="scan-row" onSubmit={(e) => void setLanesOpen(e)}>
-            <input
-              id="console-lanes-input"
-              type="number"
-              min={1}
-              max={200}
-              value={lanes}
-              aria-labelledby="lanes-title"
-              onChange={(e) => {
-                setLanes(e.target.value);
-              }}
-            />
-            <button type="submit" className="button secondary" id="console-lanes-set">
-              {t(locale, 'supervisor.lanes.set')}
-            </button>
-          </form>
-          <p className="muted">{t(locale, 'supervisor.lanes.hint')}</p>
+          <fieldset className="plain" disabled={twin}>
+            <h2 id="lanes-title">{t(locale, 'supervisor.lanes.title')}</h2>
+            <form className="scan-row" onSubmit={(e) => void setLanesOpen(e)}>
+              <input
+                id="console-lanes-input"
+                type="number"
+                min={1}
+                max={200}
+                value={lanes}
+                aria-labelledby="lanes-title"
+                onChange={(e) => {
+                  setLanes(e.target.value);
+                }}
+              />
+              <button type="submit" className="button secondary" id="console-lanes-set">
+                {t(locale, 'supervisor.lanes.set')}
+              </button>
+            </form>
+            <p className="muted">{t(locale, 'supervisor.lanes.hint')}</p>
+          </fieldset>
         </section>
 
         <section className="card console-queue" id="console-queue" aria-labelledby="queue-title">
-          <h2 id="queue-title">{t(locale, 'supervisor.queue.title')}</h2>
-          <label htmlFor="console-reason">{t(locale, 'supervisor.reason.label')}</label>
-          <select
-            id="console-reason"
-            value={reason}
-            onChange={(e) => {
-              setReason(e.target.value as OverrideReason | '');
-            }}
-          >
-            <option value="">{t(locale, 'supervisor.reason.none')}</option>
-            {REASONS.map((r) => (
-              <option key={r} value={r}>
-                {t(locale, `supervisor.reason.${r}`)}
-              </option>
-            ))}
-          </select>
-          <p className="outcome" role="status" id="console-notice" data-kind={notice?.kind ?? ''}>
-            {notice?.text ?? ''}
-          </p>
-          <h3>
-            {t(locale, 'lane.section.prepare')} <span className="count">{prepare.length}</span>
-          </h3>
-          {prepare.length === 0 ? (
-            <p className="muted">{t(locale, 'lane.empty')}</p>
-          ) : (
-            <ul id="console-prepare">{prepare.map((x) => row(x, false))}</ul>
-          )}
-          <h3>
-            {t(locale, 'lane.section.waiting')} <span className="count">{waiting.length}</span>
-          </h3>
-          {waiting.length === 0 ? (
-            <p className="muted">{t(locale, 'lane.empty')}</p>
-          ) : (
-            <ul id="console-waiting">{waiting.slice(0, LIST_LIMIT).map((x) => row(x, true))}</ul>
-          )}
+          <fieldset className="plain" disabled={twin}>
+            <h2 id="queue-title">{t(locale, 'supervisor.queue.title')}</h2>
+            <label htmlFor="console-reason">{t(locale, 'supervisor.reason.label')}</label>
+            <select
+              id="console-reason"
+              value={reason}
+              onChange={(e) => {
+                setReason(e.target.value as OverrideReason | '');
+              }}
+            >
+              <option value="">{t(locale, 'supervisor.reason.none')}</option>
+              {REASONS.map((r) => (
+                <option key={r} value={r}>
+                  {t(locale, `supervisor.reason.${r}`)}
+                </option>
+              ))}
+            </select>
+            <p className="outcome" role="status" id="console-notice" data-kind={notice?.kind ?? ''}>
+              {notice?.text ?? ''}
+            </p>
+            <h3>
+              {t(locale, 'lane.section.prepare')} <span className="count">{prepare.length}</span>
+            </h3>
+            {prepare.length === 0 ? (
+              <p className="muted">{t(locale, 'lane.empty')}</p>
+            ) : (
+              <ul id="console-prepare">{prepare.map((x) => row(x, false))}</ul>
+            )}
+            <h3>
+              {t(locale, 'lane.section.waiting')} <span className="count">{waiting.length}</span>
+            </h3>
+            {waiting.length === 0 ? (
+              <p className="muted">{t(locale, 'lane.empty')}</p>
+            ) : (
+              <ul id="console-waiting">{waiting.slice(0, LIST_LIMIT).map((x) => row(x, true))}</ul>
+            )}
+          </fieldset>
         </section>
 
         <section className="card console-policy" id="console-policy" aria-labelledby="policy-title">
-          <h2 id="policy-title">{t(locale, 'supervisor.policy.title')}</h2>
-          {policy === null ? null : (
-            <>
-              <dl className="policy-days">
-                <dt>{t(locale, 'supervisor.policy.today', { day: policy.today.serviceDay })}</dt>
-                <dd id="console-policy-today" data-policy={policy.today.policy.policyId}>
-                  {policy.today.policy.title} <code>{policy.today.policy.hash.slice(0, 12)}</code>
-                </dd>
-                <dt>{t(locale, 'supervisor.policy.next', { day: policy.next.serviceDay })}</dt>
-                <dd id="console-policy-next" data-policy={policy.next.policy.policyId}>
-                  {policy.next.policy.title} <code>{policy.next.policy.hash.slice(0, 12)}</code>
-                </dd>
-              </dl>
-              <h3>{t(locale, 'supervisor.policy.versions')}</h3>
-              <ul className="versions" id="console-versions">
-                {policy.versions.map((v) => (
-                  <li key={v.id} data-version={v.id} data-policy={v.policyId}>
-                    <span>
-                      {v.title} <code>{v.hash.slice(0, 12)}</code>
-                    </span>
-                    {admin && v.hash !== policy.next.policy.hash ? (
-                      <button
-                        type="button"
-                        className="small-button"
-                        onClick={() => void activate(v.id)}
-                      >
-                        {t(locale, 'supervisor.policy.activate', {
-                          day: policy.next.serviceDay,
-                        })}
-                      </button>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-              {admin ? null : <p className="muted">{t(locale, 'supervisor.policy.adminOnly')}</p>}
-            </>
-          )}
+          <fieldset className="plain" disabled={twin}>
+            <h2 id="policy-title">{t(locale, 'supervisor.policy.title')}</h2>
+            {policy === null ? null : (
+              <>
+                <dl className="policy-days">
+                  <dt>{t(locale, 'supervisor.policy.today', { day: policy.today.serviceDay })}</dt>
+                  <dd id="console-policy-today" data-policy={policy.today.policy.policyId}>
+                    {policy.today.policy.title} <code>{policy.today.policy.hash.slice(0, 12)}</code>
+                  </dd>
+                  <dt>{t(locale, 'supervisor.policy.next', { day: policy.next.serviceDay })}</dt>
+                  <dd id="console-policy-next" data-policy={policy.next.policy.policyId}>
+                    {policy.next.policy.title} <code>{policy.next.policy.hash.slice(0, 12)}</code>
+                  </dd>
+                </dl>
+                <h3>{t(locale, 'supervisor.policy.versions')}</h3>
+                <ul className="versions" id="console-versions">
+                  {policy.versions.map((v) => (
+                    <li key={v.id} data-version={v.id} data-policy={v.policyId}>
+                      <span>
+                        {v.title} <code>{v.hash.slice(0, 12)}</code>
+                      </span>
+                      {admin && v.hash !== policy.next.policy.hash ? (
+                        <button
+                          type="button"
+                          className="small-button"
+                          onClick={() => void activate(v.id)}
+                        >
+                          {t(locale, 'supervisor.policy.activate', {
+                            day: policy.next.serviceDay,
+                          })}
+                        </button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+                {admin ? null : <p className="muted">{t(locale, 'supervisor.policy.adminOnly')}</p>}
+              </>
+            )}
+          </fieldset>
         </section>
 
         <section className="card console-audit" id="console-audit" aria-labelledby="audit-title">
@@ -586,8 +604,8 @@ export function Console({
                     </time>
                     <span className="audit-what">{auditWhat(locale, e)}</span>
                     <span className="audit-who">
-                      {e.by.kind === 'SYSTEM' && e.by.label === 'timer'
-                        ? t(locale, 'supervisor.by.timer')
+                      {e.by.kind === 'SYSTEM' && (e.by.label === 'timer' || e.by.label === 'twin')
+                        ? t(locale, `supervisor.by.${e.by.label}`)
                         : e.by.label}
                     </span>
                     {why === null ? null : <span className="audit-why">{why}</span>}

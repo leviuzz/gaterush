@@ -74,7 +74,14 @@ const deviceToken = (printed: string): string => {
   return token;
 };
 
-export async function startProduct(serverUrl: string, scenario: string): Promise<Product> {
+export async function startProduct(
+  serverUrl: string,
+  scenario: string,
+  options: {
+    /** Serve the digital twin of the scenarios of the library (S18). */
+    readonly twin?: boolean;
+  } = {},
+): Promise<Product> {
   for (const file of [API, join(WEB, 'index.html')]) {
     if (!existsSync(file)) throw new Error(`${file} is missing: run pnpm build first`);
   }
@@ -153,7 +160,17 @@ export async function startProduct(serverUrl: string, scenario: string): Promise
   const launch = async () => {
     const started = spawn(
       process.execPath,
-      [API, 'serve', '--port', String(port), '--host', '127.0.0.1', '--web', WEB],
+      [
+        API,
+        'serve',
+        '--port',
+        String(port),
+        '--host',
+        '127.0.0.1',
+        '--web',
+        WEB,
+        ...(options.twin === true ? ['--twin', join(REPO, 'scenarios')] : []),
+      ],
       { env, stdio: ['ignore', 'pipe', 'pipe'] },
     );
     const output: string[] = [];

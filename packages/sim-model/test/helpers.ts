@@ -1,14 +1,23 @@
 import type { KnownDeadline } from '@gateflow/domain';
-import type { ConstrainedEdfSelection, SelectionParams } from '@gateflow/priority-engine';
+import type {
+  CheckpointEstimates,
+  ClassificationParams,
+  ConstrainedEdfSelection,
+  SelectionParams,
+} from '@gateflow/priority-engine';
 import {
+  CheckpointQueue,
   DEFAULT_VIRTUAL_QUEUE,
   FIFO_POLICY,
   PRIORITY_V0_POLICY,
   PRIORITY_V0_SELECTION,
   classificationOf,
+  fastTrackResponseEstimateMs,
+  responseEstimateMs,
 } from '@gateflow/queue-core';
-import type { Policy, QueueOperation, VirtualQueue } from '@gateflow/queue-core';
+import type { Policy, QueueEvent, QueueOperation, VirtualQueue } from '@gateflow/queue-core';
 import { exponential, streamFor } from '@gateflow/sim-kernel';
+import { expect } from 'vitest';
 import type {
   CheckpointSpec,
   PassengerOutcome,
@@ -16,6 +25,7 @@ import type {
   RunResult,
   SimFlight,
   SimPassenger,
+  TapeEntry,
 } from '../src';
 
 export const MINUTE = 60_000;
@@ -181,4 +191,60 @@ export function decisions(run: RunResult): Partial<PassengerOutcome>[] {
 export function withoutLaneOutages(population: Population): Population {
   const { checkpoint, flights, passengers, feedOutages } = population;
   return { checkpoint, flights, passengers, ...(feedOutages === undefined ? {} : { feedOutages }) };
+}
+
+/**
+ * Plays a tape (S18) on a new queue, as the digital twin plays it to the live system: the same
+ * operations at the same times, with the estimates of the lanes it gives. Every call and every
+ * presentation must get the result the simulator got. Returns the new queue's events.
+ */
+export function playTape(
+  population: Population,
+  policy: Policy,
+  tape: readonly TapeEntry[],
+  classification: ClassificationParams,
+): QueueEvent[] {
+  const events: QueueEvent[] = [];
+  const queue = new CheckpointQueue(policy, classification, {
+    listener: (event) => {
+      events.push(event);
+    },
+  });
+  const estimatesFor = (lanes: number): CheckpointEstimates => ({
+    throughputPerHour: lanes * population.checkpoint.serviceRatePerLanePerHour,
+    processMs: population.checkpoint.processEstimateMs,
+    responseMs: responseEstimateMs(policy.queue),
+    fastTrackResponseMs: fastTrackResponseEstimateMs(policy.queue),
+  });
+  let estimates: CheckpointEstimates | undefined;
+  const current = (): CheckpointEstimates => {
+    if (estimates === undefined) throw new Error('the tape starts with the lanes open');
+    return estimates;
+  };
+  let lastMs = -Infinity;
+  for (const entry of tape) {
+    expect(entry.atMs).toBeGreaterThanOrEqual(lastMs);
+    lastMs = entry.atMs;
+    switch (entry.type) {
+      case 'LANES':
+        estimates = estimatesFor(entry.lanes);
+        break;
+      case 'ISSUE':
+        queue.issue(entry.input, entry.atMs, current());
+        break;
+      case 'UPDATE_FLIGHT':
+        queue.updateFlight(entry.flightId, entry.knowledge, entry.atMs, current());
+        break;
+      case 'CALL_NEXT':
+        expect(queue.callNext(entry.atMs, current())?.id ?? null).toBe(entry.ticketId);
+        break;
+      case 'PRESENT':
+        expect(queue.present(entry.ticketId, entry.atMs, current())).toBe(entry.outcome);
+        break;
+      case 'ADVANCE':
+        queue.advance(entry.atMs);
+        break;
+    }
+  }
+  return events;
 }

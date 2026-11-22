@@ -1,6 +1,7 @@
 import { isLocale, localeFor } from '@gateflow/i18n';
 import type { Locale } from '@gateflow/i18n';
 import { Home } from './common/Home';
+import { Demo } from './demo/Demo';
 import { Display } from './display/Display';
 import { Kiosk } from './kiosk/Kiosk';
 import { Lane } from './lane/Lane';
@@ -13,6 +14,7 @@ export type Route =
   | { readonly page: 'lane'; readonly checkpointId: string }
   | { readonly page: 'supervisor'; readonly checkpointId: string }
   | { readonly page: 'ticket'; readonly ref: string }
+  | { readonly page: 'demo' }
   | { readonly page: 'home' };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -21,7 +23,8 @@ const REF = /^[A-Za-z0-9_-]{16,64}$/;
 
 /**
  * The page of an address: /kiosk/<checkpoint id>, /display/<checkpoint id>, /lane/<checkpoint
- * id>, /supervisor/<checkpoint id>, /t/<ticket reference>, or the home page.
+ * id>, /supervisor/<checkpoint id>, /t/<ticket reference>, /demo (the digital twin, S18), or the
+ * home page.
  */
 export function routeOf(pathname: string): Route {
   const station = /^\/(kiosk|display|lane|supervisor)\/([^/]+)\/?$/.exec(pathname);
@@ -34,6 +37,7 @@ export function routeOf(pathname: string): Route {
   ) {
     return { page, checkpointId: id.toLowerCase() };
   }
+  if (/^\/demo\/?$/.test(pathname)) return { page: 'demo' };
   const ticket = /^\/t\/([^/]+)\/?$/.exec(pathname)?.[1];
   if (ticket !== undefined && REF.test(ticket)) return { page: 'ticket', ref: ticket };
   return { page: 'home' };
@@ -67,6 +71,8 @@ export function App() {
       return <Console checkpointId={route.checkpointId} defaultLocale={locale} />;
     case 'ticket':
       return <TicketPage ticketRef={route.ref} defaultLocale={locale} />;
+    case 'demo':
+      return <Demo defaultLocale={locale} />;
     case 'home':
       return <Home />;
   }

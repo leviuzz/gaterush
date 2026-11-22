@@ -314,7 +314,23 @@ describe('the life cycle of a ticket (S15)', () => {
     const late = await scanPass(pass);
     // One reactivation is allowed (maxReactivations): the second no-show expired at once.
     expect(late.outcome).toBe(queue.maxReactivations > 1 ? 'REACTIVATED' : 'ISSUED');
-    if (late.outcome === 'ISSUED') expect(late.ticket?.number).not.toBe(first.ticket?.number);
+    if (late.outcome === 'ISSUED') {
+      expect(late.ticket?.number).not.toBe(first.ticket?.number);
+      // The new ticket keeps the passenger's first presentation, as in the simulator (S18).
+      const issues = await database.db
+        .select({ command: queueCommand.command, atMs: queueCommand.atMs })
+        .from(queueCommand)
+        .where(
+          and(eq(queueCommand.checkpointId, checkpointId), eq(queueCommand.type, 'ISSUE_TICKET')),
+        );
+      const issueOf = (ticketId: string | undefined) =>
+        issues.find((r) => (r.command as Command & { ticketId?: string }).ticketId === ticketId);
+      const firstIssue = issueOf(first.ticket?.id);
+      const again = issueOf(late.ticket?.id);
+      expect(firstIssue?.command).not.toHaveProperty('presentedAtMs');
+      expect(again?.command).toMatchObject({ presentedAtMs: firstIssue?.atMs });
+      expect(again!.atMs).toBeGreaterThan(firstIssue!.atMs);
+    }
   });
 
   it('sends to staff a pass whose ticket is under review or cancelled', async () => {

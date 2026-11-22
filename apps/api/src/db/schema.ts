@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import {
   bigint,
   boolean,
@@ -72,6 +73,11 @@ export interface CheckpointSettings {
    * the passenger to staff (the default), `ISSUE` gives a ticket all the same.
    */
   readonly afterBoardingClose?: 'ASSIST' | 'ISSUE';
+  /**
+   * A checkpoint of the digital twin (S18): the twin's run drives it on its virtual day; staff
+   * and kiosks only watch it, and the timer scheduler leaves it alone.
+   */
+  readonly twin?: { readonly runId: string; readonly serviceDay: string };
 }
 
 export const checkpoint = pgTable(
@@ -125,16 +131,31 @@ export const flight = pgTable(
     walkEstimateMs: integer('walk_estimate_ms').notNull(),
     /** `LIVE`, `SIMULATED` or `DEMO`. */
     environment: text('environment').notNull(),
+    /**
+     * A flight of a run of the digital twin (S18), on its virtual day, SIMULATED: only the twin's
+     * checkpoint sees it. Null for the airport's own flights, which kiosks and staff use.
+     */
+    twinRunId: uuid('twin_run_id').references((): AnyPgColumn => twinRun.id),
   },
   (t) => [
-    unique('flight_airport_date_number').on(t.airportId, t.serviceDate, t.number),
-    unique('flight_carrier_number').on(t.airportId, t.departureDate, t.carrier, t.flightNumber),
+    // The airport's own flights: one per number and service day, one per designator and date.
+    uniqueIndex('flight_airport_date_number')
+      .on(t.airportId, t.serviceDate, t.number)
+      .where(sql`${t.twinRunId} IS NULL`),
+    uniqueIndex('flight_carrier_number')
+      .on(t.airportId, t.departureDate, t.carrier, t.flightNumber)
+      .where(sql`${t.twinRunId} IS NULL`),
+    // A run of the twin has its own.
+    uniqueIndex('flight_twin_number')
+      .on(t.twinRunId, t.number)
+      .where(sql`${t.twinRunId} IS NOT NULL`),
     check('flight_deadline_source', sql`${t.deadlineSource} IN ('FEED', 'RULE', 'NONE')`),
     check(
       'flight_deadline_known',
       sql`(${t.deadlineSource} = 'NONE') = (${t.boardingCloseMs} IS NULL)`,
     ),
     check('flight_environment', sql`${t.environment} IN ('LIVE', 'SIMULATED', 'DEMO')`),
+    check('flight_twin_simulated', sql`${t.twinRunId} IS NULL OR ${t.environment} = 'SIMULATED'`),
     check('flight_walk', sql`${t.walkEstimateMs} >= 0`),
   ],
 );
@@ -236,7 +257,7 @@ export const queueToken = pgTable(
     unique('queue_token_opaque_ref').on(t.opaqueRef),
     check('queue_token_party_size', sql`${t.partySize} BETWEEN 1 AND 20`),
     check('queue_token_segment', sql`${t.segment} IN ('DEPARTING', 'TRANSFER')`),
-    check('queue_token_source', sql`${t.source} IN ('STAFF', 'KIOSK')`),
+    check('queue_token_source', sql`${t.source} IN ('STAFF', 'KIOSK', 'TWIN')`),
     check(
       'queue_token_state',
       sql`${t.state} IN ('QUEUED', 'PREPARE', 'CALLED', 'RECALLED', 'NO_SHOW', 'ADMITTED', 'EXPIRED', 'REVIEW', 'CANCELLED')`,
@@ -493,4 +514,73 @@ export const policyActivation = pgTable(
     activatedBy: text('activated_by').notNull(),
   },
   (t) => [index('policy_activation_checkpoint').on(t.checkpointId, t.fromServiceDay)],
+);
+
+/**
+ * A run of the digital twin (S18): a scenario's simulated day played to a twin checkpoint at its
+ * virtual time, every call checked against the simulator's. The checkpoint's log is the record of
+ * what was played; this row says how far the run went and whether it matched.
+ */
+export const twinRun = pgTable(
+  'twin_run',
+  {
+    id: uuid('id').primaryKey(),
+    /** The order the runs were started in, whatever the clocks of the servers that started them. */
+    seq: bigint('seq', { mode: 'number' }).generatedAlwaysAsIdentity().notNull(),
+    airportId: uuid('airport_id')
+      .notNull()
+      .references(() => airport.id),
+    /** The twin checkpoint the run drives, made for it. */
+    checkpointId: uuid('checkpoint_id')
+      .notNull()
+      .references(() => checkpoint.id)
+      .unique(),
+    scenarioId: text('scenario_id').notNull(),
+    /** The hash of the canonical scenario (`sha256:...`). */
+    scenarioHash: text('scenario_hash').notNull(),
+    seed: integer('seed').notNull(),
+    /** The policy version played: the SHA-256 of its canonical JSON. */
+    policyHash: text('policy_hash').notNull(),
+    /** The virtual service day, and its start in epoch milliseconds (a local midnight). */
+    serviceDay: date('service_day').notNull(),
+    originMs: ms('origin_ms').notNull(),
+    /** The last operation played, in the day's time (ms since midnight); null: the whole day. */
+    untilMs: ms('until_ms'),
+    /** The virtual time of its first command and of its last operation. */
+    fromMs: ms('from_ms').notNull(),
+    toMs: ms('to_ms').notNull(),
+    /** The operations of the run, and the calls the live system must make among them. */
+    steps: integer('steps').notNull(),
+    expectedCalls: integer('expected_calls').notNull(),
+    /** Who started it: `staff:<id>`, or `cli`. */
+    createdBy: text('created_by').notNull(),
+    createdAtMs: ms('created_at_ms').notNull(),
+    /** RUNNING, STOPPED, FINISHED, DIVERGED or FAILED. */
+    state: text('state').notNull(),
+    /** Virtual time per real time; null: as fast as the server goes. */
+    speed: integer('speed'),
+    /** The virtual clock at the latest progress written. */
+    virtualMs: ms('virtual_ms').notNull(),
+    /** The operations applied, and the calls that matched the simulator's. */
+    applied: integer('applied').notNull().default(0),
+    matchedCalls: integer('matched_calls').notNull().default(0),
+    /** The first answer that was not the simulator's. */
+    divergence: jsonb('divergence'),
+    error: text('error'),
+    /** When the server running it last wrote its progress: a run silent for long was cut off. */
+    updatedAtMs: ms('updated_at_ms').notNull(),
+    endedAtMs: ms('ended_at_ms'),
+  },
+  (t) => [
+    index('twin_run_airport').on(t.airportId, t.seq),
+    // One run at a time per airport, by the database itself.
+    uniqueIndex('twin_run_one_running')
+      .on(t.airportId)
+      .where(sql`${t.state} = 'RUNNING'`),
+    check(
+      'twin_run_state',
+      sql`${t.state} IN ('RUNNING', 'STOPPED', 'FINISHED', 'DIVERGED', 'FAILED')`,
+    ),
+    check('twin_run_speed', sql`${t.speed} IS NULL OR ${t.speed} >= 1`),
+  ],
 );

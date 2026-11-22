@@ -877,7 +877,8 @@ input {
 
 .validate label,
 .manual label,
-.sign-in label {
+.sign-in label,
+.demo-form label {
   color: var(--ink-2);
   font-size: 0.92rem;
 }
@@ -885,7 +886,9 @@ input {
 .lane input,
 .lane select,
 .console input,
-.console select {
+.console select,
+.demo input,
+.demo select {
   min-height: 2.75rem;
   padding: 0.35em 0.6em;
   border: 1.5px solid var(--line);
@@ -1050,6 +1053,13 @@ input {
   border-color: var(--stop);
   background: var(--stop);
   color: var(--surface);
+}
+
+/* An emergency that cannot be declared from here (the digital twin's console, S18) looks it. */
+.button.danger:disabled {
+  border-color: var(--line);
+  background: var(--bg);
+  color: var(--muted);
 }
 
 .confirm {
@@ -1523,6 +1533,308 @@ input {
 
 .print-only {
   display: none;
+}
+
+/*
+ * The digital twin (S18): its checkpoints' screens only show (a fieldset disables their controls,
+ * keeping the frame of the real screens), and the demo page plays it.
+ */
+.lane fieldset.plain,
+.console fieldset.plain {
+  display: grid;
+  align-content: start;
+  gap: 0.6rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.twin-banner,
+.simulated-banner {
+  margin: 0.5em clamp(0.75rem, 2vw, 1.5rem) 0;
+  padding: 0.6em 0.9em;
+  border-radius: 10px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-weight: 650;
+}
+
+.demo-main {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  align-items: start;
+  gap: 1rem;
+  padding: 0.5rem clamp(0.75rem, 2vw, 1.5rem) 2rem;
+}
+
+.demo-main,
+.demo-main > .card,
+.demo .card > * {
+  min-width: 0;
+}
+
+.demo .card {
+  display: grid;
+  align-content: start;
+  gap: 0.6rem;
+  width: auto;
+  padding: 1rem 1.1rem;
+  text-align: left;
+}
+
+.demo h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.demo h3 {
+  margin: 0.4rem 0 0;
+  font-size: 0.95rem;
+}
+
+.demo-form {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.demo-form select,
+.demo-form input {
+  width: 100%;
+  min-width: 0;
+}
+
+.demo-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.demo-row > div {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.demo .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+.demo-clock-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.demo-clock {
+  margin: 0;
+  font-size: clamp(2.2rem, 6vw, 3.4rem);
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.progress {
+  height: 0.6rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.progress > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.4s ease;
+}
+
+.state-badge {
+  display: inline-block;
+  margin-left: 0.3em;
+  padding: 0.15em 0.6em;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 0.82rem;
+  vertical-align: middle;
+}
+
+.state-badge[data-state='FINISHED'] {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.state-badge[data-state='STOPPED'] {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.state-badge[data-state='DIVERGED'],
+.state-badge[data-state='FAILED'] {
+  background: var(--stop-soft);
+  color: var(--stop);
+}
+
+.demo-check {
+  margin: 0;
+  font-weight: 650;
+}
+
+.demo-check[data-state='FINISHED'] {
+  color: var(--ok);
+}
+
+.demo .notice {
+  margin: 0;
+  padding: 0.5em 0.8em;
+  border-radius: 10px;
+  background: var(--stop-soft);
+  color: var(--stop);
+}
+
+.demo-counts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.demo-counts > div {
+  padding: 0.5rem 0.25rem;
+  border-radius: 12px;
+  background: var(--bg);
+  text-align: center;
+}
+
+.demo-counts dt {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.demo-counts dd {
+  margin: 0;
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.demo-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.demo-links a.button {
+  text-decoration: none;
+}
+
+/*
+ * A desk's screen: the controls with the latest calls below them, the run, the board; the run and
+ * the board as tall as they need.
+ */
+@media (min-width: 1100px) {
+  .demo-main {
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-areas:
+      'controls run board'
+      'calls run board';
+  }
+
+  .demo-controls {
+    grid-area: controls;
+  }
+
+  .demo-run {
+    grid-area: run;
+  }
+
+  .demo-board {
+    grid-area: board;
+  }
+
+  .demo-calls {
+    grid-area: calls;
+  }
+
+  .demo-run,
+  .demo-board {
+    grid-row: 1 / span 2;
+  }
+}
+
+.demo-numbers:empty {
+  display: none;
+}
+
+.demo-numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.demo-numbers li {
+  padding: 0.25em 0.6em;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+}
+
+.demo-numbers li:first-child {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.demo-numbers.prepare li,
+.demo-numbers.prepare li:first-child {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.demo-numbers li.second {
+  outline: 2px solid var(--warn);
+}
+
+.demo-calls ul {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.demo-calls li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.6rem;
+}
+
+.demo-calls code {
+  color: var(--muted);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.tag {
+  padding: 0.1em 0.5em;
+  border-radius: 999px;
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 0.8rem;
+  font-weight: 650;
 }
 
 @media print {

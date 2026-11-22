@@ -56,7 +56,7 @@ without disproportionate harm to passengers who are not prioritised (ADR-002).
 | FR-09 | Validate access by operator or reader; at most one admission per ticket (enforced by the database since S12). |
 | FR-10 | Public display: called numbers and direction, "prepare" numbers, data freshness; no personal data. Since S16: the numbers called (a second call marked) and the numbers to get ready, live by server-sent events, in the display's language and in English, with the time of the latest news; "not up to date" after 30 seconds and the staff's instructions after 2 minutes; a display that reconnects loses no call (ADR-047). The direction to an access point comes with the lanes (S17). Since S17 a display says when calls are paused, and in an emergency shows only the emergency message (ADR-048). |
 | FR-11 | Lane operator station: call next, validate, exceptions, overrides with a reason. Since S15: call next, validate by QR code, boarding pass or number, call again, absences, reviews, manual tickets with a coded reason and the party's size (ADR-045); overrides come with S17. Since S16 the station follows the queue's stream and shows at once what other stations and kiosks do (ADR-047). Since S17 it shows the mode the supervisor set, and calls nobody while calls are paused or stopped (ADR-048); supervisors override the order with a coded reason, from their console, and the station marks the tickets they moved up (ADR-049, ADR-050). |
-| FR-12 | Operations console: live queue, KPIs, alerts, lanes, modes (normal, FIFO only, paused, emergency). Since S17 the four modes exist, with a reset of the prepare window on resuming (ADR-048), and the supervisor sets the lanes open, which the engine's estimates follow at once (ADR-049); the console's page, `/supervisor/<checkpoint>`, gathers the modes, the lanes, the overrides, the policies and the audit (ADR-050); KPIs and alerts come with M4. |
+| FR-12 | Operations console: live queue, KPIs, alerts, lanes, modes (normal, FIFO only, paused, emergency). Since S17 the four modes exist, with a reset of the prepare window on resuming (ADR-048), and the supervisor sets the lanes open, which the engine's estimates follow at once and its risk classes at its next decision, as in the simulator (ADR-049, ADR-051); the console's page, `/supervisor/<checkpoint>`, gathers the modes, the lanes, the overrides, the policies and the audit (ADR-050); KPIs and alerts come with M4. |
 | FR-13 | Administration: airports, checkpoints, lanes, devices, users; versioned policies with four-eyes approval and rollback. Since S17, immutable policy versions named by their hash, which an administrator activates for a checkpoint from the next service day; going back is activating the earlier version; four-eyes approval comes with the pilot (ADR-050). |
 | FR-14 | Audit of every state transition, override and configuration change. Since S12 every command and event of a checkpoint is in an append-only log with a chain of hashes, which an endpoint checks (ADR-042). Since S17 every change of mode, override (with its reason) and change of the lanes open is a command of the log, with who made it, refused attempts included (ADR-048, ADR-049); the console's audit view reads a day's log with who, what, when and why, by ticket number too, without any reference that opens a passenger's page (ADR-050). |
 | FR-15 | Data quality: every datum has a source, observation time, validity and confidence; stale data leaves automatic mode for the affected criterion. |
@@ -66,7 +66,7 @@ without disproportionate harm to passengers who are not prioritised (ADR-002).
 | FR-19 | Forecasts at 15/30/60/90 min, saturation, lane-opening recommendations with logged decisions and outcomes (simulated in S8: ADR-039). |
 | FR-20 | Passenger information: current waits, forecast at arrival time, flight-based estimate, indicative priority only. Since S14 the passenger's page shows the ticket's state and what to do now; waits and estimates are not shown yet. |
 | FR-21 | Coordination between checkpoints: informative first, operator-driven later, never automatic reassignment. |
-| FR-22 | Analytics and exports, with simulated and observed results clearly separated. |
+| FR-22 | Analytics and exports, with simulated and observed results clearly separated. Since S18 the digital twin's tickets (source TWIN) and flights (SIMULATED) live on checkpoints of their own, which staff and kiosks cannot write to, never mixed with an airport's (ADR-051). |
 
 ## 5. Non-functional requirements
 
@@ -93,7 +93,10 @@ without disproportionate harm to passengers who are not prioritised (ADR-002).
 - boarding-pass parser and synthetic generator;
 - kiosk, display, lane station and supervisor functions in the browser;
 - event log and audit, versioned policies;
-- a digital-twin demo, where the simulator drives the live system;
+- a digital-twin demo, where the simulator drives the live system: since S18 the demo page
+  `/demo` plays a scenario's day through the live system's own commands at an accelerated time,
+  and the live system calls the same numbers in the same order as the offline simulator
+  (ADR-051);
 - a forecast preview.
 
 **Pilot-ready (after a signed order):**

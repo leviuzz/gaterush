@@ -2025,7 +2025,8 @@ founder on 2026-11-21 together with all of its recommendations.
     the supervisor". Refused overrides are in the log too.
   - **Lanes open** (`SET_LANES`, 1 to 200): the engine's estimates follow at once, and every
     waiting ticket is assessed again; for the rest of the service day, the next one opening with
-    the checkpoint's own number. The queue's answer gives the lanes open. Lane types and calls to
+    the checkpoint's own number. *Amended by ADR-051 (S18): the risk classes follow at the
+    engine's next decision, as in the simulator; the extra assessment is gone.* The queue's answer gives the lanes open. Lane types and calls to
     a given lane ("A012 → lane 3") wait for the pilot's layout, as decided.
 - **Alternatives considered:**
   - **A boost as the next commitment** (the ticket enters the window at the next free place): the
@@ -2130,3 +2131,98 @@ founder on 2026-11-21 together with all of its recommendations.
   - The pilot adds the second person's approval of an activation, and the airport's identity
     provider for staff (ADR-045).
   - The console's live KPIs and alerts come with M4 (operations and Predict).
+
+## ADR-051: The digital twin
+
+- **Status:** Proposed (2026-11-22), slice S18, on "ok a tutto, vai con S18"; the choices marked
+  [to confirm] in the plan wait for the founder. API and web 0.18.0, contracts 0.10.0, operations
+  0.8.0, queue-core 0.11.0, the new package `@gateflow/twin` 0.1.0, migration `0011_twin`. No
+  simulated number changes.
+- **Context:**
+  - The kickoff asks for a "digital twin": the simulator drives the real system at an accelerated
+    time, for demos (F14, the page `/demo`); its acceptance: with the same scenario and seed, the
+    live system calls passengers in the same order as the offline simulator.
+  - The simulator's results are GateFlow's evidence; they hold for the product only if the live
+    system decides exactly as the simulated queue. Both run `queue-core`, but around it the
+    simulator and the live system might differ in what they give the queue, and when.
+- **Decision:**
+  - **The tape.** The simulator records, in order, every operation on its queue with its result
+    (`SimulationOptions.recorder`, which never changes a run): a ticket issued with the inputs the
+    simulator knew, what the feed now knows of a flight, the lanes open, a call and the ticket
+    called, a presentation and its outcome, the timeouts applied.
+  - **The twin plays the tape to the live system** through the commands staff and kiosks send,
+    under the checkpoint's writer, into its hash-chained log, its current-state tables and the
+    displays' stream: `ISSUE_TICKET` (source `TWIN`, with the simulator's inputs: the party's
+    size, the closing time from the feed or the rule, the walk after a gate change, the first
+    presentation of a ticket issued again), `UPDATE_FLIGHT` (new: what the feed knows of a
+    flight; the airport's feed adapter will send it too), `SET_LANES`, `CALL_NEXT`, `PRESENT`,
+    `ADVANCE`; actor `system:twin`. Each answer is checked at once against the simulator's: the
+    ticket called, the outcome of a presentation. The first difference stops the run and is
+    recorded with the numbers; the rest of the tape assumes the simulator's history.
+  - **A virtual clock.** Every instant of the simulated day moves to a real date: its local
+    midnight plus the time of the run. Only a twin's checkpoint takes a time of the command's own
+    (never earlier than its log's last, never outside its virtual day); every other checkpoint
+    takes the server's.
+  - **A twin checkpoint per run** of the airport (`Twin n`, ticket prefix `T`, its day starting
+    at midnight), with the scenario's lanes and screening rate and the policy chosen; its flights
+    are the run's own (SIMULATED, never seen by kiosks or real checkpoints). Staff and kiosks
+    cannot write to it (409 `TWIN_CHECKPOINT`), its policy cannot be activated, and the timer
+    scheduler leaves it to the twin. Its console and lane station show a banner and only show; its
+    display, made from the demo page, shows its numbers. One run at a time per airport, by a
+    partial unique index; a run whose server has been silent for a minute no longer holds it.
+  - **Speeds**: 1, 10, 60, 300, 1000 times real time, or as fast as the server goes (about 250 to
+    300 operations a second on PostgreSQL); the speed changes while it plays.
+  - **Who:** administrators of an airport whose data are synthetic, on a server started with the
+    twin (`gateflow-api serve --twin <scenarios>`); the command line `gateflow-api twin` plays a
+    day and prints the verdict, checked again over the whole day from the numbers the twin's
+    checkpoint called.
+  - **What the live system now does as the simulated model** (found by the twin):
+    - `SET_LANES` changes the estimates at once and the risk classes at the engine's next
+      decision, as the simulator does; its extra assessment moved the reference of the
+      hysteresis and could change a later call (`queue.reassess` is gone);
+    - a ticket issued again after an expiry keeps the passenger's first presentation, for the
+      twin and at the kiosk, as in the simulator: the presentation rule reads when the passenger
+      first came;
+    - the engine never depends on the time of day: its margins subtract whole milliseconds before
+      any fractional estimate, so a day moved to a real date decides exactly the same. The
+      flight-call practice rounds to its announcement interval, which divides a local midnight;
+      the twin checks it.
+  - **Two costs the twin exposed in the product, fixed:** the displays' board read every ticket
+    of the day at each command (now only those called: a thousand times faster on the busiest
+    day); the console and the lane station loaded every ticket of the day at each change (now
+    `?inPlay=true`, and one request at a time).
+- **Alternatives considered:**
+  - **Scanning synthetic boarding passes at the kiosk:** the scan reads the live flight table and
+    takes one pass at a time, so a family, a reissued ticket or a flight whose closing time the
+    feed changed would not get the simulator's inputs, and the order could differ for reasons
+    that are not the queue's. The simulator's inputs make the comparison exact; the kiosk's own
+    path is tested by its own tests.
+  - **The simulator's kernel calling the live API step by step:** the kernel is synchronous and
+    deterministic; making it wait on a database would change it for a demo. The tape gives the
+    same operations, and a difference is caught at the first answer.
+  - **Running on the airport's demo checkpoint:** its log is real time, the twin's is virtual and
+    starts again at midnight at every run; a log never goes back in time.
+  - **Keeping the assessment on a change of lanes, and adding it to the simulator:** every
+    simulated number would change for a modelling choice that the classification of the next
+    decision already covers.
+- **Evidence:**
+  - the tape changes no run, and played on a new queue gives the same results and events (300
+    random days, with disruptions, fast track, lane management);
+  - the engine decides the same at any origin of the clock (300 random operation sequences with
+    fractional estimates); an origin that is not a multiple of the flight-call interval is
+    caught;
+  - library days through the operations day: the same calls and the same events as the
+    simulator's queue, for six scenarios and both live policies (18 days, the busiest with
+    15,000 parties);
+  - on PostgreSQL through the API: a day until noon (9,648 operations), call by call and over the
+    day; the chain of hashes intact; staff, kiosks, policy activations and the timer scheduler
+    kept off; administrators of synthetic airports only; one run at a time, speeds, stop; a live
+    system that answers otherwise stops the run at the first difference;
+  - the command line on whole days, in CI: the disrupted demo day (17,767 operations, 4,720
+    calls) and the MX-like hub in its time zone with the virtual queue in order of arrival;
+  - in Chromium: the demo page plays the VCE-like peak morning, the twin's display shows its
+    numbers, its lane station and console only show; the speed changes, the run stops.
+- **Consequences:**
+  - The feed adapter (M5) sends `UPDATE_FLIGHT`, already in the log's vocabulary.
+  - Predict (M4) can trust that the simulator forecasts what the live system will do.
+  - A demo server keeps its twin checkpoints and their logs; a reset starts a new one.

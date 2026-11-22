@@ -171,18 +171,17 @@ describe("a supervisor's overrides (S17)", () => {
     expect(q.ticket('e')).toMatchObject({ state: 'QUEUED', overridden: true });
   });
 
-  it('assesses the waiting tickets again when the lanes change', () => {
+  it('assesses the waiting tickets with new estimates at its next decision', () => {
     const q = queue();
     for (const id of ['a', 'b', 'c', 'd', 'e', 'f']) q.issue(ticket(id, 1, 600), 0, EST);
     // g must be called within 9 minutes: with one person a minute its turn comes in time; with a
     // tenth of the capacity, it does not.
     q.issue(ticket('g', 1, 9), 0, EST);
     const before = q.ticket('g')!.riskClass;
-    q.reassess(MIN, { ...EST, throughputPerHour: 6 });
-    const after = q.ticket('g')!.riskClass;
-    expect(after).not.toBe(before);
+    // The lanes close (S18): the classes follow at the next decision, as in the simulator.
+    q.issue(ticket('h', 1, 600), MIN, { ...EST, throughputPerHour: 6 });
+    expect(q.ticket('g')!.riskClass).not.toBe(before);
     expect(q.stats().classChanges).toBeGreaterThan(0);
-    // Nothing else changed.
     expect(windowOf(q)).toEqual(['a', 'b']);
   });
 });

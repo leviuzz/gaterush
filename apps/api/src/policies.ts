@@ -8,7 +8,7 @@ import { sha256 } from './chain';
 import type { Db } from './db/client';
 import { policyActivation, policyVersion, queueCommand, staffUser } from './db/schema';
 import type { Ids } from './ids';
-import { ApiError, policyForDay } from './runtime';
+import { ApiError, policyForDay, serviceDayNow } from './runtime';
 import type { CheckpointRow } from './runtime';
 import { serviceDayOf } from './time';
 
@@ -38,7 +38,7 @@ export interface PolicySummary {
   readonly hash: string;
 }
 
-function summaryOf(policy: Policy): PolicySummary {
+export function summaryOf(policy: Policy): PolicySummary {
   return {
     policyId: policy.id,
     version: policy.version,
@@ -118,6 +118,9 @@ export async function activatePolicy(
   ids: Ids,
   nowMs: number,
 ): Promise<{ readonly fromServiceDay: string; readonly policy: PolicySummary }> {
+  if (cp.settings.twin !== undefined) {
+    throw new ApiError(409, 'TWIN_CHECKPOINT', 'a checkpoint of the digital twin keeps its policy');
+  }
   return db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(${cp.lockKey})`);
     const [version] = await tx
@@ -153,7 +156,7 @@ export async function activatePolicy(
  * tomorrow's, the versions of the airport and the latest activations.
  */
 export async function policyStatus(db: Db, cp: CheckpointRow, nowMs: number) {
-  const today = serviceDayOf(nowMs, cp.timeZone, cp.dayStartsAt);
+  const today = serviceDayNow(cp, nowMs);
   const tomorrow = dayAfter(today);
   const [opened] = await db
     .select({ command: queueCommand.command })

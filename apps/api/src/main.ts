@@ -1,18 +1,23 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, isAbsolute, join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { parseArgs } from 'node:util';
-import { eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
+import type { Policy } from '@gateflow/queue-core';
 import { parseScenarioText } from '@gateflow/sim-scenarios';
+import type { Scenario } from '@gateflow/sim-scenarios';
+import { expectedCallNumbers, twinDay } from '@gateflow/twin';
 import { buildApp } from './app';
 import { connect, runMigrations } from './db/client';
 import { addDevice, revokeDevice } from './devices';
-import { airport } from './db/schema';
+import { airport, policyVersion } from './db/schema';
+import { Runtime } from './runtime';
 import { addStaff, disableStaff, resetPassword } from './staff';
 import { randomIds } from './ids';
 import { seedDemo } from './seed';
 import { systemClock } from './time';
+import { TWIN_PREFIX, TwinRunner, liveCallNumbers } from './twin';
 import { API_VERSION } from './version';
 
 const HELP = `gateflow-api ${API_VERSION}: the GateFlow API on PostgreSQL
@@ -29,15 +34,47 @@ Usage (DATABASE_URL names the database):
                                              airport, or those given); prints a password once
   gateflow-api user password --login <login> A new password, printed once; sessions end
   gateflow-api user disable --login <login>  Disable a member of staff: sessions end at once
-  gateflow-api serve [--port 8080] [--host 127.0.0.1] [--web <dir>]
+  gateflow-api serve [--port 8080] [--host 127.0.0.1] [--web <dir>] [--twin <dir>]
                                              Serve the API (OpenAPI at /v1/openapi.json) and
-                                             the web application (kiosk, ticket page)
+                                             the web application (kiosk, ticket page); with
+                                             --twin, the digital twin of the scenarios in <dir>
+                                             for the demo page (synthetic airports only)
+  gateflow-api twin --scenario <file> [--seed 1] [--policy priority-v3|virtual-fifo]
+                    [--speed <x>] [--until HH:MM] [--day YYYY-MM-DD]
+                                             The digital twin: plays the scenario's simulated
+                                             day to a new twin checkpoint, as fast as it goes
+                                             (or <x> times real time), checks every call
+                                             against the simulator's and prints the verdict
+                                             (exit code 1 if the order differs)
 `;
 
 /** The built web application next to the API, when there is one. */
 function defaultWebRoot(): string | undefined {
   const dir = fileURLToPath(new URL('../../web/dist/', import.meta.url));
   return existsSync(`${dir}index.html`) ? dir : undefined;
+}
+
+/** A scenario file, with the files it includes (its airport, its flights). */
+function readScenario(file: string): Scenario {
+  return parseScenarioText(readFileSync(file, 'utf8'), file.endsWith('.json') ? 'json' : 'yaml', {
+    read: (path) => readFileSync(isAbsolute(path) ? path : join(dirname(file), path), 'utf8'),
+    sha256: (content) => createHash('sha256').update(content).digest('hex'),
+  });
+}
+
+/** Every scenario of a folder (its `.yaml` and `.json` files): the twin's library. */
+function readLibrary(dir: string): Scenario[] {
+  return readdirSync(dir)
+    .filter((name) => /\.(ya?ml|json)$/.test(name))
+    .sort()
+    .map((name) => readScenario(join(dir, name)));
+}
+
+/** `HH:MM` as milliseconds since midnight. */
+function timeOfDay(text: string): number {
+  const match = /^([01][0-9]|2[0-3]):([0-5][0-9])$/.exec(text);
+  if (match === null) throw new Error(`--until is a time of day HH:MM, not ${text}`);
+  return (Number(match[1]) * 60 + Number(match[2])) * 60_000;
 }
 
 function databaseUrl(): string {
@@ -64,15 +101,7 @@ async function main(argv: string[]): Promise<number> {
         strict: true,
       });
       if (values.scenario === undefined) throw new Error('--scenario is required');
-      const file = values.scenario;
-      const scenario = parseScenarioText(
-        readFileSync(file, 'utf8'),
-        file.endsWith('.json') ? 'json' : 'yaml',
-        {
-          read: (path) => readFileSync(isAbsolute(path) ? path : join(dirname(file), path), 'utf8'),
-          sha256: (content) => createHash('sha256').update(content).digest('hex'),
-        },
-      );
+      const scenario = readScenario(values.scenario);
       const database = connect(databaseUrl(), { maxConnections: 1 });
       await runMigrations(database.db);
       const seeded = await seedDemo(database.db, scenario, {
@@ -210,6 +239,7 @@ async function main(argv: string[]): Promise<number> {
           port: { type: 'string', default: '8080' },
           host: { type: 'string', default: '127.0.0.1' },
           web: { type: 'string' },
+          twin: { type: 'string' },
         },
         strict: true,
       });
@@ -221,6 +251,7 @@ async function main(argv: string[]): Promise<number> {
         logger: true,
         timers: 'auto',
         ...(webRoot === undefined ? {} : { webRoot }),
+        ...(values.twin === undefined ? {} : { twin: { library: readLibrary(values.twin) } }),
       });
       const stop = () => {
         void app.close().then(() => database.close());
@@ -230,6 +261,8 @@ async function main(argv: string[]): Promise<number> {
       await app.listen({ port: Number(values.port), host: values.host });
       return -1;
     }
+    case 'twin':
+      return twin(rest);
     case undefined:
     case '--help':
     case 'help':
@@ -241,6 +274,130 @@ async function main(argv: string[]): Promise<number> {
     default:
       process.stderr.write(`unknown command "${command}"\n\n${HELP}`);
       return 2;
+  }
+}
+
+/**
+ * `gateflow-api twin`: plays a scenario's day to a new twin checkpoint of its airport (seeded if it
+ * is not there yet) and prints whether the live system called the simulator's numbers, in order.
+ */
+async function twin(args: string[]): Promise<number> {
+  const { values } = parseArgs({
+    args,
+    options: {
+      scenario: { type: 'string' },
+      seed: { type: 'string', default: '1' },
+      policy: { type: 'string', default: 'priority-v3' },
+      speed: { type: 'string' },
+      until: { type: 'string' },
+      day: { type: 'string' },
+    },
+    strict: true,
+  });
+  if (values.scenario === undefined) throw new Error('--scenario is required');
+  const scenario = readScenario(values.scenario);
+  const seed = Number(values.seed);
+  if (!Number.isSafeInteger(seed) || seed < 1) throw new Error('--seed is a whole number from 1');
+  const speed = values.speed === undefined || values.speed === 'max' ? null : Number(values.speed);
+  if (speed !== null && (!Number.isSafeInteger(speed) || speed < 1 || speed > 10_000)) {
+    throw new Error('--speed is a whole number from 1 to 10000, or max');
+  }
+  const untilMs = values.until === undefined ? undefined : timeOfDay(values.until);
+  const database = connect(databaseUrl(), { maxConnections: 4 });
+  try {
+    await runMigrations(database.db);
+    const db = database.db;
+    const ids = randomIds(systemClock);
+    // The scenario's airport, with its policies: added if it is not there yet.
+    const seeded = await seedDemo(db, scenario, { now: systemClock.now(), ids });
+    const [place] = await db.select().from(airport).where(eq(airport.id, seeded.airportId));
+    if (place === undefined) throw new Error('the airport could not be found');
+    if (place.dataClassification !== 'SYNTHETIC') {
+      throw new Error('the digital twin plays only at an airport whose data are synthetic');
+    }
+    const [version] = await db
+      .select()
+      .from(policyVersion)
+      .where(and(eq(policyVersion.airportId, place.id), eq(policyVersion.policyId, values.policy)))
+      .orderBy(desc(policyVersion.createdAtMs))
+      .limit(1);
+    if (version === undefined) throw new Error(`no policy ${values.policy} at ${place.code}`);
+    const policy = version.content as Policy;
+    const runner = new TwinRunner(db, new Runtime(db, systemClock), ids, systemClock, (error) => {
+      process.stderr.write(`error: ${error instanceof Error ? error.message : String(error)}\n`);
+    });
+    const runId = await runner.start({
+      airportId: place.id,
+      timeZone: place.timeZone,
+      scenario,
+      seed,
+      policy,
+      speed,
+      ...(untilMs === undefined ? {} : { untilMs }),
+      ...(values.day === undefined ? {} : { serviceDay: values.day }),
+      createdBy: 'cli',
+    });
+    const interrupt = () => {
+      void runner.stop(runId);
+    };
+    process.once('SIGINT', interrupt);
+    const started = await runner.view(runId);
+    if (started === null) throw new Error('the run could not be found');
+    process.stdout.write(
+      [
+        `twin ${runId}: ${started.checkpoint} (checkpoint ${started.checkpointId})`,
+        `virtual day ${started.serviceDay}, ${String(started.steps)} operations, ${String(started.expectedCalls)} calls, speed ${speed === null ? 'max' : `${String(speed)}x`}`,
+        '',
+      ].join('\n'),
+    );
+    const progress = setInterval(() => {
+      void runner.view(runId).then((run) => {
+        if (run === null) return;
+        process.stdout.write(
+          `  ${run.virtualNow.slice(11, 16)} virtual: ${String(run.applied)}/${String(run.steps)} operations, ${String(run.matchedCalls)}/${String(run.expectedCalls)} calls in order\n`,
+        );
+      });
+    }, 2_000);
+    await runner.wait(runId);
+    clearInterval(progress);
+    process.removeListener('SIGINT', interrupt);
+    const run = await runner.view(runId);
+    if (run === null) throw new Error('the run could not be found');
+    // Over the whole day, independently of the checks of each call: the numbers the live system
+    // called, in order, against those the simulator's day gives.
+    const expected = expectedCallNumbers(twinDay(scenario, seed, policy), TWIN_PREFIX, untilMs);
+    const live = await liveCallNumbers(db, run.checkpointId);
+    const same =
+      run.state === 'FINISHED' &&
+      live.length === expected.length &&
+      live.every((number, i) => number === expected[i]);
+    if (same) {
+      process.stdout.write(
+        `SAME ORDER: the live system called ${String(live.length)} numbers in the simulator's order (SIMULATED data)\n`,
+      );
+      return 0;
+    }
+    const first = live.findIndex((number, i) => number !== expected[i]);
+    process.stdout.write(
+      [
+        `NOT THE SAME: run ${run.state}, ${String(live.length)} calls of ${String(expected.length)}`,
+        ...(run.divergence === null
+          ? []
+          : [
+              `first difference at ${run.divergence.at}: ${run.divergence.operation}, expected ${run.divergence.expected}, got ${run.divergence.actual}`,
+            ]),
+        ...(first < 0
+          ? []
+          : [
+              `call ${String(first + 1)}: expected ${String(expected[first])}, got ${String(live[first])}`,
+            ]),
+        ...(run.error === null ? [] : [`error: ${run.error}`]),
+        '',
+      ].join('\n'),
+    );
+    return 1;
+  } finally {
+    await database.close();
   }
 }
 

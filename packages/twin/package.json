@@ -1,0 +1,25 @@
+{
+  "name": "@gateflow/twin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The digital twin: the simulator's day of a scenario as the commands the live system receives, at their virtual times, and the check of every call against the simulator's (pure).",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.src.json && tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run --testTimeout=300000 --hookTimeout=300000"
+  },
+  "dependencies": {
+    "@gateflow/domain": "workspace:*",
+    "@gateflow/operations": "workspace:*",
+    "@gateflow/priority-engine": "workspace:*",
+    "@gateflow/queue-core": "workspace:*",
+    "@gateflow/sim-metrics": "workspace:*",
+    "@gateflow/sim-model": "workspace:*",
+    "@gateflow/sim-scenarios": "workspace:*"
+  }
+}

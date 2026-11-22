@@ -65,6 +65,13 @@ jobs:
           # The same bundle serves the web application (S14), under its security policy.
           curl -sfD headers.txt "http://127.0.0.1:18080/kiosk/$CP" | grep -q '<div id="root">'
           grep -qi '^content-security-policy:' headers.txt
+      - name: The digital twin (S18) - whole simulated days through the API call the simulator's numbers in its order
+        run: |
+          # Feed messages and outages, lanes changing, tickets issued again; then another time zone and policy.
+          node apps/api/dist/gateflow-api.mjs twin --scenario scenarios/single-checkpoint-disrupted.yaml --seed 1 | tee twin.txt
+          grep -q '^SAME ORDER' twin.txt
+          node apps/api/dist/gateflow-api.mjs twin --scenario scenarios/mx-like-transfer-hub.yaml --seed 2 --policy virtual-fifo | tee twin-mx.txt
+          grep -q '^SAME ORDER' twin-mx.txt
       - name: End-to-end determinism of the CLI, whatever the number of worker threads
         run: |
           node apps/sim-cli/dist/gateflow-sim.mjs run --scenario scenarios/single-checkpoint-demo.yaml --seeds 1-20 --out out/a --quiet --workers 1

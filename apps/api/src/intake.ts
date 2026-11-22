@@ -1,5 +1,5 @@
 import { createHmac, randomBytes } from 'node:crypto';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { dedupMaterial, legForDeparture, parseBoardingPass } from '@gateflow/bcbp';
 import type { BoardingPass } from '@gateflow/bcbp';
 import type { Db, Tx } from './db/client';
@@ -83,6 +83,8 @@ export async function readPass(
     .where(
       and(
         eq(flight.airportId, cp.airportId),
+        // A boarding pass is never for a flight of the digital twin (S18).
+        isNull(flight.twinRunId),
         eq(flight.carrier, choice.leg.carrier),
         eq(flight.flightNumber, choice.leg.flightNumber),
         eq(flight.departureDate, choice.flightDate),

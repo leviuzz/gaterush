@@ -69,6 +69,12 @@ export interface CommandRequest {
   readonly requestHash: string;
   readonly actor: string;
   /**
+   * The virtual time of a command of the digital twin (S18): only a twin checkpoint takes it, and
+   * only it, never earlier than the last command of its log. Any other command takes the server's
+   * time.
+   */
+  readonly atMs?: number;
+  /**
    * Builds the command once the day is current (e.g. finds the ticket of a number), or gives null
    * when there is nothing to apply (a boarding pass scanned again finds its ticket).
    */
@@ -145,6 +151,14 @@ export async function policyForDay(
   return (rows[0]?.content ?? cp.settings.policy) as Policy;
 }
 
+/**
+ * Today's service day at a checkpoint: from the server's clock, or the virtual day of a checkpoint
+ * of the digital twin (S18).
+ */
+export function serviceDayNow(cp: CheckpointRow, nowMs: number): string {
+  return cp.settings.twin?.serviceDay ?? serviceDayOf(nowMs, cp.timeZone, cp.dayStartsAt);
+}
+
 export async function loadCheckpoint(db: Db | Tx, checkpointId: string): Promise<CheckpointRow> {
   const rows = await db
     .select({
@@ -203,6 +217,19 @@ export class Runtime {
 
   private async run(tx: Tx, request: CommandRequest): Promise<Executed> {
     const cp = await loadCheckpoint(tx, request.checkpointId);
+    // The digital twin drives its checkpoints on their virtual day; nobody else writes to them,
+    // and no other checkpoint takes a time that is not the server's (S18).
+    const twin = cp.settings.twin !== undefined;
+    if (twin && request.atMs === undefined) {
+      throw new ApiError(
+        409,
+        'TWIN_CHECKPOINT',
+        'the digital twin drives this checkpoint: staff and kiosks only watch it',
+      );
+    }
+    if (!twin && request.atMs !== undefined) {
+      throw new ApiError(409, 'NOT_A_TWIN', 'only a checkpoint of the digital twin takes its time');
+    }
     await tx.execute(sql`SELECT pg_advisory_xact_lock(${cp.lockKey})`);
     const known = await tx
       .select({
@@ -234,9 +261,19 @@ export class Runtime {
       };
     }
     const memory = await this.sync(tx, cp);
+    if (
+      request.atMs !== undefined &&
+      !(Number.isSafeInteger(request.atMs) && request.atMs >= memory.lastAtMs)
+    ) {
+      throw new ApiError(409, 'OUT_OF_ORDER', 'a command of the twin cannot go back in time');
+    }
     // The log never goes back in time, even if this server's clock does.
-    const atMs = Math.max(this.clock.now(), memory.lastAtMs);
+    const atMs = request.atMs ?? Math.max(this.clock.now(), memory.lastAtMs);
     const serviceDay = serviceDayOf(atMs, cp.timeZone, cp.dayStartsAt);
+    // A twin's checkpoint plays one virtual day: a command outside it would open another one.
+    if (twin && serviceDay !== cp.settings.twin.serviceDay) {
+      throw new ApiError(409, 'OUTSIDE_TWIN_DAY', "the command is outside the twin's virtual day");
+    }
     let day = memory.day;
     if (day?.config.serviceDay !== serviceDay) {
       // The policy activated for this day, read under the lock that activations take too.

@@ -26,7 +26,7 @@ apps/
   api/              gateflow-api: the operational checkpoint behind HTTP (Fastify) on PostgreSQL (Drizzle)
   sim-cli/          gateflow-sim: experiments and sweeps on worker threads; JSON, Markdown, HTML (bundled)
   studio/           GateFlow Simulator Studio: the simulator in one offline HTML page (React, Web Workers)
-  web/              the product's screens, served by the API: kiosk and passenger's ticket page (React)
+  web/              the product's screens, served by the API: kiosk, ticket page, display, lane, console, demo (React)
 packages/
   bcbp/             IATA boarding passes: a parser that never throws or returns the name, encoder, generator (pure)
   domain/           shared domain types and units (integer milliseconds, segments, risk classes)
@@ -41,6 +41,7 @@ packages/
   sim-metrics/      experiments, sweeps, paired metrics, statistics, results, Markdown and HTML (pure)
   sim-trace/        the trace of one day: every event of two policies, replay views, explanations (pure)
   studio-core/      what the Studio adds in the browser: SHA-256, files, library, setup, what-if, comparison, traces (pure)
+  twin/             the digital twin: a simulated day as the live system's commands at virtual times, checked (pure)
 airports/           airport configurations: parameters of each airport and checkpoint (YAML)
 airports/private/   airport-provided configurations, ignored by git
 scenarios/          scenario files (YAML), including the S7 library
@@ -65,6 +66,7 @@ flowchart LR
   trace["sim-trace"]
   studiocore["studio-core"]
   operations["operations"]
+  twin["twin"]
   contracts["contracts"]
   bcbp["bcbp"]
   i18n["i18n"]
@@ -107,9 +109,15 @@ flowchart LR
   operations --> queue
   operations --> engine
   operations --> domain
+  twin --> operations
+  twin --> metrics
+  twin --> scenarios
+  twin --> model
+  twin --> queue
   contracts --> domain
   bcbp --> kernel
   api --> operations
+  api --> twin
   api --> contracts
   api --> bcbp
   api --> metrics
@@ -667,6 +675,10 @@ flowchart LR
   - Policies (ADR-050): `policy_version` (immutable, per airport, named by the SHA-256 of the
     policy's canonical JSON) and `policy_activation` (a version for a checkpoint from a service
     day, in the order written); both append-only.
+  - The digital twin (ADR-051): `twin_run` (what a run plays, how far it went, whether it
+    matched; one running per airport by a partial unique index) and `flight.twin_run_id`, the
+    run's own flights, SIMULATED, which kiosks and real checkpoints never read; a twin's
+    checkpoint is marked in its settings (`twin`).
 - **Timers (ADR-045).** `serve` runs a scheduler: every second it sends `ADVANCE` to each
   checkpoint whose next timeout is due. The command goes through the log like any other; its
   idempotency key names the timeout, so it applies once whichever servers see it due. A rescan at
@@ -692,11 +704,33 @@ flowchart LR
   window at once, after the numbers announced; `CALL_NOW`: a ticket is called at once), with a
   coded reason, is the queue's event `OVERRIDDEN`, counted apart from the engine's commitments;
   `queue_token.overridden` keeps the mark. `SET_LANES` changes the engine's estimates for the
-  rest of the service day; the queue's answer reads the lanes open from the day's log.
+  rest of the service day, and the risk classes follow at its next decision, as in the simulator
+  (ADR-051); the queue's answer reads the lanes open from the day's log.
 - **Policies and the audit view (ADR-050).** A day opens with the version activated for it,
   read under the checkpoint's lock, as activations are written; the day keeps it to its end. The
   audit view reads a day's commands and their events and shows coded values only: who, what,
   when, why, the tickets by number.
+- **The digital twin (ADR-051).** The simulator records its tape, every operation on its queue
+  with its result; `@gateflow/twin` turns it into the commands staff and kiosks send, with the
+  simulator's inputs, at a virtual time (the day's local midnight plus the time of the run). The
+  runner sends them through the same `Runtime` to a checkpoint made for the run, paced at a speed
+  (or as fast as the server goes), and checks each answer against the simulator's; the first
+  difference stops it. Only a twin's checkpoint takes a command's own time, never earlier than its
+  log's last nor outside its virtual day; staff, kiosks and activations are refused there, and the
+  timer scheduler leaves it to the twin. `UPDATE_FLIGHT` gives a flight's tickets what the feed
+  knows. The engine decides the same at any origin of the clock: its margins subtract whole
+  milliseconds before any fractional estimate.
+
+```mermaid
+flowchart LR
+  scenario["Scenario + seed + policy"] --> sim["simulateCheckpoint<br/>with a recorder"]
+  sim --> tape["The tape:<br/>ISSUE, UPDATE_FLIGHT, LANES,<br/>CALL_NEXT, PRESENT, ADVANCE"]
+  tape --> script["TwinScript (twin)<br/>commands at virtual times"]
+  script --> runner["TwinRunner (api)<br/>paced, checks every answer"]
+  runner --> runtime["Runtime: the twin's checkpoint"]
+  runtime --> screens["Its display, lane station,<br/>console, audit"]
+```
+
 - **Staff (ADR-045).** Every staff route checks, in this order: the request comes from this site,
   a session (401), the checkpoint (404), the role and the checkpoints of the member (403). The
   log records the member as the actor (`staff:<id>`).
@@ -713,12 +747,16 @@ flowchart LR
     `POST /v1/checkpoints/{id}/lanes`, for supervisors (ADR-049);
   - `GET /v1/checkpoints/{id}/audit` and `/policy` for supervisors, `POST .../policy/versions`
     and `.../policy/activations` for administrators (ADR-050);
+  - with `serve --twin`, for the administrators of a synthetic airport: `GET /v1/twin/options`,
+    `GET /v1/twin`, `POST /v1/twin/runs`, `POST /v1/twin/runs/{run}/speed`, `/stop` and
+    `/display` (ADR-051);
   - `POST /v1/auth/sign-in`, `GET /v1/auth/me`, `POST /v1/auth/sign-out` (ADR-045);
   - `POST /v1/checkpoints/{id}/tickets/{ticket}/recall`, `no-show`, `reactivate`, `review`,
     `resolve` and `cancel` (ADR-045);
   - `GET /v1/checkpoints/{id}` and `/flights`, for the lane station;
   - `POST /v1/checkpoints/{id}/tickets`, `/calls` and `/admissions`;
-  - `GET /v1/checkpoints/{id}/queue` and `/audit/verify`;
+  - `GET /v1/checkpoints/{id}/queue` (`?inPlay=true`: the tickets still in play) and
+    `/audit/verify`;
   - `GET /v1/tickets/{ref}` (number, party size, state, checkpoint, day and the checkpoint's
     mode only);
   - `GET /v1/health`.
@@ -726,9 +764,11 @@ flowchart LR
   ticket reference.
 - **Commands** of the bundle `gateflow-api`: `migrate`, `seed --scenario <file>` (demo data from
   the library), `device add` and `device revoke`, `user add`, `user password` and `user disable`,
-  and `serve`, which also serves the web application and runs the timers.
+  `serve`, which also serves the web application and runs the timers (and the twin, with
+  `--twin <scenarios>`), and `twin --scenario <file>`, which plays a day and prints whether the
+  live order is the simulator's.
 
-## 14. The screens (`apps/web`, `@gateflow/i18n`, ADR-044, ADR-045, ADR-047 to ADR-050)
+## 14. The screens (`apps/web`, `@gateflow/i18n`, ADR-044, ADR-045, ADR-047 to ADR-051)
 
 One React application, built by esbuild into static files and served by the API: one process,
 one origin, one Content Security Policy.
@@ -797,6 +837,14 @@ flowchart LR
   time, today's and the next day's policy with the activation of a version for administrators,
   and the day's audit with the check of the chain. It follows the stream as the lane station
   does; both share the staff's sign-in form.
+- **The demo page** (`/demo`, ADR-051), for the administrators of a synthetic airport on a server
+  with the twin: a scenario of the airport, a policy, a day (seed), a speed and an optional end;
+  start, stop, start again. It shows the virtual clock, the progress, the check against the
+  simulator, the counts, the board and the latest calls with the engine's reasons, and links to
+  the twin's display (a display device made on demand), lane station and console. A twin's
+  console and lane station carry a banner and only show; the lane station reads the twin's clock.
+  Every staff screen asks for the tickets in play only, one request at a time however fast the
+  checkpoint changes.
 - **Build** (`node build.mjs`): `index.html`, `assets/app.js` and `app.css` with Brotli and gzip
   copies, an icon, and `THIRD-PARTY-NOTICES.txt` with the licences of the bundled libraries.
 

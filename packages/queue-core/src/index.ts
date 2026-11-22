@@ -1,5 +1,5 @@
 /** Version of the queue state machine. Bump on any change that can alter behaviour. */
-export const QUEUE_CORE_VERSION = '0.10.0';
+export const QUEUE_CORE_VERSION = '0.11.0';
 
 export { CheckpointQueue } from './queue';
 export {

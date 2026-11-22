@@ -27,4 +27,5 @@ export type {
   SimFlight,
   SimPassenger,
   SimulationOptions,
+  TapeEntry,
 } from './types';

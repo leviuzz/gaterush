@@ -263,8 +263,15 @@ interface Trace {
   };
 }
 
-/** Runs `ops` and checks the invariants after every operation. */
-function run(policy: Policy, ops: readonly Op[]): Trace {
+/**
+ * Runs `ops` and checks the invariants after every operation: from `originMs` (the time of the
+ * first operation's clock), with the checkpoint's `estimates`.
+ */
+function run(
+  policy: Policy,
+  ops: readonly Op[],
+  { originMs = 0, estimates = EST }: { originMs?: number; estimates?: CheckpointEstimates } = {},
+): Trace {
   const events: QueueEvent[] = [];
   const q = new CheckpointQueue(policy, CLASSIFICATION, { listener: (e) => events.push(e) });
   const ids: string[] = [];
@@ -293,7 +300,7 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
   /** The mode as the events tell it. */
   let modelMode: CheckpointMode = 'NORMAL';
   let seen = 0;
-  let now = 0;
+  let now = originMs;
   for (const op of ops) {
     now += op.dt;
     const before = q.prepareWindow().map((t) => t.id);
@@ -322,7 +329,7 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
             flightId: `F${ids.length % 3}`,
           },
           now,
-          EST,
+          estimates,
         );
         break;
       }
@@ -339,12 +346,12 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
             },
           },
           now,
-          EST,
+          estimates,
         );
         break;
       case 'call': {
         const paused = stopped(q.mode);
-        calledId = q.callNext(now, EST)?.id ?? null;
+        calledId = q.callNext(now, estimates)?.id ?? null;
         // Paused, or in an emergency: nobody is called (S17).
         if (paused) {
           expect(calledId).toBeNull();
@@ -355,7 +362,7 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
       case 'mode': {
         const previous = q.mode;
         const reported = events.length;
-        const outcome = q.setMode(op.mode, now, EST, op.reset);
+        const outcome = q.setMode(op.mode, now, estimates, op.reset);
         const allowed = op.reset ? stopped(previous) && !stopped(op.mode) : op.mode !== previous;
         expect(outcome).toBe(allowed ? 'DONE' : 'NOT_ALLOWED');
         expect(q.mode).toBe(allowed ? op.mode : previous);
@@ -388,7 +395,7 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
           (op.override === 'BOOST' ? mode === 'NORMAL' || mode === 'PAUSED' : mode === 'NORMAL');
         const reported = events.length;
         const snapshot = JSON.stringify([ids.map((t) => q.ticket(t)), q.stats()]);
-        const outcome = q.override(id, op.override, op.reason, now, EST);
+        const outcome = q.override(id, op.override, op.reason, now, estimates);
         if (!allowed) {
           // Refused: nothing changed and nothing was reported.
           expect(outcome).toBe('NOT_ALLOWED');
@@ -411,7 +418,7 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
       }
       case 'present':
         if (ids.length > 0) {
-          const outcome = q.present(ids[op.pick % ids.length]!, now, EST);
+          const outcome = q.present(ids[op.pick % ids.length]!, now, estimates);
           expect(outcome).not.toBe('UNKNOWN_TICKET');
         }
         break;
@@ -424,7 +431,9 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
           const id = called[op.pick % called.length]!;
           const state = q.ticket(id)!.state;
           // advance(now) has applied every timeout due at `now`, so the outcome is determined.
-          expect(q.present(id, now, EST)).toBe(state === 'NO_SHOW' ? 'REACTIVATED' : 'ADMITTED');
+          expect(q.present(id, now, estimates)).toBe(
+            state === 'NO_SHOW' ? 'REACTIVATED' : 'ADMITTED',
+          );
         }
         break;
       }
@@ -441,7 +450,7 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
         const state = q.ticket(id)!.state;
         const reported = events.length;
         const snapshot = JSON.stringify([ids.map((t) => q.ticket(t)), q.stats()]);
-        const outcome = act(q, op.action, id, now, EST);
+        const outcome = act(q, op.action, id, now, estimates);
         // A second call is a call: none while calls are stopped (S17).
         const target =
           op.action === 'recall' && stopped(q.mode) ? undefined : TRANSITIONS[state][op.action];
@@ -802,5 +811,50 @@ describe('queue state machine properties', () => {
     expect(overrideHits.callsNow).toBeGreaterThanOrEqual(100);
     expect(overrideHits.refused).toBeGreaterThanOrEqual(125);
     expect(overrideHits.passing).toBeGreaterThanOrEqual(40);
+  });
+});
+
+/** An event with every instant moved by `shiftMs`: its time, and the latest useful call. */
+function moved(event: QueueEvent, shiftMs: number): QueueEvent {
+  const atMs = event.atMs + shiftMs;
+  if (event.type !== 'COMMITTED' || event.assessment === null) return { ...event, atMs };
+  const latest = event.assessment.latestCallMs;
+  return {
+    ...event,
+    atMs,
+    assessment: { ...event.assessment, latestCallMs: latest === null ? null : latest + shiftMs },
+  };
+}
+
+describe('the time of day (S18)', () => {
+  it('decides the same at any origin of the clock, as the digital twin needs', () => {
+    let fractional = 0;
+    fc.assert(
+      fc.property(
+        policyArb,
+        opsArb,
+        // A local midnight in epoch milliseconds: a whole quarter of an hour, up to the 2090s.
+        fc.integer({ min: 1, max: 4_000_000 }),
+        // Lanes that give whole and fractional milliseconds per person.
+        fc.constantFrom(60, 140, 157, 450, 900, 1_330),
+        (policy, ops, quarters, throughputPerHour) => {
+          const estimates = { ...EST, throughputPerHour };
+          // The flight-call practice rounds the clock to its announcement interval: a midnight is
+          // a multiple of it (S18). Any other policy may start anywhere a quarter of an hour falls.
+          const unit =
+            policy.selection.kind === 'flight-call'
+              ? policy.selection.announcementIntervalMs * 15 * MIN
+              : 15 * MIN;
+          const originMs = (quarters % Math.floor(4e12 / unit)) * unit + unit;
+          const here = run(policy, ops, { estimates });
+          const there = run(policy, ops, { estimates, originMs });
+          expect(there.events.map((e) => moved(e, -originMs))).toEqual(here.events);
+          expect(there.stats).toEqual(here.stats);
+          if (!Number.isInteger(3_600_000 / throughputPerHour)) fractional++;
+        },
+      ),
+      { numRuns: 300 },
+    );
+    expect(fractional).toBeGreaterThanOrEqual(100);
   });
 });

@@ -74,6 +74,9 @@ importers:
       '@gateflow/sim-scenarios':
         specifier: workspace:*
         version: link:../../packages/sim-scenarios
+      '@gateflow/twin':
+        specifier: workspace:*
+        version: link:../../packages/twin
       drizzle-orm:
         specifier: ^0.45.4
         version: 0.45.4(@types/pg@8.23.1)(pg@8.23.1)
@@ -373,6 +376,30 @@ importers:
       '@gateflow/sim-trace':
         specifier: workspace:*
         version: link:../sim-trace
+
+  packages/twin:
+    dependencies:
+      '@gateflow/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@gateflow/operations':
+        specifier: workspace:*
+        version: link:../operations
+      '@gateflow/priority-engine':
+        specifier: workspace:*
+        version: link:../priority-engine
+      '@gateflow/queue-core':
+        specifier: workspace:*
+        version: link:../queue-core
+      '@gateflow/sim-metrics':
+        specifier: workspace:*
+        version: link:../sim-metrics
+      '@gateflow/sim-model':
+        specifier: workspace:*
+        version: link:../sim-model
+      '@gateflow/sim-scenarios':
+        specifier: workspace:*
+        version: link:../sim-scenarios
 
 packages:
 

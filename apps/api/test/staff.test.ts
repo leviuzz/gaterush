@@ -71,7 +71,13 @@ beforeAll(async () => {
   const later = flights.find((f) => f.stdMs > clock.now() + 150 * MIN);
   if (later === undefined) throw new Error('no flight');
   flightId = later.id;
-  app = buildApp({ db: database.db, clock, logger: { stream: { write: (l) => lines.push(l) } } });
+  // With the digital twin (S18), so that every staff route of the contracts is there.
+  app = buildApp({
+    db: database.db,
+    clock,
+    logger: { stream: { write: (l) => lines.push(l) } },
+    twin: { library: [] },
+  });
 });
 
 afterAll(async () => {
@@ -89,7 +95,10 @@ const TICKET = '0193a0b2-7c1d-7e5f-8a9b-0c1d2e3f4a5b';
 const staffRoutes = (answered = false) =>
   ROUTES.filter((r) => r.staff !== undefined && !(answered && r.stream === true)).map((r) => ({
     method: r.method.toUpperCase() as 'GET' | 'POST',
-    url: r.path.replace('{checkpointId}', checkpointId).replace('{ticketId}', TICKET),
+    url: r.path
+      .replace('{checkpointId}', checkpointId)
+      .replace('{ticketId}', TICKET)
+      .replace('{runId}', TICKET),
     role: r.staff,
   }));
 

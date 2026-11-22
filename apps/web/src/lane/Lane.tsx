@@ -17,6 +17,7 @@ import type {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode, SyntheticEvent } from 'react';
 import { api, randomKey } from '../api';
+import { coalesced } from '../common/coalesce';
 import { timeOfDay, useDocumentLanguage } from '../common/format';
 import { LanguageSwitch } from '../common/LanguageSwitch';
 import { follow } from '../common/stream';
@@ -86,12 +87,15 @@ function Section({
   count,
   id,
   locale,
+  readOnly,
   children,
 }: {
   readonly title: string;
   readonly count: number;
   readonly id: string;
   readonly locale: Locale;
+  /** A checkpoint of the digital twin (S18): its lists only show. */
+  readonly readOnly: boolean;
   readonly children: ReactNode;
 }) {
   return (
@@ -99,7 +103,13 @@ function Section({
       <h2 id={`${id}-title`}>
         {title} <span className="count">{count}</span>
       </h2>
-      {count === 0 ? <p className="muted">{t(locale, 'lane.empty')}</p> : <ul>{children}</ul>}
+      {count === 0 ? (
+        <p className="muted">{t(locale, 'lane.empty')}</p>
+      ) : (
+        <fieldset className="plain" disabled={readOnly}>
+          <ul>{children}</ul>
+        </fieldset>
+      )}
     </section>
   );
 }
@@ -119,6 +129,8 @@ export function Lane({
   const [flights, setFlights] = useState<FlightsResponse['flights']>([]);
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  /** The time of the checkpoint's latest command: a twin's checkpoint reads its own clock (S18). */
+  const [virtualNow, setVirtualNow] = useState<number | null>(null);
   const [last, setLast] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<Outcome>(null);
   const [code, setCode] = useState('');
@@ -164,10 +176,12 @@ export function Lane({
   }, [enter]);
 
   const refresh = useCallback(async () => {
-    const answer = await api<QueueResponse>(`${base}/queue`, { session: true });
+    // The tickets still in play: a day has thousands of others (S18).
+    const answer = await api<QueueResponse>(`${base}/queue?inPlay=true`, { session: true });
     if (answer.ok) {
       setTickets(answer.body.tickets);
       setMode(answer.body.mode);
+      setVirtualNow(answer.body.updatedAt === null ? null : Date.parse(answer.body.updatedAt));
       setUpdatedAt(Date.now());
     } else if (answer.status === 401) {
       setPhase('sign-in');
@@ -190,11 +204,13 @@ export function Lane({
     const timer = window.setInterval(() => {
       void refresh();
     }, REFRESH_MS);
-    // The queue changed: another station called, a kiosk issued, a timeout fell due.
+    // The queue changed: another station called, a kiosk issued, a timeout fell due. One question
+    // at a time, however fast the checkpoint changes (S18).
+    const again = coalesced(refresh);
     const stop = follow(`${base}/stream`, {
       session: true,
       onMessage: (message) => {
-        if (message.event === 'changed') void refresh();
+        if (message.event === 'changed') void again();
         else setUpdatedAt(Date.now());
       },
       onRefused: (status) => {
@@ -305,6 +321,9 @@ export function Lane({
   const absent = by(['NO_SHOW']);
   const review = by(['REVIEW']);
   const stale = updatedAt !== null && now - updatedAt > STALE_MS;
+  /** A checkpoint of the digital twin (S18): the station only shows it, on its virtual clock. */
+  const twin = (place?.checkpoint.twin ?? null) !== null;
+  const shownNow = twin && virtualNow !== null ? virtualNow : now;
   const boss = member !== null && supervises(member);
   const callsStopped = mode === 'PAUSED' || mode === 'EMERGENCY';
 
@@ -357,8 +376,13 @@ export function Lane({
   }
 
   return (
-    <div className="lane" data-phase="ready">
+    <div className="lane" data-phase="ready" data-twin={twin}>
       {header}
+      {twin ? (
+        <p className="twin-banner" role="note" id="lane-twin">
+          {t(locale, 'twin.banner')}
+        </p>
+      ) : null}
       {stale ? (
         <p className="stale" role="alert" id="lane-stale">
           {t(locale, 'lane.stale', { time: timeOfDay(updatedAt, locale) })}
@@ -371,41 +395,43 @@ export function Lane({
       )}
       <main className="lane-main">
         <section className="card lane-actions">
-          <button
-            type="button"
-            className="button primary call-next"
-            id="lane-call"
-            disabled={callsStopped}
-            onClick={() => void callNext()}
-          >
-            {t(locale, 'lane.callNext')}
-          </button>
-          <p className="last" role="status" id="lane-last">
-            {last ?? ''}
-          </p>
-          <form className="validate" onSubmit={(e) => void validate(e)}>
-            <label htmlFor="lane-code">{t(locale, 'lane.validate.label')}</label>
-            <div className="scan-row">
-              <input
-                id="lane-code"
-                ref={field}
-                value={code}
-                onChange={(e) => {
-                  setCode(e.target.value);
-                }}
-                autoComplete="off"
-                autoCapitalize="off"
-                spellCheck={false}
-                maxLength={1100}
-              />
-              <button type="submit" className="button secondary" id="lane-validate">
-                {t(locale, 'lane.validate.submit')}
-              </button>
-            </div>
-          </form>
-          <p className="outcome" role="status" id="lane-outcome" data-kind={outcome?.kind ?? ''}>
-            {outcome?.text ?? ''}
-          </p>
+          <fieldset className="plain" disabled={twin}>
+            <button
+              type="button"
+              className="button primary call-next"
+              id="lane-call"
+              disabled={callsStopped}
+              onClick={() => void callNext()}
+            >
+              {t(locale, 'lane.callNext')}
+            </button>
+            <p className="last" role="status" id="lane-last">
+              {last ?? ''}
+            </p>
+            <form className="validate" onSubmit={(e) => void validate(e)}>
+              <label htmlFor="lane-code">{t(locale, 'lane.validate.label')}</label>
+              <div className="scan-row">
+                <input
+                  id="lane-code"
+                  ref={field}
+                  value={code}
+                  onChange={(e) => {
+                    setCode(e.target.value);
+                  }}
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  maxLength={1100}
+                />
+                <button type="submit" className="button secondary" id="lane-validate">
+                  {t(locale, 'lane.validate.submit')}
+                </button>
+              </div>
+            </form>
+            <p className="outcome" role="status" id="lane-outcome" data-kind={outcome?.kind ?? ''}>
+              {outcome?.text ?? ''}
+            </p>
+          </fieldset>
         </section>
 
         <Section
@@ -413,9 +439,10 @@ export function Lane({
           count={called.length}
           id="lane-called"
           locale={locale}
+          readOnly={twin}
         >
           {called.map((x) => (
-            <TicketRow key={x.id} ticket={x} flight={flightOf(x)} locale={locale} now={now}>
+            <TicketRow key={x.id} ticket={x} flight={flightOf(x)} locale={locale} now={shownNow}>
               <button type="button" className="small-button" onClick={() => void act(x, 'recall')}>
                 {t(locale, 'lane.action.recall')}
               </button>
@@ -431,9 +458,10 @@ export function Lane({
           count={prepare.length}
           id="lane-prepare"
           locale={locale}
+          readOnly={twin}
         >
           {prepare.map((x) => (
-            <TicketRow key={x.id} ticket={x} flight={flightOf(x)} locale={locale} now={now}>
+            <TicketRow key={x.id} ticket={x} flight={flightOf(x)} locale={locale} now={shownNow}>
               <button type="button" className="small-button" onClick={() => void act(x, 'review')}>
                 {t(locale, 'lane.action.review')}
               </button>
@@ -446,9 +474,10 @@ export function Lane({
           count={waiting.length}
           id="lane-waiting"
           locale={locale}
+          readOnly={twin}
         >
           {waiting.slice(0, LIST_LIMIT).map((x) => (
-            <TicketRow key={x.id} ticket={x} flight={flightOf(x)} locale={locale} now={now}>
+            <TicketRow key={x.id} ticket={x} flight={flightOf(x)} locale={locale} now={shownNow}>
               <button type="button" className="small-button" onClick={() => void act(x, 'review')}>
                 {t(locale, 'lane.action.review')}
               </button>
@@ -470,9 +499,10 @@ export function Lane({
           count={absent.length}
           id="lane-absent"
           locale={locale}
+          readOnly={twin}
         >
           {absent.map((x) => (
-            <TicketRow key={x.id} ticket={x} flight={flightOf(x)} locale={locale} now={now}>
+            <TicketRow key={x.id} ticket={x} flight={flightOf(x)} locale={locale} now={shownNow}>
               <button
                 type="button"
                 className="small-button"
@@ -489,9 +519,10 @@ export function Lane({
           count={review.length}
           id="lane-review"
           locale={locale}
+          readOnly={twin}
         >
           {review.map((x) => (
-            <TicketRow key={x.id} ticket={x} flight={flightOf(x)} locale={locale} now={now}>
+            <TicketRow key={x.id} ticket={x} flight={flightOf(x)} locale={locale} now={shownNow}>
               {boss ? (
                 <>
                   <button
@@ -515,100 +546,103 @@ export function Lane({
         </Section>
 
         <section className="card manual" id="lane-manual" aria-labelledby="lane-manual-title">
-          <h2 id="lane-manual-title">{t(locale, 'lane.manual.title')}</h2>
-          <form onSubmit={(e) => void issue(e)}>
-            <label htmlFor="manual-flight">{t(locale, 'lane.manual.flight')}</label>
-            <select
-              id="manual-flight"
-              value={manual.flightId}
-              onChange={(e) => {
-                setManual({ ...manual, flightId: e.target.value });
-              }}
-              required
-            >
-              {flights.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.label} · {timeOfDay(Date.parse(f.departure), locale, place?.airport.timeZone)}
-                </option>
-              ))}
-            </select>
-            <fieldset>
-              <legend>{t(locale, 'lane.manual.segment')}</legend>
-              {(['DEPARTING', 'TRANSFER'] as const).map((segment) => (
-                <label key={segment} className="choice">
-                  <input
-                    type="radio"
-                    name="manual-segment"
-                    value={segment}
-                    checked={manual.segment === segment}
-                    onChange={() => {
-                      setManual({ ...manual, segment });
-                    }}
-                  />
-                  {t(locale, `lane.manual.${segment}`)}
-                </label>
-              ))}
-            </fieldset>
-            <label htmlFor="manual-party">{t(locale, 'lane.manual.party')}</label>
-            <input
-              id="manual-party"
-              type="number"
-              min={1}
-              max={20}
-              value={manual.partySize}
-              onChange={(e) => {
-                setManual({
-                  ...manual,
-                  partySize: Math.min(20, Math.max(1, Number(e.target.value) || 1)),
-                });
-              }}
-            />
-            <label htmlFor="manual-reason">{t(locale, 'lane.manual.reason')}</label>
-            <select
-              id="manual-reason"
-              value={manual.reason}
-              onChange={(e) => {
-                setManual({ ...manual, reason: e.target.value as ManualReason });
-              }}
-            >
-              {REASONS.map((r) => (
-                <option key={r} value={r}>
-                  {t(locale, `lane.manual.reason.${r}`)}
-                </option>
-              ))}
-            </select>
-            <button
-              type="submit"
-              className="button primary"
-              id="manual-issue"
-              disabled={mode === 'EMERGENCY'}
-            >
-              {t(locale, 'lane.manual.issue')}
-            </button>
-          </form>
-          {issued === null ? null : (
-            <div className="issued print-area" id="manual-issued">
-              <p className="eyebrow">
-                {t(locale, 'lane.manual.issued', { number: issued.ticket.number })}
-              </p>
-              <p className="number" data-length={issued.ticket.number.length}>
-                {issued.ticket.number}
-              </p>
-              <QrCode
-                text={`${window.location.origin}/t/${issued.ref}`}
-                label={issued.ticket.number}
+          <fieldset className="plain" disabled={twin}>
+            <h2 id="lane-manual-title">{t(locale, 'lane.manual.title')}</h2>
+            <form onSubmit={(e) => void issue(e)}>
+              <label htmlFor="manual-flight">{t(locale, 'lane.manual.flight')}</label>
+              <select
+                id="manual-flight"
+                value={manual.flightId}
+                onChange={(e) => {
+                  setManual({ ...manual, flightId: e.target.value });
+                }}
+                required
+              >
+                {flights.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.label} ·{' '}
+                    {timeOfDay(Date.parse(f.departure), locale, place?.airport.timeZone)}
+                  </option>
+                ))}
+              </select>
+              <fieldset>
+                <legend>{t(locale, 'lane.manual.segment')}</legend>
+                {(['DEPARTING', 'TRANSFER'] as const).map((segment) => (
+                  <label key={segment} className="choice">
+                    <input
+                      type="radio"
+                      name="manual-segment"
+                      value={segment}
+                      checked={manual.segment === segment}
+                      onChange={() => {
+                        setManual({ ...manual, segment });
+                      }}
+                    />
+                    {t(locale, `lane.manual.${segment}`)}
+                  </label>
+                ))}
+              </fieldset>
+              <label htmlFor="manual-party">{t(locale, 'lane.manual.party')}</label>
+              <input
+                id="manual-party"
+                type="number"
+                min={1}
+                max={20}
+                value={manual.partySize}
+                onChange={(e) => {
+                  setManual({
+                    ...manual,
+                    partySize: Math.min(20, Math.max(1, Number(e.target.value) || 1)),
+                  });
+                }}
               />
-              <button
-                type="button"
-                className="button secondary"
-                onClick={() => {
-                  window.print();
+              <label htmlFor="manual-reason">{t(locale, 'lane.manual.reason')}</label>
+              <select
+                id="manual-reason"
+                value={manual.reason}
+                onChange={(e) => {
+                  setManual({ ...manual, reason: e.target.value as ManualReason });
                 }}
               >
-                {t(locale, 'kiosk.print')}
+                {REASONS.map((r) => (
+                  <option key={r} value={r}>
+                    {t(locale, `lane.manual.reason.${r}`)}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="submit"
+                className="button primary"
+                id="manual-issue"
+                disabled={mode === 'EMERGENCY'}
+              >
+                {t(locale, 'lane.manual.issue')}
               </button>
-            </div>
-          )}
+            </form>
+            {issued === null ? null : (
+              <div className="issued print-area" id="manual-issued">
+                <p className="eyebrow">
+                  {t(locale, 'lane.manual.issued', { number: issued.ticket.number })}
+                </p>
+                <p className="number" data-length={issued.ticket.number.length}>
+                  {issued.ticket.number}
+                </p>
+                <QrCode
+                  text={`${window.location.origin}/t/${issued.ref}`}
+                  label={issued.ticket.number}
+                />
+                <button
+                  type="button"
+                  className="button secondary"
+                  onClick={() => {
+                    window.print();
+                  }}
+                >
+                  {t(locale, 'kiosk.print')}
+                </button>
+              </div>
+            )}
+          </fieldset>
         </section>
       </main>
     </div>

@@ -14,8 +14,17 @@ import type {
   RunResult,
   SimFlight,
   SimPassenger,
+  TapeEntry,
 } from '../src';
-import { INSTANT_QUEUE, MINUTE, OPTIONS, decisions, policy, withoutLaneOutages } from './helpers';
+import {
+  INSTANT_QUEUE,
+  MINUTE,
+  OPTIONS,
+  decisions,
+  playTape,
+  policy,
+  withoutLaneOutages,
+} from './helpers';
 
 const RUNS = { numRuns: 300 };
 
@@ -934,5 +943,49 @@ describe('day observer (S11)', () => {
       ),
       RUNS,
     );
+  });
+});
+
+describe('the tape of the queue (S18)', () => {
+  it('never changes the run, and played on a new queue gives the same results and events', () => {
+    const hits = { updates: 0, lanes: 0, reissued: 0, advances: 0 };
+    fc.assert(
+      fc.property(
+        fc.oneof(populationArb, disruptedPopulationArb, congestedPopulationArb),
+        fc.oneof(policyArb, s5PolicyArb, fastTrackPolicyArb),
+        (population, p) => {
+          const tape: TapeEntry[] = [];
+          const events: QueueEvent[] = [];
+          const recorded = simulateCheckpoint(population, p, {
+            ...OPTIONS,
+            listener: (e) => events.push(e),
+            recorder: (e) => tape.push(e),
+          });
+          expect(recorded).toEqual(simulateCheckpoint(population, p, OPTIONS));
+          // The lanes open at the start come first, before any operation on the queue.
+          expect(tape[0]?.type).toBe('LANES');
+          // One issue per ticket, one presentation per admission, one call per call.
+          const count = (type: TapeEntry['type']) => tape.filter((e) => e.type === type).length;
+          expect(count('ISSUE')).toBe(events.filter((e) => e.type === 'ISSUED').length);
+          expect(tape.filter((e) => e.type === 'CALL_NEXT' && e.ticketId !== null).length).toBe(
+            events.filter((e) => e.type === 'CALLED').length,
+          );
+          expect(tape.filter((e) => e.type === 'PRESENT' && e.outcome === 'ADMITTED').length).toBe(
+            events.filter((e) => e.type === 'ADMITTED').length,
+          );
+          expect(playTape(population, p, tape, OPTIONS.classification)).toEqual(events);
+          if (count('UPDATE_FLIGHT') > 0) hits.updates++;
+          if (count('LANES') > 1) hits.lanes++;
+          if (recorded.stats.reissuedTickets > 0) hits.reissued++;
+          if (count('ADVANCE') > 0) hits.advances++;
+        },
+      ),
+      RUNS,
+    );
+    // The random days reach every kind of operation.
+    expect(hits.updates).toBeGreaterThanOrEqual(50);
+    expect(hits.lanes).toBeGreaterThanOrEqual(50);
+    expect(hits.reissued).toBeGreaterThanOrEqual(20);
+    expect(hits.advances).toBeGreaterThanOrEqual(100);
   });
 });

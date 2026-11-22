@@ -38,6 +38,7 @@ function outcomeOf(result: CommandResult): string | null {
     case 'OVERRIDDEN':
       return result.outcome;
     case 'LANES_SET':
+    case 'FLIGHT_UPDATED':
       return 'DONE';
   }
 }
@@ -71,6 +72,8 @@ function detailOf(command: Command, result: CommandResult): AuditEntry['detail']
       };
     case 'OVERRIDE':
       return { override: command.override };
+    case 'UPDATE_FLIGHT':
+      return result.type === 'FLIGHT_UPDATED' ? { tickets: result.tickets } : {};
     case 'ISSUE_TICKET':
       return { source: command.source, partySize: command.partySize };
     case 'PRESENT':
@@ -203,7 +206,10 @@ export async function auditOf(
   const byOf = (actor: string): AuditEntry['by'] => {
     if (actor.startsWith('staff:')) return { kind: 'STAFF', label: names.get(actor) ?? '' };
     if (actor.startsWith('kiosk:')) return { kind: 'DEVICE', label: names.get(actor) ?? '' };
-    return { kind: 'SYSTEM', label: actor === 'system:timer' ? 'timer' : 'GateFlow' };
+    if (actor === 'system:timer') return { kind: 'SYSTEM', label: 'timer' };
+    // The digital twin (S18): its simulated passengers and staff.
+    if (actor === 'system:twin') return { kind: 'SYSTEM', label: 'twin' };
+    return { kind: 'SYSTEM', label: 'GateFlow' };
   };
   const entries: AuditEntry[] = page.map((r) => {
     const command = r.command as Command;

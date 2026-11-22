@@ -50,6 +50,11 @@ export const TICKET_SOURCES = [
   'STAFF',
   /** Issued by a kiosk from a scanned boarding pass. */
   'KIOSK',
+  /**
+   * Issued by the digital twin (S18) for a simulated party, with what the simulator knew: only on
+   * a twin checkpoint, never for a real passenger.
+   */
+  'TWIN',
 ] as const;
 export type TicketSource = (typeof TICKET_SOURCES)[number];
 
@@ -71,6 +76,12 @@ export interface IssueTicket {
   /** Nominal walking time from the checkpoint to the flight's gate zone. */
   readonly walkEstimateMs: Millis;
   readonly scheduledDepartureMs: Millis | null;
+  /**
+   * When the passenger first presented at the checkpoint, if earlier than the issue (S18): a ticket
+   * issued again after an expiry keeps the first presentation, which the presentation rule reads.
+   * Never later than the command. Absent: the time of the command.
+   */
+  readonly presentedAtMs?: Millis;
   /**
    * For a ticket from a boarding pass: the HMAC of the pass's flight, check-in sequence and
    * booking reference (ADR-043), so that the same pass scanned again finds this ticket. The pass
@@ -211,12 +222,26 @@ export interface OverrideTicket {
 
 /**
  * The supervisor sets the number of lanes open (S17): the engine's estimates follow at once, and
- * the waiting tickets are assessed again. The next service day opens with the checkpoint's own
- * number.
+ * the risk classes at its next decision, as in the simulator (S18). The next service day opens
+ * with the checkpoint's own number.
  */
 export interface SetLanes {
   readonly type: 'SET_LANES';
   readonly lanesOpen: number;
+}
+
+/**
+ * What the flight feed now knows of a flight (S18): its boarding close, the walk to its gate after
+ * a gate change, or both. Every ticket of the flight that still waits or is called takes it, and
+ * the engine uses it from its next decision. The digital twin sends it; the airport's feed adapter
+ * will too (M5).
+ */
+export interface UpdateFlight {
+  readonly type: 'UPDATE_FLIGHT';
+  /** The flight, as the tickets name it. */
+  readonly flightId: string;
+  readonly deadline?: KnownDeadline;
+  readonly walkEstimateMs?: Millis;
 }
 
 export type Command =
@@ -230,7 +255,8 @@ export type Command =
   | AddToParty
   | SetMode
   | OverrideTicket
-  | SetLanes;
+  | SetLanes
+  | UpdateFlight;
 export type CommandType = Command['type'];
 
 /** A command as recorded in a checkpoint's log: its place in the log and its time. */
@@ -330,7 +356,9 @@ export type CommandResult =
       readonly ticket: TicketSummary;
     }
   /** The lanes open now, and before the command. */
-  | { readonly type: 'LANES_SET'; readonly lanesOpen: number; readonly previous: number };
+  | { readonly type: 'LANES_SET'; readonly lanesOpen: number; readonly previous: number }
+  /** The flight's tickets took what the feed knows (S18): `tickets` of them. */
+  | { readonly type: 'FLIGHT_UPDATED'; readonly flightId: string; readonly tickets: number };
 
 /** An event of the day: the queue's own events, and the opening of the day. */
 export type DayLogEvent =

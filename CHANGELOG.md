@@ -4,6 +4,69 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Any change that alters simulated numbers
 must be listed, together with the component versions it bumps.
 
+## [0.18.0] - 2026-11-22: Slice S18, the digital twin
+
+The simulator drives the live system at an accelerated time (ADR-051): a scenario's day, played
+through the commands staff and kiosks send, calls the same numbers in the same order as the
+offline simulator, checked call by call. The demo page plays it, for the administrators of a
+synthetic airport.
+
+### Simulated numbers change
+
+- None. The golden files change only in the version of the queue (0.11.0).
+
+### Added
+
+- sim-model: the tape, `SimulationOptions.recorder`: every operation of the simulator on its
+  queue, in order, with its result; it never changes a run.
+- `@gateflow/twin` 0.1.0 (pure): a scenario's day and its tape (`twinDay`), the commands the live
+  system receives at their virtual times (`TwinScript`), the check of each answer (`checkStep`),
+  a play on an operations day in memory, the numbers the live system must call
+  (`expectedCallNumbers`).
+- operations 0.8.0: the command `UPDATE_FLIGHT` (what the feed knows of a flight now; the result
+  says how many tickets took it); the ticket source `TWIN`; `IssueTicket.presentedAtMs`, the
+  first presentation of a ticket issued again; `CheckpointDay.presentedAtMs`; `ticketNumber`.
+- queue-core 0.11.0: `calledTickets`, the tickets called whose passengers have not come yet;
+  `updateFlight` says how many tickets took the knowledge.
+- API 0.18.0:
+  - the twin (`--twin <scenarios>` on `serve`): `GET /v1/twin/options`, `GET /v1/twin`,
+    `POST /v1/twin/runs`, `POST /v1/twin/runs/{run}/speed`, `/stop` and `/display`, for the
+    administrators of an airport whose data are synthetic;
+  - `gateflow-api twin --scenario <file> [--seed] [--policy] [--speed] [--until] [--day]`: plays
+    a day to a new twin checkpoint and prints whether the live order is the simulator's (exit
+    code 1 if not);
+  - a twin's checkpoint takes the virtual time of its commands; staff, kiosks and policy
+    activations get 409 `TWIN_CHECKPOINT`; the timer scheduler leaves it alone; its screens read
+    its virtual day; its flights are its run's own;
+  - `GET /v1/checkpoints/{id}/queue?inPlay=true`: the tickets still in play; the queue's answer
+    gives the time of the latest command (`updatedAt`); the checkpoint's answer says whether it
+    is a twin's;
+  - migration `0011_twin`: `twin_run`, one running per airport; `flight.twin_run_id`, the airport's
+    own flights unique as before; the ticket source `TWIN`.
+- Contracts 0.10.0: `TwinState`, `TwinSpeed`, `TwinOptionsResponse`, `StartTwinRequest`,
+  `TwinSpeedRequest`, `TwinRun`, `TwinCall`, `TwinResponse`, `TwinDisplayResponse`; `TWIN` as a
+  ticket's source; `twin` in `CheckpointResponse`; `updatedAt` in `QueueResponse`; `tickets` in an
+  audit entry's detail.
+- Web 0.18.0: the demo page `/demo` (scenario, policy, day, speed, until; start, stop, start
+  again; the virtual clock, the progress, the check against the simulator, the counts, the board,
+  the latest calls with the engine's reasons; links to the twin's display, lane station and
+  console); a twin's console and lane station show a banner and only show; texts in the three
+  languages.
+- CI: whole days through the command line on PostgreSQL (the disrupted demo day; the MX-like hub
+  with the virtual queue in order of arrival).
+
+### Changed
+
+- `SET_LANES` changes the engine's estimates at once and the risk classes at its next decision,
+  as the simulator does: the extra assessment of S17 is gone (`queue.reassess` removed; ADR-049
+  amended). It moved the reference of the hysteresis and could change a later call.
+- A ticket issued again at the kiosk after an expiry keeps the passenger's first presentation, as
+  in the simulator.
+- The displays' board reads the tickets called only, not every ticket of the day (a thousand
+  times faster on the busiest library day); the console and the lane station ask for the tickets
+  in play, one request at a time.
+- A manual ticket is never for a flight of the twin; kiosks never read one.
+
 ## [0.17.0] - 2026-11-22: Slice S17, the supervisor's console
 
 The supervisor's console: the modes of a checkpoint (ADR-048), a supervisor's overrides and the

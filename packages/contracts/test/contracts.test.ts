@@ -217,6 +217,13 @@ describe('the API contracts', () => {
       [`post ${cp}/policy/activations`]: 'ADMIN',
       [`get ${cp}/audit/verify`]: 'SUPERVISOR',
       [`get ${cp}/stream`]: 'OPERATOR',
+      // The digital twin (S18): administrators of a synthetic airport.
+      'get /v1/twin/options': 'ADMIN',
+      'get /v1/twin': 'ADMIN',
+      'post /v1/twin/runs': 'ADMIN',
+      'post /v1/twin/runs/{runId}/speed': 'ADMIN',
+      'post /v1/twin/runs/{runId}/stop': 'ADMIN',
+      'post /v1/twin/runs/{runId}/display': 'ADMIN',
     });
     for (const [key, role] of Object.entries(roles)) {
       const [method = '', path = ''] = key.split(' ');

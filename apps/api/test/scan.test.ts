@@ -16,6 +16,7 @@ import { randomIds } from '../src/ids';
 import { designatorOf, iataOf, seedDemo } from '../src/seed';
 import { zonedEpoch } from '../src/time';
 import { freshDatabase } from './database';
+import { staffCookie } from './staff';
 
 const file = fileURLToPath(new URL('../../../scenarios/vce-like-peak-day.yaml', import.meta.url));
 const scenario = parseScenarioText(readFileSync(file, 'utf8'), 'yaml', {
@@ -37,16 +38,23 @@ let app: FastifyInstance;
 const lines: string[] = [];
 let flights: (typeof flight.$inferSelect)[];
 let kioskToken: string;
+let airportId: string;
+let staffSession: string | undefined;
+/** A supervisor's session, made at first use (S15): staff requests need one. */
+async function staff(): Promise<string> {
+  staffSession ??= await staffCookie(app, database.db, clock, airportId);
+  return staffSession;
+}
 
 beforeAll(async () => {
   database = await freshDatabase({ maxConnections: 12 });
-  checkpointId = (
-    await seedDemo(database.db, scenario, {
-      now: clock.now(),
-      ids: randomIds(clock),
-      serviceDay: DAY,
-    })
-  ).checkpointId;
+  const seeded = await seedDemo(database.db, scenario, {
+    now: clock.now(),
+    ids: randomIds(clock),
+    serviceDay: DAY,
+  });
+  checkpointId = seeded.checkpointId;
+  airportId = seeded.airportId;
   flights = await database.db.select().from(flight).orderBy(asc(flight.stdMs));
   kioskToken = (
     await addDevice(database.db, randomIds(clock), { checkpointId, kind: 'KIOSK', name: 'Kiosk 1' })
@@ -237,6 +245,7 @@ describe('scanning boarding passes (S13)', () => {
       const call = await app.inject({
         method: 'POST',
         url: `/v1/checkpoints/${checkpointId}/calls`,
+        headers: { cookie: await staff() },
       });
       const { called } = call.json<{ called: { id: string } | null }>();
       if (called === null || called.id === issued.body.ticket?.id) break;
@@ -245,6 +254,7 @@ describe('scanning boarding passes (S13)', () => {
       method: 'POST',
       url: `/v1/checkpoints/${checkpointId}/admissions`,
       payload: { ref: issued.body.ref },
+      headers: { cookie: await staff() },
     });
     expect(admitted.json()).toMatchObject({ outcome: 'ADMITTED' });
     const { body } = await scanPass(pass);

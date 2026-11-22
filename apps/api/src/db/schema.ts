@@ -353,3 +353,45 @@ export const device = pgTable(
     check('device_token_hash_hex', sql`${t.tokenHash} ~ '^[0-9a-f]{64}$'`),
   ],
 );
+
+/**
+ * A member of an airport's staff (S15): a local login with a password, a role and the checkpoints
+ * they work at (all of the airport's when null). OIDC/SAML replace the passwords for the pilot.
+ */
+export const staffUser = pgTable(
+  'staff_user',
+  {
+    id: uuid('id').primaryKey(),
+    airportId: uuid('airport_id')
+      .notNull()
+      .references(() => airport.id),
+    login: text('login').notNull(),
+    role: text('role').notNull(),
+    checkpointIds: uuid('checkpoint_ids').array(),
+    /** `scrypt$N$r$p$salt$key`: never the password. */
+    passwordHash: text('password_hash').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    disabledAt: timestamp('disabled_at', { withTimezone: true }),
+  },
+  (t) => [
+    unique('staff_user_login').on(t.login),
+    check('staff_user_role', sql`${t.role} IN ('OPERATOR', 'SUPERVISOR', 'ADMIN')`),
+    check('staff_user_login_format', sql`${t.login} ~ '^[a-z0-9][a-z0-9._-]{2,62}$'`),
+    check('staff_user_password_hash', sql`${t.passwordHash} LIKE 'scrypt$%'`),
+  ],
+);
+
+/** A signed-in session of a member of staff: only the SHA-256 of its token is kept. */
+export const staffSession = pgTable(
+  'staff_session',
+  {
+    tokenHash: text('token_hash').primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => staffUser.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAtMs: ms('expires_at_ms').notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (t) => [check('staff_session_token_hash', sql`${t.tokenHash} ~ '^[0-9a-f]{64}$'`)],
+);

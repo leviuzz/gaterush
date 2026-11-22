@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
+import fastifyCookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
 import { and, asc, eq, gte, lte } from 'drizzle-orm';
 import Fastify from 'fastify';
@@ -11,14 +12,26 @@ import {
   IssueTicketRequest,
   ResolveReviewRequest,
   ScanRequest,
+  SignInRequest,
   openApiDocument,
 } from '@gateflow/contracts';
-import type { StaffActionResponse, Ticket } from '@gateflow/contracts';
+import type { StaffActionResponse, StaffMemberResponse, Ticket } from '@gateflow/contracts';
 import { OperationError } from '@gateflow/operations';
 import type { Command, CommandResult, TicketSummary } from '@gateflow/operations';
 import { requestHash } from './chain';
 import { readPass, recordScan, ticketOfPass } from './intake';
 import { TimerScheduler } from './scheduler';
+import {
+  SignInGuard,
+  clearSessionCookie,
+  requireSameOrigin,
+  requireStaff,
+  setSessionCookie,
+  signIn,
+  signOut,
+  staffOf,
+} from './staff';
+import type { StaffMember, StaffRole } from './staff';
 import type { ScanOutcome, ScanReason } from './intake';
 import type { Db } from './db/client';
 import { airport, checkpoint, flight, queueToken } from './db/schema';
@@ -160,9 +173,6 @@ function idempotencyKeyOf(request: FastifyRequest): string {
   return key;
 }
 
-/** Until staff sign in (S15), every command is recorded as coming from unauthenticated staff. */
-const ACTOR = 'staff:unauthenticated';
-
 /** The Fastify application of the API. */
 export function buildApp(options: AppOptions): FastifyInstance {
   const clock = options.clock ?? systemClock;
@@ -207,6 +217,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
   });
 
   /** Runs a command of a checkpoint and answers with its result. */
+  void app.register(fastifyCookie);
   const timers = new TimerScheduler(options.db, runtime, clock);
   app.decorate('timers', timers);
   if (options.timers === 'auto') {
@@ -220,9 +231,21 @@ export function buildApp(options: AppOptions): FastifyInstance {
     await timers.stop();
   });
 
+  /**
+   * The member of staff a request of a checkpoint needs, checked before anything else of the
+   * request is read (S15).
+   */
+  const staffFor = async (
+    request: FastifyRequest<{ Params: { checkpointId: string } }>,
+    role: StaffRole,
+  ): Promise<StaffMember> =>
+    (await requireStaff(options.db, clock, request, role, request.params.checkpointId)).member;
+
+  /** Runs a staff command of a checkpoint and answers with its result; the log says who acted. */
   const command = async (
     request: FastifyRequest<{ Params: { checkpointId: string } }>,
     reply: FastifyReply,
+    member: StaffMember,
     body: unknown,
     build: (context: BuildContext) => Promise<Command> | Command,
     answer: (result: CommandResult) => { status: number; body: unknown },
@@ -231,7 +254,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
       checkpointId: request.params.checkpointId,
       idempotencyKey: idempotencyKeyOf(request),
       requestHash: requestHash(`${request.method} ${request.routeOptions.url ?? ''}`, body),
-      actor: ACTOR,
+      actor: `staff:${member.id}`,
       build,
     });
     if (executed.result === null) throw new Error('the command applied nothing');
@@ -279,6 +302,44 @@ export function buildApp(options: AppOptions): FastifyInstance {
   });
 
   app.get('/v1/health', () => ({ status: 'ok', version: API_VERSION }));
+
+  /** Staff sign in (S15): the session goes in an HttpOnly cookie, never in a page's reach. */
+  const guard = new SignInGuard(clock);
+  const memberView = (m: StaffMember): StaffMemberResponse => ({
+    member: {
+      id: m.id,
+      login: m.login,
+      role: m.role,
+      checkpoints: m.checkpointIds?.slice() ?? null,
+    },
+  });
+  app.post('/v1/auth/sign-in', async (request, reply) => {
+    requireSameOrigin(request);
+    const body = parse(SignInRequest, request.body);
+    if (guard.blocked(body.login)) {
+      throw new ApiError(429, 'TOO_MANY_ATTEMPTS', 'too many failed sign-ins: try again later');
+    }
+    const signed = await signIn(options.db, clock, body.login, body.password);
+    if (signed === null) {
+      guard.failed(body.login);
+      throw new ApiError(401, 'INVALID_CREDENTIALS', 'the login or the password is not right');
+    }
+    guard.succeeded(body.login);
+    const forwarded = request.headers['x-forwarded-proto'];
+    setSessionCookie(reply, signed.token, request.protocol === 'https' || forwarded === 'https');
+    return memberView(signed.member);
+  });
+  app.get('/v1/auth/me', async (request) => {
+    const member = await staffOf(options.db, clock, request);
+    if (member === null) throw new ApiError(401, 'SIGN_IN_REQUIRED', 'sign in as staff first');
+    return memberView(member);
+  });
+  app.post('/v1/auth/sign-out', async (request, reply) => {
+    requireSameOrigin(request);
+    await signOut(options.db, request);
+    clearSessionCookie(reply);
+    return reply.status(204).send();
+  });
 
   /** The device's own view: what a kiosk needs to show where it is. */
   app.get('/v1/devices/me', async (request) => {
@@ -345,10 +406,12 @@ export function buildApp(options: AppOptions): FastifyInstance {
   app.post<{ Params: { checkpointId: string } }>(
     '/v1/checkpoints/:checkpointId/tickets',
     async (request, reply) => {
+      const member = await staffFor(request, 'OPERATOR');
       const body = parse(IssueTicketRequest, request.body);
       return command(
         request,
         reply,
+        member,
         body,
         async ({ tx, checkpoint: cp }) => {
           const rows = await tx.select().from(flight).where(eq(flight.id, body.flightId));
@@ -578,6 +641,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
       command(
         request,
         reply,
+        await staffFor(request, 'OPERATOR'),
         null,
         () => ({ type: 'CALL_NEXT' }),
         (result) => {
@@ -593,6 +657,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
   app.post<{ Params: { checkpointId: string } }>(
     '/v1/checkpoints/:checkpointId/admissions',
     async (request, reply) => {
+      const member = await staffFor(request, 'OPERATOR');
       const body = parse(AdmissionRequest, request.body);
       const unknown = () =>
         new ApiError(404, 'UNKNOWN_TICKET', 'no such ticket today at this checkpoint');
@@ -607,6 +672,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
       return command(
         request,
         reply,
+        member,
         passKey === null ? body : { pass: passKey },
         async ({ tx, day, checkpoint: cp }) => {
           let ticketId: string | undefined;
@@ -647,20 +713,22 @@ export function buildApp(options: AppOptions): FastifyInstance {
     new ApiError(404, 'UNKNOWN_TICKET', 'no such ticket today at this checkpoint');
 
   const STAFF_ROUTES = [
-    ['recall', 'RECALL'],
-    ['no-show', 'MARK_NO_SHOW'],
-    ['reactivate', 'REACTIVATE'],
-    ['review', 'HOLD'],
-    ['cancel', 'CANCEL'],
+    ['recall', 'RECALL', 'OPERATOR'],
+    ['no-show', 'MARK_NO_SHOW', 'OPERATOR'],
+    ['reactivate', 'REACTIVATE', 'OPERATOR'],
+    ['review', 'HOLD', 'OPERATOR'],
+    ['cancel', 'CANCEL', 'SUPERVISOR'],
   ] as const;
-  for (const [path, action] of STAFF_ROUTES) {
+  for (const [path, action, role] of STAFF_ROUTES) {
     app.post<{ Params: { checkpointId: string; ticketId: string } }>(
       `/v1/checkpoints/:checkpointId/tickets/:ticketId/${path}`,
       async (request, reply) => {
+        const member = await staffFor(request, role);
         const { ticketId } = request.params;
         return command(
           request,
           reply,
+          member,
           { action, ticketId },
           ({ day }) => {
             if (day.ticket(ticketId) === undefined) throw unknownTicket();
@@ -675,11 +743,13 @@ export function buildApp(options: AppOptions): FastifyInstance {
   app.post<{ Params: { checkpointId: string; ticketId: string } }>(
     '/v1/checkpoints/:checkpointId/tickets/:ticketId/resolve',
     async (request, reply) => {
+      const member = await staffFor(request, 'SUPERVISOR');
       const { ticketId } = request.params;
       const body = parse(ResolveReviewRequest, request.body);
       return command(
         request,
         reply,
+        member,
         { ...body, ticketId },
         ({ day }) => {
           if (day.ticket(ticketId) === undefined) throw unknownTicket();
@@ -693,7 +763,13 @@ export function buildApp(options: AppOptions): FastifyInstance {
   app.get<{ Params: { checkpointId: string } }>(
     '/v1/checkpoints/:checkpointId/queue',
     async (request) => {
-      const cp = await loadCheckpoint(options.db, request.params.checkpointId);
+      const { checkpoint: cp } = await requireStaff(
+        options.db,
+        clock,
+        request,
+        'OPERATOR',
+        request.params.checkpointId,
+      );
       const serviceDay = serviceDayOf(clock.now(), cp.timeZone, cp.dayStartsAt);
       const rows = await options.db
         .select()
@@ -707,7 +783,13 @@ export function buildApp(options: AppOptions): FastifyInstance {
   app.get<{ Params: { checkpointId: string } }>(
     '/v1/checkpoints/:checkpointId/audit/verify',
     async (request) => {
-      const cp = await loadCheckpoint(options.db, request.params.checkpointId);
+      const { checkpoint: cp } = await requireStaff(
+        options.db,
+        clock,
+        request,
+        'SUPERVISOR',
+        request.params.checkpointId,
+      );
       return { checkpointId: cp.id, ...(await verifyChain(options.db, cp.id)) };
     },
   );

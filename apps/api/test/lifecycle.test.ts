@@ -34,6 +34,7 @@ import { randomIds } from '../src/ids';
 import { seedDemo } from '../src/seed';
 import { zonedEpoch } from '../src/time';
 import { freshDatabase } from './database';
+import { staffCookie } from './staff';
 
 /*
  * The life cycle of a ticket in the live system (S15): the queue's timeouts applied on time by the
@@ -63,16 +64,17 @@ let flights: (typeof flight.$inferSelect)[];
 let kioskToken: string;
 /** The checkpoint's queue: its timeouts T1, T2 and the window of reactivation. */
 let queue: VirtualQueue;
+/** A supervisor's session (staff requests need one). */
+let cookie: string;
 
 beforeAll(async () => {
   database = await freshDatabase({ maxConnections: 12 });
-  checkpointId = (
-    await seedDemo(database.db, scenario, {
-      now: clock.now(),
-      ids: randomIds(clock),
-      serviceDay: DAY,
-    })
-  ).checkpointId;
+  const seeded = await seedDemo(database.db, scenario, {
+    now: clock.now(),
+    ids: randomIds(clock),
+    serviceDay: DAY,
+  });
+  checkpointId = seeded.checkpointId;
   flights = await database.db.select().from(flight).orderBy(asc(flight.stdMs));
   kioskToken = (
     await addDevice(database.db, randomIds(clock), { checkpointId, kind: 'KIOSK', name: 'Kiosk' })
@@ -81,6 +83,7 @@ beforeAll(async () => {
   const policy = (row?.settings as CheckpointSettings).policy as { queue: VirtualQueue };
   queue = policy.queue;
   app = buildApp({ db: database.db, clock });
+  cookie = await staffCookie(app, database.db, clock, seeded.airportId);
 });
 
 afterAll(async () => {
@@ -99,7 +102,7 @@ async function post(path: string, body?: unknown, key = `test-${String(++keys)}`
   return app.inject({
     method: 'POST',
     url: `/v1/checkpoints/${checkpointId}/${path}`,
-    headers: { 'idempotency-key': key },
+    headers: { cookie, 'idempotency-key': key },
     ...(body === undefined ? {} : { payload: body as Record<string, unknown> }),
   });
 }
@@ -274,7 +277,10 @@ describe('the life cycle of a ticket (S15)', () => {
     expect(held.body?.ticket.state).toBe('REVIEW');
     const present = await post('admissions', { number: ticket.number });
     expect(AdmissionResponse.parse(present.json()).outcome).toBe('UNDER_REVIEW');
-    const page = await app.inject({ url: `/v1/checkpoints/${checkpointId}/queue` });
+    const page = await app.inject({
+      url: `/v1/checkpoints/${checkpointId}/queue`,
+      headers: { cookie },
+    });
     expect(page.statusCode).toBe(200);
     expect((await act(ticket.id, 'resolve', { decision: 'MAYBE' })).status).toBe(400);
     const released = await act(ticket.id, 'resolve', { decision: 'QUEUE' });
@@ -405,7 +411,10 @@ describe('the life cycle of a ticket (S15)', () => {
       expect(day.ticket(t.id)?.lastCalledAtMs ?? null).toBe(t.lastCalledAtMs);
     }
     expect(day.nextDueMs()).toBe(await nextDue());
-    const verify = await app.inject({ url: `/v1/checkpoints/${checkpointId}/audit/verify` });
+    const verify = await app.inject({
+      url: `/v1/checkpoints/${checkpointId}/audit/verify`,
+      headers: { cookie },
+    });
     expect(verify.json()).toMatchObject({ intact: true });
   });
 });

@@ -6,7 +6,7 @@ must be listed, together with the component versions it bumps.
 
 ## [Unreleased]
 
-Slice S15 in progress. Part 1: the life cycle of a ticket on a clock.
+Slice S15 in progress. Part 1: the life cycle of a ticket on a clock. Part 2: staff sign in.
 
 ### Simulated numbers change
 
@@ -45,6 +45,20 @@ Slice S15 in progress. Part 1: the life cycle of a ticket on a clock.
   pass.
 - i18n: the texts of a review, a cancellation, a return to the queue and a closed boarding, in
   the three languages. The kiosk says "You are back in the queue" with the same number.
+- Staff sign in (part 2):
+  - local members of staff with a login and a password, a role (operator, supervisor, admin) and
+    the checkpoints of their airport they work at: `gateflow-api user add`, `user password`,
+    `user disable`;
+  - `POST /v1/auth/sign-in`, `GET /v1/auth/me`, `POST /v1/auth/sign-out`. The session is an
+    HttpOnly, SameSite=Strict cookie (Secure over TLS) that lasts a shift (12 hours). Passwords
+    are kept as scrypt hashes and sessions as the SHA-256 of their token. After ten failures in a
+    quarter of an hour, a login waits. A request sent by a page of another site is refused.
+  - Every staff route needs a session. Operators issue manual tickets, call, admit, call again,
+    mark no-shows, bring them back and ask for reviews. Supervisors also cancel, end reviews and
+    check the audit. The log records who acted (`staff:<id>`).
+  - Contracts: `SignInRequest`, `StaffMemberResponse`, the staff cookie scheme and each route's
+    role (`x-gateflow-role`) in the OpenAPI document. Migration `0006_staff`.
+  - The CI's check of the bundle and the Chromium tests sign a supervisor in.
 
 ## [0.14.0] - 2026-11-22: Slice S14, the kiosk and the passenger's page
 

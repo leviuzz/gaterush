@@ -20,6 +20,7 @@ import { seedDemo } from '../src/seed';
 import { zonedEpoch } from '../src/time';
 import { API_VERSION } from '../src/version';
 import { freshDatabase } from './database';
+import { staffCookie } from './staff';
 
 const scenario = parseScenarioText(
   readFileSync(new URL('../../../scenarios/single-checkpoint-demo.yaml', import.meta.url), 'utf8'),
@@ -42,6 +43,9 @@ let checkpointId: string;
 let flights: { id: string; number: string; stdMs: number }[];
 const clock = virtualClock(zonedEpoch(DAY, 5 * 60 * MIN, 'Europe/Rome'));
 let app: FastifyInstance;
+/** The session of a supervisor of the airport (S15): staff requests need one. */
+let cookie: string;
+let airportId: string;
 
 beforeAll(async () => {
   database = await freshDatabase({ maxConnections: 12 });
@@ -57,6 +61,8 @@ beforeAll(async () => {
     stdMs: f.stdMs,
   }));
   app = buildApp({ db: database.db, clock });
+  airportId = seeded.airportId;
+  cookie = await staffCookie(app, database.db, clock, airportId);
 });
 
 afterAll(async () => {
@@ -80,7 +86,7 @@ async function post(server: FastifyInstance, path: string, body?: unknown, key?:
     method: 'POST',
     url: `/v1/checkpoints/${checkpointId}/${path}`,
     ...(body === undefined ? {} : { payload: body as Record<string, unknown> }),
-    headers: key === undefined ? {} : { 'idempotency-key': key },
+    headers: { cookie, ...(key === undefined ? {} : { 'idempotency-key': key }) },
   });
 }
 
@@ -102,7 +108,10 @@ async function callNext(server: FastifyInstance) {
 }
 
 async function verify() {
-  const response = await app.inject({ url: `/v1/checkpoints/${checkpointId}/audit/verify` });
+  const response = await app.inject({
+    url: `/v1/checkpoints/${checkpointId}/audit/verify`,
+    headers: { cookie },
+  });
   return AuditVerifyResponse.parse(response.json());
 }
 
@@ -131,7 +140,9 @@ describe('the API (S12)', () => {
       ticket: { number: 'A001', state: 'ADMITTED' },
     });
     const queue = QueueResponse.parse(
-      (await app.inject({ url: `/v1/checkpoints/${checkpointId}/queue` })).json(),
+      (
+        await app.inject({ url: `/v1/checkpoints/${checkpointId}/queue`, headers: { cookie } })
+      ).json(),
     );
     expect(queue.serviceDay).toBe(DAY);
     expect(queue.tickets.map((t) => [t.number, t.state])).toEqual([
@@ -242,6 +253,7 @@ describe('the API (S12)', () => {
     const unknown = await app.inject({
       method: 'POST',
       url: '/v1/checkpoints/0193a0b2-7c1d-7e5f-8a9b-0c1d2e3f4a5b/calls',
+      headers: { cookie },
     });
     expect(unknown.statusCode).toBe(404);
     expect(await commandsCount()).toBe(before);
@@ -302,12 +314,18 @@ describe('the API (S12)', () => {
 
   it('opens a new service day after the day ends, with numbers from A001 again', async () => {
     clock.t = zonedEpoch('2026-11-24', 3 * 60 * MIN + 5 * MIN, 'Europe/Rome');
+    // A session lasts a shift: the next day's staff sign in again.
+    const expired = await app.inject({ url: '/v1/auth/me', headers: { cookie } });
+    expect(expired.statusCode).toBe(401);
+    cookie = await staffCookie(app, database.db, clock, airportId);
     const rows = await database.db.select().from(flight).where(eq(flight.serviceDate, DAY));
     const late = rows.sort((a, b) => b.stdMs - a.stdMs)[0]!;
     const t = await issue(app, late.id);
     expect(t.ticket.number).toBe('A001');
     const queue = QueueResponse.parse(
-      (await app.inject({ url: `/v1/checkpoints/${checkpointId}/queue` })).json(),
+      (
+        await app.inject({ url: `/v1/checkpoints/${checkpointId}/queue`, headers: { cookie } })
+      ).json(),
     );
     expect(queue.serviceDay).toBe('2026-11-24');
     expect(queue.tickets.map((x) => x.number)).toEqual(['A001']);

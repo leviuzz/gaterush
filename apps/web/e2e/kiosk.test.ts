@@ -444,6 +444,7 @@ describe("the passenger's page", () => {
     for (let calls = 0; calls < 60 && (await ticketOf(ref)).state !== 'CALLED'; calls++) {
       await fetch(`${product.base}/v1/checkpoints/${product.checkpointId}/calls`, {
         method: 'POST',
+        headers: { cookie: product.staffCookie },
       });
     }
     expect((await ticketOf(ref)).state).toBe('CALLED');
@@ -460,7 +461,7 @@ describe("the passenger's page", () => {
       `${product.base}/v1/checkpoints/${product.checkpointId}/admissions`,
       {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', cookie: product.staffCookie },
         body: JSON.stringify({ ref }),
       },
     );

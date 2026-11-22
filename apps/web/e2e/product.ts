@@ -25,6 +25,8 @@ export interface Product {
   readonly displayToken: string;
   /** The airport's day, as boarding passes give it. */
   readonly calendarDay: string;
+  /** The `cookie` header of a supervisor signed in at the airport (S15). */
+  readonly staffCookie: string;
   /** Runs a command of gateflow-api on the product's database. */
   cli(args: readonly string[]): string;
   stop(): Promise<void>;
@@ -97,6 +99,18 @@ export async function startProduct(serverUrl: string, scenario: string): Promise
   const displayToken = deviceToken(
     cli(['device', 'add', '--checkpoint', checkpointId, '--kind', 'display', '--name', 'Hall']),
   );
+  const added = cli([
+    'user',
+    'add',
+    '--airport',
+    'vce-like',
+    '--login',
+    'e2e.supervisor',
+    '--role',
+    'supervisor',
+  ]);
+  const password = /^password (\S+)$/m.exec(added)?.[1];
+  if (password === undefined) throw new Error(`no password in:\n${added}`);
 
   const port = await freePort();
   const server = spawn(
@@ -122,12 +136,21 @@ export async function startProduct(serverUrl: string, scenario: string): Promise
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
 
+  const signedIn = await fetch(`${base}/v1/auth/sign-in`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ login: 'e2e.supervisor', password }),
+  });
+  const session = /gateflow_session=([^;]+)/.exec(signedIn.headers.get('set-cookie') ?? '')?.[1];
+  if (!signedIn.ok || session === undefined) throw new Error('the supervisor cannot sign in');
+
   return {
     base,
     checkpointId,
     kioskToken,
     displayToken,
     calendarDay,
+    staffCookie: `gateflow_session=${session}`,
     cli,
     stop: async () => {
       const exited = new Promise((resolve) => server.once('exit', resolve));

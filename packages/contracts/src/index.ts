@@ -227,6 +227,26 @@ export const ErrorResponse = z.object({
   error: z.object({ code: z.string(), message: z.string() }),
 });
 
+/** The roles of airport staff (S15), each with what the previous one may do. */
+export const StaffRole = z.enum(['OPERATOR', 'SUPERVISOR', 'ADMIN']);
+
+/** A member of staff signs in with their login and password (S15). */
+export const SignInRequest = z.strictObject({
+  login: z.string().min(3).max(63),
+  password: z.string().min(1).max(200),
+});
+
+/** The member of staff signed in: never their password, never their session's token. */
+export const StaffMemberResponse = z.object({
+  member: z.object({
+    id: z.uuid(),
+    login: z.string(),
+    role: StaffRole,
+    /** The checkpoints they work at; null for every checkpoint of their airport. */
+    checkpoints: z.array(z.uuid()).nullable(),
+  }),
+});
+
 /** The types of the answers, for clients that do not validate them (the web application). */
 export type TicketState = z.infer<typeof TicketState>;
 export type ScanOutcome = z.infer<typeof ScanOutcome>;
@@ -238,6 +258,8 @@ export type DeviceResponse = z.infer<typeof DeviceResponse>;
 export type DemoFlightsResponse = z.infer<typeof DemoFlightsResponse>;
 export type ManualReason = z.infer<typeof ManualReason>;
 export type StaffActionResponse = z.infer<typeof StaffActionResponse>;
+export type StaffRole = z.infer<typeof StaffRole>;
+export type StaffMemberResponse = z.infer<typeof StaffMemberResponse>;
 export type ErrorResponse = z.infer<typeof ErrorResponse>;
 
 /** An endpoint of the API, for the OpenAPI document. */
@@ -249,6 +271,8 @@ export interface Route {
   readonly command: boolean;
   /** Only a registered device may call it, with its token (`Authorization: Bearer`). */
   readonly device?: boolean;
+  /** Only staff signed in with at least this role, at the checkpoint, may call it (S15). */
+  readonly staff?: z.infer<typeof StaffRole>;
   readonly body?: z.ZodType;
   readonly responses: Readonly<
     Record<string, { readonly description: string; readonly schema: z.ZodType }>
@@ -258,6 +282,14 @@ export interface Route {
 const errors = {
   '400': { description: 'The request is invalid', schema: ErrorResponse },
   '404': { description: 'Not found', schema: ErrorResponse },
+} as const;
+
+const staffErrors = {
+  '401': { description: 'Not signed in as staff', schema: ErrorResponse },
+  '403': {
+    description: 'Another site, or a role or checkpoint that does not allow it',
+    schema: ErrorResponse,
+  },
 } as const;
 
 const deviceErrors = {
@@ -276,12 +308,14 @@ export const ROUTES: readonly Route[] = [
   {
     method: 'post',
     path: '/v1/checkpoints/{checkpointId}/tickets',
-    summary: 'Issue a ticket for a passenger of a flight',
+    summary: 'Issue a ticket for a passenger, or a party, of a flight (staff, with a reason)',
     command: true,
+    staff: 'OPERATOR',
     body: IssueTicketRequest,
     responses: {
       '201': { description: 'Issued', schema: IssueTicketResponse },
       ...errors,
+      ...staffErrors,
       '409': { description: 'Idempotency key reused for another request', schema: ErrorResponse },
     },
   },
@@ -313,7 +347,7 @@ export const ROUTES: readonly Route[] = [
   {
     method: 'get',
     path: '/v1/checkpoints/{checkpointId}/demo-flights',
-    summary: "Today's demo flights, for a kiosk's sample boarding passes",
+    summary: "The next 24 hours' demo flights, for a kiosk's sample boarding passes",
     command: false,
     device: true,
     responses: {
@@ -327,9 +361,11 @@ export const ROUTES: readonly Route[] = [
     path: '/v1/checkpoints/{checkpointId}/calls',
     summary: 'Call the next passenger: the engine chooses who',
     command: true,
+    staff: 'OPERATOR',
     responses: {
       '200': { description: 'Called, or nobody waiting', schema: CallNextResponse },
       ...errors,
+      ...staffErrors,
       '409': { description: 'Idempotency key reused for another request', schema: ErrorResponse },
     },
   },
@@ -338,29 +374,37 @@ export const ROUTES: readonly Route[] = [
     path: '/v1/checkpoints/{checkpointId}/admissions',
     summary: 'A passenger presents their ticket at the access point',
     command: true,
+    staff: 'OPERATOR',
     body: AdmissionRequest,
     responses: {
       '200': { description: 'The outcome of the presentation', schema: AdmissionResponse },
       ...errors,
+      ...staffErrors,
       '409': { description: 'Idempotency key reused for another request', schema: ErrorResponse },
     },
   },
   ...(
     [
-      ['recall', 'Call a called passenger again, now: the no-show timeout counts from this call'],
-      ['no-show', 'Mark a called passenger as absent, now'],
-      ['reactivate', 'Bring a no-show back to the queue, within its window'],
-      ['review', 'Hold a waiting ticket for a review: it keeps its place'],
-      ['cancel', 'Cancel a ticket'],
+      [
+        'recall',
+        'Call a called passenger again, now: the no-show timeout counts from this call',
+        'OPERATOR',
+      ],
+      ['no-show', 'Mark a called passenger as absent, now', 'OPERATOR'],
+      ['reactivate', 'Bring a no-show back to the queue, within its window', 'OPERATOR'],
+      ['review', 'Hold a waiting ticket for a review: it keeps its place', 'OPERATOR'],
+      ['cancel', 'Cancel a ticket', 'SUPERVISOR'],
     ] as const
-  ).map(([action, summary]): Route => ({
+  ).map(([action, summary, role]): Route => ({
     method: 'post',
     path: `/v1/checkpoints/{checkpointId}/tickets/{ticketId}/${action}`,
     summary,
     command: true,
+    staff: role,
     responses: {
       '200': { description: 'Done, or not allowed in its state', schema: StaffActionResponse },
       ...errors,
+      ...staffErrors,
       '409': { description: 'Idempotency key reused for another request', schema: ErrorResponse },
     },
   })),
@@ -369,10 +413,12 @@ export const ROUTES: readonly Route[] = [
     path: '/v1/checkpoints/{checkpointId}/tickets/{ticketId}/resolve',
     summary: 'End the review of a ticket: back to its place in the queue, or cancelled',
     command: true,
+    staff: 'SUPERVISOR',
     body: ResolveReviewRequest,
     responses: {
       '200': { description: 'Done, or not allowed in its state', schema: StaffActionResponse },
       ...errors,
+      ...staffErrors,
       '409': { description: 'Idempotency key reused for another request', schema: ErrorResponse },
     },
   },
@@ -381,14 +427,24 @@ export const ROUTES: readonly Route[] = [
     path: '/v1/checkpoints/{checkpointId}/queue',
     summary: "The day's tickets, as staff see them",
     command: false,
-    responses: { '200': { description: 'The queue', schema: QueueResponse }, ...errors },
+    staff: 'OPERATOR',
+    responses: {
+      '200': { description: 'The queue', schema: QueueResponse },
+      ...errors,
+      ...staffErrors,
+    },
   },
   {
     method: 'get',
     path: '/v1/checkpoints/{checkpointId}/audit/verify',
     summary: "Check the chain of hashes of the checkpoint's log",
     command: false,
-    responses: { '200': { description: 'The check', schema: AuditVerifyResponse }, ...errors },
+    staff: 'SUPERVISOR',
+    responses: {
+      '200': { description: 'The check', schema: AuditVerifyResponse },
+      ...errors,
+      ...staffErrors,
+    },
   },
   {
     method: 'get',
@@ -396,6 +452,35 @@ export const ROUTES: readonly Route[] = [
     summary: "The passenger's view of a ticket",
     command: false,
     responses: { '200': { description: 'The ticket', schema: PublicTicketResponse }, ...errors },
+  },
+  {
+    method: 'post',
+    path: '/v1/auth/sign-in',
+    summary: 'A member of staff signs in: the session goes in an HttpOnly cookie',
+    command: false,
+    body: SignInRequest,
+    responses: {
+      '200': { description: 'Signed in', schema: StaffMemberResponse },
+      '401': { description: 'The login or the password is not right', schema: ErrorResponse },
+      '429': { description: 'Too many failed sign-ins for this login', schema: ErrorResponse },
+    },
+  },
+  {
+    method: 'get',
+    path: '/v1/auth/me',
+    summary: 'The member of staff signed in',
+    command: false,
+    responses: {
+      '200': { description: 'Signed in', schema: StaffMemberResponse },
+      '401': staffErrors['401'],
+    },
+  },
+  {
+    method: 'post',
+    path: '/v1/auth/sign-out',
+    summary: 'End the session',
+    command: false,
+    responses: { '204': { description: 'Signed out', schema: z.null() } },
   },
 ];
 
@@ -431,6 +516,10 @@ export function openApiDocument(version: string): Record<string, unknown> {
       ),
     };
     if (route.device === true) operation.security = [{ device: [] }];
+    if (route.staff !== undefined) {
+      operation.security = [{ staff: [] }];
+      operation['x-gateflow-role'] = route.staff;
+    }
     if (route.body !== undefined) {
       operation.requestBody = {
         required: true,
@@ -457,6 +546,13 @@ export function openApiDocument(version: string): Record<string, unknown> {
           scheme: 'bearer',
           description:
             'The token of a registered device (kiosk, display, lane station), given once by `gateflow-api device add`; only its hash is stored.',
+        },
+        staff: {
+          type: 'apiKey',
+          in: 'cookie',
+          name: 'gateflow_session',
+          description:
+            'The session of a member of staff, from `POST /v1/auth/sign-in`: HttpOnly, SameSite=Strict. The role each route needs is in `x-gateflow-role`.',
         },
       },
     },

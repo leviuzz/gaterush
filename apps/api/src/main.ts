@@ -3,10 +3,13 @@ import { fileURLToPath } from 'node:url';
 import { dirname, isAbsolute, join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { parseArgs } from 'node:util';
+import { eq } from 'drizzle-orm';
 import { parseScenarioText } from '@gateflow/sim-scenarios';
 import { buildApp } from './app';
 import { connect, runMigrations } from './db/client';
 import { addDevice, revokeDevice } from './devices';
+import { airport } from './db/schema';
+import { addStaff, disableStaff, resetPassword } from './staff';
 import { randomIds } from './ids';
 import { seedDemo } from './seed';
 import { systemClock } from './time';
@@ -21,6 +24,11 @@ Usage (DATABASE_URL names the database):
   gateflow-api device add --checkpoint <id> --kind kiosk|display|lane --name <name>
                                              Add a device; prints its token once
   gateflow-api device revoke --id <id>       Revoke a device: its token stops working
+  gateflow-api user add --airport <code> --login <login> --role operator|supervisor|admin
+                    [--checkpoint <id>]...   Add a member of staff (every checkpoint of the
+                                             airport, or those given); prints a password once
+  gateflow-api user password --login <login> A new password, printed once; sessions end
+  gateflow-api user disable --login <login>  Disable a member of staff: sessions end at once
   gateflow-api serve [--port 8080] [--host 127.0.0.1] [--web <dir>]
                                              Serve the API (OpenAPI at /v1/openapi.json) and
                                              the web application (kiosk, ticket page)
@@ -127,6 +135,68 @@ async function main(argv: string[]): Promise<number> {
           return revoked ? 0 : 1;
         }
         throw new Error('device add or device revoke');
+      } finally {
+        await database.close();
+      }
+    }
+    case 'user': {
+      const [action, ...args] = rest;
+      const { values } = parseArgs({
+        args,
+        options: {
+          airport: { type: 'string' },
+          login: { type: 'string' },
+          role: { type: 'string' },
+          checkpoint: { type: 'string', multiple: true },
+        },
+        strict: true,
+      });
+      if (values.login === undefined) throw new Error('--login is required');
+      const database = connect(databaseUrl(), { maxConnections: 1 });
+      try {
+        if (action === 'add') {
+          const role = values.role?.toUpperCase();
+          if (role !== 'OPERATOR' && role !== 'SUPERVISOR' && role !== 'ADMIN') {
+            throw new Error('--role is operator, supervisor or admin');
+          }
+          if (values.airport === undefined) throw new Error('--airport is required');
+          const code = values.airport;
+          const found = await database.db
+            .select({ id: airport.id })
+            .from(airport)
+            .where(/^[0-9a-f-]{36}$/.test(code) ? eq(airport.id, code) : eq(airport.code, code));
+          const airportId = found[0]?.id;
+          if (airportId === undefined) throw new Error(`no airport ${code}`);
+          const added = await addStaff(database.db, randomIds(systemClock), {
+            airportId,
+            login: values.login,
+            role,
+            checkpointIds: values.checkpoint ?? null,
+          });
+          process.stdout.write(
+            [
+              `added ${role.toLowerCase()} ${added.member.login} (${added.member.id})`,
+              `password ${added.password}`,
+              'The password is shown once: give it to the person only.',
+              '',
+            ].join('\n'),
+          );
+          return 0;
+        }
+        if (action === 'password') {
+          const password = await resetPassword(database.db, values.login);
+          if (password === null) throw new Error(`no member of staff ${values.login}`);
+          process.stdout.write(`password ${password}\nThe password is shown once.\n`);
+          return 0;
+        }
+        if (action === 'disable') {
+          const disabled = await disableStaff(database.db, values.login);
+          process.stdout.write(
+            disabled ? `disabled ${values.login}\n` : `no active member ${values.login}\n`,
+          );
+          return disabled ? 0 : 1;
+        }
+        throw new Error('user add, user password or user disable');
       } finally {
         await database.close();
       }

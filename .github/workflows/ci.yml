@@ -52,10 +52,15 @@ jobs:
           node apps/api/dist/gateflow-api.mjs migrate
           node apps/api/dist/gateflow-api.mjs seed --scenario scenarios/vce-like-peak-day.yaml | tee seed.txt
           CP=$(sed -n 's/.*checkpoint \([0-9a-f-]*\),.*/\1/p' seed.txt)
+          # Staff sign in (S15): a supervisor added by the command line, a session in a cookie jar.
+          node apps/api/dist/gateflow-api.mjs user add --airport vce-like --login ci.supervisor --role supervisor | tee user.txt
+          PASSWORD=$(sed -n 's/^password //p' user.txt)
           node apps/api/dist/gateflow-api.mjs serve --port 18080 &
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:18080/v1/health && break; sleep 1; done
-          curl -sf -X POST "http://127.0.0.1:18080/v1/checkpoints/$CP/calls" -H 'Idempotency-Key: ci-1'
-          curl -sf "http://127.0.0.1:18080/v1/checkpoints/$CP/audit/verify" | tee verify.json
+          curl -sf -c jar.txt -X POST http://127.0.0.1:18080/v1/auth/sign-in -H 'Content-Type: application/json' \
+            -d "{\"login\":\"ci.supervisor\",\"password\":\"$PASSWORD\"}"
+          curl -sf -b jar.txt -X POST "http://127.0.0.1:18080/v1/checkpoints/$CP/calls" -H 'Idempotency-Key: ci-1'
+          curl -sf -b jar.txt "http://127.0.0.1:18080/v1/checkpoints/$CP/audit/verify" | tee verify.json
           grep -q '"intact":true' verify.json
           # The same bundle serves the web application (S14), under its security policy.
           curl -sfD headers.txt "http://127.0.0.1:18080/kiosk/$CP" | grep -q '<div id="root">'

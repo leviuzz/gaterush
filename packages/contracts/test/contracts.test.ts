@@ -93,7 +93,11 @@ describe('the API contracts', () => {
     for (const route of ROUTES) {
       const operation = doc.paths[route.path]?.[route.method];
       expect(operation?.security, `${route.method} ${route.path}`).toEqual(
-        route.device === true ? [{ device: [] }] : undefined,
+        route.device === true
+          ? [{ device: [] }]
+          : route.staff !== undefined
+            ? [{ staff: [] }]
+            : undefined,
       );
     }
     const id = '0193a0b2-7c1d-7e5f-8a9b-0c1d2e3f4a5b';
@@ -109,5 +113,34 @@ describe('the API contracts', () => {
         },
       }).success,
     ).toBe(true);
+  });
+
+  it('mark the routes only staff may call, with the role each needs (S15)', () => {
+    const doc = openApiDocument('0.15.0') as {
+      paths: Record<string, Record<string, { 'x-gateflow-role'?: string }>>;
+      components: { securitySchemes: Record<string, { type: string; in?: string }> };
+    };
+    expect(doc.components.securitySchemes.staff).toMatchObject({ type: 'apiKey', in: 'cookie' });
+    const roles = Object.fromEntries(
+      ROUTES.filter((r) => r.staff !== undefined).map((r) => [`${r.method} ${r.path}`, r.staff]),
+    );
+    const cp = '/v1/checkpoints/{checkpointId}';
+    expect(roles).toEqual({
+      [`post ${cp}/tickets`]: 'OPERATOR',
+      [`post ${cp}/calls`]: 'OPERATOR',
+      [`post ${cp}/admissions`]: 'OPERATOR',
+      [`post ${cp}/tickets/{ticketId}/recall`]: 'OPERATOR',
+      [`post ${cp}/tickets/{ticketId}/no-show`]: 'OPERATOR',
+      [`post ${cp}/tickets/{ticketId}/reactivate`]: 'OPERATOR',
+      [`post ${cp}/tickets/{ticketId}/review`]: 'OPERATOR',
+      [`post ${cp}/tickets/{ticketId}/cancel`]: 'SUPERVISOR',
+      [`post ${cp}/tickets/{ticketId}/resolve`]: 'SUPERVISOR',
+      [`get ${cp}/queue`]: 'OPERATOR',
+      [`get ${cp}/audit/verify`]: 'SUPERVISOR',
+    });
+    for (const [key, role] of Object.entries(roles)) {
+      const [method = '', path = ''] = key.split(' ');
+      expect(doc.paths[path]?.[method]?.['x-gateflow-role']).toBe(role);
+    }
   });
 });

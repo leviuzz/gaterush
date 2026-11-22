@@ -1462,8 +1462,20 @@ Evidence:
 - the API on PostgreSQL: the forecast's bands are the pure forecast's with the library's
   calibration, the median the paths', the calibration named in the answer;
 - Chromium: the console's note says what the brackets hold;
-- the error report per horizon, calibrated, of the scenario library, 200 days each:
-  `docs/reports/slice-21`.
+- the error report per horizon, calibrated, of the scenario library, 200 days each
+  (`docs/reports/slice-21`, from a clean checkout of the S21.3 commit), the paths as they are
+  beside it (the same figures as S21's report):
+
+  | When there is a queue | Arrivals | Queue | Wait |
+  |---|---|---|---|
+  | Share of the truths in the band, before | 76 to 79 % | 78 to 88 % | 37 to 77 % |
+  | After the calibration | 77 to 81 % | 80 to 91 % | 75 to 98 % |
+
+  The wait: 78 to 82 % on the VCE-like peak and disrupted days, 75 to 79 % at the MX-like hub,
+  83 to 88 % on the demo and the TSF-like day, 93 to 98 % on the VCE-like normal day (few and
+  short queues: most truths are nobody waiting). The bands are wider for it (on the VCE-like
+  peak, 4.3 minutes at 15 minutes instead of 3.2); the medians, and so the MAE and the bias, do
+  not change.
 
 ## Later milestones (summary)
 

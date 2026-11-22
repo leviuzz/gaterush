@@ -2511,6 +2511,11 @@ founder on 2026-11-21 together with all of its recommendations.
   - **Wider bands by a factor per horizon:** does not follow the shape of the spread (the wait's
     misses are mostly below the band) and needs a width where the paths have none.
   - **A model of the call-ahead in the paths:** tried in S21 (ADR-054), worse.
+- **Evidence:** on 200 report days of each of the six scenarios (`docs/reports/slice-21`), the
+  share of the truths in the band, when there is a queue: the wait 37 to 77 % before, 75 to 98 %
+  after (78 to 82 % on the VCE-like peak and disrupted days; 93 to 98 % on the VCE-like normal
+  day, where most truths are nobody waiting); the queue 78 to 88 % before, 80 to 91 % after; the
+  arrivals 76 to 79 % before, 77 to 81 % after. The medians are the same.
 - **Consequences:**
   - The forecast of the arrivals barely changes; the queue's lower edge goes down, its upper edge
     a little; the wait's band widens: it says less, and what it says holds.

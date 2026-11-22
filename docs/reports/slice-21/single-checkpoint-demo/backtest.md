@@ -8,53 +8,55 @@ The truth is the full simulator's day. Every 15 minutes, from an hour after the 
 
 MAE and bias are of the median (p50), bias above 0 when the forecast says more than happened; WAPE is the absolute errors over the truths. Calibrated bands hold 80 % of the truths between p10 and p90, with 10 % below and 10 % above; the narrower the band, the more it says. Most of the day nobody waits and none is forecast to: those forecasts are right but say nothing of the bands, so the people not yet admitted and the waits are also measured on the forecasts of a queue alone (median or truth at least 1).
 
+The bands' edges read the paths at the levels of a calibration (the scenario library (6 scenarios, seeds 2000001-2000060)): where the truths fell among the paths on other simulated days. The median is the paths'. The last column gives the share of the truths between the paths' 10th and 90th percentiles, before the calibration.
+
 ## Arrivals: people arriving in the 5 minutes before the horizon
 
-| Horizon | Forecasts | MAE | WAPE | Bias | In p10-p90 | Below p10 | Above p90 | Band width |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| 15 min | 13950 | 5.6 | 19.3 % | -0.2 | 76.1 % | 12.2 % | 11.7 % | 16.4 |
-| 30 min | 13750 | 5.6 | 19.1 % | -0.2 | 76.4 % | 12.0 % | 11.5 % | 16.5 |
-| 60 min | 13350 | 5.6 | 19.0 % | -0.3 | 77.6 % | 11.6 % | 10.8 % | 16.7 |
-| 90 min | 12950 | 5.6 | 18.9 % | -0.2 | 77.6 % | 11.5 % | 10.8 % | 16.7 |
+| Horizon | Forecasts | MAE | WAPE | Bias | In p10-p90 | Below p10 | Above p90 | Band width | Paths in p10-p90 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 15 min | 13950 | 5.6 | 19.3 % | -0.2 | 79.6 % | 10.2 % | 10.2 % | 17.9 | 76.1 % |
+| 30 min | 13750 | 5.6 | 19.1 % | -0.2 | 78.0 % | 12.0 % | 10.0 % | 17.3 | 76.4 % |
+| 60 min | 13350 | 5.6 | 19.0 % | -0.3 | 77.6 % | 11.6 % | 10.8 % | 16.7 | 77.6 % |
+| 90 min | 12950 | 5.6 | 18.9 % | -0.2 | 79.0 % | 11.5 % | 9.4 % | 17.5 | 77.6 % |
 
 ## Queue: people not yet admitted at the horizon
 
 ### When a queue was forecast or happened
 
-| Horizon | Forecasts | MAE | WAPE | Bias | In p10-p90 | Below p10 | Above p90 | Band width |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| 15 min | 3468 | 11.3 | 19.0 % | 1.1 | 85.4 % | 7.6 % | 7.0 % | 37.3 |
-| 30 min | 3580 | 14.1 | 24.6 % | 0.2 | 87.4 % | 5.2 % | 7.4 % | 48.6 |
-| 60 min | 3504 | 18.6 | 31.7 % | 2.1 | 87.6 % | 6.0 % | 6.4 % | 63.2 |
-| 90 min | 3571 | 20.2 | 35.1 % | 1.5 | 87.8 % | 6.8 % | 5.4 % | 68.8 |
+| Horizon | Forecasts | MAE | WAPE | Bias | In p10-p90 | Below p10 | Above p90 | Band width | Paths in p10-p90 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 15 min | 3468 | 11.3 | 19.0 % | 1.1 | 82.8 % | 4.1 % | 13.1 % | 33.5 | 85.4 % |
+| 30 min | 3580 | 14.1 | 24.6 % | 0.2 | 84.3 % | 2.9 % | 12.8 % | 44.0 | 87.4 % |
+| 60 min | 3504 | 18.6 | 31.7 % | 2.1 | 83.0 % | 2.9 % | 14.1 % | 56.8 | 87.6 % |
+| 90 min | 3571 | 20.2 | 35.1 % | 1.5 | 81.2 % | 4.0 % | 14.8 % | 56.7 | 87.8 % |
 
 ### Every forecast
 
-| Horizon | Forecasts | MAE | WAPE | Bias | In p10-p90 | Below p10 | Above p90 | Band width |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| 15 min | 13950 | 2.8 | 19.1 % | 0.3 | 96.4 % | 1.9 % | 1.7 % | 10.6 |
-| 30 min | 13750 | 3.7 | 24.7 % | 0.1 | 96.7 % | 1.4 % | 1.9 % | 14.0 |
-| 60 min | 13350 | 4.9 | 31.8 % | 0.6 | 96.8 % | 1.6 % | 1.7 % | 17.8 |
-| 90 min | 12950 | 5.6 | 35.2 % | 0.4 | 96.6 % | 1.9 % | 1.5 % | 20.4 |
+| Horizon | Forecasts | MAE | WAPE | Bias | In p10-p90 | Below p10 | Above p90 | Band width | Paths in p10-p90 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 15 min | 13950 | 2.8 | 19.1 % | 0.3 | 95.7 % | 1.0 % | 3.3 % | 8.9 | 96.4 % |
+| 30 min | 13750 | 3.7 | 24.7 % | 0.1 | 95.9 % | 0.8 % | 3.3 % | 11.9 | 96.7 % |
+| 60 min | 13350 | 4.9 | 31.8 % | 0.6 | 95.5 % | 0.8 % | 3.7 % | 15.3 | 96.8 % |
+| 90 min | 12950 | 5.6 | 35.2 % | 0.4 | 94.8 % | 1.1 % | 4.1 % | 15.9 | 96.6 % |
 
 ## Wait: minutes from arrival to admission, the median of the people arriving in those 5 minutes
 
 ### When a queue was forecast or happened
 
-| Horizon | Forecasts | MAE | WAPE | Bias | In p10-p90 | Below p10 | Above p90 | Band width |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| 15 min | 2296 | 1.9 | 18.4 % | -0.5 | 72.9 % | 10.3 % | 16.8 % | 5.2 |
-| 30 min | 2381 | 2.5 | 25.4 % | -0.6 | 73.8 % | 9.2 % | 17.0 % | 6.9 |
-| 60 min | 2521 | 3.1 | 32.8 % | -0.3 | 77.0 % | 10.0 % | 13.1 % | 8.7 |
-| 90 min | 2604 | 3.4 | 36.8 % | -0.4 | 77.1 % | 11.1 % | 11.8 % | 9.5 |
+| Horizon | Forecasts | MAE | WAPE | Bias | In p10-p90 | Below p10 | Above p90 | Band width | Paths in p10-p90 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 15 min | 2296 | 1.9 | 18.4 % | -0.5 | 87.5 % | 1.0 % | 11.5 % | 7.2 | 72.9 % |
+| 30 min | 2381 | 2.5 | 25.4 % | -0.6 | 85.4 % | 3.8 % | 10.8 % | 9.9 | 73.8 % |
+| 60 min | 2521 | 3.1 | 32.8 % | -0.3 | 86.0 % | 3.5 % | 10.5 % | 11.5 | 77.0 % |
+| 90 min | 2604 | 3.4 | 36.8 % | -0.4 | 85.8 % | 3.8 % | 10.4 % | 12.0 | 77.1 % |
 
 ### Every forecast
 
-| Horizon | Forecasts | MAE | WAPE | Bias | In p10-p90 | Below p10 | Above p90 | Band width |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| 15 min | 13904 | 0.4 | 20.4 % | -0.0 | 95.5 % | 1.7 % | 2.8 % | 1.2 |
-| 30 min | 13704 | 0.5 | 27.6 % | -0.1 | 95.4 % | 1.6 % | 3.0 % | 1.6 |
-| 60 min | 13304 | 0.6 | 34.9 % | -0.0 | 95.6 % | 1.9 % | 2.5 % | 2.0 |
-| 90 min | 12904 | 0.7 | 38.9 % | -0.0 | 95.4 % | 2.2 % | 2.4 % | 2.3 |
+| Horizon | Forecasts | MAE | WAPE | Bias | In p10-p90 | Below p10 | Above p90 | Band width | Paths in p10-p90 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 15 min | 13904 | 0.4 | 20.4 % | -0.0 | 97.9 % | 0.2 % | 1.9 % | 1.6 | 95.5 % |
+| 30 min | 13704 | 0.5 | 27.6 % | -0.1 | 97.5 % | 0.7 % | 1.9 % | 2.2 | 95.4 % |
+| 60 min | 13304 | 0.6 | 34.9 % | -0.0 | 97.3 % | 0.7 % | 2.0 % | 2.6 | 95.6 % |
+| 90 min | 12904 | 0.7 | 38.9 % | -0.0 | 97.1 % | 0.8 % | 2.1 % | 2.8 | 95.4 % |
 
-Generated by gateflow-sim 0.12.0 (source 8f3e19552ec27f4b60318968985e3a873486362e); forecast 0.1.0, model 0.6.0, population generator 0.6.0.
+Generated by gateflow-sim 0.13.0 (source c2ce38c31a826655dc59fc9eebed44c748f7a003); forecast 0.2.0, model 0.6.0, population generator 0.6.0.

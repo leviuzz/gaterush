@@ -1,14 +1,14 @@
 {
-  "schema": "gateflow.forecast.backtest/1",
+  "schema": "gateflow.forecast.backtest/2",
   "disclaimer": "SIMULATED RESULTS ON SYNTHETIC OR HYPOTHETICAL DATA. These numbers are model outputs, not measurements, and must not be presented as evidence of operational performance.",
   "manifest": {
     "generator": {
       "name": "gateflow-sim",
-      "version": "0.12.0"
+      "version": "0.13.0"
     },
-    "commit": "8f3e19552ec27f4b60318968985e3a873486362e",
+    "commit": "c2ce38c31a826655dc59fc9eebed44c748f7a003",
     "versions": {
-      "forecast": "0.1.0",
+      "forecast": "0.2.0",
       "model": "0.6.0",
       "populationGenerator": "0.6.0"
     },
@@ -41,9 +41,352 @@
       "arrivals": "people arriving in the 5 minutes before the horizon",
       "backlog": "people not yet admitted at the horizon",
       "wait": "minutes from arrival to admission, the median of the people arriving in those 5 minutes"
+    },
+    "calibration": {
+      "source": "the scenario library (6 scenarios, seeds 2000001-2000060)",
+      "levels": {
+        "arrivals": {
+          "15": {
+            "p10": 0.08,
+            "p50": 0.5,
+            "p90": 0.92
+          },
+          "30": {
+            "p10": 0.1,
+            "p50": 0.5,
+            "p90": 0.92
+          },
+          "60": {
+            "p10": 0.1,
+            "p50": 0.5,
+            "p90": 0.9
+          },
+          "90": {
+            "p10": 0.1,
+            "p50": 0.5,
+            "p90": 0.92
+          }
+        },
+        "backlog": {
+          "15": {
+            "p10": 0.0575,
+            "p50": 0.5,
+            "p90": 0.82
+          },
+          "30": {
+            "p10": 0.0475,
+            "p50": 0.5,
+            "p90": 0.805
+          },
+          "60": {
+            "p10": 0.0425,
+            "p50": 0.5,
+            "p90": 0.785
+          },
+          "90": {
+            "p10": 0.0525,
+            "p50": 0.5,
+            "p90": 0.76
+          }
+        },
+        "wait": {
+          "15": {
+            "p10": 0.02,
+            "p50": 0.5,
+            "p90": 0.945
+          },
+          "30": {
+            "p10": 0.0125,
+            "p50": 0.5,
+            "p90": 0.94
+          },
+          "60": {
+            "p10": 0.0125,
+            "p50": 0.5,
+            "p90": 0.925
+          },
+          "90": {
+            "p10": 0.015,
+            "p50": 0.5,
+            "p90": 0.915
+          }
+        }
+      }
     }
   },
   "summary": {
+    "arrivals": {
+      "15": {
+        "all": {
+          "n": 13145,
+          "mae": 5.9131,
+          "wape": 0.2011,
+          "bias": -0.3503,
+          "coverage": 0.7936,
+          "below": 0.107,
+          "above": 0.0994,
+          "width": 19.1751
+        },
+        "busy": {
+          "n": 13145,
+          "mae": 5.9131,
+          "wape": 0.2011,
+          "bias": -0.3503,
+          "coverage": 0.7936,
+          "below": 0.107,
+          "above": 0.0994,
+          "width": 19.1751
+        }
+      },
+      "30": {
+        "all": {
+          "n": 12945,
+          "mae": 5.8809,
+          "wape": 0.1981,
+          "bias": -0.3577,
+          "coverage": 0.7859,
+          "below": 0.1187,
+          "above": 0.0954,
+          "width": 18.8037
+        },
+        "busy": {
+          "n": 12945,
+          "mae": 5.8809,
+          "wape": 0.1981,
+          "bias": -0.3577,
+          "coverage": 0.7859,
+          "below": 0.1187,
+          "above": 0.0954,
+          "width": 18.8037
+        }
+      },
+      "60": {
+        "all": {
+          "n": 12545,
+          "mae": 5.8852,
+          "wape": 0.196,
+          "bias": -0.3221,
+          "coverage": 0.7739,
+          "below": 0.1145,
+          "above": 0.1115,
+          "width": 17.891
+        },
+        "busy": {
+          "n": 12545,
+          "mae": 5.8852,
+          "wape": 0.196,
+          "bias": -0.3221,
+          "coverage": 0.7739,
+          "below": 0.1145,
+          "above": 0.1115,
+          "width": 17.891
+        }
+      },
+      "90": {
+        "all": {
+          "n": 12145,
+          "mae": 5.8441,
+          "wape": 0.1962,
+          "bias": -0.2983,
+          "coverage": 0.7959,
+          "below": 0.1154,
+          "above": 0.0887,
+          "width": 18.7708
+        },
+        "busy": {
+          "n": 12145,
+          "mae": 5.8441,
+          "wape": 0.1962,
+          "bias": -0.2983,
+          "coverage": 0.7959,
+          "below": 0.1154,
+          "above": 0.0887,
+          "width": 18.7708
+        }
+      }
+    },
+    "backlog": {
+      "15": {
+        "all": {
+          "n": 13145,
+          "mae": 3.071,
+          "wape": 0.1832,
+          "bias": 0.2153,
+          "coverage": 0.9444,
+          "below": 0.0103,
+          "above": 0.0453,
+          "width": 10.6224
+        },
+        "busy": {
+          "n": 3759,
+          "mae": 10.6526,
+          "wape": 0.1817,
+          "bias": 0.6662,
+          "coverage": 0.8055,
+          "below": 0.0359,
+          "above": 0.1586,
+          "width": 30.139
+        }
+      },
+      "30": {
+        "all": {
+          "n": 12945,
+          "mae": 4.1949,
+          "wape": 0.2464,
+          "bias": 0.2971,
+          "coverage": 0.9434,
+          "below": 0.0093,
+          "above": 0.0473,
+          "width": 13.5238
+        },
+        "busy": {
+          "n": 3763,
+          "mae": 14.3265,
+          "wape": 0.2446,
+          "bias": 0.9181,
+          "coverage": 0.8052,
+          "below": 0.0322,
+          "above": 0.1626,
+          "width": 39.7064
+        }
+      },
+      "60": {
+        "all": {
+          "n": 12545,
+          "mae": 5.2964,
+          "wape": 0.3025,
+          "bias": 0.4122,
+          "coverage": 0.9452,
+          "below": 0.0089,
+          "above": 0.0459,
+          "width": 16.2809
+        },
+        "busy": {
+          "n": 3568,
+          "mae": 18.5108,
+          "wape": 0.3007,
+          "bias": 1.3381,
+          "coverage": 0.8072,
+          "below": 0.0314,
+          "above": 0.1614,
+          "width": 51.0413
+        }
+      },
+      "90": {
+        "all": {
+          "n": 12145,
+          "mae": 5.9246,
+          "wape": 0.3276,
+          "bias": 0.4993,
+          "coverage": 0.9378,
+          "below": 0.0119,
+          "above": 0.0504,
+          "width": 16.6064
+        },
+        "busy": {
+          "n": 3712,
+          "mae": 19.3092,
+          "wape": 0.3263,
+          "bias": 1.5585,
+          "coverage": 0.7963,
+          "below": 0.0388,
+          "above": 0.1649,
+          "width": 49.8932
+        }
+      }
+    },
+    "wait": {
+      "15": {
+        "all": {
+          "n": 13124,
+          "mae": 0.5026,
+          "wape": 0.2133,
+          "bias": -0.0644,
+          "coverage": 0.9678,
+          "below": 0.0053,
+          "above": 0.027,
+          "width": 2.5404
+        },
+        "busy": {
+          "n": 2738,
+          "mae": 2.2476,
+          "wape": 0.1992,
+          "bias": -0.4592,
+          "coverage": 0.8455,
+          "below": 0.0252,
+          "above": 0.1293,
+          "width": 7.5668
+        }
+      },
+      "30": {
+        "all": {
+          "n": 12924,
+          "mae": 0.679,
+          "wape": 0.2838,
+          "bias": -0.0652,
+          "coverage": 0.967,
+          "below": 0.0054,
+          "above": 0.0276,
+          "width": 3.2374
+        },
+        "busy": {
+          "n": 2885,
+          "mae": 2.9052,
+          "wape": 0.2713,
+          "bias": -0.4175,
+          "coverage": 0.8523,
+          "below": 0.0243,
+          "above": 0.1234,
+          "width": 10.0629
+        }
+      },
+      "60": {
+        "all": {
+          "n": 12524,
+          "mae": 0.8672,
+          "wape": 0.3522,
+          "bias": -0.0914,
+          "coverage": 0.9622,
+          "below": 0.0082,
+          "above": 0.0296,
+          "width": 3.6835
+        },
+        "busy": {
+          "n": 2833,
+          "mae": 3.7292,
+          "wape": 0.3428,
+          "bias": -0.4976,
+          "coverage": 0.833,
+          "below": 0.0364,
+          "above": 0.1306,
+          "width": 12.3409
+        }
+      },
+      "90": {
+        "all": {
+          "n": 12124,
+          "mae": 0.9453,
+          "wape": 0.3716,
+          "bias": -0.0491,
+          "coverage": 0.9617,
+          "below": 0.0088,
+          "above": 0.0294,
+          "width": 3.8839
+        },
+        "busy": {
+          "n": 2825,
+          "mae": 3.9587,
+          "wape": 0.3629,
+          "bias": -0.2978,
+          "coverage": 0.8358,
+          "below": 0.0379,
+          "above": 0.1264,
+          "width": 12.9755
+        }
+      }
+    }
+  },
+  "uncalibrated": {
     "arrivals": {
       "15": {
         "all": {

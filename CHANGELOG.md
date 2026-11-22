@@ -28,6 +28,8 @@ wait's bands, which held 37 to 77 % of the truths when there was a queue, are ca
 - `pnpm calibrate:library` and `pnpm calibrate:check`; CI checks the module.
 - Contracts 0.14.0: the forecast names its calibration (`model.calibration`).
 - API 0.21.1 and web 0.21.1: calibrated bands; the console's note says what the brackets hold.
+- `docs/reports/slice-21`: the reports of S21 made again with the calibration, from a clean
+  checkout of the S21.3 commit; the figures before the calibration are S21's, unchanged.
 
 ## [0.21.0] - 2026-11-22: Slice S21, GateFlow Predict preview
 

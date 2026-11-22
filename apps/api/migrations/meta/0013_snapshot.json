@@ -1,0 +1,2507 @@
+{
+  "id": "de6d0347-ceb2-4997-96d7-9d527f5a4002",
+  "prevId": "86b0dfe9-7358-447e-880d-79c9e49d5a32",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.admission": {
+      "name": "admission",
+      "schema": "",
+      "columns": {
+        "token_id": {
+          "name": "token_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "checkpoint_id": {
+          "name": "checkpoint_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "at_ms": {
+          "name": "at_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "method": {
+          "name": "method",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "command_seq": {
+          "name": "command_seq",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "admission_token_id_queue_token_id_fk": {
+          "name": "admission_token_id_queue_token_id_fk",
+          "tableFrom": "admission",
+          "tableTo": "queue_token",
+          "columnsFrom": [
+            "token_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "admission_method": {
+          "name": "admission_method",
+          "value": "\"admission\".\"method\" IN ('NUMBER', 'REF', 'PASS')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.airport": {
+      "name": "airport",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "time_zone": {
+          "name": "time_zone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "iata": {
+          "name": "iata",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'ZZZ'"
+        },
+        "data_classification": {
+          "name": "data_classification",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "airport_org_id_organization_id_fk": {
+          "name": "airport_org_id_organization_id_fk",
+          "tableFrom": "airport",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "org_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "airport_org_code": {
+          "name": "airport_org_code",
+          "nullsNotDistinct": false,
+          "columns": [
+            "org_id",
+            "code"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "airport_iata": {
+          "name": "airport_iata",
+          "value": "\"airport\".\"iata\" ~ '^[A-Z]{3}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.checkpoint": {
+      "name": "checkpoint",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "airport_id": {
+          "name": "airport_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ticket_prefix": {
+          "name": "ticket_prefix",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lock_key": {
+          "name": "lock_key",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "checkpoint_lock_key_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "day_starts_at": {
+          "name": "day_starts_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'03:00'"
+        },
+        "settings": {
+          "name": "settings",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "checkpoint_airport_id_airport_id_fk": {
+          "name": "checkpoint_airport_id_airport_id_fk",
+          "tableFrom": "checkpoint",
+          "tableTo": "airport",
+          "columnsFrom": [
+            "airport_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "checkpoint_airport_code": {
+          "name": "checkpoint_airport_code",
+          "nullsNotDistinct": false,
+          "columns": [
+            "airport_id",
+            "code"
+          ]
+        },
+        "checkpoint_lock_key": {
+          "name": "checkpoint_lock_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "lock_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "checkpoint_ticket_prefix": {
+          "name": "checkpoint_ticket_prefix",
+          "value": "\"checkpoint\".\"ticket_prefix\" ~ '^[A-Z]{1,3}$'"
+        },
+        "checkpoint_day_starts_at": {
+          "name": "checkpoint_day_starts_at",
+          "value": "\"checkpoint\".\"day_starts_at\" ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.checkpoint_timer": {
+      "name": "checkpoint_timer",
+      "schema": "",
+      "columns": {
+        "checkpoint_id": {
+          "name": "checkpoint_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "service_day": {
+          "name": "service_day",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "next_due_ms": {
+          "name": "next_due_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_seq": {
+          "name": "updated_seq",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "checkpoint_timer_due": {
+          "name": "checkpoint_timer_due",
+          "columns": [
+            {
+              "expression": "next_due_ms",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"checkpoint_timer\".\"next_due_ms\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "checkpoint_timer_checkpoint_id_checkpoint_id_fk": {
+          "name": "checkpoint_timer_checkpoint_id_checkpoint_id_fk",
+          "tableFrom": "checkpoint_timer",
+          "tableTo": "checkpoint",
+          "columnsFrom": [
+            "checkpoint_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.dedup_secret": {
+      "name": "dedup_secret",
+      "schema": "",
+      "columns": {
+        "airport_id": {
+          "name": "airport_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "flight_date": {
+          "name": "flight_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "secret": {
+          "name": "secret",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "dedup_secret_airport_id_airport_id_fk": {
+          "name": "dedup_secret_airport_id_airport_id_fk",
+          "tableFrom": "dedup_secret",
+          "tableTo": "airport",
+          "columnsFrom": [
+            "airport_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "dedup_secret_pkey": {
+          "name": "dedup_secret_pkey",
+          "columns": [
+            "airport_id",
+            "flight_date"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "dedup_secret_hex": {
+          "name": "dedup_secret_hex",
+          "value": "\"dedup_secret\".\"secret\" ~ '^[0-9a-f]{64}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.device": {
+      "name": "device",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "checkpoint_id": {
+          "name": "checkpoint_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "device_checkpoint_id_checkpoint_id_fk": {
+          "name": "device_checkpoint_id_checkpoint_id_fk",
+          "tableFrom": "device",
+          "tableTo": "checkpoint",
+          "columnsFrom": [
+            "checkpoint_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "device_token_hash": {
+          "name": "device_token_hash",
+          "nullsNotDistinct": false,
+          "columns": [
+            "token_hash"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "device_kind": {
+          "name": "device_kind",
+          "value": "\"device\".\"kind\" IN ('KIOSK', 'DISPLAY', 'LANE')"
+        },
+        "device_token_hash_hex": {
+          "name": "device_token_hash_hex",
+          "value": "\"device\".\"token_hash\" ~ '^[0-9a-f]{64}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.display_board": {
+      "name": "display_board",
+      "schema": "",
+      "columns": {
+        "checkpoint_id": {
+          "name": "checkpoint_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "service_day": {
+          "name": "service_day",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seq": {
+          "name": "seq",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "at_ms": {
+          "name": "at_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "board": {
+          "name": "board",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "display_board_checkpoint_id_checkpoint_id_fk": {
+          "name": "display_board_checkpoint_id_checkpoint_id_fk",
+          "tableFrom": "display_board",
+          "tableTo": "checkpoint",
+          "columnsFrom": [
+            "checkpoint_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.flight": {
+      "name": "flight",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "airport_id": {
+          "name": "airport_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "service_date": {
+          "name": "service_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "number": {
+          "name": "number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "carrier": {
+          "name": "carrier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "flight_number": {
+          "name": "flight_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "departure_date": {
+          "name": "departure_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "std_ms": {
+          "name": "std_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "boarding_close_ms": {
+          "name": "boarding_close_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deadline_source": {
+          "name": "deadline_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "observed_at_ms": {
+          "name": "observed_at_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gate_zone": {
+          "name": "gate_zone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "walk_estimate_ms": {
+          "name": "walk_estimate_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "environment": {
+          "name": "environment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "twin_run_id": {
+          "name": "twin_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "flight_airport_date_number": {
+          "name": "flight_airport_date_number",
+          "columns": [
+            {
+              "expression": "airport_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "service_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"flight\".\"twin_run_id\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flight_carrier_number": {
+          "name": "flight_carrier_number",
+          "columns": [
+            {
+              "expression": "airport_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "departure_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "carrier",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "flight_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"flight\".\"twin_run_id\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flight_twin_number": {
+          "name": "flight_twin_number",
+          "columns": [
+            {
+              "expression": "twin_run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"flight\".\"twin_run_id\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "flight_airport_id_airport_id_fk": {
+          "name": "flight_airport_id_airport_id_fk",
+          "tableFrom": "flight",
+          "tableTo": "airport",
+          "columnsFrom": [
+            "airport_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "flight_twin_run_id_twin_run_id_fk": {
+          "name": "flight_twin_run_id_twin_run_id_fk",
+          "tableFrom": "flight",
+          "tableTo": "twin_run",
+          "columnsFrom": [
+            "twin_run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "flight_deadline_source": {
+          "name": "flight_deadline_source",
+          "value": "\"flight\".\"deadline_source\" IN ('FEED', 'RULE', 'NONE')"
+        },
+        "flight_deadline_known": {
+          "name": "flight_deadline_known",
+          "value": "(\"flight\".\"deadline_source\" = 'NONE') = (\"flight\".\"boarding_close_ms\" IS NULL)"
+        },
+        "flight_environment": {
+          "name": "flight_environment",
+          "value": "\"flight\".\"environment\" IN ('LIVE', 'SIMULATED', 'DEMO')"
+        },
+        "flight_twin_simulated": {
+          "name": "flight_twin_simulated",
+          "value": "\"flight\".\"twin_run_id\" IS NULL OR \"flight\".\"environment\" = 'SIMULATED'"
+        },
+        "flight_walk": {
+          "name": "flight_walk",
+          "value": "\"flight\".\"walk_estimate_ms\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.organization": {
+      "name": "organization",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "country": {
+          "name": "country",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.party_pass": {
+      "name": "party_pass",
+      "schema": "",
+      "columns": {
+        "checkpoint_id": {
+          "name": "checkpoint_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dedup_key": {
+          "name": "dedup_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ticket_id": {
+          "name": "ticket_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "command_seq": {
+          "name": "command_seq",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "at_ms": {
+          "name": "at_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "party_pass_dedup": {
+          "name": "party_pass_dedup",
+          "columns": [
+            {
+              "expression": "checkpoint_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "dedup_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "party_pass_checkpoint_id_checkpoint_id_fk": {
+          "name": "party_pass_checkpoint_id_checkpoint_id_fk",
+          "tableFrom": "party_pass",
+          "tableTo": "checkpoint",
+          "columnsFrom": [
+            "checkpoint_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "party_pass_ticket_id_queue_token_id_fk": {
+          "name": "party_pass_ticket_id_queue_token_id_fk",
+          "tableFrom": "party_pass",
+          "tableTo": "queue_token",
+          "columnsFrom": [
+            "ticket_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "party_pass_checkpoint_id_command_seq_pk": {
+          "name": "party_pass_checkpoint_id_command_seq_pk",
+          "columns": [
+            "checkpoint_id",
+            "command_seq"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "party_pass_dedup_key": {
+          "name": "party_pass_dedup_key",
+          "value": "\"party_pass\".\"dedup_key\" ~ '^[0-9a-f]{64}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.policy_activation": {
+      "name": "policy_activation",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "seq": {
+          "name": "seq",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "policy_activation_seq_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "checkpoint_id": {
+          "name": "checkpoint_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "policy_version_id": {
+          "name": "policy_version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_service_day": {
+          "name": "from_service_day",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "activated_at_ms": {
+          "name": "activated_at_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "activated_by": {
+          "name": "activated_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "policy_activation_checkpoint": {
+          "name": "policy_activation_checkpoint",
+          "columns": [
+            {
+              "expression": "checkpoint_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "from_service_day",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "policy_activation_checkpoint_id_checkpoint_id_fk": {
+          "name": "policy_activation_checkpoint_id_checkpoint_id_fk",
+          "tableFrom": "policy_activation",
+          "tableTo": "checkpoint",
+          "columnsFrom": [
+            "checkpoint_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "policy_activation_policy_version_id_policy_version_id_fk": {
+          "name": "policy_activation_policy_version_id_policy_version_id_fk",
+          "tableFrom": "policy_activation",
+          "tableTo": "policy_version",
+          "columnsFrom": [
+            "policy_version_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.policy_version": {
+      "name": "policy_version",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "airport_id": {
+          "name": "airport_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "hash": {
+          "name": "hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "policy_id": {
+          "name": "policy_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content": {
+          "name": "content",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at_ms": {
+          "name": "created_at_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "policy_version_airport_id_airport_id_fk": {
+          "name": "policy_version_airport_id_airport_id_fk",
+          "tableFrom": "policy_version",
+          "tableTo": "airport",
+          "columnsFrom": [
+            "airport_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "policy_version_hash": {
+          "name": "policy_version_hash",
+          "nullsNotDistinct": false,
+          "columns": [
+            "airport_id",
+            "hash"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "policy_version_hash_hex": {
+          "name": "policy_version_hash_hex",
+          "value": "\"policy_version\".\"hash\" ~ '^[0-9a-f]{64}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.queue_command": {
+      "name": "queue_command",
+      "schema": "",
+      "columns": {
+        "checkpoint_id": {
+          "name": "checkpoint_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seq": {
+          "name": "seq",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "service_day": {
+          "name": "service_day",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "at_ms": {
+          "name": "at_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "command": {
+          "name": "command",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "result": {
+          "name": "result",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_hash": {
+          "name": "request_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor": {
+          "name": "actor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "prev_hash": {
+          "name": "prev_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "hash": {
+          "name": "hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "queue_command_day": {
+          "name": "queue_command_day",
+          "columns": [
+            {
+              "expression": "checkpoint_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "service_day",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "seq",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "queue_command_checkpoint_id_checkpoint_id_fk": {
+          "name": "queue_command_checkpoint_id_checkpoint_id_fk",
+          "tableFrom": "queue_command",
+          "tableTo": "checkpoint",
+          "columnsFrom": [
+            "checkpoint_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "queue_command_pkey": {
+          "name": "queue_command_pkey",
+          "columns": [
+            "checkpoint_id",
+            "seq"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "queue_command_idempotency": {
+          "name": "queue_command_idempotency",
+          "nullsNotDistinct": false,
+          "columns": [
+            "checkpoint_id",
+            "idempotency_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "queue_command_seq": {
+          "name": "queue_command_seq",
+          "value": "\"queue_command\".\"seq\" >= 1"
+        },
+        "queue_command_hash": {
+          "name": "queue_command_hash",
+          "value": "\"queue_command\".\"hash\" ~ '^[0-9a-f]{64}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.queue_event": {
+      "name": "queue_event",
+      "schema": "",
+      "columns": {
+        "checkpoint_id": {
+          "name": "checkpoint_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seq": {
+          "name": "seq",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "command_seq": {
+          "name": "command_seq",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "at_ms": {
+          "name": "at_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ticket_id": {
+          "name": "ticket_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "queue_event_by_command": {
+          "name": "queue_event_by_command",
+          "columns": [
+            {
+              "expression": "checkpoint_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "command_seq",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "queue_event_command": {
+          "name": "queue_event_command",
+          "tableFrom": "queue_event",
+          "tableTo": "queue_command",
+          "columnsFrom": [
+            "checkpoint_id",
+            "command_seq"
+          ],
+          "columnsTo": [
+            "checkpoint_id",
+            "seq"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "queue_event_pkey": {
+          "name": "queue_event_pkey",
+          "columns": [
+            "checkpoint_id",
+            "seq"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.queue_token": {
+      "name": "queue_token",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "checkpoint_id": {
+          "name": "checkpoint_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "service_day": {
+          "name": "service_day",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "number": {
+          "name": "number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "opaque_ref": {
+          "name": "opaque_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "flight_id": {
+          "name": "flight_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "segment": {
+          "name": "segment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "party_size": {
+          "name": "party_size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "risk_class": {
+          "name": "risk_class",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "priority": {
+          "name": "priority",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "overridden": {
+          "name": "overridden",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "calls": {
+          "name": "calls",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "issued_at_ms": {
+          "name": "issued_at_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "presented_at_ms": {
+          "name": "presented_at_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "overtaken": {
+          "name": "overtaken",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "first_called_at_ms": {
+          "name": "first_called_at_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_called_at_ms": {
+          "name": "last_called_at_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "admitted_at_ms": {
+          "name": "admitted_at_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_seq": {
+          "name": "updated_seq",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dedup_key": {
+          "name": "dedup_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "queue_token_dedup_active": {
+          "name": "queue_token_dedup_active",
+          "columns": [
+            {
+              "expression": "checkpoint_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "dedup_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"queue_token\".\"dedup_key\" IS NOT NULL AND \"queue_token\".\"state\" NOT IN ('ADMITTED', 'EXPIRED')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "queue_token_checkpoint_id_checkpoint_id_fk": {
+          "name": "queue_token_checkpoint_id_checkpoint_id_fk",
+          "tableFrom": "queue_token",
+          "tableTo": "checkpoint",
+          "columnsFrom": [
+            "checkpoint_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "queue_token_flight_id_flight_id_fk": {
+          "name": "queue_token_flight_id_flight_id_fk",
+          "tableFrom": "queue_token",
+          "tableTo": "flight",
+          "columnsFrom": [
+            "flight_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "queue_token_number": {
+          "name": "queue_token_number",
+          "nullsNotDistinct": false,
+          "columns": [
+            "checkpoint_id",
+            "service_day",
+            "number"
+          ]
+        },
+        "queue_token_opaque_ref": {
+          "name": "queue_token_opaque_ref",
+          "nullsNotDistinct": false,
+          "columns": [
+            "opaque_ref"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "queue_token_party_size": {
+          "name": "queue_token_party_size",
+          "value": "\"queue_token\".\"party_size\" BETWEEN 1 AND 20"
+        },
+        "queue_token_segment": {
+          "name": "queue_token_segment",
+          "value": "\"queue_token\".\"segment\" IN ('DEPARTING', 'TRANSFER')"
+        },
+        "queue_token_source": {
+          "name": "queue_token_source",
+          "value": "\"queue_token\".\"source\" IN ('STAFF', 'KIOSK', 'TWIN')"
+        },
+        "queue_token_state": {
+          "name": "queue_token_state",
+          "value": "\"queue_token\".\"state\" IN ('QUEUED', 'PREPARE', 'CALLED', 'RECALLED', 'NO_SHOW', 'ADMITTED', 'EXPIRED', 'REVIEW', 'CANCELLED')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.scan": {
+      "name": "scan",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "checkpoint_id": {
+          "name": "checkpoint_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "at_ms": {
+          "name": "at_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ticket_id": {
+          "name": "ticket_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bcbp_version": {
+          "name": "bcbp_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "legs": {
+          "name": "legs",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "security_data": {
+          "name": "security_data",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "scan_checkpoint_id_checkpoint_id_fk": {
+          "name": "scan_checkpoint_id_checkpoint_id_fk",
+          "tableFrom": "scan",
+          "tableTo": "checkpoint",
+          "columnsFrom": [
+            "checkpoint_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "scan_outcome": {
+          "name": "scan_outcome",
+          "value": "\"scan\".\"outcome\" IN ('ISSUED', 'RETRIEVED', 'REACTIVATED', 'ADDED', 'REJECTED', 'NEEDS_ASSISTANCE')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.sim_run": {
+      "name": "sim_run",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "seq": {
+          "name": "seq",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "sim_run_seq_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "airport_id": {
+          "name": "airport_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scenario_ref": {
+          "name": "scenario_ref",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "request": {
+          "name": "request",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "days_total": {
+          "name": "days_total",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "days_done": {
+          "name": "days_done",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "results": {
+          "name": "results",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "results_hash": {
+          "name": "results_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reproduces": {
+          "name": "reproduces",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expected_fingerprint": {
+          "name": "expected_fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "matches": {
+          "name": "matches",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at_ms": {
+          "name": "created_at_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "started_at_ms": {
+          "name": "started_at_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ended_at_ms": {
+          "name": "ended_at_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at_ms": {
+          "name": "updated_at_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "runner": {
+          "name": "runner",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "sim_run_airport": {
+          "name": "sim_run_airport",
+          "columns": [
+            {
+              "expression": "airport_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "seq",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sim_run_waiting": {
+          "name": "sim_run_waiting",
+          "columns": [
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "seq",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "sim_run_airport_id_airport_id_fk": {
+          "name": "sim_run_airport_id_airport_id_fk",
+          "tableFrom": "sim_run",
+          "tableTo": "airport",
+          "columnsFrom": [
+            "airport_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "sim_run_scenario_ref_sim_scenario_id_fk": {
+          "name": "sim_run_scenario_ref_sim_scenario_id_fk",
+          "tableFrom": "sim_run",
+          "tableTo": "sim_scenario",
+          "columnsFrom": [
+            "scenario_ref"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "sim_run_reproduces_sim_run_id_fk": {
+          "name": "sim_run_reproduces_sim_run_id_fk",
+          "tableFrom": "sim_run",
+          "tableTo": "sim_run",
+          "columnsFrom": [
+            "reproduces"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "sim_run_state": {
+          "name": "sim_run_state",
+          "value": "\"sim_run\".\"state\" IN ('QUEUED', 'RUNNING', 'DONE', 'FAILED', 'CANCELLED')"
+        },
+        "sim_run_days": {
+          "name": "sim_run_days",
+          "value": "\"sim_run\".\"days_done\" >= 0 AND \"sim_run\".\"days_done\" <= \"sim_run\".\"days_total\""
+        },
+        "sim_run_done": {
+          "name": "sim_run_done",
+          "value": "(\"sim_run\".\"state\" = 'DONE') = (\"sim_run\".\"results\" IS NOT NULL AND \"sim_run\".\"fingerprint\" IS NOT NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.sim_scenario": {
+      "name": "sim_scenario",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "airport_id": {
+          "name": "airport_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "hash": {
+          "name": "hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scenario_id": {
+          "name": "scenario_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "data_classification": {
+          "name": "data_classification",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at_ms": {
+          "name": "created_at_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "sim_scenario_airport_id_airport_id_fk": {
+          "name": "sim_scenario_airport_id_airport_id_fk",
+          "tableFrom": "sim_scenario",
+          "tableTo": "airport",
+          "columnsFrom": [
+            "airport_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "sim_scenario_hash": {
+          "name": "sim_scenario_hash",
+          "nullsNotDistinct": false,
+          "columns": [
+            "airport_id",
+            "hash"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "sim_scenario_hash_format": {
+          "name": "sim_scenario_hash_format",
+          "value": "\"sim_scenario\".\"hash\" ~ '^sha256:[0-9a-f]{64}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.staff_session": {
+      "name": "staff_session",
+      "schema": "",
+      "columns": {
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "expires_at_ms": {
+          "name": "expires_at_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "staff_session_user_id_staff_user_id_fk": {
+          "name": "staff_session_user_id_staff_user_id_fk",
+          "tableFrom": "staff_session",
+          "tableTo": "staff_user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "staff_session_token_hash": {
+          "name": "staff_session_token_hash",
+          "value": "\"staff_session\".\"token_hash\" ~ '^[0-9a-f]{64}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.staff_user": {
+      "name": "staff_user",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "airport_id": {
+          "name": "airport_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "login": {
+          "name": "login",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "checkpoint_ids": {
+          "name": "checkpoint_ids",
+          "type": "uuid[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "password_hash": {
+          "name": "password_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "disabled_at": {
+          "name": "disabled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "staff_user_airport_id_airport_id_fk": {
+          "name": "staff_user_airport_id_airport_id_fk",
+          "tableFrom": "staff_user",
+          "tableTo": "airport",
+          "columnsFrom": [
+            "airport_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "staff_user_login": {
+          "name": "staff_user_login",
+          "nullsNotDistinct": false,
+          "columns": [
+            "login"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "staff_user_role": {
+          "name": "staff_user_role",
+          "value": "\"staff_user\".\"role\" IN ('OPERATOR', 'SUPERVISOR', 'ADMIN', 'ANALYST')"
+        },
+        "staff_user_login_format": {
+          "name": "staff_user_login_format",
+          "value": "\"staff_user\".\"login\" ~ '^[a-z0-9][a-z0-9._-]{2,62}$'"
+        },
+        "staff_user_password_hash": {
+          "name": "staff_user_password_hash",
+          "value": "\"staff_user\".\"password_hash\" LIKE 'scrypt$%'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.twin_run": {
+      "name": "twin_run",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "seq": {
+          "name": "seq",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "twin_run_seq_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "airport_id": {
+          "name": "airport_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "checkpoint_id": {
+          "name": "checkpoint_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scenario_id": {
+          "name": "scenario_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scenario_hash": {
+          "name": "scenario_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seed": {
+          "name": "seed",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "policy_hash": {
+          "name": "policy_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "service_day": {
+          "name": "service_day",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "origin_ms": {
+          "name": "origin_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "until_ms": {
+          "name": "until_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "from_ms": {
+          "name": "from_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "to_ms": {
+          "name": "to_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "steps": {
+          "name": "steps",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expected_calls": {
+          "name": "expected_calls",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at_ms": {
+          "name": "created_at_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "speed": {
+          "name": "speed",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "virtual_ms": {
+          "name": "virtual_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "applied": {
+          "name": "applied",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "matched_calls": {
+          "name": "matched_calls",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "divergence": {
+          "name": "divergence",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at_ms": {
+          "name": "updated_at_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ended_at_ms": {
+          "name": "ended_at_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "twin_run_airport": {
+          "name": "twin_run_airport",
+          "columns": [
+            {
+              "expression": "airport_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "seq",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "twin_run_one_running": {
+          "name": "twin_run_one_running",
+          "columns": [
+            {
+              "expression": "airport_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"twin_run\".\"state\" = 'RUNNING'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "twin_run_airport_id_airport_id_fk": {
+          "name": "twin_run_airport_id_airport_id_fk",
+          "tableFrom": "twin_run",
+          "tableTo": "airport",
+          "columnsFrom": [
+            "airport_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "twin_run_checkpoint_id_checkpoint_id_fk": {
+          "name": "twin_run_checkpoint_id_checkpoint_id_fk",
+          "tableFrom": "twin_run",
+          "tableTo": "checkpoint",
+          "columnsFrom": [
+            "checkpoint_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "twin_run_checkpoint_id_unique": {
+          "name": "twin_run_checkpoint_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "checkpoint_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "twin_run_state": {
+          "name": "twin_run_state",
+          "value": "\"twin_run\".\"state\" IN ('RUNNING', 'STOPPED', 'FINISHED', 'DIVERGED', 'FAILED')"
+        },
+        "twin_run_speed": {
+          "name": "twin_run_speed",
+          "value": "\"twin_run\".\"speed\" IS NULL OR \"twin_run\".\"speed\" >= 1"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

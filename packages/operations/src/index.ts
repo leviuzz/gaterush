@@ -1,5 +1,5 @@
 /** Version of the operational checkpoint. Bump on any change to commands, results or events. */
-export const OPERATIONS_VERSION = '0.8.0';
+export const OPERATIONS_VERSION = '0.9.0';
 
 export {
   MANUAL_REASONS,
@@ -47,3 +47,15 @@ export {
   validateLivePolicy,
 } from './day';
 export type { OperationErrorCode } from './day';
+export { OVERVIEW_ALERTS, RECENT_WAITS_MS, callCountsOf, overviewOf } from './overview';
+export type {
+  CallCounts,
+  Group,
+  Overview,
+  OverviewAlert,
+  OverviewAlertCode,
+  OverviewFlight,
+  OverviewInput,
+  OverviewTicket,
+  Spread,
+} from './overview';

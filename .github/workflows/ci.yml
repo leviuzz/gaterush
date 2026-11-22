@@ -62,6 +62,10 @@ jobs:
           curl -sf -b jar.txt -X POST "http://127.0.0.1:18080/v1/checkpoints/$CP/calls" -H 'Idempotency-Key: ci-1'
           curl -sf -b jar.txt "http://127.0.0.1:18080/v1/checkpoints/$CP/audit/verify" | tee verify.json
           grep -q '"intact":true' verify.json
+          # The overview's figures (S20), checked against a replay of the day's log.
+          curl -sf -b jar.txt "http://127.0.0.1:18080/v1/checkpoints/$CP/overview" | grep -q '"lanesOpen"'
+          curl -sf -b jar.txt "http://127.0.0.1:18080/v1/checkpoints/$CP/overview/verify" | tee overview.json
+          grep -q '"intact":true' overview.json
           # The same bundle serves the web application (S14), under its security policy.
           curl -sfD headers.txt "http://127.0.0.1:18080/kiosk/$CP" | grep -q '<div id="root">'
           grep -qi '^content-security-policy:' headers.txt

@@ -1117,11 +1117,16 @@ input {
   .console-main {
     grid-template-columns: 1fr 1fr 1.25fr;
     /* The queue's height goes to the policy's row: the first row stays as tall as its cards. */
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: auto auto 1fr auto;
     grid-template-areas:
+      'overview overview overview'
       'mode lanes queue'
       'policy policy queue'
       'audit audit audit';
+  }
+
+  .console-overview {
+    grid-area: overview;
   }
 
   .console-mode {
@@ -1901,4 +1906,121 @@ input {
   .qr {
     width: 38mm;
   }
+}
+
+/* The overview of the day (S20): the figures first, the alerts above them. */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  gap: 0.75rem;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.kpi {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg);
+}
+
+.kpi-label {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.kpi-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.kpi-value small {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.kpi-detail {
+  color: var(--ink-2);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+#kpi-risk:not([data-critical='0']) .kpi-value {
+  color: var(--stop);
+}
+
+.alerts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.alerts li {
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.alerts li[data-severity='CRITICAL'] {
+  background: var(--stop-soft);
+  color: var(--stop);
+}
+
+.alerts li[data-severity='WARNING'] {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.overview-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: 0.25rem 1.5rem;
+}
+
+.overview-columns h3 {
+  margin: 0.4rem 0 0.2rem;
+}
+
+.overview-columns p {
+  margin: 0.15rem 0;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.differences {
+  margin: 0.25rem 0 0;
+  padding-left: 1.2rem;
+  color: var(--stop);
+  overflow-wrap: anywhere;
+}
+
+/* A ticket's class in the console's lists: the words say it, the colour only helps. */
+.risk {
+  margin-left: 0.4rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: var(--accent-soft);
+}
+
+.risk[data-risk='URGENT'],
+.risk[data-risk='UNVERIFIED'] {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.risk[data-risk='CRITICAL'] {
+  background: var(--stop-soft);
+  color: var(--stop);
 }

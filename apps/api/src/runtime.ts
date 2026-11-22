@@ -446,6 +446,8 @@ export class Runtime {
         overridden: t.overridden,
         calls: t.calls,
         issuedAtMs: t.issuedAtMs,
+        presentedAtMs: t.presentedAtMs,
+        overtaken: t.overtaken,
         firstCalledAtMs: t.firstCalledAtMs,
         lastCalledAtMs: t.lastCalledAtMs,
         admittedAtMs: t.admittedAtMs,
@@ -453,8 +455,13 @@ export class Runtime {
         dedupKey: record.command.type === 'ISSUE_TICKET' ? record.command.dedupKey : null,
       });
     }
+    // The tickets of the events, and those the command changed without one (S20): a new class at
+    // a reassessment, people who overtook them. The current state never drifts from the log.
     const touched = new Set(
-      events.flatMap((e) => (e.ticketId === null || e.ticketId === issued ? [] : [e.ticketId])),
+      [
+        ...events.flatMap((e) => (e.ticketId === null ? [] : [e.ticketId])),
+        ...applied.changed,
+      ].filter((id) => id !== issued),
     );
     for (const ticketId of touched) {
       const t = day.ticket(ticketId);
@@ -468,6 +475,7 @@ export class Runtime {
           overridden: t.overridden,
           calls: t.calls,
           partySize: t.partySize,
+          overtaken: t.overtaken,
           firstCalledAtMs: t.firstCalledAtMs,
           lastCalledAtMs: t.lastCalledAtMs,
           admittedAtMs: t.admittedAtMs,

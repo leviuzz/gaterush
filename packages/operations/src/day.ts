@@ -77,6 +77,14 @@ export function ticketNumber(prefix: string, n: number): string {
   return `${prefix}${String(n).padStart(3, '0')}`;
 }
 
+/**
+ * What the queue changes in a ticket without an event of its own (S20): its class at a
+ * reassessment, the people who overtook it. Everything else of a ticket changes with an event.
+ */
+function silentMarkOf(view: TicketView): string {
+  return `${view.riskClass ?? ''}|${String(view.overtakenCount)}`;
+}
+
 function invalid(message: string): never {
   throw new OperationError('INVALID_COMMAND', message);
 }
@@ -190,6 +198,11 @@ export class CheckpointDay {
    */
   private readonly infants = new Map<string, number>();
   private pending: DayLogEvent[] = [];
+  /**
+   * The tickets still in play (S20), in issue order: issued, and neither admitted, expired nor
+   * cancelled. The only ones a command can change without an event of their own.
+   */
+  private readonly inPlay = new Set<string>();
   private seq: number;
   private atMs: number;
 
@@ -229,7 +242,7 @@ export class CheckpointDay {
       events.push(...day.pending);
       day.pending = [];
     }
-    return { day, applied: { result: { type: 'DAY_OPENED', serviceDay }, events } };
+    return { day, applied: { result: { type: 'DAY_OPENED', serviceDay }, events, changed: [] } };
   }
 
   /** Rebuilds a day from its log: the same commands give the same day and the same events. */
@@ -274,12 +287,28 @@ export class CheckpointDay {
       throw new OperationError('OUT_OF_ORDER', 'a command cannot go back in time');
     }
     this.pending = [];
+    // What a reassessment can change without an event: the class, the people who overtook.
+    const before = new Map<string, string>();
+    for (const id of this.inPlay) before.set(id, silentMarkOf(this.view(id)));
     const result = this.run(record.command, record.atMs);
     this.seq = record.seq;
     this.atMs = record.atMs;
     const events = this.pending;
     this.pending = [];
-    return { result, events };
+    const named = new Set<string>();
+    for (const event of events) {
+      if (!('ticketId' in event)) continue;
+      named.add(event.ticketId);
+      if (event.type === 'ISSUED') this.inPlay.add(event.ticketId);
+      if (event.type === 'ADMITTED' || event.type === 'EXPIRED' || event.type === 'CANCELLED') {
+        this.inPlay.delete(event.ticketId);
+      }
+    }
+    const changed: string[] = [];
+    for (const [id, mark] of before) {
+      if (!named.has(id) && silentMarkOf(this.view(id)) !== mark) changed.push(id);
+    }
+    return { result, events, changed };
   }
 
   private run(command: Command, nowMs: number): CommandResult {
@@ -571,6 +600,8 @@ export class CheckpointDay {
       overridden: view.overridden,
       calls: view.calls,
       issuedAtMs: view.issuedAtMs,
+      presentedAtMs: view.presentedAtMs,
+      overtaken: view.overtakenCount,
       firstCalledAtMs: view.firstCalledAtMs,
       lastCalledAtMs: view.lastCalledAtMs,
       admittedAtMs: view.admittedAtMs,

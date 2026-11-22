@@ -13,8 +13,17 @@ import {
 } from '@gateflow/queue-core';
 import type { CheckpointMode, Policy, QueueEvent } from '@gateflow/queue-core';
 import { describe, expect, it } from 'vitest';
-import { CheckpointDay, OperationError, estimatesOf } from '../src';
-import type { AddToParty, Command, CommandRecord, DayConfig, IssueTicket } from '../src';
+import { CheckpointDay, OperationError, callCountsOf, estimatesOf, overviewOf } from '../src';
+import type {
+  AddToParty,
+  Command,
+  CommandRecord,
+  DayConfig,
+  IssueTicket,
+  OverviewInput,
+  OverviewTicket,
+  TicketSummary,
+} from '../src';
 
 const MIN = 60_000;
 /** A service day starting at 05:00 UTC on 2026-11-23, in epoch milliseconds. */
@@ -831,6 +840,205 @@ describe('the log of a day', () => {
         expect(applied.slice(1).flatMap((a) => a.events)).toEqual(events);
       }),
       { numRuns: 200 },
+    );
+  });
+});
+
+describe('what the current state needs from each command (S20)', () => {
+  /** The tickets each command names: those of its events, and those it changed without one. */
+  const named = (applied: { events: readonly object[]; changed: readonly string[] }) =>
+    new Set([
+      ...applied.events.flatMap((e) =>
+        'ticketId' in e && typeof e.ticketId === 'string' ? [e.ticketId] : [],
+      ),
+      ...applied.changed,
+    ]);
+
+  it('names every ticket whose summary changed: a store of those stays equal to the day', () => {
+    let silent = 0;
+    fc.assert(
+      fc.property(dayArb, (records) => {
+        const [first, ...rest] = records;
+        const { day } = CheckpointDay.open(first!);
+        const store = new Map<string, TicketSummary>();
+        for (const record of rest) {
+          const applied = day.apply(record);
+          silent += applied.changed.length;
+          for (const id of named(applied)) {
+            const ticket = day.ticket(id);
+            if (ticket !== undefined) store.set(id, ticket);
+          }
+          // After every command: nothing the store lacks, nothing out of date.
+          expect(store).toEqual(new Map(day.tickets().map((t) => [t.ticketId, t])));
+        }
+      }),
+      { numRuns: 200 },
+    );
+    // The random days do change tickets without an event: the property is not empty.
+    expect(silent).toBeGreaterThan(0);
+  });
+
+  it('names a waiting ticket whose class a decision changed, and the people who overtook one', () => {
+    const crowd = Array.from({ length: 12 }, (_, i) =>
+      issue(i + 1, { deadline: { atMs: DAY_START + 300 * MIN, source: 'FEED' }, partySize: 4 }),
+    );
+    const { day } = run(
+      log(
+        [
+          { type: 'OPEN_DAY', config: config(PRIORITY_V3_POLICY, { lanesOpen: 6 }) },
+          ...crowd,
+          issue(13, { deadline: { atMs: DAY_START + 40 * MIN, source: 'FEED' } }),
+          { type: 'SET_LANES', lanesOpen: 1 },
+        ],
+        Array.from({ length: 15 }, () => DAY_START),
+      ),
+    );
+    expect(day.ticket('t-13')?.riskClass).toBe('NORMAL');
+    // The next decision sees one lane: t-13 is now at risk, with no event of its own.
+    const next = day.apply({ seq: 16, atMs: DAY_START + MIN, command: issue(14) });
+    expect(day.ticket('t-13')?.riskClass).toBe('ATTENTION');
+    expect(next.events.some((e) => 'ticketId' in e && e.ticketId === 't-13')).toBe(false);
+    expect(next.changed).toContain('t-13');
+    // Presented first, every ticket says when; nobody has overtaken anybody yet.
+    expect(day.ticket('t-14')).toMatchObject({ presentedAtMs: DAY_START + MIN, overtaken: 0 });
+  });
+});
+
+describe('the figures of a day (S20)', () => {
+  const ticket = (overrides: Partial<OverviewTicket>): OverviewTicket => ({
+    state: 'QUEUED',
+    partySize: 1,
+    riskClass: 'NORMAL',
+    presentedAtMs: DAY_START,
+    admittedAtMs: null,
+    overtaken: 0,
+    ...overrides,
+  });
+  const input = (overrides: Partial<OverviewInput>): OverviewInput => ({
+    nowMs: DAY_START + 120 * MIN,
+    mode: 'NORMAL',
+    lanesOpen: 3,
+    tickets: [],
+    calls: { commitments: 0, priorityCommitments: 0, passedPeople: 0, overrides: 0 },
+    overtakeBound: 30,
+    maxDeadlineAgeMs: 30 * MIN,
+    flights: [],
+    ...overrides,
+  });
+
+  it('counts waits per person, from the first presentation to the admission, as the simulator', () => {
+    const now = DAY_START + 120 * MIN;
+    const admitted = (waitMin: number, atMin: number, partySize = 1) =>
+      ticket({
+        state: 'ADMITTED',
+        partySize,
+        presentedAtMs: DAY_START + (atMin - waitMin) * MIN,
+        admittedAtMs: DAY_START + atMin * MIN,
+      });
+    const o = overviewOf(
+      input({
+        nowMs: now,
+        tickets: [
+          admitted(10, 30), // over an hour ago: the day's only
+          admitted(20, 70, 3), // in the last hour, a family of three
+          admitted(40, 110),
+          ticket({ presentedAtMs: now - 25 * MIN, partySize: 2 }),
+          ticket({ state: 'CALLED', presentedAtMs: now - 5 * MIN }),
+        ],
+      }),
+    );
+    // The day: 10, 20, 20, 20, 40 minutes; type 7 quantiles.
+    expect(o.waits.day).toEqual({ people: 5, p50Ms: 20 * MIN, p90Ms: 32 * MIN, maxMs: 40 * MIN });
+    // The last hour: 20, 20, 20, 40.
+    expect(o.waits.lastHour).toEqual({
+      people: 4,
+      p50Ms: 20 * MIN,
+      p90Ms: 34 * MIN,
+      maxMs: 40 * MIN,
+    });
+    // Waiting now, so far: 25, 25 and 5 minutes.
+    expect(o.waitingNow).toEqual({ people: 3, p50Ms: 25 * MIN, p90Ms: 25 * MIN, maxMs: 25 * MIN });
+    expect(o.tickets.waiting).toEqual({ tickets: 1, people: 2 });
+    expect(o.tickets.called).toEqual({ tickets: 1, people: 1 });
+    expect(o.tickets.admitted).toEqual({ tickets: 3, people: 5 });
+    expect(overviewOf(input({})).waits).toEqual({ lastHour: null, day: null });
+  });
+
+  it('shows who is at risk, the fairness of the calls, the data and the alerts', () => {
+    const now = DAY_START + 120 * MIN;
+    const o = overviewOf(
+      input({
+        nowMs: now,
+        mode: 'PAUSED',
+        tickets: [
+          ticket({ riskClass: 'CRITICAL', partySize: 2, overtaken: 4 }),
+          ticket({ state: 'PREPARE', riskClass: 'URGENT', overtaken: 9 }),
+          ticket({ riskClass: 'ATTENTION' }),
+          ticket({ riskClass: 'UNVERIFIED', partySize: 3 }),
+          // Called: no longer waiting for its call, so not "at risk"; overtaken still counts.
+          ticket({ state: 'CALLED', riskClass: 'CRITICAL', overtaken: 12 }),
+          ticket({ state: 'REVIEW' }),
+          // Admitted: out of play.
+          ticket({ state: 'ADMITTED', overtaken: 40, admittedAtMs: now - MIN }),
+        ],
+        calls: { commitments: 20, priorityCommitments: 3, passedPeople: 11, overrides: 1 },
+        flights: [
+          { source: 'FEED', observedAtMs: now - 31 * MIN },
+          { source: 'FEED', observedAtMs: now - 29 * MIN },
+          { source: 'FEED', observedAtMs: null },
+          { source: 'RULE', observedAtMs: null },
+          { source: 'NONE', observedAtMs: null },
+        ],
+      }),
+    );
+    expect(o.atRisk).toEqual({
+      ATTENTION: { tickets: 1, people: 1 },
+      URGENT: { tickets: 1, people: 1 },
+      CRITICAL: { tickets: 1, people: 2 },
+    });
+    expect(o.fairness).toEqual({
+      commitments: 20,
+      priorityCommitments: 3,
+      passedPeople: 11,
+      overrides: 1,
+      mostOvertaken: 12,
+      overtakeBound: 30,
+    });
+    expect(o.dataQuality).toEqual({
+      flights: 5,
+      feed: 3,
+      rule: 1,
+      none: 1,
+      staleAfterMs: 30 * MIN,
+      stale: 1,
+      unverified: { tickets: 1, people: 3 },
+    });
+    expect(o.alerts).toEqual([
+      { code: 'CRITICAL_WAITING', severity: 'CRITICAL', count: 1 },
+      { code: 'CALLS_PAUSED', severity: 'WARNING', count: null },
+      { code: 'REVIEWS_PENDING', severity: 'WARNING', count: 1 },
+      { code: 'STALE_FLIGHT_DATA', severity: 'WARNING', count: 1 },
+    ]);
+    // Without a stale-data rule, no flight is stale.
+    expect(overviewOf(input({ maxDeadlineAgeMs: null })).dataQuality.stale).toBeNull();
+    expect(overviewOf(input({ mode: 'EMERGENCY' })).alerts).toEqual([
+      { code: 'EMERGENCY', severity: 'CRITICAL', count: null },
+    ]);
+  });
+
+  it('counts the commitments and overrides of a day from its events', () => {
+    fc.assert(
+      fc.property(dayArb, (records) => {
+        const { day, applied } = run(records);
+        const calls = callCountsOf(applied.flatMap((a) => a.events));
+        const events = applied.flatMap((a) => a.events);
+        expect(calls.commitments).toBe(events.filter((e) => e.type === 'COMMITTED').length);
+        expect(calls.overrides).toBe(events.filter((e) => e.type === 'OVERRIDDEN').length);
+        // Every ticket that jumped the order counts at least one priority commitment.
+        const prioritized = day.tickets().filter((t) => t.priority).length;
+        expect(calls.priorityCommitments).toBeGreaterThanOrEqual(prioritized);
+      }),
+      { numRuns: 100 },
     );
   });
 });

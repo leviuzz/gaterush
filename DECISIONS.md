@@ -2230,9 +2230,10 @@ founder on 2026-11-21 together with all of its recommendations.
 
 ## ADR-052: Simulations through the API
 
-- **Status:** Proposed (2026-11-22), slice S19, on "ok a tutto, vai con S19"; the choices marked
-  [to confirm] in the plan wait for the founder. API and web 0.19.0, contracts 0.11.0,
-  sim-metrics 0.10.0, Studio 0.12.0, migration `0012_simulations`. No simulated number changes.
+- **Status:** Accepted (2026-11-22). Slice S19, as the founder confirmed it ("ok a tutto, vai
+  avanti"): the analyst's role, one run at a time per server, the limits, the Studio at `/sim`
+  without signing in. API and web 0.19.0, contracts 0.11.0, sim-metrics 0.10.0, Studio 0.12.0,
+  migration `0012_simulations`. No simulated number changes.
 - **Context:**
   - The kickoff moves S10 into M3: "simulations through the API: saved scenarios and runs,
     history, export; the Studio saves its runs"; its acceptance: `POST /v1/simulations` gives a
@@ -2321,3 +2322,74 @@ founder on 2026-11-21 together with all of its recommendations.
   - Results stay SIMULATED: every document carries the disclaimer; a scenario's data
     classification goes with its runs, and an airport's scenarios are its analysts' only.
   - M5: analysts sign in as staff do (OIDC and MFA then).
+
+## ADR-053: The operations overview, checked against the log
+
+- **Status:** Proposed (2026-11-22), slice S20, the first of M4, on "ok a tutto, vai avanti"; the
+  choices marked [to confirm] in the plan wait for the founder. API and web 0.20.0, contracts
+  0.12.0, operations 0.9.0, migration `0013_overview`. No simulated number changes.
+- **Context:**
+  - The kickoff's M4 opens with the operations overview: cards for waits P50/P90, people at
+    risk, lanes and alerts, the live queue by number, a fairness monitor and a data-quality
+    panel; its acceptance: the live figures equal those recomputed from the log.
+  - The API keeps a current state of every ticket (`queue_token`) with each command, for the
+    screens; the log (`queue_command`, `queue_event`) is the record. They had never been compared
+    as a whole.
+  - Comparing them showed a drift. The queue reassesses waiting tickets at every decision and
+    counts the people who overtake them, without an event of their own; the API wrote only the
+    tickets of the events. On the disrupted demo morning, from 05:45 on, the current state said
+    wrongly who had been overtaken and, at 06:45, put 15 tickets at risk where the log puts 20:
+    the console and the lane station showed out-of-date classes.
+- **Decision:**
+  - **Every changed ticket is written.** Each command of a day now says which tickets it changed
+    without an event (`Applied.changed`: a new class, people who overtook them); the API writes
+    them with the command's own. A store that keeps only those stays equal to the day, after every
+    command (a property test). The cost: about 12 % fewer commands a second on a whole twin day.
+  - **The figures, by one pure function** (`overviewOf` in operations) from what any source gives:
+    tickets and people waiting, announced, called, under review, absent, admitted; the waits of
+    the people admitted, per person, from the first presentation at the checkpoint to admission,
+    as the simulator counts them (median, 90th percentile, largest; the last hour and the day);
+    how long the people waiting now have waited; people at risk by class; the lanes open; the
+    fairness monitor (the engine's commitments and those that jumped the order, the people they
+    passed, the most people who overtook a ticket still in play against the bound K, the
+    supervisors' overrides); the day's flights by the source of their closing time and those the
+    feed has not confirmed within the stale-data rule; and alerts worked out from the state
+    (emergency, critical numbers waiting, calls paused, reviews pending, stale flight data,
+    order of arrival only), not stored. Tickets keep when their passenger first presented and
+    the people who overtook them (`presentedAtMs`, `overtaken`).
+  - **Read from the current state, checked against the log.** `GET /v1/checkpoints/{id}/overview`
+    reads the current state, in one snapshot of the database. `GET .../overview/verify` replays
+    the service day's commands in the same snapshot, letting requests in as it goes, and compares
+    every figure and every ticket of the current state with the replay's; it lists the first
+    differences. Supervisors and administrators; a twin's checkpoint takes its virtual time.
+  - **In the console.** The overview opens the supervisor's console: the alerts, four cards
+    (waiting now, waits of the last hour, at risk, lanes), the fairness monitor, the flight data,
+    and the check against the log; the lists say how long each number has waited, its class when
+    it is not normal, and whether it was called ahead of its turn.
+- **Alternatives considered:**
+  - **An event for every reassessment** (the kickoff's `PriorityReassessed`): the simulator's
+    queue would emit thousands more events a day, its traces and their fingerprints would change,
+    and the log would grow with what a replay recomputes anyway. The list of changed tickets
+    leaves the simulator and the log as they are.
+  - **Figures from the day in memory only:** fast, but then nothing compares the current state
+    the screens read with the record; the drift above would have stayed.
+  - **Figures maintained command by command** (counters in a table): a second copy to keep in
+    step; the current state already holds what they need, and one function computes them.
+  - **A replay at every request:** a busy day has thousands of commands; the check replays only
+    when asked.
+- **Evidence:**
+  - operations: after every command of 200 random days, a store of the tickets named by the
+    events and by the changed list equals the day (and random days do change tickets without an
+    event); a decision that makes a waiting ticket at risk names it; the figures per person, the
+    last hour, the classes, the fairness, the stale data and the alerts on worked examples;
+  - the API on PostgreSQL: a twin plays the disrupted morning to 06:45 (about 4,000 commands):
+    the overview equals the replay, every figure and every ticket (written only with the tickets
+    of their events, the same morning fails the check); a current state tampered with is caught,
+    the figures that read it too; a staff day's waits per person; supervisors and administrators
+    only;
+  - Chromium: the console shows the API's figures and the check against the log says intact.
+- **Consequences:**
+  - Days written before 0.20.0 keep `overtaken` at 0 and their first presentation at the issue;
+    a day opened after the upgrade is exact. The check says so for an older day still open.
+  - S21's forecasts and S22's recommendations start from the same current state, now proven equal
+    to the log.

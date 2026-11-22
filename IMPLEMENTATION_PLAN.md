@@ -11,9 +11,9 @@ Status legend: **Done**, **Next**, **Planned**, **Gated** (needs a business deci
 | Milestone | Business plan stage | Status |
 |---|---|---|
 | M1: Simulator core and priority engine | R1 | **Done** (S1 to S8) |
-| M2: Simulator Studio (web, runs in the browser) | R1-R2 | In progress (S9 and S11 done) |
-| M3: Priority end-to-end in the browser, digital twin | R2 | **In progress** (from 2026-11-22) |
-| M4: Operations console and Predict preview (pitch-ready) | R2 | Planned |
+| M2: Simulator Studio (web, runs in the browser) | R1-R2 | **Done** (S9, S11; S10 moved into M3) |
+| M3: Priority end-to-end in the browser, digital twin | R2 | **Done** (S12 to S19) |
+| M4: Operations console and Predict preview (pitch-ready) | R2 | **In progress** (from 2026-11-22) |
 | Gate R3: discovery with the airport (checkpoint, data, authorisations) | R3 | Gated |
 | M5: Pilot readiness (after a signed order) | R4 | Gated |
 | M6: Post-pilot (Connect, analytics, multi-airport, ML if justified) | R5+ | Gated |
@@ -1148,9 +1148,10 @@ differ only in the queue's version.
 ## S19: simulations through the API (done)
 
 Proposed on 2026-11-22 from the kickoff (S9 of the proposal, the Analyst role of 2.6, the
-simulations of 2.7, NFR-08), on "ok a tutto, vai con S19". The choices marked **[to confirm]**
-are mine, for the founder (ADR-052). Two parts: the simulations on the server (S19.1), the Studio
-that saves its runs (S19.2).
+simulations of 2.7, NFR-08), on "ok a tutto, vai con S19". The founder confirmed every proposal
+the same day ("ok a tutto, vai avanti"): the marks **[to confirm]** below are kept to show what
+was decided (ADR-052). Two parts: the simulations on the server (S19.1), the Studio that saves its
+runs (S19.2).
 
 - **Analysts [to confirm].** A new role of an airport's staff, `ANALYST`: simulations only, no live
   command, no ticket, no audit of a checkpoint. Administrators may simulate too; operators and
@@ -1216,10 +1217,90 @@ Acceptance (kickoff): `POST /v1/simulations` gives a run reproducible from its m
   its own script only, and nothing is requested elsewhere;
 - no simulated number changes.
 
+## M4: Operations console and Predict preview
+
+The duty manager's view of a checkpoint, and a first look at what comes next: the live figures of
+the day, forecasts of arrivals and waits, and recommendations to open lanes, with the decision
+staff take and what then happened. Started on 2026-11-22 ("ok a tutto, vai avanti"), after M3. The
+slices follow the kickoff (section 3, M4), renumbered after S19. Everything stays on simulated and
+synthetic data until the pilot: forecasts and recommendations are a preview, for the pitch.
+
+| Slice | Content | Acceptance (kickoff, renumbered) | Status |
+|---|---|---|---|
+| **S20** | Operations overview: cards (waiting now, waits P50/P90, at risk, lanes, alerts), the live queue by number with class, age and exceptions, a fairness monitor, a data-quality panel | The live figures equal those recomputed from the log | **Done** |
+| S21 | Arrival forecast baseline (5-minute buckets, horizons 15/30/60/90) and Monte Carlo of the simulator from the live state; backtest on the simulated truth (MAE, WAPE, calibration of the intervals) | An error report per horizon; p10/p50/p90 bands | Planned |
+| S22 | Lane-opening recommendations in the console, with the decision and its outcome | Cooldown and deduplication tested; every alert has a reason, a lead time, an interval and the expected benefit | Planned |
+| S23 (optional) | A passenger widget prototype (Connect) | Intervals with their freshness only; no promise of priority | Planned |
+
+**Gate R3** follows M4: discovery with the airport. M5 starts only when the checkpoint, the data
+and the authorisations are confirmed.
+
+## S20: the operations overview (done)
+
+Proposed on 2026-11-22 from the kickoff (2.7 `/ops`: overview, live queue, fairness monitor,
+data quality), on "ok a tutto, vai avanti". The choices marked **[to confirm]** are mine, for the
+founder. Two parts: the figures and their check against the log (S20.1), the console (S20.2).
+
+- **Where [to confirm].** The overview opens the supervisor's console (`/supervisor/<checkpoint>`),
+  above the modes, the queue and the audit: the duty manager's one page. Supervisors and
+  administrators; analysts see no live checkpoint (ADR-052), their aggregated figures come with
+  analytics (V1).
+- **The figures, as the simulator counts them [to confirm]:**
+  - **waiting now:** tickets and people waiting, in the prepare window, called and not yet come,
+    under review; the age of the oldest, and the median and 90th percentile of their ages;
+  - **waits:** from the passenger's first presentation at the checkpoint to admission, per
+    person, as the simulator's P50 and P90: over the last 60 minutes and over the service day;
+  - **at risk:** people waiting or in the prepare window whose class is ATTENTION, URGENT or
+    CRITICAL;
+  - **lanes:** open now, from the day's log;
+  - **fairness monitor:** priority calls of the day and their share of all calls, the people they
+    passed, the most people who overtook a ticket still in play against the policy's bound K, and
+    the supervisors' overrides;
+  - **data quality:** the day's flights by the source of their closing time (feed, rule, unknown),
+    those the feed has not confirmed within the policy's stale-data rule (ADR-029; 60 minutes in
+    GateFlow priority v3), and the waiting tickets whose deadline is not trusted;
+  - **alerts [to confirm]:** worked out from the state, not stored: critical tickets waiting,
+    reviews pending, stale flight data, calls paused, an emergency. Stored recommendations, with
+    the decision taken and the outcome, come with S22.
+- **The live queue by number [to confirm]:** the console's lists show each ticket by its number (no
+  name is ever stored), with its flight (as since S17, for the supervisor's overrides), party
+  size, how long it has waited, its class when it is not normal, and its exceptions (called ahead
+  of its turn, moved by a supervisor).
+- **Checked against the log.** The figures are read from the current state (tables kept with every
+  command, fast); `GET /v1/checkpoints/{id}/overview/verify` replays the day's log and says
+  whether every figure, and every ticket of the current state, equals the replay's. The console
+  offers the same check. Tickets a reassessment changes without an event of their own (a new
+  class, people who overtook them) are now written with the command, so the current state never
+  drifts from the log.
+
+**What the check found.** The current state had drifted from the log since S15: the queue
+reassesses waiting tickets and counts the people who overtake them without an event of their own,
+and the API wrote only the tickets of the events. On the disrupted demo morning, from 05:45 on,
+the current state said wrongly who had been overtaken and, at 06:45, put 15 tickets at risk where
+the log puts 20: the console and the lane station showed out-of-date classes. Each command now
+names the tickets it changed without an event, and the API writes them (ADR-053); a whole twin
+day runs about 12 % slower for it.
+
+Acceptance (kickoff): the live figures equal those recomputed from the log. **Evidence:**
+- operations: after every command of 200 random days, a store that keeps only the tickets of the
+  command's events and of its list of changed tickets equals the day (random days do change
+  tickets without an event); a decision that puts a waiting ticket at risk names it; the figures
+  per person, the last hour, the classes, the fairness, the stale data and the alerts on worked
+  examples (19 tests);
+- the API on PostgreSQL: a twin plays the disrupted morning to 06:45 (about 4,000 commands, 4,000
+  silent changes); the overview equals the figures recomputed from the replay, and every ticket
+  too, while the same morning written the old way fails the check; a current state tampered with
+  is caught, and the figures that read it; a staff day's waits per person, the last hour, the
+  twin's virtual time; supervisors and administrators only (4 tests);
+- Chromium: the console shows the API's figures (waiting, lanes, at risk, fairness, flights),
+  each number's wait, and the check against the log says every figure equals it;
+- no simulated number changes.
+
 ## Later milestones (summary)
 
 - **M2 Simulator Studio:** S9 and S11 done; S10 moved into M3 (S12 and S19).
-- **M4 Operations and Predict preview:** console KPIs, forecasts (Monte Carlo on the simulation
-  from the live state), lane-opening recommendations with logged decisions.
+- **M4 Operations and Predict preview:** see the M4 section: S20 the overview, S21 forecasts
+  (Monte Carlo on the simulation from the live state), S22 lane-opening recommendations with
+  logged decisions, S23 optionally a passenger widget.
 - **M5 Pilot readiness (gated):** OIDC/MFA, four-eyes policies, real feed adapters, lab
   hardware, degraded modes, hardening, privacy pack, deployment, shadow mode.

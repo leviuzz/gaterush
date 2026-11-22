@@ -6,7 +6,7 @@ import { z } from 'zod';
  * ticket is a number, a state and a flight, never a name.
  */
 
-export const CONTRACTS_VERSION = '0.11.0';
+export const CONTRACTS_VERSION = '0.12.0';
 
 export const Segment = z.enum(['DEPARTING', 'TRANSFER']);
 
@@ -65,6 +65,13 @@ export const Ticket = z.object({
   overridden: z.boolean(),
   calls: z.int().min(0),
   issuedAt: Instant,
+  /**
+   * When the passenger first presented at the checkpoint (S20): the issue, or the earlier
+   * presentation a ticket issued again keeps. A wait runs from here.
+   */
+  presentedAt: Instant,
+  /** People who overtook the ticket while it waited (S20): the policy's bound K limits it. */
+  overtaken: z.int().min(0),
   firstCalledAt: Instant.nullable(),
   /** The latest call: a reactivated ticket is called again. */
   lastCalledAt: Instant.nullable(),
@@ -682,6 +689,103 @@ export type TwinCall = z.infer<typeof TwinCall>;
 export type TwinResponse = z.infer<typeof TwinResponse>;
 export type TwinDisplayResponse = z.infer<typeof TwinDisplayResponse>;
 
+/** Tickets and the people on them (S20). */
+export const Group = z.object({ tickets: z.int().min(0), people: z.int().min(0) });
+
+/** Durations per person (S20): median, 90th percentile and largest, in milliseconds. */
+export const Spread = z.object({
+  people: z.int().min(1),
+  p50Ms: z.int().min(0),
+  p90Ms: z.int().min(0),
+  maxMs: z.int().min(0),
+});
+
+/** A condition the duty manager should see (S20): worked out from the state, not stored. */
+export const OverviewAlert = z.object({
+  code: z.enum([
+    'EMERGENCY',
+    'CRITICAL_WAITING',
+    'CALLS_PAUSED',
+    'REVIEWS_PENDING',
+    'STALE_FLIGHT_DATA',
+    'FIFO_ONLY',
+  ]),
+  severity: z.enum(['CRITICAL', 'WARNING', 'INFO']),
+  /** How many tickets or flights, when it counts any. */
+  count: z.int().min(0).nullable(),
+});
+
+/**
+ * The operations overview of a checkpoint's service day (S20, ADR-053), from its current state.
+ * Waits as the simulator counts them: per person, from the first presentation to the admission.
+ */
+export const OverviewResponse = z.object({
+  checkpointId: z.uuid(),
+  serviceDay: z.iso.date(),
+  /** The time of the figures: now; for a twin's checkpoint, its virtual time. */
+  at: Instant,
+  /** The day's latest command: what the figures reflect. */
+  seq: z.int().min(0),
+  mode: CheckpointMode,
+  lanesOpen: z.int().min(1),
+  tickets: z.object({
+    waiting: Group,
+    prepare: Group,
+    /** Called, or called again, and not yet come. */
+    called: Group,
+    review: Group,
+    noShow: Group,
+    admitted: Group,
+    expired: Group,
+    cancelled: Group,
+  }),
+  /** How long the people waiting now (waiting, announced, called) have waited so far. */
+  waitingNow: Spread.nullable(),
+  /** The waits of the people admitted, in the last hour and over the day. */
+  waits: z.object({ lastHour: Spread.nullable(), day: Spread.nullable() }),
+  /** People waiting or announced whose class says they are at risk. */
+  atRisk: z.object({ ATTENTION: Group, URGENT: Group, CRITICAL: Group }),
+  /** The fairness monitor: the engine's jumps of the order, overrides, and the bound K. */
+  fairness: z.object({
+    commitments: z.int().min(0),
+    priorityCommitments: z.int().min(0),
+    passedPeople: z.int().min(0),
+    overrides: z.int().min(0),
+    /** The most people who overtook a ticket still in play. */
+    mostOvertaken: z.int().min(0),
+    overtakeBound: z.int().min(0).nullable(),
+  }),
+  /** Where the closing times of the day's flights come from, and how fresh they are. */
+  dataQuality: z.object({
+    flights: z.int().min(0),
+    feed: z.int().min(0),
+    rule: z.int().min(0),
+    none: z.int().min(0),
+    /** The stale-data rule (ADR-029): how long the feed's word holds; null without one. */
+    staleAfterMs: z.int().min(0).nullable(),
+    /** Flights the feed has not confirmed within the stale-data rule; null without the rule. */
+    stale: z.int().min(0).nullable(),
+    unverified: Group,
+  }),
+  alerts: z.array(OverviewAlert),
+});
+
+/** The check of the overview against the log (S20): the day replayed, every figure and ticket. */
+export const OverviewVerifyResponse = z.object({
+  checkpointId: z.uuid(),
+  serviceDay: z.iso.date(),
+  at: Instant,
+  /** The commands of the day replayed. */
+  commands: z.int().min(0),
+  /** True when every figure and every ticket of the current state equals the replay's. */
+  intact: z.boolean(),
+  /** What differs, the first 20: the current state's value and the log's. */
+  differences: z.array(z.object({ what: z.string(), live: z.string(), log: z.string() })),
+});
+
+export type OverviewResponse = z.infer<typeof OverviewResponse>;
+export type OverviewVerifyResponse = z.infer<typeof OverviewVerifyResponse>;
+
 /** A scenario's name (S19): the SHA-256 of its canonical JSON, as results record it. */
 export const ScenarioHash = z.string().regex(/^sha256:[0-9a-f]{64}$/);
 
@@ -1247,6 +1351,32 @@ export const ROUTES: readonly Route[] = [
     body: ActivatePolicyRequest,
     responses: {
       '200': { description: 'Activated, from the day said', schema: ActivatePolicyResponse },
+      ...errors,
+      ...staffErrors,
+    },
+  },
+  {
+    method: 'get',
+    path: '/v1/checkpoints/{checkpointId}/overview',
+    summary:
+      "The operations overview of the checkpoint's service day (S20): waiting, waits, at risk, lanes, fairness, data quality, alerts",
+    command: false,
+    staff: 'SUPERVISOR',
+    responses: {
+      '200': { description: 'The figures', schema: OverviewResponse },
+      ...errors,
+      ...staffErrors,
+    },
+  },
+  {
+    method: 'get',
+    path: '/v1/checkpoints/{checkpointId}/overview/verify',
+    summary:
+      "Check the overview against the log (S20): the day's commands replayed, every figure and every ticket compared",
+    command: false,
+    staff: 'SUPERVISOR',
+    responses: {
+      '200': { description: 'The check', schema: OverviewVerifyResponse },
       ...errors,
       ...staffErrors,
     },

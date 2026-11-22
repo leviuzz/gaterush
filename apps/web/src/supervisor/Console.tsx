@@ -11,6 +11,8 @@ import type {
   MeResponse,
   OverrideReason,
   OverrideResponse,
+  OverviewResponse,
+  OverviewVerifyResponse,
   PolicyStatusResponse,
   QueueResponse,
   SetLanesResponse,
@@ -28,12 +30,13 @@ import { SignIn } from '../common/SignIn';
 import { follow } from '../common/stream';
 
 /*
- * The supervisor's console (S17, ADR-048 to ADR-050), `/supervisor/<checkpoint>`: the mode of the
- * checkpoint (an emergency asks for a confirmation, and resuming chooses between the same order
- * and the order of arrival), the lanes open, the queue with the overrides and their coded reason,
- * today's and the next day's policy (administrators activate a version from the next service
- * day), and the audit view of the day with the check of the log's chain. It follows the
- * checkpoint's stream, as the lane station does.
+ * The supervisor's console (S17, ADR-048 to ADR-050), `/supervisor/<checkpoint>`: the overview of
+ * the day (S20, ADR-053: waiting, waits, at risk, lanes, fairness, flight data, alerts, and their
+ * check against the log), the mode of the checkpoint (an emergency asks for a confirmation, and
+ * resuming chooses between the same order and the order of arrival), the lanes open, the queue
+ * with the overrides and their coded reason, today's and the next day's policy (administrators
+ * activate a version from the next service day), and the audit view of the day with the check of
+ * the log's chain. It follows the checkpoint's stream, as the lane station does.
  */
 
 const REFRESH_MS = 20_000;
@@ -51,6 +54,13 @@ type Member = StaffMemberResponse['member'];
 type Notice = { readonly kind: 'ok' | 'warn' | 'stop'; readonly text: string } | null;
 
 const stoppedMode = (mode: CheckpointMode) => mode === 'PAUSED' || mode === 'EMERGENCY';
+
+/** Minutes, rounded, of a duration in milliseconds. */
+const minutes = (ms: number) => Math.round(ms / 60_000);
+
+/** A share in per cent, rounded; 0 of nothing. */
+const percent = (part: number, whole: number) =>
+  whole === 0 ? 0 : Math.round((100 * part) / whole);
 
 /** A text of the catalogue by a key the server gave (a command, a reason), or the key itself. */
 function label(locale: Locale, key: string, fallback: string): string {
@@ -106,6 +116,8 @@ export function Console({
   const [lanes, setLanes] = useState('');
   const [notice, setNotice] = useState<Notice>(null);
   const [chain, setChain] = useState<AuditVerifyResponse | null>(null);
+  const [overview, setOverview] = useState<OverviewResponse | null>(null);
+  const [check, setCheck] = useState<OverviewVerifyResponse | null>(null);
   useDocumentLanguage(locale);
 
   const base = `/v1/checkpoints/${checkpointId}`;
@@ -159,9 +171,10 @@ export function Console({
   );
 
   const refresh = useCallback(async () => {
-    const [q, p] = await Promise.all([
+    const [q, p, o] = await Promise.all([
       api<QueueResponse>(`${base}/queue?inPlay=true`, { session: true }),
       api<PolicyStatusResponse>(`${base}/policy`, { session: true }),
+      api<OverviewResponse>(`${base}/overview`, { session: true }),
     ]);
     if (!q.ok && q.status === 401) {
       setPhase('sign-in');
@@ -172,6 +185,7 @@ export function Console({
       setLanes((l) => (l === '' ? String(q.body.lanesOpen) : l));
     }
     if (p.ok) setPolicy(p.body);
+    if (o.ok) setOverview(o.body);
     await loadAudit(shown);
   }, [base, loadAudit, shown]);
 
@@ -265,6 +279,15 @@ export function Console({
     if (answer.ok) setChain(answer.body);
   };
 
+  /** The overview against the log (S20): the day replayed, every figure and ticket compared. */
+  const verifyOverview = async () => {
+    setCheck(null);
+    const answer = await api<OverviewVerifyResponse>(`${base}/overview/verify`, {
+      session: true,
+    });
+    if (answer.ok) setCheck(answer.body);
+  };
+
   const showHistory = (event: SyntheticEvent) => {
     event.preventDefault();
     const number = filter.trim().toUpperCase();
@@ -335,12 +358,23 @@ export function Console({
   const waiting = tickets.filter((x) => x.state === 'QUEUED');
   const timeZone = place?.airport.timeZone;
   const admin = member.role === 'ADMIN';
+  /** Now, for ages: the figures' time (a twin's virtual time), else the device's. */
+  const nowMs = overview === null ? Date.now() : Date.parse(overview.at);
   const row = (x: Ticket, boost: boolean) => (
-    <li key={x.id} className="ticket-row" data-ticket={x.number}>
+    <li key={x.id} className="ticket-row" data-ticket={x.number} data-risk={x.riskClass}>
       <span className="row-number">{x.number}</span>
       <span className="row-detail">
         {flightOf(x)}
+        {` · ${t(locale, 'supervisor.row.waiting', {
+          minutes: Math.max(0, minutes(nowMs - Date.parse(x.presentedAt))),
+        })}`}
         {x.partySize > 1 ? ` · ${t(locale, 'lane.people', { count: x.partySize })}` : ''}
+        {x.riskClass === 'NORMAL' ? null : (
+          <span className="risk" data-risk={x.riskClass}>
+            {t(locale, `supervisor.risk.${x.riskClass}`)}
+          </span>
+        )}
+        {x.priority ? ` · ${t(locale, 'supervisor.row.ahead')}` : ''}
         {x.overridden ? ` · ${t(locale, 'lane.overridden')}` : ''}
       </span>
       <span className="row-actions">
@@ -380,6 +414,213 @@ export function Console({
         </p>
       )}
       <main className="console-main">
+        <section
+          className="card console-overview"
+          id="console-overview"
+          aria-labelledby="overview-title"
+          data-seq={overview?.seq ?? ''}
+        >
+          <h2 id="overview-title">
+            {t(locale, 'supervisor.overview.title')}
+            {overview === null ? null : (
+              <span className="muted" id="console-overview-at">
+                {' '}
+                {t(locale, 'supervisor.overview.at', {
+                  time: timeOfDay(Date.parse(overview.at), locale, timeZone),
+                })}
+              </span>
+            )}
+          </h2>
+          {overview === null ? (
+            <div className="spinner" role="progressbar" aria-label="GateFlow" />
+          ) : (
+            <>
+              {overview.alerts.length === 0 ? (
+                <p className="muted" id="console-alerts-none">
+                  {t(locale, 'supervisor.overview.noAlerts')}
+                </p>
+              ) : (
+                <ul className="alerts" id="console-alerts">
+                  {overview.alerts.map((a) => (
+                    <li key={a.code} data-alert={a.code} data-severity={a.severity}>
+                      {t(locale, `supervisor.alert.${a.code}`, { count: a.count ?? 0 })}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="kpis">
+                <div
+                  className="kpi"
+                  id="kpi-waiting"
+                  data-people={
+                    overview.tickets.waiting.people +
+                    overview.tickets.prepare.people +
+                    overview.tickets.called.people
+                  }
+                >
+                  <span className="kpi-label">{t(locale, 'supervisor.overview.waitingNow')}</span>
+                  <span className="kpi-value">
+                    {overview.tickets.waiting.people +
+                      overview.tickets.prepare.people +
+                      overview.tickets.called.people}{' '}
+                    <small>{t(locale, 'supervisor.overview.people')}</small>
+                  </span>
+                  <span className="kpi-detail">
+                    {t(locale, 'supervisor.overview.waitingDetail', {
+                      tickets:
+                        overview.tickets.waiting.tickets +
+                        overview.tickets.prepare.tickets +
+                        overview.tickets.called.tickets,
+                      minutes: minutes(overview.waitingNow?.maxMs ?? 0),
+                    })}
+                  </span>
+                </div>
+                <div className="kpi" id="kpi-waits">
+                  <span className="kpi-label">{t(locale, 'supervisor.overview.waits')}</span>
+                  <span className="kpi-value">
+                    {overview.waits.lastHour === null
+                      ? '–'
+                      : t(locale, 'supervisor.overview.minutesPair', {
+                          p50: minutes(overview.waits.lastHour.p50Ms),
+                          p90: minutes(overview.waits.lastHour.p90Ms),
+                        })}
+                  </span>
+                  <span className="kpi-detail">
+                    {overview.waits.day === null
+                      ? t(locale, 'supervisor.overview.noWaits')
+                      : t(locale, 'supervisor.overview.waitsDetail', {
+                          p50: minutes(overview.waits.day.p50Ms),
+                          p90: minutes(overview.waits.day.p90Ms),
+                        })}
+                  </span>
+                </div>
+                <div
+                  className="kpi"
+                  id="kpi-risk"
+                  data-critical={overview.atRisk.CRITICAL.people}
+                  data-people={
+                    overview.atRisk.CRITICAL.people +
+                    overview.atRisk.URGENT.people +
+                    overview.atRisk.ATTENTION.people
+                  }
+                >
+                  <span className="kpi-label">{t(locale, 'supervisor.overview.atRisk')}</span>
+                  <span className="kpi-value">
+                    {overview.atRisk.CRITICAL.people +
+                      overview.atRisk.URGENT.people +
+                      overview.atRisk.ATTENTION.people}{' '}
+                    <small>{t(locale, 'supervisor.overview.people')}</small>
+                  </span>
+                  <span className="kpi-detail">
+                    {t(locale, 'supervisor.overview.atRiskDetail', {
+                      critical: overview.atRisk.CRITICAL.people,
+                      urgent: overview.atRisk.URGENT.people,
+                      attention: overview.atRisk.ATTENTION.people,
+                    })}
+                  </span>
+                </div>
+                <div className="kpi" id="kpi-lanes" data-lanes={overview.lanesOpen}>
+                  <span className="kpi-label">{t(locale, 'supervisor.lanes.title')}</span>
+                  <span className="kpi-value">{overview.lanesOpen}</span>
+                  <span className="kpi-detail">
+                    {t(locale, `supervisor.mode.${overview.mode}`)}
+                  </span>
+                </div>
+              </div>
+              <div className="overview-columns">
+                <section id="console-fairness" aria-labelledby="fairness-title">
+                  <h3 id="fairness-title">{t(locale, 'supervisor.overview.fairness')}</h3>
+                  <p data-figure="calledAhead">
+                    {t(locale, 'supervisor.overview.calledAhead', {
+                      count: overview.fairness.priorityCommitments,
+                      total: overview.fairness.commitments,
+                      share: percent(
+                        overview.fairness.priorityCommitments,
+                        overview.fairness.commitments,
+                      ),
+                    })}
+                  </p>
+                  <p data-figure="passed">
+                    {t(locale, 'supervisor.overview.passed', {
+                      count: overview.fairness.passedPeople,
+                    })}
+                  </p>
+                  <p data-figure="mostOvertaken">
+                    {overview.fairness.overtakeBound === null
+                      ? t(locale, 'supervisor.overview.mostOvertakenNoBound', {
+                          count: overview.fairness.mostOvertaken,
+                        })
+                      : t(locale, 'supervisor.overview.mostOvertaken', {
+                          count: overview.fairness.mostOvertaken,
+                          bound: overview.fairness.overtakeBound,
+                        })}
+                  </p>
+                  <p data-figure="overrides">
+                    {t(locale, 'supervisor.overview.overrides', {
+                      count: overview.fairness.overrides,
+                    })}
+                  </p>
+                </section>
+                <section id="console-data" aria-labelledby="data-title">
+                  <h3 id="data-title">{t(locale, 'supervisor.overview.data')}</h3>
+                  <p data-figure="flights">
+                    {t(locale, 'supervisor.overview.flights', {
+                      flights: overview.dataQuality.flights,
+                      feed: overview.dataQuality.feed,
+                      rule: overview.dataQuality.rule,
+                      none: overview.dataQuality.none,
+                    })}
+                  </p>
+                  <p data-figure="stale">
+                    {overview.dataQuality.stale === null ||
+                    overview.dataQuality.staleAfterMs === null
+                      ? t(locale, 'supervisor.overview.noStaleRule')
+                      : t(locale, 'supervisor.overview.stale', {
+                          minutes: minutes(overview.dataQuality.staleAfterMs),
+                          count: overview.dataQuality.stale,
+                        })}
+                  </p>
+                  <p data-figure="unverified">
+                    {t(locale, 'supervisor.overview.unverified', {
+                      count: overview.dataQuality.unverified.people,
+                    })}
+                  </p>
+                </section>
+              </div>
+              <div className="actions">
+                <button
+                  type="button"
+                  className="button secondary"
+                  id="console-overview-verify"
+                  onClick={() => void verifyOverview()}
+                >
+                  {t(locale, 'supervisor.overview.verify')}
+                </button>
+              </div>
+              {check === null ? null : (
+                <div id="console-overview-check" data-kind={check.intact ? 'ok' : 'stop'}>
+                  <p className="outcome" data-kind={check.intact ? 'ok' : 'stop'}>
+                    {check.intact
+                      ? t(locale, 'supervisor.overview.intact', { commands: check.commands })
+                      : t(locale, 'supervisor.overview.differs', {
+                          count: check.differences.length,
+                        })}
+                  </p>
+                  {check.intact ? null : (
+                    <ul className="differences">
+                      {check.differences.slice(0, 5).map((d) => (
+                        <li key={d.what}>
+                          <code>{d.what}</code>: {d.live} ≠ {d.log}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </section>
+
         <section className="card console-mode" id="console-mode" aria-labelledby="mode-title">
           <fieldset className="plain" disabled={twin}>
             <h2 id="mode-title">

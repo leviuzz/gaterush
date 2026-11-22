@@ -188,6 +188,8 @@ export const queueCommand = pgTable(
   (t) => [
     primaryKey({ name: 'queue_command_pkey', columns: [t.checkpointId, t.seq] }),
     unique('queue_command_idempotency').on(t.checkpointId, t.idempotencyKey),
+    // A service day's commands (S20): the overview and the console read one day of a long log.
+    index('queue_command_day').on(t.checkpointId, t.serviceDay, t.seq),
     check('queue_command_seq', sql`${t.seq} >= 1`),
     check('queue_command_hash', sql`${t.hash} ~ '^[0-9a-f]{64}$'`),
   ],
@@ -212,6 +214,8 @@ export const queueEvent = pgTable(
       columns: [t.checkpointId, t.commandSeq],
       foreignColumns: [queueCommand.checkpointId, queueCommand.seq],
     }),
+    // The events of a range of commands (S20): a service day's.
+    index('queue_event_by_command').on(t.checkpointId, t.commandSeq),
   ],
 );
 
@@ -240,6 +244,13 @@ export const queueToken = pgTable(
     overridden: boolean('overridden').notNull().default(false),
     calls: integer('calls').notNull(),
     issuedAtMs: ms('issued_at_ms').notNull(),
+    /**
+     * When the passenger first presented at the checkpoint (S20): the issue, or the earlier
+     * presentation a ticket issued again keeps. A wait runs from here to the admission.
+     */
+    presentedAtMs: ms('presented_at_ms').notNull(),
+    /** People who overtook the ticket while it waited (S20). */
+    overtaken: integer('overtaken').notNull().default(0),
     firstCalledAtMs: ms('first_called_at_ms'),
     /** The latest call (S15): a reactivated ticket is called again. */
     lastCalledAtMs: ms('last_called_at_ms'),

@@ -4,6 +4,50 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Any change that alters simulated numbers
 must be listed, together with the component versions it bumps.
 
+## [0.20.0] - 2026-11-22: Slice S20, the operations overview
+
+M4 begins. The supervisor's console opens with the day's figures: waiting now, waits as the
+simulator counts them, people at risk, lanes, a fairness monitor, flight data and alerts; they are
+read from the current state and checked against a replay of the log (ADR-053).
+
+### Simulated numbers change
+
+- None.
+
+### Fixed
+
+- The current state of the tickets drifted from the log: the queue reassesses waiting tickets and
+  counts the people who overtake them without an event of their own, and the API wrote only the
+  tickets of the events. The console and the lane station could show out-of-date classes (on the
+  disrupted demo morning, 15 tickets at risk where the log puts 20). Every changed ticket is now
+  written with its command.
+
+### Added
+
+- operations 0.9.0: `Applied.changed`, the tickets a command changed without an event; a ticket's
+  first presentation and the people who overtook it in its summary (`presentedAtMs`,
+  `overtaken`); `overviewOf` and `callCountsOf`, the figures of a day from any source.
+- API 0.20.0:
+  - `GET /v1/checkpoints/{id}/overview`: the figures of the service day from the current state,
+    in one snapshot; a twin's checkpoint at its virtual time;
+  - `GET /v1/checkpoints/{id}/overview/verify`: the day's log replayed in the same snapshot, every
+    figure and every ticket compared, the first differences listed;
+  - migration `0013_overview`: `queue_token.presented_at_ms` (the issue for earlier tickets) and
+    `queue_token.overtaken`; indexes for one service day of a long log (`queue_command` by day,
+    `queue_event` by command).
+- Contracts 0.12.0: `OverviewResponse`, `OverviewVerifyResponse`, `Group`, `Spread`,
+  `OverviewAlert`; a ticket's `presentedAt` and `overtaken`.
+- Web 0.20.0: the overview at the top of the supervisor's console (alerts; waiting now, waits of
+  the last hour and the day, at risk, lanes; fairness; flight data; the check against the log);
+  the lists say how long each number has waited, its class when it is not normal, and whether it
+  was called ahead of its turn; texts in the three languages.
+- CI: the overview's check from the bundle.
+
+### Changed
+
+- A whole twin day runs about 12 % slower through the API: it writes the tickets each decision
+  changes.
+
 ## [0.19.0] - 2026-11-22: Slice S19, simulations through the API
 
 Analysts save an airport's scenarios and ask the server for simulations; the servers simulate

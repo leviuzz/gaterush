@@ -1,8 +1,8 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { syntheticBoardingPass } from '@gateflow/bcbp';
-import type { DemoFlightsResponse, ScanResponse } from '@gateflow/contracts';
-import { MESSAGES } from '@gateflow/i18n';
+import type { DemoFlightsResponse, OverviewResponse, ScanResponse } from '@gateflow/contracts';
+import { MESSAGES, t } from '@gateflow/i18n';
 import { chromium } from 'playwright';
 import type { Browser, Page } from 'playwright';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -114,6 +114,14 @@ async function passenger(): Promise<string> {
 
 const modeNow = (page: Page) => page.getAttribute('#console-mode-now', 'data-mode');
 
+/** The overview as the API gives it to a supervisor (S20). */
+async function overviewOfApi(): Promise<OverviewResponse> {
+  const answer = await fetch(`${product.base}/v1/checkpoints/${product.checkpointId}/overview`, {
+    headers: { cookie: product.staffCookie },
+  });
+  return (await answer.json()) as OverviewResponse;
+}
+
 describe("the supervisor's console (S17)", () => {
   it('is for supervisors and administrators only', async () => {
     const { page } = await open();
@@ -218,6 +226,68 @@ describe("the supervisor's console (S17)", () => {
         String(width),
       ).toBe(true);
     }
+    expect(errors).toEqual([]);
+    await page.context().close();
+  });
+
+  it('shows the overview of the day, the figures of the API, checked against the log (S20)', async () => {
+    await passenger();
+    const { page, errors } = await open();
+    await signIn(page, 'supervisor');
+    await page.waitForSelector('#console-overview .kpi');
+    // The page and the API on the same command of the log (the timers may add one meanwhile).
+    let api = await overviewOfApi();
+    for (let i = 0; i < 5; i++) {
+      try {
+        await page.waitForSelector(`#console-overview[data-seq="${String(api.seq)}"]`, {
+          timeout: 5000,
+        });
+        break;
+      } catch {
+        api = await overviewOfApi();
+      }
+    }
+    const waiting =
+      api.tickets.waiting.people + api.tickets.prepare.people + api.tickets.called.people;
+    expect(waiting).toBeGreaterThan(0);
+    expect(await page.getAttribute('#kpi-waiting', 'data-people')).toBe(String(waiting));
+    expect(await page.getAttribute('#kpi-lanes', 'data-lanes')).toBe(String(api.lanesOpen));
+    const atRisk =
+      api.atRisk.CRITICAL.people + api.atRisk.URGENT.people + api.atRisk.ATTENTION.people;
+    expect(await page.getAttribute('#kpi-risk', 'data-people')).toBe(String(atRisk));
+    const f = api.fairness;
+    expect(await page.textContent('#console-fairness [data-figure="calledAhead"]')).toBe(
+      t('en', 'supervisor.overview.calledAhead', {
+        count: f.priorityCommitments,
+        total: f.commitments,
+        share: f.commitments === 0 ? 0 : Math.round((100 * f.priorityCommitments) / f.commitments),
+      }),
+    );
+    // S17's test moved a passenger up with a reason: the monitor counts it.
+    expect(f.overrides).toBeGreaterThan(0);
+    expect(await page.textContent('#console-fairness [data-figure="overrides"]')).toBe(
+      t('en', 'supervisor.overview.overrides', { count: f.overrides }),
+    );
+    expect(await page.textContent('#console-data [data-figure="flights"]')).toBe(
+      t('en', 'supervisor.overview.flights', {
+        flights: api.dataQuality.flights,
+        feed: api.dataQuality.feed,
+        rule: api.dataQuality.rule,
+        none: api.dataQuality.none,
+      }),
+    );
+    // Each number in the lists says how long it has waited.
+    expect(
+      await page.locator('#console-prepare li, #console-waiting li').first().textContent(),
+    ).toMatch(/waiting \d+ min/);
+    // The check against the log: the day replayed, every figure and every number.
+    await page.click('#console-overview-verify');
+    await page.waitForSelector('#console-overview-check');
+    expect(await page.getAttribute('#console-overview-check', 'data-kind')).toBe('ok');
+    expect(await page.textContent('#console-overview-check')).toMatch(
+      /equals the log: \d+ commands/,
+    );
+    await shot(page, 'console-overview');
     expect(errors).toEqual([]);
     await page.context().close();
   });

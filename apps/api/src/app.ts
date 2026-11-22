@@ -27,6 +27,8 @@ import type {
   KioskStatus,
   MeResponse,
   OverrideResponse,
+  OverviewResponse,
+  OverviewVerifyResponse,
   PolicyStatusResponse,
   PublicTicketResponse,
   PublishPolicyResponse,
@@ -80,6 +82,7 @@ import type { BuildContext, CheckpointRow } from './runtime';
 import { localDate, systemClock } from './time';
 import type { Clock } from './time';
 import { TwinRunner, twinFlightsOf } from './twin';
+import { liveOverview, verifyOverview } from './overview';
 import { registerSimulationRoutes } from './simulation-routes';
 import { SimulationRunner } from './simulations';
 import type { SimulationThreads } from './simulations';
@@ -187,6 +190,8 @@ export function toTicket(t: TicketSummary): Ticket {
     overridden: t.overridden,
     calls: t.calls,
     issuedAt: new Date(t.issuedAtMs).toISOString(),
+    presentedAt: new Date(t.presentedAtMs).toISOString(),
+    overtaken: t.overtaken,
     firstCalledAt: iso(t.firstCalledAtMs),
     lastCalledAt: iso(t.lastCalledAtMs),
     admittedAt: iso(t.admittedAtMs),
@@ -852,6 +857,8 @@ export function buildApp(options: AppOptions): FastifyInstance {
       overridden: r.overridden,
       calls: r.calls,
       issuedAtMs: r.issuedAtMs,
+      presentedAtMs: r.presentedAtMs,
+      overtaken: r.overtaken,
       firstCalledAtMs: r.firstCalledAtMs,
       lastCalledAtMs: r.lastCalledAtMs,
       admittedAtMs: r.admittedAtMs,
@@ -1572,6 +1579,36 @@ export function buildApp(options: AppOptions): FastifyInstance {
         request.params.checkpointId,
       );
       return { checkpointId: cp.id, ...(await verifyChain(options.db, cp.id)) };
+    },
+  );
+
+  /** The operations overview (S20, ADR-053): the day's figures, from the current state. */
+  app.get<{ Params: { checkpointId: string } }>(
+    '/v1/checkpoints/:checkpointId/overview',
+    async (request): Promise<OverviewResponse> => {
+      const { checkpoint: cp } = await requireStaff(
+        options.db,
+        clock,
+        request,
+        'SUPERVISOR',
+        request.params.checkpointId,
+      );
+      return liveOverview(options.db, cp, clock.now());
+    },
+  );
+
+  /** The overview checked against the log: the day replayed, every figure and ticket compared. */
+  app.get<{ Params: { checkpointId: string } }>(
+    '/v1/checkpoints/:checkpointId/overview/verify',
+    async (request): Promise<OverviewVerifyResponse> => {
+      const { checkpoint: cp } = await requireStaff(
+        options.db,
+        clock,
+        request,
+        'SUPERVISOR',
+        request.params.checkpointId,
+      );
+      return verifyOverview(options.db, cp, clock.now());
     },
   );
 

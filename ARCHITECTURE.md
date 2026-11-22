@@ -744,6 +744,13 @@ flowchart LR
   runtime --> screens["Its display, lane station,<br/>console, audit"]
 ```
 
+- **The operations overview (ADR-053).** Each command of a day names the tickets it changed
+  without an event (`Applied.changed`: a new class at a reassessment, people who overtook them),
+  and the runtime writes them with the tickets of its events: the current state stays equal to
+  the log after every command. `overviewOf` (operations, pure) computes the day's figures from any
+  source; `GET .../overview` feeds it the current state in one snapshot (`REPEATABLE READ`), and
+  `GET .../overview/verify` replays the service day's log in the same snapshot and compares every
+  figure and every ticket.
 - **Simulations (ADR-052).** Analysts (and administrators) save an airport's scenarios and ask
   for runs, from settings as the CLI's command line or from the manifest of results. Each server
   with a runner takes the oldest run that waits (`FOR UPDATE SKIP LOCKED`), one at a time, and
@@ -784,6 +791,7 @@ flowchart LR
     `POST /v1/checkpoints/{id}/lanes`, for supervisors (ADR-049);
   - `GET /v1/checkpoints/{id}/audit` and `/policy` for supervisors, `POST .../policy/versions`
     and `.../policy/activations` for administrators (ADR-050);
+  - `GET /v1/checkpoints/{id}/overview` and `/overview/verify`, for supervisors (ADR-053);
   - with `serve --twin`, for the administrators of a synthetic airport: `GET /v1/twin/options`,
     `GET /v1/twin`, `POST /v1/twin/runs`, `POST /v1/twin/runs/{run}/speed`, `/stop` and
     `/display` (ADR-051);

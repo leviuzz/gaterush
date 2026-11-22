@@ -13,7 +13,8 @@ border procedures: it organises the flow before they start.
 > the product an airport installs: its operational core (S12), boarding passes (S13), the kiosk
 > and the passenger's page (S14), the queue's life cycle with staff who sign in and the lane
 > station (S15), the displays (S16), the supervisor's console (S17), the digital twin (S18) and
-> simulations through the API (S19).**
+> simulations through the API (S19); M4, the operations console and a preview of Predict: the
+> day's overview, checked against the log (S20).**
 > This repository contains the simulation foundations:
 > - the priority engine;
 > - the queue state machine that the operational product will share;
@@ -61,6 +62,10 @@ border procedures: it organises the flow before they start.
 >   server for runs, simulated on worker threads, with their history and their exports; a run is
 >   reproducible from its manifest and says so. The Studio, served by GateFlow at `/sim`, saves
 >   its runs, and GateFlow checks it finds the page's results.
+>
+> - **The operations overview** (S20): the supervisor's console opens with the day's figures,
+>   waits counted as the simulator counts them, people at risk, lanes, a fairness monitor, flight
+>   data and alerts, checked on demand against a replay of the day's log.
 >
 > Staff sign in with local passwords until the pilot brings the airport's identity provider. See
 > [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
@@ -159,9 +164,11 @@ node apps/api/dist/gateflow-api.mjs user add --airport vce-like --login m.rossi 
 This prints the member's password once. `user password --login <login>` gives a new one and
 `user disable --login <login>` ends their access; both end their sessions at once.
 
-Supervisors and administrators use the console, `/supervisor/<checkpoint id>`: the mode of the
-checkpoint, the lanes open, moving a passenger up or calling one now with a reason, the policies
-(an administrator activates a version from the next service day) and the day's audit.
+Supervisors and administrators use the console, `/supervisor/<checkpoint id>`: the day's
+overview (waiting now, waits of the last hour and the day, people at risk, lanes, fairness, flight
+data, alerts, and the check of every figure against the log), the mode of the checkpoint, the
+lanes open, moving a passenger up or calling one now with a reason, the policies (an
+administrator activates a version from the next service day) and the day's audit.
 
 **The digital twin** (S18) plays a scenario's simulated day through the live system, as fast as
 the server goes or at a chosen speed, to a new checkpoint of the scenario's airport, and checks
@@ -243,6 +250,9 @@ The endpoints:
   `limit`); `GET /v1/checkpoints/{id}/policy`: today's policy, the next day's, the versions.
 - `POST /v1/checkpoints/{id}/policy/versions` and `/policy/activations`: an administrator
   publishes a version of a policy, and activates one from the next service day.
+- `GET /v1/checkpoints/{id}/overview`: the day's figures for supervisors (S20);
+  `GET /v1/checkpoints/{id}/overview/verify` replays the day's log and compares every figure and
+  every ticket with the current state.
 - `GET /v1/twin/options`, `GET /v1/twin`, `POST /v1/twin/runs`, and `/v1/twin/runs/{run}/speed`,
   `/stop`, `/display`: the digital twin, for the administrators of a synthetic airport, on a
   server started with `--twin` (S18).

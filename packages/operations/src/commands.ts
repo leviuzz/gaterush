@@ -285,6 +285,13 @@ export interface TicketSummary {
   readonly overridden: boolean;
   readonly calls: number;
   readonly issuedAtMs: Millis;
+  /**
+   * When the passenger first presented at the checkpoint (S20): the issue, or an earlier
+   * presentation that a ticket issued again keeps. A wait runs from here to the admission.
+   */
+  readonly presentedAtMs: Millis;
+  /** People who overtook the ticket while it waited (S20): what the bound K limits. */
+  readonly overtaken: number;
   readonly firstCalledAtMs: Millis | null;
   /** The latest call (a reactivated ticket is called again). */
   readonly lastCalledAtMs: Millis | null;
@@ -368,4 +375,10 @@ export type DayLogEvent =
 export interface Applied {
   readonly result: CommandResult;
   readonly events: readonly DayLogEvent[];
+  /**
+   * Tickets the command changed without an event of their own (S20): a new risk class at a
+   * reassessment, people who overtook them. With the tickets of the events, every ticket whose
+   * summary changed: a store that keeps those stays equal to the day.
+   */
+  readonly changed: readonly string[];
 }

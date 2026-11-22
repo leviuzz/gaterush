@@ -21,9 +21,10 @@ seeds: 1-200
 policies: [fifo-manual, fifo-manual@reactive, fifo-manual@predict]
 baseline: fifo-manual
 candidate: fifo-manual@predict
+# The first comparison is drawn in the charts: GateFlow's lanes against today's supervisor.
 compare:
-  - fifo-manual@predict:fifo-manual
   - fifo-manual@predict:fifo-manual@reactive
+  - fifo-manual@predict:fifo-manual
   - fifo-manual@reactive:fifo-manual
 dimensions:
   - id: screening-time

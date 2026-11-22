@@ -12,7 +12,7 @@ Status legend: **Done**, **Next**, **Planned**, **Gated** (needs a business deci
 |---|---|---|
 | M1: Simulator core and priority engine | R1 | **Done** (S1 to S8) |
 | M2: Simulator Studio (web, runs in the browser) | R1-R2 | In progress (S9 and S11 done) |
-| M3: Priority end-to-end in the browser, digital twin | R2 | Planned |
+| M3: Priority end-to-end in the browser, digital twin | R2 | **In progress** (from 2026-11-22) |
 | M4: Operations console and Predict preview (pitch-ready) | R2 | Planned |
 | Gate R3: discovery with the airport (checkpoint, data, authorisations) | R3 | Gated |
 | M5: Pilot readiness (after a signed order) | R4 | Gated |
@@ -566,15 +566,15 @@ With S8, M1 is complete:
 | Slice | Content | Status |
 |---|---|---|
 | **S9** | Simulator Studio in the browser: one self-contained page (scenario library, what-if settings, every parameter with its source, policies with their lane modes, report, comparison of runs), days on Web Workers, offline and on a phone, the CLI's results (ADR-040) | **Done** |
-| S10 | API (Fastify, PostgreSQL): persisted scenarios and runs, asynchronous runs, history, export. Acceptance: `POST /v1/simulations` gives a run reproducible from its manifest; integration tests with Testcontainers | **Proposed to move into M3** (see below) |
+| S10 | API (Fastify, PostgreSQL): persisted scenarios and runs, asynchronous runs, history, export. Acceptance: `POST /v1/simulations` gives a run reproducible from its manifest; integration tests with Testcontainers | **Moved into M3** (S12 and S19) |
 | **S11** | Per-passenger detail (why a passenger was called earlier, the paired outcome) and replay of the day. Acceptance: every call of the replay shows the engine's reason codes (ADR-041) | **Done** |
 
 S11 came before S10 (the founder agreed on 2026-11-22): the replay shows airports what sets
 GateFlow apart, and runs in the same offline page.
 
-Proposed on 2026-11-22, to be confirmed by the founder: S10 moves into M3. M3 needs a server and a
-database for the operational product (persistence, event log, audit). Building them once there,
-for the product, comes before persisting the Studio's runs, which then come with them.
+S10 moved into M3 (confirmed with "vai M3" on 2026-11-22). M3 needs a server and a database for
+the operational product (persistence, event log, audit): they are built once there, in S12, and
+the Studio's runs are saved through the API in S19.
 
 The slices of M2 were S8 to S10 in the kickoff proposal: they moved by one with the renumbering
 of S4.
@@ -656,15 +656,61 @@ Verification beyond the criteria:
 - The busiest library day (VCE-like peak, 15,088 parties, 210,000 events) traces in 0.6 s into
   41 MB of JSON.
 
+## M3: Priority end-to-end in the browser
+
+The product an airport installs, without hardware: passengers take a ticket at a kiosk, wait
+freely, are called on displays and validated at the access point, and staff run the checkpoint
+from the browser. Approved with "vai M3" on 2026-11-22; S10 (the server and the database) is built
+here once, for the product. The slices follow the kickoff (section 3, M3), renumbered after S11.
+
+| Slice | Content | Acceptance (kickoff, renumbered) | Status |
+|---|---|---|---|
+| **S12** | Operational core: API server (Fastify), PostgreSQL with migrations, one writer per checkpoint, command and event log, current-state tables, idempotent commands, hash-chained audit, demo data. The queue runs the same `queue-core` as the simulator | 100 concurrent "call next" give no double call; the database refuses a second admission; the audit check finds tampering; the same command twice is applied once; a restart, or a second server, gives the same queue | **Done** |
+| S13 | BCBP package: multi-leg parser, synthetic generator, validations, HMAC deduplication key | Round trip and fuzzing pass; no boarding pass in the logs; Julian date to the right year across year end | Planned |
+| S14 | Web application, kiosk and ticket: scan (paste, sample, HID scanner), outcomes, digital and printable ticket, ticket page, Italian, English and Spanish, privacy notice, kiosk credentials | A rescan returns the same ticket; another airport's boarding pass is refused with a reason; no personal data on screen | Planned |
+| S15 | Queue life cycle and lane station: timers on a scheduler, recall, no-show, reactivation, admission, manual ticket, review; staff users and roles | The state machine is covered by tests; every transition is idempotent | Planned |
+| S16 | Display over SSE: called and prepare numbers, data freshness, reconnection with `Last-Event-ID` | No event lost after a disconnection; "data not up to date" within the timeout | Planned |
+| S17 | Supervisor: modes (FIFO only, paused, emergency), overrides with a reason, lanes, audit view; versioned policies and their activation | Overrides and mode changes are always in the audit; in FIFO only the order is pure FIFO | Planned |
+| S18 | Digital twin: the simulator drives the live system at accelerated time; demo page | Same scenario and seed: the live system calls passengers in the same order as the offline simulator | Planned |
+| S19 | Simulations through the API (from S10): saved scenarios and runs, history, export; the Studio saves its runs | `POST /v1/simulations` gives a run reproducible from its manifest | Planned |
+
+## S12: acceptance criteria and evidence
+
+Scope delivered (approved with "vai M3"):
+- **`@gateflow/operations`** (pure): one service day of a live checkpoint on the simulator's
+  `CheckpointQueue`, unchanged. Commands `OPEN_DAY`, `ISSUE_TICKET`, `CALL_NEXT` and `PRESENT`;
+  numbered tickets (A001...), the queue's own events, a day rebuilt exactly from its log.
+- **`apps/api`** (Fastify, PostgreSQL, Drizzle):
+  - one writer per checkpoint, idempotent commands, a hash-chained append-only log;
+  - current-state tables and admissions, at most one per ticket by the database;
+  - the service day opened automatically;
+  - the audit check, the passenger's view of a ticket, OpenAPI;
+  - the `gateflow-api` bundle: `migrate`, `seed`, `serve`.
+- **`@gateflow/contracts`**: the API's schemas (Zod) and the OpenAPI document.
+- Tests on a real PostgreSQL (a throwaway cluster locally, PostgreSQL 17 in CI).
+- API 0.12.0, operations 0.1.0, contracts 0.1.0. No simulated number changes.
+
+| # | Criterion (kickoff, as proposed) | Evidence |
+|---|---|---|
+| 1 | 100 concurrent "call next" give no double call | 61 tickets waiting, 100 calls at once through the API: each ticket called exactly once, the other 39 calls find nobody, 100 commands in the log, chain intact. Without the advisory lock the same test fails (mutation check). |
+| 2 | The database refuses a second admission | The second presentation of an admitted ticket answers `ALREADY_ADMITTED` and writes no admission; a second admission inserted directly is refused by the primary key. |
+| 3 | `audit/verify` detects tampering | An event changed by an administrator who disabled the append-only trigger breaks the chain at its command, which the check names. |
+| 4 | Idempotency | The same `Idempotency-Key` gives the same answer, applied once (`Idempotent-Replayed: true`); the key reused for another request is refused (409). |
+| 5 | Same state after a restart, or with two servers | A second server on the same database continues the numbering and the calls; the first catches up. The tickets' state equals the replay of the log. |
+| 6 | Same code as the simulator | Property tests on random days: the log rebuilds the same day, and the events are those of the simulator's queue driven with the same inputs. |
+
+Verification beyond the criteria:
+- Invalid requests (unknown fields such as a name, a party of 50, an unknown flight or ticket)
+  are refused and write nothing.
+- A new service day starts numbering from A001 again; the previous day's tickets stay.
+- The request log keeps no client address and no ticket reference (test).
+- The bundle migrates, seeds the VCE-like day (138 flights) and serves. A ticket is issued,
+  repeated with its key, called and admitted, and the audit check is intact, over real HTTP,
+  locally and in CI.
+
 ## Later milestones (summary)
 
-- **M2 Simulator Studio:** S10 above, proposed to move into M3.
-- **M3 Priority end-to-end:**
-  - persistence with one writer per checkpoint, idempotency, event log and hash-chained audit;
-  - BCBP parser and synthetic generator with HMAC deduplication;
-  - kiosk, ticket page, display (SSE), lane station and supervisor modes;
-  - digital twin. Acceptance: the live system calls passengers in the same order as the offline
-    simulator.
+- **M2 Simulator Studio:** S9 and S11 done; S10 moved into M3 (S12 and S19).
 - **M4 Operations and Predict preview:** console KPIs, forecasts (Monte Carlo on the simulation
   from the live state), lane-opening recommendations with logged decisions.
 - **M5 Pilot readiness (gated):** OIDC/MFA, four-eyes policies, real feed adapters, lab

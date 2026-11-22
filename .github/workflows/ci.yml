@@ -24,6 +24,18 @@ jobs:
         # Running the golden tests on two Node.js (V8) versions proves that simulation results do
         # not depend on the JavaScript engine version.
         node: ['22', '24']
+    services:
+      # The API's tests run on a real PostgreSQL (S12): each test file creates its own database.
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -35,6 +47,16 @@ jobs:
       - name: Format, boundaries, typecheck, lint, tests
         run: pnpm check
       - run: pnpm build
+      - name: The API runs from its bundle on PostgreSQL (migrate, demo data, a command, the audit)
+        run: |
+          node apps/api/dist/gateflow-api.mjs migrate
+          node apps/api/dist/gateflow-api.mjs seed --scenario scenarios/vce-like-peak-day.yaml | tee seed.txt
+          CP=$(sed -n 's/.*checkpoint \([0-9a-f-]*\),.*/\1/p' seed.txt)
+          node apps/api/dist/gateflow-api.mjs serve --port 18080 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:18080/v1/health && break; sleep 1; done
+          curl -sf -X POST "http://127.0.0.1:18080/v1/checkpoints/$CP/calls" -H 'Idempotency-Key: ci-1'
+          curl -sf "http://127.0.0.1:18080/v1/checkpoints/$CP/audit/verify" | tee verify.json
+          grep -q '"intact":true' verify.json
       - name: End-to-end determinism of the CLI, whatever the number of worker threads
         run: |
           node apps/sim-cli/dist/gateflow-sim.mjs run --scenario scenarios/single-checkpoint-demo.yaml --seeds 1-20 --out out/a --quiet --workers 1

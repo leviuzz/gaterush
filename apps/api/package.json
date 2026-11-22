@@ -1,0 +1,36 @@
+{
+  "name": "@gateflow/api",
+  "version": "0.12.0",
+  "private": true,
+  "description": "GateFlow API: the operational checkpoint behind HTTP, on PostgreSQL. One writer per checkpoint, idempotent commands, a hash-chained log.",
+  "type": "module",
+  "bin": {
+    "gateflow-api": "./dist/gateflow-api.mjs"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run --testTimeout=120000 --hookTimeout=120000",
+    "db:generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "@gateflow/contracts": "workspace:*",
+    "@gateflow/domain": "workspace:*",
+    "@gateflow/operations": "workspace:*",
+    "@gateflow/priority-engine": "workspace:*",
+    "@gateflow/queue-core": "workspace:*",
+    "@gateflow/sim-metrics": "workspace:*",
+    "@gateflow/sim-scenarios": "workspace:*",
+    "drizzle-orm": "^0.45.4",
+    "fastify": "^5.12.8",
+    "pg": "^8.23.1",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.15.6",
+    "drizzle-kit": "^0.31.11",
+    "esbuild": "^0.28.2"
+  }
+}

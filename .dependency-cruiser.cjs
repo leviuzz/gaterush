@@ -86,6 +86,8 @@ module.exports = {
       'sim-model',
       'sim-scenarios',
     ]),
+    onlyAllowed('operations', ['domain', 'priority-engine', 'queue-core']),
+    onlyAllowed('contracts', ['domain'], ['zod']),
     onlyAllowed('sim-trace', [
       'domain',
       'priority-engine',

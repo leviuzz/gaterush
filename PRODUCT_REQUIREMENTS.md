@@ -49,16 +49,16 @@ without disproportionate harm to passengers who are not prioritised (ADR-002).
 | FR-02 | Select the leg relevant to the checkpoint (airport, date); check the flight feed when available. |
 | FR-03 | Unreadable, duplicate, expired or wrong-airport passes go to staff assistance, never to automatic access. |
 | FR-04 | Issue a ticket with a stable, readable public number and an opaque QR code (no PNR or name), plus area, status, multilingual instructions and expiry. |
-| FR-05 | Rescanning is idempotent: it retrieves the existing ticket, allows reprinting and shows the status; it never creates duplicates. |
+| FR-05 | Rescanning is idempotent: it retrieves the existing ticket, allows reprinting and shows the status; it never creates duplicates. Every command of the API is idempotent by its key (S12, ADR-042). |
 | FR-06 | Compute eligibility, risk class and a deterministic explanation; reassess on every relevant event. |
 | FR-07 | Fairness controls: cap on priority calls, bound on overtakes, anti-churn, documented manual exceptions. |
 | FR-08 | Call only for real capacity; second call; no-show timeout; limited recovery window. |
-| FR-09 | Validate access by operator or reader; at most one admission per ticket. |
+| FR-09 | Validate access by operator or reader; at most one admission per ticket (enforced by the database since S12). |
 | FR-10 | Public display: called numbers and direction, "prepare" numbers, data freshness; no personal data. |
 | FR-11 | Lane operator station: call next, validate, exceptions, overrides with a reason. |
 | FR-12 | Operations console: live queue, KPIs, alerts, lanes, modes (normal, FIFO only, paused, emergency). |
 | FR-13 | Administration: airports, checkpoints, lanes, devices, users; versioned policies with four-eyes approval and rollback. |
-| FR-14 | Audit of every state transition, override and configuration change. |
+| FR-14 | Audit of every state transition, override and configuration change. Since S12 every command and event of a checkpoint is in an append-only log with a chain of hashes, which an endpoint checks (ADR-042). |
 | FR-15 | Data quality: every datum has a source, observation time, validity and confidence; stale data leaves automatic mode for the affected criterion. |
 | FR-16 | Dedicated paths for assisted passengers, groups and families, without penalising existing rights. |
 | FR-17 | Defined degraded modes for network or device failure; never disable security barriers. |

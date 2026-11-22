@@ -1,0 +1,20 @@
+{
+  "name": "@gateflow/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Contracts of the GateFlow API: request, response and event schemas (Zod), from which the OpenAPI document is generated (pure).",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.src.json && tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run --testTimeout=60000 --hookTimeout=60000"
+  },
+  "dependencies": {
+    "@gateflow/domain": "workspace:*",
+    "zod": "^4.6.7"
+  }
+}

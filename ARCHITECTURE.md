@@ -23,10 +23,13 @@ referenced as ADR-nnn ([DECISIONS.md](DECISIONS.md)).
 
 ```
 apps/
+  api/              gateflow-api: the operational checkpoint behind HTTP (Fastify) on PostgreSQL (Drizzle)
   sim-cli/          gateflow-sim: experiments and sweeps on worker threads; JSON, Markdown, HTML (bundled)
   studio/           GateFlow Simulator Studio: the simulator in one offline HTML page (React, Web Workers)
 packages/
   domain/           shared domain types and units (integer milliseconds, segments, risk classes)
+  contracts/        the API's request, answer and OpenAPI schemas (Zod, pure)
+  operations/       one service day of a live checkpoint on the simulator's queue, rebuilt from its log (pure)
   priority-engine/  assessment and selection of the next call (pure)
   queue-core/       queue state machine: tickets, prepare window, calls, no-shows; policies and lane modes (pure)
   sim-kernel/       seeded RNG streams, deterministic math, distributions, event calendar (pure)
@@ -58,6 +61,9 @@ flowchart LR
   metrics["sim-metrics"]
   trace["sim-trace"]
   studiocore["studio-core"]
+  operations["operations"]
+  contracts["contracts"]
+  api["apps/api"]
   cli["apps/sim-cli"]
   studio["apps/studio"]
   engine --> domain
@@ -92,13 +98,21 @@ flowchart LR
   studio --> studiocore
   studio --> trace
   studio --> metrics
+  operations --> queue
+  operations --> engine
+  operations --> domain
+  contracts --> domain
+  api --> operations
+  api --> contracts
+  api --> metrics
+  api --> scenarios
 ```
 
 Enforced automatically, on three levels:
 
 | Level | Tool | Rule |
 |---|---|---|
-| Imports | dependency-cruiser (`pnpm boundaries`) | Packages may import only the dependencies shown above. Allowed npm modules: `zod` and `yaml` in `sim-scenarios`, nothing elsewhere. No Node.js built-ins in `packages/*/src`. No cycles. No unresolvable imports. |
+| Imports | dependency-cruiser (`pnpm boundaries`) | Packages may import only the dependencies shown above. Allowed npm modules: `zod` and `yaml` in `sim-scenarios`, `zod` in `contracts`, nothing elsewhere. No Node.js built-ins in `packages/*/src`: the database, HTTP and the clock live in `apps/api`. No cycles. No unresolvable imports. |
 | Environment | `tsconfig.src.json` | Package sources compile with `lib: ES2023` and no Node or DOM types, so they cannot use `process`, `console`, timers or browser APIs. |
 | Determinism | ESLint | `packages/*/src` may not use `Math.random`, `Date`, `**`, implementation-approximated `Math` functions, `localeCompare` or `Intl`. |
 
@@ -574,7 +588,51 @@ explanation of every call are computed.
     flights missed, lanes), the latest calls with their reasons, lists of passengers (saved,
     lost, delayed) and the journey of any passenger under both policies.
 
-## 13. Target architecture of the operational product (ADR-013)
+## 13. Operational core (`apps/api`, `@gateflow/operations`, ADR-042)
+
+The product's server: a checkpoint's day runs on the simulator's queue, behind HTTP, on
+PostgreSQL.
+
+```mermaid
+flowchart LR
+  client["Staff, kiosk, display (S14 to S17)"] -->|"REST + Idempotency-Key"| routes["Fastify routes<br/>(contracts: Zod)"]
+  routes --> runtime["Runtime: one writer per checkpoint"]
+  runtime -->|"pg_advisory_xact_lock"| db[("PostgreSQL")]
+  runtime --> day["CheckpointDay (operations)<br/>= CheckpointQueue of queue-core"]
+  db --- log["queue_command + queue_event<br/>append-only, hash-chained"]
+  db --- state["queue_token (current state)<br/>admission (one per ticket)"]
+```
+
+- **A command is one transaction.**
+  1. It takes the checkpoint's advisory lock.
+  2. A known `Idempotency-Key` returns the stored answer.
+  3. The day in memory is brought in step with the log; another server's commands are applied,
+     and a day that is not the log's is rebuilt from its `OPEN_DAY`.
+  4. The service day is opened when it changed.
+  5. The command is applied to the `CheckpointDay`.
+  6. The command, its events (the queue's own), the tickets it changed and any admission are
+     written. Any failure rolls back and drops the day in memory.
+- **The log rebuilds the day.** Every value a command needs is in its record (identifiers,
+  opaque reference, the flight as known, the time), and the queue is deterministic. The tests
+  check that the current state equals a replay of the log, on random days and through the API.
+- **Tables.**
+  - Configuration: `organization`, `airport` (IANA time zone), `checkpoint` (lock key, start of
+    the service day, settings), `flight` (closing time with its source).
+  - Log: `queue_command` (seq per checkpoint, idempotency key, request hash, actor,
+    `prev_hash`, `hash`) and `queue_event`. Both are append-only by trigger.
+  - Current state: `queue_token` (number per checkpoint and day, opaque reference).
+  - `admission`: its primary key is the ticket, so a second admission is impossible.
+- **Endpoints** (OpenAPI at `/v1/openapi.json`):
+  - `POST /v1/checkpoints/{id}/tickets`, `/calls` and `/admissions`;
+  - `GET /v1/checkpoints/{id}/queue` and `/audit/verify`;
+  - `GET /v1/tickets/{ref}` (number, state, checkpoint and day only);
+  - `GET /v1/health`.
+- **Privacy.** No field holds personal data; the request log keeps no client address and no
+  ticket reference.
+- **Commands** of the bundle `gateflow-api`: `migrate`, `seed --scenario <file>` (demo data from
+  the library) and `serve`.
+
+## 14. Target architecture of the operational product (ADR-013)
 
 Direction agreed at kickoff, to be implemented from milestone M2/M3:
 

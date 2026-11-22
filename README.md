@@ -9,8 +9,8 @@ engine** brings forward passengers who would miss their flight under FIFO but ca
 It does so within **declared, measurable fairness bounds**. GateFlow never changes security or
 border procedures: it organises the flow before they start.
 
-> **Status: milestone M1 done (slices S1 to S8); M2 in progress: the Simulator Studio (S9) and the
-> replay of a day with the reason for every call (S11).**
+> **Status: M1 done (S1 to S8); M2: the Simulator Studio (S9) and the replay of a day (S11); M3,
+> the product an airport installs, started with its operational core (S12).**
 > This repository contains the simulation foundations:
 > - the priority engine;
 > - the queue state machine that the operational product will share;
@@ -30,8 +30,11 @@ border procedures: it organises the flow before they start.
 >   phone too, and never connects to the network. It replays any simulated day minute by minute,
 >   with the reason the engine gave for every call and each passenger's day under both policies.
 >
-> There is no operational system or API yet, and no interface for passengers or airport staff:
-> the Studio is the simulator's interface. See
+> - **GateFlow API** (operational core): a checkpoint's day on the simulator's own queue, on
+>   PostgreSQL, with one writer per checkpoint, idempotent commands and a hash-chained log.
+>
+> There is no interface for passengers or airport staff yet (kiosk, displays, lane station: S14
+> to S17), and no sign-in: the API is for development and demos only. See
 > [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 > **All results in this repository are SIMULATED on synthetic assumptions.** They are not
@@ -71,6 +74,35 @@ The replay shows both policies at the same moment, the people standing, the flig
 the lanes open over the day, every call with the engine's reason, and the passengers saved, lost,
 or delayed by priority calls. Choose a passenger to follow their day under both policies, call by
 call. The page gives the trace's fingerprint and the CLI command that gives the same one.
+
+### GateFlow API (operational core)
+
+It needs PostgreSQL (16 or later). With `DATABASE_URL` set to an empty database:
+
+```bash
+pnpm --filter @gateflow/api build
+```
+
+```bash
+node apps/api/dist/gateflow-api.mjs seed --scenario scenarios/vce-like-peak-day.yaml
+```
+
+```bash
+node apps/api/dist/gateflow-api.mjs serve --port 8080
+```
+
+`seed` migrates the database and adds demo data: the VCE-like airport, its checkpoint run with
+GateFlow priority v3, and the day's flights. `serve` answers on `/v1`. The endpoints:
+- `POST /v1/checkpoints/{id}/tickets`: issue a ticket;
+- `POST /v1/checkpoints/{id}/calls`: call the next passenger;
+- `POST /v1/checkpoints/{id}/admissions`: admit a passenger at the access point;
+- `GET /v1/checkpoints/{id}/queue`: the day's tickets;
+- `GET /v1/checkpoints/{id}/audit/verify`: check the hash chain of the log;
+- `GET /v1/tickets/{ref}`: the passenger's view of a ticket.
+
+Send an `Idempotency-Key` header with each command. The OpenAPI document is at
+`/v1/openapi.json`. The API's tests (`pnpm test`) start a throwaway PostgreSQL from the binaries
+of the machine, or use `DATABASE_URL`.
 
 ### Command line
 
@@ -238,6 +270,8 @@ How to read these numbers:
 | Path | Content |
 |---|---|
 | `packages/domain` | Shared domain types and units |
+| `packages/contracts` | The API's request and answer schemas (Zod) and its OpenAPI document (pure) |
+| `packages/operations` | A live checkpoint's day on the simulator's queue, rebuilt from its command log (pure) |
 | `packages/priority-engine` | Deterministic priority engine (pure) |
 | `packages/queue-core` | Queue state machine, policies and lane modes, shared by simulator and product (pure) |
 | `packages/sim-kernel` | Seeded RNG streams, deterministic math, distributions, event calendar (pure) |
@@ -246,6 +280,7 @@ How to read these numbers:
 | `packages/sim-metrics` | Experiments, paired metrics, statistics, results and report (pure) |
 | `packages/sim-trace` | The trace of one day: every event, replay views, the explanation of every call (pure) |
 | `packages/studio-core` | What the Studio adds in the browser: SHA-256, files, library, what-if settings, comparison of runs, traces (pure) |
+| `apps/api` | `gateflow-api`: the operational core on PostgreSQL (Fastify, Drizzle) |
 | `apps/sim-cli` | `gateflow-sim` command-line interface |
 | `apps/studio` | GateFlow Simulator Studio: the simulator in one offline HTML page |
 | `airports/` | Airport configurations: the parameters of each airport and checkpoint ([guide](airports/README.md)) |

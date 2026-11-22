@@ -26,3 +26,5 @@ export { LEVERS, markWhatIf, withLevers } from './levers';
 export type { Lever } from './levers';
 export { ResultsFileError, compareRuns, parseResultsFile } from './compare';
 export type { MeanWithInterval, RunComparison, RunSummary } from './compare';
+export { notableDays, replayComparison, studioTrace, traceFingerprint } from './trace';
+export type { NotableDay } from './trace';

@@ -9,7 +9,8 @@ engine** brings forward passengers who would miss their flight under FIFO but ca
 It does so within **declared, measurable fairness bounds**. GateFlow never changes security or
 border procedures: it organises the flow before they start.
 
-> **Status: milestone M1 done (slices S1 to S8); M2 started with S9, the Simulator Studio.**
+> **Status: milestone M1 done (slices S1 to S8); M2 in progress: the Simulator Studio (S9) and the
+> replay of a day with the reason for every call (S11).**
 > This repository contains the simulation foundations:
 > - the priority engine;
 > - the queue state machine that the operational product will share;
@@ -26,7 +27,8 @@ border procedures: it organises the flow before they start.
 >   source and licence of every datum printed in every report, one configuration file per
 >   airport, and a library of synthetic VCE-like, TSF-like and MX-like checkpoints;
 > - **GateFlow Simulator Studio**: the same simulator in one HTML page that runs offline, on a
->   phone too, and never connects to the network.
+>   phone too, and never connects to the network. It replays any simulated day minute by minute,
+>   with the reason the engine gave for every call and each passenger's day under both policies.
 >
 > There is no operational system or API yet, and no interface for passengers or airport staff:
 > the Studio is the simulator's interface. See
@@ -63,6 +65,12 @@ Choose a checkpoint and a day, change a what-if setting (lanes, screening time, 
 GateFlow's target wait...), choose the policies and simulate. The page shows the CLI's report,
 compares runs, and saves the results and the scenario: the CLI gives the same results from that
 scenario. An airport's own files can be added; they stay in the browser.
+
+Then replay a day of the run: the typical day (the median one), the best, the worst or any other.
+The replay shows both policies at the same moment, the people standing, the flights missed and
+the lanes open over the day, every call with the engine's reason, and the passengers saved, lost,
+or delayed by priority calls. Choose a passenger to follow their day under both policies, call by
+call. The page gives the trace's fingerprint and the CLI command that gives the same one.
 
 ### Command line
 
@@ -122,6 +130,14 @@ Each airport has a configuration file in `airports/` with all its parameters: la
 staff on call, throughput, walking times, passenger behaviour, GateFlow settings and fairness
 target per checkpoint. A scenario names the airport and the checkpoint and gives only its day.
 See [airports/README.md](airports/README.md).
+
+```bash
+pnpm sim trace --scenario scenarios/mx-like-transfer-hub.yaml --seed 5
+```
+
+`trace` writes every event of one day for two policies (by default the first and the last of
+`--policies`), on the same passengers, into `trace.json`. It prints the day in numbers and the
+trace's fingerprint; the Studio replays the same trace.
 
 ```bash
 pnpm sim policies
@@ -228,7 +244,8 @@ How to read these numbers:
 | `packages/sim-model` | Checkpoint simulation: physical or virtual queue, calls, lane schedules, extra lanes, disruptions (pure) |
 | `packages/sim-scenarios` | Scenario schema, airport configurations, assumptions registry, synthetic population, arrival forecast (pure) |
 | `packages/sim-metrics` | Experiments, paired metrics, statistics, results and report (pure) |
-| `packages/studio-core` | What the Studio adds in the browser: SHA-256, files, library, what-if settings, comparison of runs (pure) |
+| `packages/sim-trace` | The trace of one day: every event, replay views, the explanation of every call (pure) |
+| `packages/studio-core` | What the Studio adds in the browser: SHA-256, files, library, what-if settings, comparison of runs, traces (pure) |
 | `apps/sim-cli` | `gateflow-sim` command-line interface |
 | `apps/studio` | GateFlow Simulator Studio: the simulator in one offline HTML page |
 | `airports/` | Airport configurations: the parameters of each airport and checkpoint ([guide](airports/README.md)) |

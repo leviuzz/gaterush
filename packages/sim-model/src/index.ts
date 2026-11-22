@@ -12,6 +12,7 @@ export {
 export type {
   ArrivalForecast,
   CheckpointSpec,
+  DayEvent,
   FeedOutage,
   FlightUpdate,
   GateChange,

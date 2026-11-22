@@ -11,7 +11,7 @@ Status legend: **Done**, **Next**, **Planned**, **Gated** (needs a business deci
 | Milestone | Business plan stage | Status |
 |---|---|---|
 | M1: Simulator core and priority engine | R1 | **Done** (S1 to S8) |
-| M2: Simulator Studio (web, runs in the browser) | R1-R2 | In progress (S9 done) |
+| M2: Simulator Studio (web, runs in the browser) | R1-R2 | In progress (S9 and S11 done) |
 | M3: Priority end-to-end in the browser, digital twin | R2 | Planned |
 | M4: Operations console and Predict preview (pitch-ready) | R2 | Planned |
 | Gate R3: discovery with the airport (checkpoint, data, authorisations) | R3 | Gated |
@@ -566,8 +566,15 @@ With S8, M1 is complete:
 | Slice | Content | Status |
 |---|---|---|
 | **S9** | Simulator Studio in the browser: one self-contained page (scenario library, what-if settings, every parameter with its source, policies with their lane modes, report, comparison of runs), days on Web Workers, offline and on a phone, the CLI's results (ADR-040) | **Done** |
-| S10 | API (Fastify, PostgreSQL): persisted scenarios and runs, asynchronous runs, history, export. Acceptance: `POST /v1/simulations` gives a run reproducible from its manifest; integration tests with Testcontainers | Planned |
-| S11 | Per-passenger detail (why a passenger was called earlier, the paired outcome) and replay of the day. Acceptance: every call of the replay shows the engine's reason codes | Planned |
+| S10 | API (Fastify, PostgreSQL): persisted scenarios and runs, asynchronous runs, history, export. Acceptance: `POST /v1/simulations` gives a run reproducible from its manifest; integration tests with Testcontainers | **Proposed to move into M3** (see below) |
+| **S11** | Per-passenger detail (why a passenger was called earlier, the paired outcome) and replay of the day. Acceptance: every call of the replay shows the engine's reason codes (ADR-041) | **Done** |
+
+S11 came before S10 (the founder agreed on 2026-11-22): the replay shows airports what sets
+GateFlow apart, and runs in the same offline page.
+
+Proposed on 2026-11-22, to be confirmed by the founder: S10 moves into M3. M3 needs a server and a
+database for the operational product (persistence, event log, audit). Building them once there,
+for the product, comes before persisting the Studio's runs, which then come with them.
 
 The slices of M2 were S8 to S10 in the kickoff proposal: they moved by one with the renumbering
 of S4.
@@ -607,9 +614,51 @@ Verification beyond the criteria:
 - Report links are kept only for web addresses and relative paths (the page may show results
   files a person loads).
 
+## S11: acceptance criteria and evidence
+
+Scope delivered (approved with "vai pure"):
+- **The trace of a day** (`@gateflow/sim-trace`, schema `gateflow.sim.trace/1`):
+  - every event of one day of a run, for two of its policies on the same passengers;
+  - the day itself, so that the trace can be checked and run again;
+  - a fingerprint that the CLI and the Studio both give.
+- **The simulator tells the day**: an observer receives every `DayEvent` and never changes the
+  run. The queue's commitment event carries what the engine decided on.
+- **Reasons in words**: every reason code of the engine has a title and a sentence; every call is
+  explained with its figures, margins given as times at the gate.
+- **CLI**: `gateflow-sim trace --scenario <file> --seed <n>` writes `trace.json` and prints the
+  day in numbers and its fingerprint.
+- **Studio**, replay of a day of the run:
+  - the typical, best, worst or any day;
+  - both policies at any moment: people in each stage and the lanes;
+  - three aligned charts with the hour-by-hour table;
+  - the latest calls with their reasons;
+  - the passengers saved, lost, or who waited longer for others;
+  - each passenger's day under both policies, call by call;
+  - the fingerprint, the CLI command and the trace file.
+- CLI and Studio 0.11.0, studio core 0.2.0, trace 0.1.0. Engine, queue and model versions
+  unchanged; results unchanged.
+
+| # | Criterion (kickoff, as proposed) | Evidence |
+|---|---|---|
+| 1 | Every call of the replay shows the engine's reason codes | Every commitment carries its reasons and the engine's assessment; the replay lists every call with its code and title, and a passenger's day explains each call. Tested on five library days (every commitment explained, every priority call `URGENT_FEASIBLE`, or `FLIGHT_CALL` for today's staff practice) and in Chromium (every call shown has a reason code of the engine; priority calls only: `URGENT_FEASIBLE`). |
+| 2 | Per-passenger detail: why a passenger was called earlier | The figures of the decision: boarding close as known, risk class, estimated wait and time at the gate in arrival order and if called now, latest useful call, tickets and people passed, fast track, safety margin. The engine's notes on the ticket (source of the closing time, safety margin used, rules applied) are shown too. |
+| 3 | The paired outcome | Every party under both policies: saved, lost, missed or made with both, and the change in wait. The day's flights saved and lost equal the run's for that day (Node tests on five days, CLI test, Chromium end-to-end test). |
+| 4 | Replay of the day | Projections of the day's events, equal to the simulator's own statistics on five library days: waiting and standing integrated over the day, largest queues, lanes, the day's metrics. Seek, play at three speeds, or jump to any step of a passenger. |
+
+Verification beyond the criteria:
+- The observer never changes a run: property tests on random days (with disruptions, extra
+  lanes, supervisors and GateFlow's recommendations); extra lane time recomputed from its events
+  equals the simulator's.
+- The Studio's trace of a day equals the CLI's, fingerprint included (Node and Chromium).
+- The replay opens on the median day, so no chosen day is shown as the rule.
+- The page still makes no network request and fits a phone. The replay of an MX-like hub day is
+  ready about 0.3 s after the run, its fingerprint 0.8 s later.
+- The busiest library day (VCE-like peak, 15,088 parties, 210,000 events) traces in 0.6 s into
+  41 MB of JSON.
+
 ## Later milestones (summary)
 
-- **M2 Simulator Studio:** S10 and S11 above.
+- **M2 Simulator Studio:** S10 above, proposed to move into M3.
 - **M3 Priority end-to-end:**
   - persistence with one writer per checkpoint, idempotency, event log and hash-chained audit;
   - BCBP parser and synthetic generator with HMAC deduplication;

@@ -65,6 +65,9 @@ importers:
       '@gateflow/sim-scenarios':
         specifier: workspace:*
         version: link:../../packages/sim-scenarios
+      '@gateflow/sim-trace':
+        specifier: workspace:*
+        version: link:../../packages/sim-trace
       yaml:
         specifier: ^2.9.1
         version: 2.9.1
@@ -78,15 +81,24 @@ importers:
 
   apps/studio:
     dependencies:
+      '@gateflow/priority-engine':
+        specifier: workspace:*
+        version: link:../../packages/priority-engine
       '@gateflow/queue-core':
         specifier: workspace:*
         version: link:../../packages/queue-core
       '@gateflow/sim-metrics':
         specifier: workspace:*
         version: link:../../packages/sim-metrics
+      '@gateflow/sim-model':
+        specifier: workspace:*
+        version: link:../../packages/sim-model
       '@gateflow/sim-scenarios':
         specifier: workspace:*
         version: link:../../packages/sim-scenarios
+      '@gateflow/sim-trace':
+        specifier: workspace:*
+        version: link:../../packages/sim-trace
       '@gateflow/studio-core':
         specifier: workspace:*
         version: link:../../packages/studio-core
@@ -189,6 +201,30 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
 
+  packages/sim-trace:
+    dependencies:
+      '@gateflow/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@gateflow/priority-engine':
+        specifier: workspace:*
+        version: link:../priority-engine
+      '@gateflow/queue-core':
+        specifier: workspace:*
+        version: link:../queue-core
+      '@gateflow/sim-kernel':
+        specifier: workspace:*
+        version: link:../sim-kernel
+      '@gateflow/sim-metrics':
+        specifier: workspace:*
+        version: link:../sim-metrics
+      '@gateflow/sim-model':
+        specifier: workspace:*
+        version: link:../sim-model
+      '@gateflow/sim-scenarios':
+        specifier: workspace:*
+        version: link:../sim-scenarios
+
   packages/studio-core:
     dependencies:
       '@gateflow/queue-core':
@@ -200,6 +236,9 @@ importers:
       '@gateflow/sim-scenarios':
         specifier: workspace:*
         version: link:../sim-scenarios
+      '@gateflow/sim-trace':
+        specifier: workspace:*
+        version: link:../sim-trace
 
 packages:
 

@@ -55,3 +55,100 @@ export const REASON_CODES = [
 ] as const;
 
 export type ReasonCode = (typeof REASON_CODES)[number];
+
+/** A reason code in words, for the people who read a decision: staff, auditors, passengers. */
+export interface ReasonDescription {
+  /** A few words, e.g. for a badge. */
+  readonly title: string;
+  /** One sentence. */
+  readonly text: string;
+}
+
+/**
+ * Every reason code in plain words. The texts explain what the engine did, never more: a reader
+ * learns why a passenger was called, not how to obtain priority. Changing a text never changes a
+ * decision.
+ */
+export const REASON_DESCRIPTIONS: Readonly<Record<ReasonCode, ReasonDescription>> = {
+  POLICY_FIFO: {
+    title: 'Arrival order (policy)',
+    text: 'Called in order of arrival: this policy never changes the order.',
+  },
+  FIFO: {
+    title: 'Arrival order',
+    text: 'Called in order of arrival: nobody waiting needed to be brought forward.',
+  },
+  URGENT_FEASIBLE: {
+    title: 'Brought forward',
+    text: 'In order of arrival this passenger would have reached the gate too late; called now, they can still make it.',
+  },
+  CAP_REACHED: {
+    title: 'Priority cap reached',
+    text: 'Called in order of arrival: passengers at risk were waiting, but priority calls had reached their cap (at most k people in any N called).',
+  },
+  OVERTAKE_LIMIT_GUARD: {
+    title: 'Fairness bound',
+    text: 'Called because K people had already gone ahead of this passenger: nobody is overtaken more than K times.',
+  },
+  OVERTAKE_ROOM_EXHAUSTED: {
+    title: 'Fairness bound protects others',
+    text: 'Called in order of arrival: bringing a passenger at risk forward would have put someone who has waited longer beyond K overtakes.',
+  },
+  FLIGHT_CALL: {
+    title: 'Flight called by staff',
+    text: "Called by staff with the other passengers of a flight that closes soon (today's practice).",
+  },
+  DEADLINE_FROM_FEED: {
+    title: 'Closing time from the flight feed',
+    text: "The time boarding closes comes from the airport's flight feed.",
+  },
+  DEADLINE_FROM_RULE: {
+    title: 'Closing time from a rule',
+    text: 'The time boarding closes comes from an approved rule (the scheduled departure minus a fixed time).',
+  },
+  DEADLINE_UNKNOWN: {
+    title: 'Closing time unknown',
+    text: 'The time boarding closes is unknown: the passenger is served in order of arrival and never brought forward.',
+  },
+  DEADLINE_STALE: {
+    title: 'Flight data too old',
+    text: 'The flight data are too old to be trusted: the passenger is served in order of arrival until fresh data arrive.',
+  },
+  HYSTERESIS_HOLD: {
+    title: 'Class held',
+    text: 'The passenger stays in the more urgent class for a few minutes, so that the class does not flap back and forth.',
+  },
+  RULE_DEADLINE_NOT_ALLOWED: {
+    title: 'Rule-based time not trusted',
+    text: 'The policy does not trust closing times from a rule: the passenger is served in order of arrival.',
+  },
+  SEGMENT_NOT_ELIGIBLE: {
+    title: 'Not eligible',
+    text: 'This kind of passenger is not eligible for automatic priority.',
+  },
+  CRITICAL_ESCALATION: {
+    title: 'Staff alerted',
+    text: 'Too late even if called now: staff are alerted, and the system does not bring the passenger forward on its own.',
+  },
+  INSIDE_SAFETY_MARGIN: {
+    title: 'Inside the safety margin',
+    text: 'Still in time, but only by using part of the safety margin.',
+  },
+  LATE_PRESENTATION: {
+    title: 'Arrived too late for priority',
+    text: 'Arrived at the checkpoint later than the policy allows before departure: never brought forward automatically.',
+  },
+  PRESENTATION_UNVERIFIED: {
+    title: 'Arrival rule not checkable',
+    text: 'The arrival time or the departure time is unknown, so the arrival rule cannot be checked: never brought forward automatically.',
+  },
+  GROUP_EXCEEDS_CAP: {
+    title: 'Group larger than the cap',
+    text: 'The group is larger than the priority cap: staff are alerted instead of an automatic priority call.',
+  },
+};
+
+/** The description of a reason code. */
+export function describeReason(code: ReasonCode): ReasonDescription {
+  return REASON_DESCRIPTIONS[code];
+}

@@ -15,7 +15,8 @@ import { ComparePanel } from './components/ComparePanel';
 import { LeversPanel } from './components/LeversPanel';
 import { ParametersPanel } from './components/ParametersPanel';
 import { PoliciesPanel } from './components/PoliciesPanel';
-import { ResultsPanel } from './components/ResultsPanel';
+import { ReplayPanel } from './components/ReplayPanel';
+import { ReportPanel, ResultsPanel } from './components/ResultsPanel';
 import type { Run } from './components/ResultsPanel';
 import { RunPanel } from './components/RunPanel';
 import type { ActiveRun, RunStatus } from './components/RunPanel';
@@ -189,6 +190,7 @@ export function App() {
         label: `#${id} ${doc.manifest.scenario.title}, ${doc.summary.days} days`,
         doc,
         scenario: config.scenario,
+        job: plan.job,
       });
       setStatus({
         kind: 'done',
@@ -239,6 +241,7 @@ export function App() {
             label: `#${id} ${file.name} (${doc.manifest.scenario.id})`,
             doc,
             scenario: null,
+            job: null,
           });
         } catch (error) {
           errors.push(`${file.name}: ${issuesOf(error).join('; ')}`);
@@ -352,7 +355,11 @@ export function App() {
               <p className="hint">The results of a run appear here, with the full report.</p>
             </section>
           ) : (
-            <ResultsPanel run={shown} canSave={canSave} />
+            <>
+              <ResultsPanel run={shown} canSave={canSave} />
+              <ReplayPanel key={shown.id} run={shown} canSave={canSave} />
+              <ReportPanel doc={shown.doc} />
+            </>
           )}
           <ComparePanel
             runs={runs}

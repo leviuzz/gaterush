@@ -86,7 +86,16 @@ module.exports = {
       'sim-model',
       'sim-scenarios',
     ]),
-    onlyAllowed('studio-core', ['queue-core', 'sim-metrics', 'sim-scenarios']),
+    onlyAllowed('sim-trace', [
+      'domain',
+      'priority-engine',
+      'queue-core',
+      'sim-kernel',
+      'sim-metrics',
+      'sim-model',
+      'sim-scenarios',
+    ]),
+    onlyAllowed('studio-core', ['queue-core', 'sim-metrics', 'sim-scenarios', 'sim-trace']),
   ],
   options: {
     doNotFollow: { path: 'node_modules' },

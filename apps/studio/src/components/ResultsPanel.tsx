@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { renderHtmlReport, renderReport, stringifyResults } from '@gateflow/sim-metrics';
-import type { ResultsDocument } from '@gateflow/sim-metrics';
+import type { DayJob, ResultsDocument } from '@gateflow/sim-metrics';
 import type { Scenario } from '@gateflow/sim-scenarios';
 import { scenarioFileText } from '@gateflow/studio-core';
 import { copyText, saveFile } from '../exports';
@@ -15,6 +15,8 @@ export interface Run {
   readonly doc: ResultsDocument;
   /** The scenario simulated (null for a results file loaded to compare). */
   readonly scenario: Scenario | null;
+  /** The work of one day of the run, to replay a day (null for a results file). */
+  readonly job: DayJob | null;
 }
 
 interface Props {
@@ -231,8 +233,19 @@ export function ResultsPanel({ run, canSave }: Props) {
           </>
         )}
       </div>
+      <p className="hint">
+        <a href="#replay">Replay a day of this run</a>: every call with its reason, every passenger.
+      </p>
+    </section>
+  );
+}
+
+/** The CLI's full report of a run. */
+export function ReportPanel({ doc }: { readonly doc: ResultsDocument }) {
+  return (
+    <section className="panel" aria-labelledby="h-report">
       <details open>
-        <summary>Full report</summary>
+        <summary id="h-report">Full report</summary>
         <ReportView doc={doc} />
       </details>
     </section>

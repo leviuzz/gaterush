@@ -1,5 +1,5 @@
 import type { KnownDeadline, Millis, RiskClass, Segment } from '@gateflow/domain';
-import type { ReasonCode, SelectionParams } from '@gateflow/priority-engine';
+import type { Assessment, ReasonCode, SelectionParams } from '@gateflow/priority-engine';
 
 /** Life cycle of a ticket. `ADMITTED` and `EXPIRED` are terminal. */
 export const TICKET_STATES = [
@@ -182,11 +182,32 @@ export type PresentOutcome =
 export type QueueEvent =
   | { readonly type: 'ISSUED'; readonly ticketId: string; readonly atMs: Millis }
   | {
+      /**
+       * The engine chose who is called next. The event carries what the decision was based on,
+       * so that it can be explained and audited without running the engine again.
+       */
       readonly type: 'COMMITTED';
       readonly ticketId: string;
       readonly atMs: Millis;
+      /** True when the commitment jumps the FIFO order (by urgency, or by a staff flight call). */
       readonly priority: boolean;
       readonly reasons: readonly ReasonCode[];
+      /** Waiting tickets that were ahead of this one in FIFO order and are now passed. */
+      readonly passedTickets: number;
+      /** People on those tickets. */
+      readonly passedPeople: number;
+      /**
+       * True when the commitment goes through the fast track (ADR-027): it is called ahead of the
+       * prepare window and the party then goes to the next free lane.
+       */
+      readonly fastTrack: boolean;
+      /** Boost-eligible URGENT tickets when the decision was taken (see `Selection`). */
+      readonly urgentCandidates: number;
+      /**
+       * The engine's assessment of the chosen ticket at its place in FIFO order (`null` for the
+       * selections that do not assess tickets: plain FIFO and staff flight calls).
+       */
+      readonly assessment: Assessment | null;
     }
   | { readonly type: 'CALLED'; readonly ticketId: string; readonly atMs: Millis }
   | { readonly type: 'RECALLED'; readonly ticketId: string; readonly atMs: Millis }

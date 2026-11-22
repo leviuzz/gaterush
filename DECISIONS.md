@@ -1272,3 +1272,85 @@ founder on 2026-11-21 together with all of its recommendations.
   - A person can run the simulator on a phone, offline, and give their own airport's files
     without sending them anywhere.
   - Persisted runs, history and exports through an API follow in S10 (Fastify, PostgreSQL).
+
+## ADR-041: The trace of a simulated day, and its replay
+
+- **Status:** Accepted (2026-11-22). Slice S11, the second of M2. Trace 0.1.0, studio core 0.2.0,
+  CLI and Studio 0.11.0. Engine, queue and model versions are unchanged: no decision and no
+  outcome changes, and every results file is the same as S9's but for the version of the program
+  that wrote it.
+- **Context:**
+  - The kickoff plans a slice with each passenger's detail (why they were called earlier, the
+    paired outcome) and the replay of a day. Its criterion: every call of the replay shows the
+    engine's reason codes.
+  - The founder needs something that can be sold. What sets GateFlow apart is that every call is
+    explainable (principle 2 of the kickoff), and an airport has to see it, not take it on trust.
+  - The operational product will need the same thing in M3 and M4: an audit trail with the reason
+    for every call, and a console whose figures are recomputed from the event log (criterion of
+    the kickoff's console slice).
+- **Decision:**
+  - **The event log is the record; every view is computed from it.**
+    - The simulator tells an observer every event of the day: arrivals, every event of the
+      queue attributed to its party, screenings with their lane, lanes opening and closing,
+      decisions on extra lanes, and what the system was told about the flights (`DayEvent`).
+      The observer never changes a run.
+    - The replay's figures are projections of that log: people waiting, called, absent, at the
+      lanes and in screening; the lanes in use; each party's journey; the flights missed as
+      boarding closed; and the paired outcome of every party.
+  - **A decision carries its inputs.** The queue's `COMMITTED` event now holds what the engine
+    decided on: the tickets and people passed, the fast track, the urgent tickets waiting and the
+    engine's assessment of the ticket chosen. The audit trail of M3 will store the same event, so
+    a call can be explained without running the engine again.
+  - **Reasons in words.** The engine package describes every reason code in a title and one
+    sentence (`REASON_DESCRIPTIONS`); they say what the engine did, never how to obtain
+    priority. An explanation adds the figures of the decision. The engine's margins become
+    times at the gate ("3.8 min before boarding closes"), because staff understand those.
+  - **A trace is a file** (`gateflow.sim.trace/1`, package `@gateflow/sim-trace`):
+    - it holds one day of a run and two of its policies, the reference and the candidate, on
+      the same passengers;
+    - it includes the day itself (checkpoint, flights, parties, disruptions, staff), so it can be
+      checked and run again on its own.
+  - **A fingerprint proves the replay.**
+    - The fingerprint is a SHA-256 of the canonical trace, without the program that wrote it and
+      its revision.
+    - `gateflow-sim trace` writes the trace and prints the fingerprint.
+    - The Studio shows the same fingerprint, with the command that reproduces the day.
+  - **No chosen day by default.** The Studio replays the run's median day for its comparison
+    (the typical day), and offers the best, the worst or any day of the run. The replay opens at
+    the moment the reference's queue is longest.
+- **Alternatives considered:**
+  - **Counts sampled by the simulator every minute.** Simpler to draw, but a second record
+    beside the outcomes, and not what the operational console will have. The projections of the
+    log are exact (they give the simulator's statistics to the person-millisecond).
+  - **A compact, column-wise trace.** The busiest library day (VCE-like peak, 15,088 parties)
+    gives a trace of 41 MB of JSON, built in 0.6 s. Readable JSON is kept until a phone shows it
+    is too much.
+  - **WebCrypto for the fingerprint.** Faster, but not available in every frame (a page opened
+    from disk). The page's own SHA-256, already proved identical to node:crypto, computes it on
+    a worker after the replay is shown.
+- **Evidence:**
+  - The day observer changes nothing: property tests on random days, with and without
+    disruptions and extra lanes, give identical runs with and without it. Its events agree with
+    the outcomes and statistics: arrivals, screenings and lanes, commitments, priority calls,
+    lane decisions, extra lane time.
+  - On real library days (demo, feed stress, VCE-like disrupted, TSF-like with extra lanes,
+    MX-like hub), the projections of the trace give the simulator's statistics exactly:
+    - waiting and standing, integrated over the day;
+    - the largest queues and the most lanes open;
+    - the day's metrics of both policies;
+    - flights saved and lost, as in the run.
+  - Every commitment is explained with a reason code. Priority calls are always
+    `URGENT_FEASIBLE`, or `FLIGHT_CALL` for today's staff practice.
+  - The commitment event names exactly the tickets and people it passes (queue property test).
+  - The CLI's `trace` gives the run's flights saved and lost for the same day.
+  - The Studio's trace equals the CLI's, fingerprint included (Node test and Chromium
+    end-to-end test). The end-to-end test also checks:
+    - the replay opens on the median day, with that day's flights saved and lost;
+    - every call shows a reason of the engine;
+    - a saved passenger's day is explained call by call.
+- **Consequences:**
+  - An airport sees, on its own day, which passengers GateFlow brought forward and why, and
+    who waited longer for them, within the bound K.
+  - The engine's figures appear on screen: the wording of facts and reasons is now part of the
+    product and will need Italian and Spanish (M3).
+  - A trace of a busy day is large; a lighter format can come later without changing the views.

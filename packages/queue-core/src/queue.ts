@@ -485,8 +485,11 @@ export class CheckpointQueue {
       throw new QueueError(`engine selected ${selection.ticketId} at an unexpected position`);
     }
     // Every older ticket is overtaken by all the people of the committed ticket.
+    let passedPeople = 0;
     for (let i = 0; i < position; i++) {
-      (this.waiting[i] as TicketRecord).overtakenCount += record.partySize;
+      const passed = this.waiting[i] as TicketRecord;
+      passed.overtakenCount += record.partySize;
+      passedPeople += passed.partySize;
     }
     this.waiting.splice(position, 1);
     for (let p = 0; p < record.partySize; p++) this.recentPriority.push(selection.priorityCall);
@@ -510,6 +513,11 @@ export class CheckpointQueue {
       atMs: nowMs,
       priority: selection.priorityCall,
       reasons: selection.reasons,
+      passedTickets: position,
+      passedPeople,
+      fastTrack: record.fastTracked,
+      urgentCandidates: selection.urgentCandidates,
+      assessment: selection.assessment,
     });
     return record;
   }

@@ -33,7 +33,8 @@ packages/
   sim-model/        checkpoint simulation: physical queue or GateFlow virtual queue, extra lanes (pure)
   sim-scenarios/    scenario schema, validation, assumptions, synthetic population, arrival forecast (pure)
   sim-metrics/      experiments, sweeps, paired metrics, statistics, results, Markdown and HTML (pure)
-  studio-core/      what the Studio adds in the browser: SHA-256, files, library, setup, what-if, comparison (pure)
+  sim-trace/        the trace of one day: every event of two policies, replay views, explanations (pure)
+  studio-core/      what the Studio adds in the browser: SHA-256, files, library, setup, what-if, comparison, traces (pure)
 airports/           airport configurations: parameters of each airport and checkpoint (YAML)
 airports/private/   airport-provided configurations, ignored by git
 scenarios/          scenario files (YAML), including the S7 library
@@ -55,6 +56,7 @@ flowchart LR
   model["sim-model"]
   scenarios["sim-scenarios"]
   metrics["sim-metrics"]
+  trace["sim-trace"]
   studiocore["studio-core"]
   cli["apps/sim-cli"]
   studio["apps/studio"]
@@ -73,14 +75,22 @@ flowchart LR
   metrics --> queue
   metrics --> engine
   metrics --> kernel
+  trace --> metrics
+  trace --> scenarios
+  trace --> model
+  trace --> queue
+  trace --> engine
   cli --> metrics
+  cli --> trace
   cli --> scenarios
   cli --> queue
   cli --> engine
   studiocore --> metrics
+  studiocore --> trace
   studiocore --> scenarios
   studiocore --> queue
   studio --> studiocore
+  studio --> trace
   studio --> metrics
 ```
 
@@ -243,7 +253,9 @@ States: `QUEUED -> PREPARE -> CALLED -> RECALLED -> NO_SHOW -> EXPIRED`, where:
   window. Timeouts strictly before `t` are applied before an operation at `t`, so a passenger
   presenting exactly at a deadline is on time.
 - **Events.** Every transition is reported to a listener in chronological order (the audit log in
-  production, metrics in simulation).
+  production, metrics in simulation). A commitment carries what it was decided on: the reasons,
+  the tickets and people it passes, the fast track, the urgent tickets waiting and the engine's
+  assessment of the ticket chosen (ADR-041).
 - **Parties.** A ticket carries its party size, presentation time and scheduled departure. The
   window, the waiting list and the outstanding calls are also counted in people; a party called
   ahead of older tickets adds its size to their overtake counts.
@@ -276,7 +288,8 @@ priority commitments, the cap, the guard and reactivations.
 ## 7. Checkpoint simulation model (model version 0.6.0)
 
 `simulateCheckpoint(population, policy, { classification })` is a discrete-event simulation of
-one checkpoint operated by a `CheckpointQueue`:
+one checkpoint operated by a `CheckpointQueue`. An optional `observer` receives every event of the
+day (`DayEvent`, ADR-041) and never changes the run:
 
 - **Queues.** With a *physical* queue (status quo) passengers stand in line and the next one steps
   forward as soon as a lane is free. With a GateFlow *virtual* queue, tickets are called while the
@@ -530,7 +543,38 @@ The simulator in the browser, as one self-contained page that works offline and 
   the generator. End-to-end tests in Chromium check it with and without workers, and for a
   scenario changed in the page and saved for the CLI.
 
-## 12. Target architecture of the operational product (ADR-013)
+## 12. Trace and replay of a day (`@gateflow/sim-trace`, ADR-041)
+
+The record of one simulated day, from which the replay, each passenger's journey and the
+explanation of every call are computed.
+
+- **Trace** (`traceDay`, schema `gateflow.sim.trace/1`):
+  - one day (seed) of a run's job, for two of its policies (a reference and a candidate) on the
+    same passengers;
+  - the day itself (the population) and, for each policy, every `DayEvent` in processing order,
+    the outcomes and the statistics.
+- **Fingerprint:** `traceContent` is the canonical JSON without the generator and the commit;
+  its SHA-256 is the same in the CLI (`gateflow-sim trace`) and in the Studio.
+- **Projections**, all from the events:
+  - `buildTimeline` and `stateAt`: people waiting, called, absent, at the lanes and in
+    screening, lanes open and extra;
+  - `screeningsByLane` and `lanesAt`: who is on each lane;
+  - `eventsByParty`, `commitmentIndexes` and `knownDeadlines` (what the system knew of the
+    flight at each decision);
+  - `missedByClosing`: misses as boarding closes;
+  - `pairParties` and `summariseDay`: saved, lost or both, the change in wait.
+  - Tests check them against the simulator's own statistics: the integrals of waiting and
+    standing, maxima, the day's metrics and its paired comparison.
+- **Explanations** (`explainCommitment`): the engine's reason in words (`REASON_DESCRIPTIONS` of
+  the engine package), the figures of the decision, with margins as times at the gate, and the
+  engine's notes on the ticket.
+- **In the Studio:**
+  - a worker traces the chosen day of the run and then computes the fingerprint;
+  - the replay shows both policies at any moment, three aligned charts (people standing,
+    flights missed, lanes), the latest calls with their reasons, lists of passengers (saved,
+    lost, delayed) and the journey of any passenger under both policies.
+
+## 13. Target architecture of the operational product (ADR-013)
 
 Direction agreed at kickoff, to be implemented from milestone M2/M3:
 

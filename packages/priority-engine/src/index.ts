@@ -14,8 +14,8 @@ export {
 } from './assess';
 export type { JourneyEstimates, QueueSnapshot } from './assess';
 export { capAllows, priorityCallsInWindow, selectNext } from './select';
-export { REASON_CODES } from './reasons';
-export type { ReasonCode } from './reasons';
+export { REASON_CODES, REASON_DESCRIPTIONS, describeReason } from './reasons';
+export type { ReasonCode, ReasonDescription } from './reasons';
 export {
   EngineInputError,
   toFifoOrder,

@@ -298,6 +298,74 @@ export interface RunResult {
   readonly stats: RunStats;
 }
 
+/**
+ * What happens during a simulated day, in the order the simulator processes it (S11). Together
+ * the events tell the whole day: who arrived, every decision of the queue with what it was based
+ * on, every screening, the lanes and what the system knew of the flights. Parties and flights are
+ * indexes into `Population.passengers` and `Population.flights`; lanes are numbered from 0.
+ */
+export type DayEvent =
+  /** A party reached the checkpoint (a queue party takes its ticket at once). */
+  | { readonly type: 'ARRIVED'; readonly atMs: Millis; readonly party: number }
+  /** An event of the queue, attributed to the party that holds the ticket. */
+  | {
+      readonly type: 'QUEUE';
+      readonly atMs: Millis;
+      readonly party: number;
+      readonly event: QueueEvent;
+    }
+  | {
+      readonly type: 'SCREENING_STARTED';
+      readonly atMs: Millis;
+      readonly party: number;
+      readonly lane: number;
+    }
+  | {
+      readonly type: 'SCREENING_ENDED';
+      readonly atMs: Millis;
+      readonly party: number;
+      readonly lane: number;
+    }
+  /**
+   * The lanes open changed (and once at the start of the day): `open` lanes 0 to open - 1, of
+   * which `extra` beyond the plan; `planned` by the lane plan, `outOfService` by outages.
+   */
+  | {
+      readonly type: 'LANES';
+      readonly atMs: Millis;
+      readonly open: number;
+      readonly planned: number;
+      readonly outOfService: number;
+      readonly extra: number;
+    }
+  /**
+   * A decision on an extra lane (S8): today's supervisor (always carried out) or a GateFlow
+   * recommendation, which the duty manager follows or not. `waitMs` is what motivated it: the
+   * wait the queue showed the supervisor, or the longest wait GateFlow projected (with the lanes
+   * open for a decision to open, with one lane fewer for a decision to close).
+   */
+  | {
+      readonly type: 'LANE_DECISION';
+      readonly atMs: Millis;
+      readonly by: 'SUPERVISOR' | 'GATEFLOW';
+      readonly action: 'OPEN' | 'CLOSE';
+      readonly lanes: number;
+      readonly followed: boolean;
+      readonly waitMs: Millis;
+    }
+  /** The flight feed went down: what is known stays, and grows old. */
+  | { readonly type: 'FEED_DOWN'; readonly atMs: Millis }
+  /** The flight feed recovered. */
+  | { readonly type: 'FEED_UP'; readonly atMs: Millis }
+  /** The queue was told new knowledge of a flight (from the feed, or as it went down or up). */
+  | {
+      readonly type: 'FLIGHT_KNOWN';
+      readonly atMs: Millis;
+      readonly flight: number;
+      readonly deadlineMs: Millis | null;
+      readonly walkEstimateMs: Millis | null;
+    };
+
 export interface SimulationOptions {
   /**
    * Parameters used to classify each ticket on arrival (`classAtArrival`). Using the same values
@@ -306,4 +374,6 @@ export interface SimulationOptions {
   readonly classification: ClassificationParams;
   /** Observer of the queue's events, for tests and diagnostics (it must not change the run). */
   readonly listener?: (event: QueueEvent) => void;
+  /** Observer of the whole day (S11): it receives every `DayEvent` and must not change the run. */
+  readonly observer?: (event: DayEvent) => void;
 }

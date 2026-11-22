@@ -3,7 +3,7 @@ import type { Policy, PredictiveLanes, ReactiveLanes } from '@gateflow/queue-cor
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { PopulationError, simulateCheckpoint } from '../src';
-import type { ArrivalForecast, LaneStaffing, Population, RunResult } from '../src';
+import type { ArrivalForecast, DayEvent, LaneStaffing, Population, RunResult } from '../src';
 import {
   FIFO,
   MINUTE,
@@ -307,6 +307,27 @@ describe('lane management: properties (S8)', () => {
           const policy = mode === 'reactive' ? reactive() : predict();
           const run = simulateCheckpoint(population, policy, OPTIONS);
           const { stats } = run;
+          // The day observer (S11) changes nothing and accounts for every decision and lane.
+          const events: DayEvent[] = [];
+          const observed = simulateCheckpoint(population, policy, {
+            ...OPTIONS,
+            observer: (e) => events.push(e),
+          });
+          expect(observed).toEqual(run);
+          const decided = events.filter((e) => e.type === 'LANE_DECISION');
+          expect(decided.length).toBe(stats.laneDecisions);
+          expect(decided.filter((e) => e.followed).length).toBe(stats.laneDecisionsFollowed);
+          expect(
+            decided.every((e) => e.by === (mode === 'reactive' ? 'SUPERVISOR' : 'GATEFLOW')),
+          ).toBe(true);
+          const lanes = events.filter((e) => e.type === 'LANES');
+          let extraMs = 0;
+          lanes.forEach((e, i) => {
+            const from = Math.max(e.atMs, stats.firstArrivalMs);
+            const to = Math.min(lanes[i + 1]?.atMs ?? Infinity, stats.lastServiceEndMs);
+            if (to > from) extraMs += e.extra * (to - from);
+          });
+          expect(extraMs).toBe(stats.extraLaneMs);
           expect(run.outcomes.every((o) => o.serviceEndMs >= o.serviceStartMs)).toBe(true);
           expect(stats.maxOpenLanes).toBeLessThanOrEqual(lanesAvailable);
           expect(stats.maxOpenLanes).toBeLessThanOrEqual(planned + staff.maxExtraLanes);

@@ -1,6 +1,6 @@
 {
   "name": "@gateflow/studio",
-  "version": "0.9.0",
+  "version": "0.11.0",
   "private": true,
   "description": "GateFlow Simulator Studio: the simulator in the browser, as one self-contained HTML page.",
   "type": "module",
@@ -12,9 +12,12 @@
     "test:e2e": "vitest run --config vitest.e2e.config.mjs"
   },
   "dependencies": {
+    "@gateflow/priority-engine": "workspace:*",
     "@gateflow/queue-core": "workspace:*",
     "@gateflow/sim-metrics": "workspace:*",
+    "@gateflow/sim-model": "workspace:*",
     "@gateflow/sim-scenarios": "workspace:*",
+    "@gateflow/sim-trace": "workspace:*",
     "@gateflow/studio-core": "workspace:*",
     "react": "19.3.1",
     "react-dom": "19.3.1"

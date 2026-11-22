@@ -4,6 +4,57 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Any change that alters simulated numbers
 must be listed, together with the component versions it bumps.
 
+## [0.11.0] - 2026-11-22: Slice S11, replay of a day with the reason for every call
+
+The trace of a simulated day and its replay in the Studio: each passenger's journey, the paired
+outcome and the engine's reason for every call (ADR-041). Second slice of milestone M2, before
+S10.
+
+### Simulated numbers change
+
+- None. Engine 0.5.0, queue core 0.6.0 and model 0.6.0 make the same decisions with the same
+  outcomes: results files are byte-identical but for the generator (`gateflow-sim 0.11.0`,
+  `gateflow-studio 0.11.0`), and the golden files are unchanged.
+
+### Added
+
+- `@gateflow/sim-trace` 0.1.0 (pure): `traceDay` writes the trace of one day of a run for two of
+  its policies (`gateflow.sim.trace/1`): the day itself, and every event, outcome and statistic
+  of each policy.
+  - Views computed from the events: the checkpoint at any moment, the lanes, each party's
+    events, what the system knew of each flight at each decision, misses as boarding closes,
+    the paired outcome of every party.
+  - `explainCommitment`: a call in words, with its figures.
+  - `traceContent`: the content behind the fingerprint.
+- sim-model: the `observer` option receives every `DayEvent` of a run (arrivals, queue events
+  with their party, screenings with their lane, lanes, extra-lane decisions, flight feed); it
+  never changes the run.
+- queue-core: the `COMMITTED` event carries what the decision was based on: tickets and people
+  passed, fast track, urgent tickets waiting, the engine's assessment.
+- priority-engine: `REASON_DESCRIPTIONS` and `describeReason`, every reason code in a title and a
+  sentence.
+- CLI: `gateflow-sim trace --scenario <file> --seed <n>` (`--policies`, `--reference`,
+  `--candidate`, `--out`, `--commit`) writes `trace.json` and prints the day and the trace's
+  fingerprint.
+- Studio:
+  - "Replay a day": the typical (median), best, worst or any day of a run, any of its
+    comparisons;
+  - both policies at the same moment, with play and seek;
+  - charts of people standing, flights missed and lanes open, with an hour-by-hour table;
+  - the latest calls with their reasons, and lists of passengers saved, lost or delayed by
+    priority calls;
+  - each passenger's day under both policies, call by call;
+  - the trace's fingerprint, the CLI command that reproduces it, and the trace file.
+- studio-core 0.2.0: `studioTrace`, `traceFingerprint`, `replayComparison`, `notableDays`.
+- Tests: property tests of the observer; the trace against the simulator's statistics on five
+  library days; the CLI's `trace`; the Studio's trace and fingerprint against the CLI's; an
+  end-to-end test of the replay in Chromium.
+
+### Changed
+
+- Studio: the full report has its own panel, after the replay.
+- CLI and Studio 0.11.0 (the slice number; there is no 0.10.0).
+
 ## [0.9.0] - 2026-11-22: Slice S9, GateFlow Simulator Studio
 
 The simulator in the browser, as one HTML page that works offline and on a phone and gives the

@@ -1,12 +1,13 @@
 import { assembleExperiment, planExperiment, runDay } from '@gateflow/sim-metrics';
 import type { DayJob } from '@gateflow/sim-metrics';
-import { studioResults } from '@gateflow/studio-core';
+import { studioResults, studioTrace, traceFingerprint } from '@gateflow/studio-core';
 import type { WorkerReply, WorkerRequest } from './protocol';
 
 /**
  * The Web Worker of the Studio. It plans a run (the arrival forecast takes seconds), simulates days
- * of a job (received once, then one seed per message) and computes the statistics. Each answer
- * depends only on the request: the results are those of the page or of the CLI.
+ * of a job (received once, then one seed per message), computes the statistics and traces a day
+ * for the replay (the trace first, then its fingerprint, which takes longer). Each answer depends
+ * only on the request: the results are those of the page or of the CLI.
  */
 const scope = self as unknown as {
   onmessage: ((event: MessageEvent<WorkerRequest>) => void) | null;
@@ -30,6 +31,11 @@ function answer(request: WorkerRequest): WorkerReply | undefined {
         type: 'results',
         doc: studioResults(assembleExperiment(request.config, request.days), request.build),
       };
+    case 'trace': {
+      const doc = studioTrace(request.job, request.seed, request.comparison, request.build);
+      scope.postMessage({ type: 'traced', doc });
+      return { type: 'fingerprint', fingerprint: traceFingerprint(doc) };
+    }
   }
 }
 

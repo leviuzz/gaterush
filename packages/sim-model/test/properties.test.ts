@@ -5,6 +5,7 @@ import type { Policy, QueueEvent, QueueOperation } from '@gateflow/queue-core';
 import { describe, expect, it } from 'vitest';
 import { simulateCheckpoint } from '../src';
 import type {
+  DayEvent,
   FeedOutage,
   FlightUpdate,
   LaneOutage,
@@ -835,5 +836,101 @@ describe('disruptions (S5)', () => {
     expect(hits.gateChangesWalk).toBeGreaterThanOrEqual(130);
     expect(hits.misinformed).toBeGreaterThanOrEqual(30);
     expect(hits.reversals).toBeGreaterThanOrEqual(65);
+  });
+});
+
+/**
+ * The day events of a run tell the same day as its outcomes: every arrival and screening at the
+ * outcome's times and lanes, every decision of the queue, lanes that are open when used.
+ */
+function checkDayEvents(population: Population, run: RunResult, events: readonly DayEvent[]): void {
+  for (let i = 1; i < events.length; i++) {
+    expect(events[i]!.atMs).toBeGreaterThanOrEqual(events[i - 1]!.atMs);
+  }
+  const first = events[0];
+  expect(first?.type).toBe('LANES');
+  const count = (party: number, type: DayEvent['type']) =>
+    events.filter((e) => e.type === type && 'party' in e && e.party === party).length;
+  let open = 0;
+  let commitments = 0;
+  let priority = 0;
+  let decisions = 0;
+  let followed = 0;
+  let maxOpen = 0;
+  for (const e of events) {
+    switch (e.type) {
+      case 'LANES':
+        expect(e.open).toBeGreaterThanOrEqual(1);
+        expect(e.extra).toBeGreaterThanOrEqual(0);
+        open = e.open;
+        maxOpen = Math.max(maxOpen, open);
+        break;
+      case 'SCREENING_STARTED':
+        // Screening starts only on a lane that is open.
+        expect(e.lane).toBeLessThan(open);
+        expect(e.atMs).toBe(run.outcomes[e.party]!.serviceStartMs);
+        expect(e.lane).toBe(run.outcomes[e.party]!.laneIndex);
+        break;
+      case 'SCREENING_ENDED':
+        expect(e.atMs).toBe(run.outcomes[e.party]!.serviceEndMs);
+        expect(e.lane).toBe(run.outcomes[e.party]!.laneIndex);
+        break;
+      case 'ARRIVED':
+        expect(e.atMs).toBe(population.passengers[e.party]!.arrivalMs);
+        break;
+      case 'QUEUE': {
+        const id = population.passengers[e.party]!.id;
+        expect(e.event.ticketId === id || e.event.ticketId.startsWith(`${id}#`)).toBe(true);
+        expect(e.event.atMs).toBe(e.atMs);
+        if (e.event.type === 'COMMITTED') {
+          commitments++;
+          if (e.event.priority) priority++;
+        }
+        break;
+      }
+      case 'LANE_DECISION':
+        decisions++;
+        if (e.followed) followed++;
+        break;
+      case 'FEED_DOWN':
+      case 'FEED_UP':
+      case 'FLIGHT_KNOWN':
+        break;
+    }
+  }
+  population.passengers.forEach((pax, party) => {
+    expect(count(party, 'ARRIVED')).toBe(1);
+    expect(count(party, 'SCREENING_STARTED')).toBe(1);
+    expect(count(party, 'SCREENING_ENDED')).toBe(1);
+    const issued = events.filter(
+      (e) => e.type === 'QUEUE' && e.party === party && e.event.type === 'ISSUED',
+    ).length;
+    expect(issued).toBe(pax.path === 'QUEUE' ? 1 + run.outcomes[party]!.reissuedTickets : 0);
+  });
+  expect(commitments).toBe(run.stats.commitments);
+  expect(priority).toBe(run.stats.priorityCalls);
+  expect(decisions).toBe(run.stats.laneDecisions);
+  expect(followed).toBe(run.stats.laneDecisionsFollowed);
+  expect(maxOpen).toBe(run.stats.maxOpenLanes);
+}
+
+describe('day observer (S11)', () => {
+  it('never changes the run, and its events tell the same day as the outcomes', () => {
+    fc.assert(
+      fc.property(
+        fc.oneof(populationArb, disruptedPopulationArb),
+        fc.oneof(policyArb, s5PolicyArb),
+        (population, p) => {
+          const events: DayEvent[] = [];
+          const observed = simulateCheckpoint(population, p, {
+            ...OPTIONS,
+            observer: (e) => events.push(e),
+          });
+          expect(observed).toEqual(simulateCheckpoint(population, p, OPTIONS));
+          checkDayEvents(population, observed, events);
+        },
+      ),
+      RUNS,
+    );
   });
 });

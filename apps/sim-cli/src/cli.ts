@@ -43,6 +43,14 @@ import {
 } from '@gateflow/sim-scenarios';
 import type { Scenario } from '@gateflow/sim-scenarios';
 import {
+  clock,
+  pairParties,
+  stringifyTrace,
+  summariseDay,
+  traceContent,
+  traceDay,
+} from '@gateflow/sim-trace';
+import {
   UsageError,
   parseComparisons,
   parsePolicies,
@@ -65,6 +73,8 @@ const HELP = `${CLI_NAME} ${CLI_VERSION}: GateFlow simulation experiments
 Usage:
   ${CLI_NAME} run --scenario <file> [options]   Run an experiment: results.json, report.md, report.html
   ${CLI_NAME} sweep --spec <file> [options]     Run a sensitivity sweep: sweep.json, sweep.md, sweep.html
+  ${CLI_NAME} trace --scenario <file> --seed <n> [options]
+                                                Trace one day of two policies: trace.json
   ${CLI_NAME} validate --scenario <file>        Validate a scenario file
   ${CLI_NAME} flights --scenario <file> [--out <file>]
                                                 Write the design day as a flight list (CSV)
@@ -83,6 +93,16 @@ Options for "run":
   --workers <n>                  Worker threads; results do not depend on it (default: all CPUs)
   --commit <rev>                 Source revision recorded in the manifest (default: detected)
   --quiet                        Do not print progress
+
+Options for "trace" (every event of one simulated day, for the replay and audits):
+  --scenario <file>              Scenario file (YAML or JSON)            (required)
+  --seed <n>                     The day                                 (required)
+  --policies <ids>               The run's policies: they set the risk classes on arrival
+                                                                         (default ${DEFAULT_POLICIES})
+  --reference <id>               One of --policies                       (default: the first)
+  --candidate <id>               One of --policies                       (default: the last)
+  --out <dir>                    Output directory                (default out/<scenario id>/trace-<seed>)
+  --commit <rev>                 Source revision recorded in the manifest (default: detected)
 
 Options for "sweep" (a sensitivity sweep is described in a file, see sweeps/):
   --spec <file>                  Sweep specification (YAML or JSON)      (required)
@@ -272,6 +292,86 @@ async function commandRun(argv: string[], io: CliIo): Promise<number> {
       `written    ${resultsPath}`,
       `           ${reportPath}`,
       `           ${htmlPath}`,
+      '',
+    ].join('\n'),
+  );
+  return EXIT_OK;
+}
+
+function commandTrace(argv: string[], io: CliIo): number {
+  const { values } = parseArgs({
+    args: argv,
+    options: {
+      scenario: { type: 'string' },
+      seed: { type: 'string' },
+      policies: { type: 'string', default: DEFAULT_POLICIES },
+      reference: { type: 'string' },
+      candidate: { type: 'string' },
+      out: { type: 'string' },
+      commit: { type: 'string' },
+    },
+    strict: true,
+    allowPositionals: false,
+  });
+  if (values.scenario === undefined) throw new UsageError('--scenario is required');
+  if (values.seed === undefined) throw new UsageError('--seed is required');
+  const seeds = parseSeeds(values.seed);
+  if (seeds.length !== 1) throw new UsageError('--seed takes one day');
+  const seed = seeds[0] as number;
+  const scenario = loadScenario(io, values.scenario);
+  const policies = configuredPolicies(parsePolicies(values.policies), scenario);
+  const referenceId = values.reference ?? (policies[0] as Policy).id;
+  const candidateId = values.candidate ?? (policies[policies.length - 1] as Policy).id;
+  for (const [option, id] of [
+    ['--reference', referenceId],
+    ['--candidate', candidateId],
+  ] as const) {
+    if (!policies.some((p) => p.id === id)) {
+      throw new UsageError(`${option} "${id}" must be one of --policies`);
+    }
+  }
+  if (referenceId === candidateId) throw new UsageError('--reference and --candidate must differ');
+  const baselinePolicyId = (policies[0] as Policy).id;
+  const { job } = planExperiment({
+    scenario,
+    seeds: [seed],
+    policies,
+    baselinePolicyId,
+    comparisons: recommendedComparisons(policies, baselinePolicyId),
+    classification: arrivalClassification(policies),
+    bootstrap: DEFAULT_BOOTSTRAP,
+  });
+  const doc = traceDay(
+    job,
+    seed,
+    { candidateId, referenceId },
+    {
+      generator: { name: CLI_NAME, version: CLI_VERSION },
+      commit: values.commit ?? io.commit(),
+      scenarioHash: scenarioHash(io, scenario),
+    },
+  );
+  const outDir = values.out ?? join('out', scenario.id, `trace-${seed}`);
+  io.mkdir(outDir);
+  const tracePath = join(outDir, 'trace.json');
+  io.writeFile(tracePath, stringifyTrace(doc));
+  const day = summariseDay(doc, pairParties(doc));
+  const [reference, candidate] = doc.runs;
+  const events = reference.events.length + candidate.events.length;
+  io.stdout(
+    [
+      'GateFlow day trace: SIMULATED, not operational evidence',
+      `scenario   ${scenario.id} (${doc.manifest.scenario.hash.slice(0, 19)}...), day ${seed}`,
+      `day        ${day.parties} parties, ${day.people} people, ${day.flights} flights, ${events} events`,
+      `${referenceId}: ${day.missedReference} people missed their flight`,
+      `${candidateId}: ${day.missedCandidate} people missed their flight, ` +
+        `${candidate.stats.priorityCalls} priority calls (${day.priorityPeople} people)`,
+      `paired     saved ${day.saved}, lost ${day.harmed}, net ${day.saved - day.harmed}`,
+      `hours      first arrival ${clock(Math.min(reference.stats.firstArrivalMs, candidate.stats.firstArrivalMs))}, ` +
+        `last screening over ${clock(Math.max(reference.stats.lastServiceEndMs, candidate.stats.lastServiceEndMs))}`,
+      `fingerprint sha256:${io.sha256(traceContent(doc))}`,
+      '',
+      `written    ${tracePath}`,
       '',
     ].join('\n'),
   );
@@ -519,6 +619,8 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
         return await commandRun(rest, io);
       case 'sweep':
         return await commandSweep(rest, io);
+      case 'trace':
+        return commandTrace(rest, io);
       case 'validate':
         return commandValidate(rest, io);
       case 'flights':

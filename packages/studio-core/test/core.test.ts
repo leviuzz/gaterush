@@ -7,9 +7,11 @@ import {
   applyScenarioSettings,
   arrivalClassification,
   buildResults,
+  planExperiment,
   recommendedComparisons,
   runExperiment,
 } from '@gateflow/sim-metrics';
+import { traceContent, traceDay } from '@gateflow/sim-trace';
 import { findPolicyPreset } from '@gateflow/queue-core';
 import {
   ScenarioValidationError,
@@ -30,12 +32,16 @@ import {
   loadLibrary,
   loadScenarioFile,
   normalizePath,
+  notableDays,
+  replayComparison,
   parseResultsFile,
   resolveFrom,
   scenarioFileText,
   scenarioHash,
   sha256Hex,
   studioResults,
+  studioTrace,
+  traceFingerprint,
   withLevers,
   withParameter,
 } from '../src';
@@ -225,6 +231,51 @@ describe('experiments', () => {
       ...studio,
       manifest: { ...studio.manifest, generator: cli.manifest.generator },
     }).toEqual(cli);
+  });
+});
+
+describe('replaying a day (S11)', () => {
+  const tsf = loadScenarioFile(files, 'scenarios/tsf-like-peak-day.yaml');
+  const config = experimentConfig({
+    scenario: tsf,
+    policyIds: ['fifo', 'fifo-manual', 'priority-v3'],
+    days: 5,
+    resamples: 50,
+  });
+  const doc = studioResults(runExperiment(config), { version: '0', commit: 'abc' });
+
+  it('opens on a priority policy against the status quo', () => {
+    expect(replayComparison(doc)).toEqual({ candidateId: 'priority-v3', referenceId: 'fifo' });
+  });
+
+  it('picks the median day as the typical day, and the best and worst days', () => {
+    const comparison = { candidateId: 'priority-v3', referenceId: 'fifo' };
+    const days = notableDays(doc, comparison)!;
+    const nets = doc.perSeed.map((d) => d.comparisons['priority-v3 vs fifo']!.net);
+    const sorted = [...nets].sort((a, b) => a - b);
+    expect(days.typical.net).toBe(sorted[2]);
+    expect(days.best.net).toBe(Math.max(...nets));
+    expect(days.worst.net).toBe(Math.min(...nets));
+    for (const day of [days.typical, days.best, days.worst]) {
+      expect(nets[day.seed - 1]).toBe(day.net);
+      // The lowest seed among the days with that net.
+      expect(nets.indexOf(day.net)).toBe(day.seed - 1);
+    }
+    expect(notableDays(doc, { candidateId: 'fifo', referenceId: 'priority-v3' })).toBeNull();
+  });
+
+  it('traces a day as the CLI does, with the same fingerprint', () => {
+    const { job } = planExperiment(config);
+    const comparison = { candidateId: 'priority-v3', referenceId: 'fifo-manual' };
+    const studio = studioTrace(job, 3, comparison, { version: '0.11.0', commit: 'abc' });
+    const cli = traceDay(job, 3, comparison, {
+      generator: { name: 'gateflow-sim', version: '0.11.0' },
+      commit: 'def',
+      scenarioHash: `sha256:${nodeSha(canonicalJson(tsf))}`,
+    });
+    expect(studio.manifest.generator).toEqual({ name: 'gateflow-studio', version: '0.11.0' });
+    expect(traceContent(studio)).toBe(traceContent(cli));
+    expect(traceFingerprint(studio)).toBe(`sha256:${nodeSha(traceContent(cli))}`);
   });
 });
 

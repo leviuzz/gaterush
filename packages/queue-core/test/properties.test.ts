@@ -274,6 +274,12 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
         const key = queuedKeys.get(e.ticketId)!;
         const size = q.ticket(e.ticketId)!.partySize;
         queuedKeys.delete(e.ticketId);
+        // The event names the tickets it passes and the people on them.
+        const passed = [...queuedKeys].filter(([, k]) => k < key).map(([id]) => id);
+        expect(e.passedTickets).toBe(passed.length);
+        expect(e.passedPeople).toBe(passed.reduce((sum, id) => sum + q.ticket(id)!.partySize, 0));
+        expect(e.fastTrack).toBe(fastTrack && e.priority);
+        if (e.assessment !== null) expect(e.assessment.ticketId).toBe(e.ticketId);
         for (const [id, k] of queuedKeys) {
           if (k < key) overtaken.set(id, (overtaken.get(id) ?? 0) + size);
         }

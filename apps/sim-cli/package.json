@@ -1,6 +1,6 @@
 {
   "name": "@gateflow/sim-cli",
-  "version": "0.9.0",
+  "version": "0.11.0",
   "private": true,
   "description": "Command-line interface for GateFlow simulation experiments (gateflow-sim).",
   "type": "module",
@@ -21,6 +21,7 @@
     "@gateflow/sim-metrics": "workspace:*",
     "@gateflow/sim-model": "workspace:*",
     "@gateflow/sim-scenarios": "workspace:*",
+    "@gateflow/sim-trace": "workspace:*",
     "yaml": "^2.9.1",
     "zod": "^4.6.7"
   },

@@ -3,10 +3,12 @@ import type {
   DayJob,
   ExperimentConfig,
   ExperimentPlan,
+  PolicyComparison,
   ResultsDocument,
   SeedResult,
 } from '@gateflow/sim-metrics';
-import { studioResults } from '@gateflow/studio-core';
+import type { TraceDocument } from '@gateflow/sim-trace';
+import { studioResults, studioTrace, traceFingerprint } from '@gateflow/studio-core';
 import type { WorkerReply, WorkerRequest } from './protocol';
 
 export interface PoolOptions {
@@ -244,4 +246,101 @@ export function resultsOfRun(
     () => studioResults(assembleExperiment(config, days), build),
     signal,
   );
+}
+
+/** A day being traced: the trace, then its fingerprint (which takes longer). */
+export interface TracedDay {
+  readonly trace: Promise<TraceDocument>;
+  readonly fingerprint: Promise<string>;
+}
+
+/**
+ * Traces one day of a run on a worker, so that the page stays responsive; where workers are not
+ * available, in the page. The trace comes as soon as it is ready, the fingerprint after it.
+ */
+export function traceOfDay(
+  job: DayJob,
+  seed: number,
+  comparison: PolicyComparison,
+  build: { readonly version: string; readonly commit: string },
+  workerSource: string,
+  signal: AbortSignal,
+): TracedDay {
+  let resolveTrace: (doc: TraceDocument) => void = () => undefined;
+  let rejectTrace: (error: Error) => void = () => undefined;
+  let resolveFingerprint: (value: string) => void = () => undefined;
+  let rejectFingerprint: (error: Error) => void = () => undefined;
+  const trace = new Promise<TraceDocument>((resolve, reject) => {
+    resolveTrace = resolve;
+    rejectTrace = reject;
+  });
+  const fingerprint = new Promise<string>((resolve, reject) => {
+    resolveFingerprint = resolve;
+    rejectFingerprint = reject;
+  });
+  // Whoever awaits them sees the errors; nothing is reported as unhandled.
+  trace.catch(() => undefined);
+  fingerprint.catch(() => undefined);
+  let traced = false;
+  // A settled promise ignores a later rejection: a failure after the trace fails the fingerprint.
+  const fail = (error: unknown) => {
+    const reason = error instanceof Error ? error : new Error(String(error));
+    rejectTrace(reason);
+    rejectFingerprint(reason);
+  };
+  // Read at each step: the run may be cancelled while the page yields.
+  const cancelled = () => signal.aborted;
+  const here = () => {
+    void yieldToPage().then(async () => {
+      try {
+        if (cancelled()) throw new RunCancelled();
+        const doc = studioTrace(job, seed, comparison, build);
+        resolveTrace(doc);
+        await yieldToPage();
+        if (cancelled()) throw new RunCancelled();
+        resolveFingerprint(traceFingerprint(doc));
+      } catch (error) {
+        fail(error);
+      }
+    });
+  };
+  let worker: Worker;
+  let url: string;
+  try {
+    url = URL.createObjectURL(new Blob([workerSource], { type: 'text/javascript' }));
+    worker = new Worker(url);
+  } catch {
+    here();
+    return { trace, fingerprint };
+  }
+  const stop = () => {
+    worker.terminate();
+    URL.revokeObjectURL(url);
+  };
+  signal.addEventListener('abort', () => {
+    stop();
+    fail(new RunCancelled());
+  });
+  worker.onmessage = (event: MessageEvent<WorkerReply>) => {
+    const reply = event.data;
+    if (reply.type === 'error') {
+      stop();
+      fail(new Error(reply.message));
+    } else if (reply.type === 'traced') {
+      traced = true;
+      resolveTrace(reply.doc);
+    } else if (reply.type === 'fingerprint') {
+      stop();
+      resolveFingerprint(reply.fingerprint);
+    }
+  };
+  worker.onerror = (event) => {
+    event.preventDefault();
+    stop();
+    // A worker that never ran (blocked by the page's frame): trace the day in the page.
+    if (!traced) here();
+    else fail(new Error(`a worker failed: ${event.message}`));
+  };
+  worker.postMessage({ type: 'trace', job, seed, comparison, build } satisfies WorkerRequest);
+  return { trace, fingerprint };
 }

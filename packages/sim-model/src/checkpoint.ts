@@ -446,13 +446,20 @@ export function simulateCheckpoint(
     }
   };
   const observe = options.listener;
+  /** Observer of the day (S11): told everything, it never changes the run. */
+  const observer = options.observer;
   const queue = new CheckpointQueue(policy, options.classification, {
     listener:
-      observe === undefined
+      observe === undefined && observer === undefined
         ? onQueueEvent
         : (event) => {
             onQueueEvent(event);
-            observe(event);
+            observe?.(event);
+            if (observer !== undefined) {
+              const party = ticketOwner.get(event.ticketId);
+              if (party === undefined) throw new Error(`unknown ticket ${event.ticketId}`);
+              observer({ type: 'QUEUE', atMs: event.atMs, party, event });
+            }
           },
   });
 
@@ -631,6 +638,15 @@ export function simulateCheckpoint(
   /** Tells the queue what is now known about a flight. */
   const publish = (flight: SimFlight, now: number): void => {
     const known = at(knowledge, flight.index, 'flight');
+    if (observer !== undefined) {
+      observer({
+        type: 'FLIGHT_KNOWN',
+        atMs: now,
+        flight: flight.index,
+        deadlineMs: known.deadline.atMs,
+        walkEstimateMs: known.walkEstimateMs,
+      });
+    }
     queue.updateFlight(
       flight.id,
       {
@@ -663,6 +679,7 @@ export function simulateCheckpoint(
    */
   const feedGoesDown = (fromMs: number, now: number): void => {
     feedDown = true;
+    observer?.({ type: 'FEED_DOWN', atMs: now });
     for (const flight of flights) {
       const known = at(knowledge, flight.index, 'flight');
       if (known.deadline.atMs === null) continue;
@@ -674,6 +691,7 @@ export function simulateCheckpoint(
   /** The feed recovers: the held messages arrive and the knowledge is live again. */
   const feedComesBack = (now: number): void => {
     feedDown = false;
+    observer?.({ type: 'FEED_UP', atMs: now });
     for (const flight of flights) {
       const known = at(knowledge, flight.index, 'flight');
       const { observedAtMs, ...live } = known.heldDeadline ?? known.deadline;
@@ -706,6 +724,7 @@ export function simulateCheckpoint(
       s.serviceStartMs = now;
       s.lane = lane;
       busyMs += passenger.serviceMs;
+      observer?.({ type: 'SCREENING_STARTED', atMs: now, party: passengerIndex, lane });
       sim.scheduleAt(now + passenger.serviceMs, SERVICE_END, {
         kind: SERVICE_END,
         lane,
@@ -794,6 +813,7 @@ export function simulateCheckpoint(
 
   const arrive = (passengerIndex: number, now: number): void => {
     const passenger = at(passengers, passengerIndex, 'passenger');
+    observer?.({ type: 'ARRIVED', atMs: now, party: passengerIndex });
     if (management?.kind === 'predict') recentArrivals.push([now, passenger.partySize]);
     if (passenger.path === 'QUEUE') {
       issueTicket(passengerIndex, now);
@@ -823,9 +843,21 @@ export function simulateCheckpoint(
   const updateLanes = (now: number): void => {
     const lanes = lanesAt(now, extraOpen);
     if (lanes > lanesAvailable) throw new Error('more lanes open than the checkpoint has');
+    const before = open;
+    const extraBefore = extraEffective;
     if (lanes !== open) changeLanes(lanes);
     extraEffective = open - lanesAt(now, 0);
     maxOpenLanes = Math.max(maxOpenLanes, open);
+    if (observer !== undefined && (open !== before || extraEffective !== extraBefore)) {
+      observer({
+        type: 'LANES',
+        atMs: now,
+        open,
+        planned: plannedAt(now),
+        outOfService: outAt(now),
+        extra: extraEffective,
+      });
+    }
   };
 
   /** People waiting for a lane: not yet called, on their way after a call, or at the lanes. */
@@ -872,6 +904,18 @@ export function simulateCheckpoint(
     }
   };
 
+  /** Tells the observer of a decision on an extra lane. */
+  const decision = (
+    by: 'SUPERVISOR' | 'GATEFLOW',
+    action: 'OPEN' | 'CLOSE',
+    lanes: number,
+    followed: boolean,
+    waitMs: number,
+    now: number,
+  ): void => {
+    observer?.({ type: 'LANE_DECISION', atMs: now, by, action, lanes, followed, waitMs });
+  };
+
   /** Today's supervisor: decides on the wait the queue shows now. */
   const reviewReactive = (now: number, lanes: ReactiveLanes): void => {
     if (staffing === undefined || now - lastDecisionMs < lanes.cooldownMs) return;
@@ -880,6 +924,7 @@ export function simulateCheckpoint(
       laneDecisions++;
       laneDecisionsFollowed++;
       lastDecisionMs = now;
+      decision('SUPERVISOR', 'OPEN', 1, true, waitMs, now);
       decideOpen(now, 1);
     } else if (
       waitMs < lanes.closeWhenWaitMs &&
@@ -889,6 +934,7 @@ export function simulateCheckpoint(
       laneDecisions++;
       laneDecisionsFollowed++;
       lastDecisionMs = now;
+      decision('SUPERVISOR', 'CLOSE', 1, true, waitMs, now);
       closeExtraLane(now);
     }
   };
@@ -935,7 +981,8 @@ export function simulateCheckpoint(
     /** Whether the duty manager follows the next recommendation. */
     const follows = (): boolean =>
       at(staffing.follows, recommendationIndex++ % staffing.follows.length, 'follow decision');
-    if (project(0, now) > lanes.targetWaitMs) {
+    const projectedMs = project(0, now);
+    if (projectedMs > lanes.targetWaitMs) {
       const free = room(now);
       if (free <= 0) return;
       const readyAt = now + staffing.openDelayEstimateMs;
@@ -943,23 +990,36 @@ export function simulateCheckpoint(
       while (wanted < free && project(wanted, readyAt) > lanes.targetWaitMs) wanted++;
       laneDecisions++;
       lastDecisionMs = now;
-      if (!follows()) return;
+      const followed = follows();
+      decision('GATEFLOW', 'OPEN', wanted, followed, projectedMs, now);
+      if (!followed) return;
       laneDecisionsFollowed++;
       decideOpen(now, wanted);
-    } else if (
-      extraOpen > 0 &&
-      pendingReady.length === 0 &&
-      now - lastOpenedAtMs >= staffing.minOpenMs &&
-      project(-1, now) <= lanes.closeWhenWaitMs
-    ) {
+      return;
+    }
+    if (extraOpen <= 0 || pendingReady.length > 0 || now - lastOpenedAtMs < staffing.minOpenMs) {
+      return;
+    }
+    const withOneFewerMs = project(-1, now);
+    if (withOneFewerMs <= lanes.closeWhenWaitMs) {
       laneDecisions++;
       lastDecisionMs = now;
-      if (!follows()) return;
+      const followed = follows();
+      decision('GATEFLOW', 'CLOSE', 1, followed, withOneFewerMs, now);
+      if (!followed) return;
       laneDecisionsFollowed++;
       closeExtraLane(now);
     }
   };
 
+  observer?.({
+    type: 'LANES',
+    atMs: startMs,
+    open,
+    planned: plannedAt(startMs),
+    outOfService: outAt(startMs),
+    extra: 0,
+  });
   sim.run((event) => {
     const now = event.timeMs;
     const payload = event.payload;
@@ -983,6 +1043,12 @@ export function simulateCheckpoint(
         noteMaxima();
         break;
       case SERVICE_END: {
+        observer?.({
+          type: 'SCREENING_ENDED',
+          atMs: now,
+          party: payload.passenger,
+          lane: payload.lane,
+        });
         busy[payload.lane] = false;
         if (payload.lane < open) freeOpen++;
         else busyClosing--;

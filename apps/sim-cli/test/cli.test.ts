@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { ResultsDocument } from '@gateflow/sim-metrics';
+import { pairParties, parseTraceFile, summariseDay, traceContent } from '@gateflow/sim-trace';
 import { EXIT_FAILURE, EXIT_OK, EXIT_USAGE, runCli } from '../src/cli';
 import { createNodeIo, detectCommit } from '../src/io';
 import { CLI_VERSION } from '../src/version';
@@ -502,6 +504,69 @@ describe('gateflow-sim sweep', () => {
       expect(result.code, result.stderr).toBe(EXIT_USAGE);
     }
     expect((await cli(['sweep'])).code).toBe(EXIT_USAGE);
+  });
+});
+
+describe('gateflow-sim trace', () => {
+  it('writes the trace of a day, with the outcomes of the run and a fingerprint', async () => {
+    const out = join(workDir, 'trace');
+    const result = await cli(['trace', '--scenario', DEMO, '--seed', '2', '--out', out]);
+    expect(result.code, result.stderr).toBe(EXIT_OK);
+    const text = readFileSync(join(out, 'trace.json'), 'utf8');
+    const doc = parseTraceFile(text);
+    expect(doc.manifest.generator).toEqual({ name: 'gateflow-sim', version: CLI_VERSION });
+    expect(doc.manifest.commit).toBe('test-commit');
+    expect(doc.manifest.referenceId).toBe('fifo');
+    expect(doc.manifest.candidateId).toBe('priority-v3');
+    const fingerprint = createHash('sha256').update(traceContent(doc)).digest('hex');
+    expect(result.stdout).toContain(`fingerprint sha256:${fingerprint}`);
+    // The day is the run's day 2: the same flights saved and lost.
+    const run = await runInto('trace-run', '2');
+    const comparison = (JSON.parse(run.results) as ResultsDocument).perSeed[0]?.comparisons[
+      'priority-v3 vs fifo'
+    ];
+    expect(comparison).toBeDefined();
+    const day = summariseDay(doc, pairParties(doc));
+    expect(day.saved).toBe(comparison?.saved);
+    expect(day.harmed).toBe(comparison?.harmed);
+    expect(result.stdout).toContain(`paired     saved ${day.saved}, lost ${day.harmed}`);
+  });
+
+  it('takes the reference and the candidate among the policies', async () => {
+    const out = join(workDir, 'trace-manual');
+    const result = await cli([
+      'trace',
+      '--scenario',
+      DEMO,
+      '--seed',
+      '1',
+      '--policies',
+      'fifo-manual,priority-v2,priority-v3',
+      '--reference',
+      'fifo-manual',
+      '--candidate',
+      'priority-v2',
+      '--out',
+      out,
+    ]);
+    expect(result.code, result.stderr).toBe(EXIT_OK);
+    const doc = parseTraceFile(readFileSync(join(out, 'trace.json'), 'utf8'));
+    expect(doc.manifest.policies.map((p) => p.id)).toEqual(['fifo-manual', 'priority-v2']);
+    expect(doc.manifest.policyIds).toEqual(['fifo-manual', 'priority-v2', 'priority-v3']);
+  });
+
+  it('rejects a missing day, several days and policies that are not simulated', async () => {
+    const bad = [
+      ['trace', '--scenario', DEMO],
+      ['trace', '--scenario', DEMO, '--seed', '1-3'],
+      ['trace', '--scenario', DEMO, '--seed', '1', '--candidate', 'priority-v2'],
+      ['trace', '--scenario', DEMO, '--seed', '1', '--reference', 'fifo', '--candidate', 'fifo'],
+      ['trace', '--seed', '1'],
+    ];
+    for (const argv of bad) {
+      const result = await cli([...argv, '--out', join(workDir, 'bad-trace')]);
+      expect(result.code, argv.join(' ')).toBe(EXIT_USAGE);
+    }
   });
 });
 

@@ -3,13 +3,17 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { REASON_CODES } from '@gateflow/priority-engine';
+import type { ResultsDocument } from '@gateflow/sim-metrics';
+import { parseTraceFile, traceContent } from '@gateflow/sim-trace';
 import { chromium } from 'playwright';
 import type { Browser, Page } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 /*
  * The built page in Chromium: it must give the CLI's results byte for byte (but for the name of
- * the program in the manifest), with workers or without, and for a scenario changed in the page.
+ * the program in the manifest), with workers or without, and for a scenario changed in the page;
+ * its replay of a day must be the CLI's trace of that day, every call with the engine's reason.
  * It must never use the network. Build first: `pnpm build`.
  */
 
@@ -153,9 +157,69 @@ describe('GateFlow Simulator Studio in the browser', () => {
     await page.context().close();
   });
 
+  it("replays a day of the run: the run's outcomes, every call's reason, the CLI's trace", async () => {
+    const page = await open();
+    await runInPage(page, 'scenarios/single-checkpoint-demo.yaml', 5);
+    await page.waitForSelector('.replay', { timeout: 120_000 });
+    // The replay opens on the typical day of GateFlow against the status quo.
+    const results = JSON.parse(await saved(page, '#download-results')) as ResultsDocument;
+    const seed = Number(await page.getAttribute('.replay', 'data-seed'));
+    const nets = results.perSeed.map((d) => d.comparisons['priority-v3 vs fifo']?.net ?? NaN);
+    const median = [...nets].sort((a, b) => a - b)[2];
+    expect(nets[seed - 1]).toBe(median);
+    // Its flights saved and lost are those of that day in the results.
+    const day = results.perSeed.find((d) => d.seed === seed)?.comparisons['priority-v3 vs fifo'];
+    expect(Number(await page.textContent('#replay-saved'))).toBe(day?.saved);
+    expect(Number(await page.textContent('#replay-harmed'))).toBe(day?.harmed);
+    // Every call shows a reason of the engine; a priority call, that the passenger was brought
+    // forward.
+    const reasons = () =>
+      page
+        .locator('#calls-list .call')
+        .evaluateAll((calls) => calls.map((c) => c.getAttribute('data-reason')));
+    await page.locator('#replay-time').fill(String(12 * 3_600_000));
+    expect((await reasons()).length).toBeGreaterThan(0);
+    for (const reason of await reasons()) expect(REASON_CODES).toContain(reason);
+    await page.check('#calls-priority');
+    const priority = await reasons();
+    expect(priority.length).toBeGreaterThan(0);
+    expect(new Set(priority)).toEqual(new Set(['URGENT_FEASIBLE']));
+    // A saved passenger: their day with both policies, every call explained.
+    await page.click('#list-saved');
+    await page.locator('#table-saved button').first().click();
+    const explained = await page
+      .locator('#passenger [data-reason]')
+      .evaluateAll((items) => items.map((i) => i.getAttribute('data-reason')));
+    expect(explained.length).toBeGreaterThan(0);
+    for (const reason of explained) expect(REASON_CODES).toContain(reason);
+    expect(await page.textContent('#passenger')).toMatch(/Made the flight/);
+    // The CLI traces the same day with the command the page gives: same fingerprint, same trace.
+    await page.waitForSelector('#replay-fingerprint[data-ready="yes"]', {
+      state: 'attached',
+      timeout: 120_000,
+    });
+    const fingerprint = (await page.textContent('#replay-fingerprint')) ?? '';
+    expect(fingerprint).toMatch(/^sha256:[0-9a-f]{64}$/);
+    const command = ((await page.textContent('.reproduce')) ?? '').trim().split(/\s+/);
+    expect(command[0]).toBe('gateflow-sim');
+    const out = mkdtempSync(join(work, 'trace-'));
+    const printed = execFileSync(process.execPath, [cli, ...command.slice(1), '--out', out], {
+      cwd: repo,
+      encoding: 'utf8',
+    });
+    expect(printed).toContain(`fingerprint ${fingerprint}`);
+    await page.click('.trace-proof > summary');
+    const fromPage = parseTraceFile(await saved(page, '#replay-save'));
+    const fromCli = parseTraceFile(readFileSync(join(out, 'trace.json'), 'utf8'));
+    expect(fromPage.manifest.generator.name).toBe('gateflow-studio');
+    expect(traceContent(fromPage)).toBe(traceContent(fromCli));
+    await page.context().close();
+  });
+
   it('fits a phone and never uses the network', async () => {
     const page = await open({ width: 390 });
     await runInPage(page, 'scenarios/tsf-like-peak-day.yaml', 2);
+    await page.waitForSelector('.replay', { timeout: 120_000 });
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,

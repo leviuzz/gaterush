@@ -1,8 +1,8 @@
 {
   "name": "@gateflow/studio-core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Logic of GateFlow Simulator Studio that runs in the browser: scenario library, hashing, editing, experiment setup and comparison of runs (pure).",
+  "description": "Logic of GateFlow Simulator Studio that runs in the browser: scenario library, hashing, editing, experiment setup, comparison of runs and the traces of days (pure).",
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -16,6 +16,7 @@
   "dependencies": {
     "@gateflow/queue-core": "workspace:*",
     "@gateflow/sim-metrics": "workspace:*",
-    "@gateflow/sim-scenarios": "workspace:*"
+    "@gateflow/sim-scenarios": "workspace:*",
+    "@gateflow/sim-trace": "workspace:*"
   }
 }

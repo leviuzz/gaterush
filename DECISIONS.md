@@ -1199,3 +1199,75 @@ founder on 2026-11-21 together with all of its recommendations.
     flights per day over the supervisor;
   - the target wait is the main setting, more than the time to open a lane or the share of
     recommendations followed.
+
+## ADR-040: Simulator Studio as one self-contained page in the browser
+
+- **Status:** Accepted (2026-11-22). Slice S9, the first of M2. Studio 0.9.0, studio core 0.1.0,
+  metrics and CLI 0.9.0. Results are unchanged.
+- **Context:**
+  - The kickoff plans the Studio as a Next.js `/sim` page that runs the simulator in a Web
+    Worker, with a downloadable static build that works offline. Its criterion: the browser and
+    the CLI give the same `results.json` for the same scenario and seeds.
+  - The founder wants a demo to show airports, including on a phone, before any server exists.
+  - The airport's data must not leave the airport's hands. A page without network access can take
+    it without a data agreement covering a service.
+- **Decision:**
+  - **One HTML file** built with esbuild (`apps/studio/dist/gateflow-studio.html`, about
+    1.6 MB). It holds the scenario library, React 19, the simulator and the worker code, and
+    loads nothing. Its Content Security Policy forbids every connection, so files a person adds
+    stay in the browser. The same build gives the body of a claude.ai page
+    (`gateflow-studio.artifact.html`): that frame blocks downloads, so it offers copying
+    instead.
+  - **Next.js is kept for the operational interfaces** (ADR-013), which need a server from M3
+    on. The Studio's components are React, so the Next.js application can host them at `/sim`
+    when that server exists (S10: persisted runs).
+  - **The browser runs the CLI's code.** A new pure package, `@gateflow/studio-core`, holds what
+    the page adds:
+    - a synchronous SHA-256, identical to node:crypto, for the hashes of scenarios and files;
+    - files by path, with paths resolved as the CLI does on disk; files a person adds, which
+      come without folders, are also found by name;
+    - the experiment setup, the what-if settings, the parameter editor and the comparison of
+      runs.
+  - **One setup, CLI and Studio.** The default comparisons and the classification on arrival
+    move from the CLI to sim-metrics (`recommendedComparisons`, `arrivalClassification`), and
+    both programs call them.
+  - **Days run on Web Workers**, one per core up to 8, each taking the next day; results come
+    back in seed order. Planning (the arrival forecast) and the statistics also run on a worker.
+    Where a frame refuses workers, the page runs the days itself, with the same results.
+  - **Identical results.** The criterion of the kickoff is refined as in ADR-012: the page's
+    `results.json` equals the CLI's byte for byte, except `manifest.generator`, which names the
+    program that wrote it (`gateflow-studio`). The commit is taken at build time with the rules
+    of ADR-014.
+  - **What-if settings mark their changes.** Ten settings (lanes, screening time, passengers,
+    arrival times, lane outages, staff on call, time to open a lane, recommendations followed,
+    K, GateFlow's target wait) start from the scenario as written. Every parameter they change
+    becomes a SYNTHETIC assumption with a note naming the setting and the value of the scenario.
+    The scenario's id and title say "what-if". Every labelled parameter can also be edited, with
+    the source the person gives (AIRPORT_PROVIDED, MEASURED). The page saves the scenario as a
+    JSON file the CLI reproduces exactly.
+  - **The report is the CLI's report**, in a shadow root that takes the page's colour tokens,
+    in both themes.
+  - Report links are kept only for web addresses and relative paths: the page may show results
+    files a person loads.
+- **Alternatives considered:**
+  - **Next.js static export now.** Several files with absolute paths: it needs a server or a
+    special set-up to open from disk, and cannot be published as one page. Rejected for S9.
+  - **WebCrypto for hashes.** Asynchronous, while the scenario loader needs a hash at once.
+  - **Preact for a smaller page.** It saves about 40 KB; React keeps the components portable to
+    the Next.js application.
+- **Evidence:**
+  - Chromium end-to-end tests (`apps/studio/e2e`, CI job "Simulator Studio in Chromium"):
+    - the page's results equal the CLI's byte for byte but for the generator: demo day, the
+      TSF-like day with extra lanes and the arrival forecast, with workers and without;
+    - a what-if on the VCE-like peak day, saved as a scenario, gives the same results in the CLI;
+    - the page fits a phone and makes no network request.
+  - Unit tests:
+    - SHA-256 against node:crypto on 500 random strings and every library file;
+    - every library scenario loads with the CLI's hash;
+    - the experiment of the CLI is set up;
+    - edits are validated and what-if settings marked;
+    - runs are compared.
+- **Consequences:**
+  - A person can run the simulator on a phone, offline, and give their own airport's files
+    without sending them anywhere.
+  - Persisted runs, history and exports through an API follow in S10 (Fastify, PostgreSQL).

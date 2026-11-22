@@ -11,7 +11,7 @@ Status legend: **Done**, **Next**, **Planned**, **Gated** (needs a business deci
 | Milestone | Business plan stage | Status |
 |---|---|---|
 | M1: Simulator core and priority engine | R1 | **Done** (S1 to S8) |
-| M2: Simulator Studio (web, runs in the browser) | R1-R2 | Planned |
+| M2: Simulator Studio (web, runs in the browser) | R1-R2 | In progress (S9 done) |
 | M3: Priority end-to-end in the browser, digital twin | R2 | Planned |
 | M4: Operations console and Predict preview (pitch-ready) | R2 | Planned |
 | Gate R3: discovery with the airport (checkpoint, data, authorisations) | R3 | Gated |
@@ -561,11 +561,55 @@ With S8, M1 is complete:
 - the airport's data as input, per airport configuration;
 - reproducible reports.
 
+## M2: Simulator Studio
+
+| Slice | Content | Status |
+|---|---|---|
+| **S9** | Simulator Studio in the browser: one self-contained page (scenario library, what-if settings, every parameter with its source, policies with their lane modes, report, comparison of runs), days on Web Workers, offline and on a phone, the CLI's results (ADR-040) | **Done** |
+| S10 | API (Fastify, PostgreSQL): persisted scenarios and runs, asynchronous runs, history, export. Acceptance: `POST /v1/simulations` gives a run reproducible from its manifest; integration tests with Testcontainers | Planned |
+| S11 | Per-passenger detail (why a passenger was called earlier, the paired outcome) and replay of the day. Acceptance: every call of the replay shows the engine's reason codes | Planned |
+
+The slices of M2 were S8 to S10 in the kickoff proposal: they moved by one with the renumbering
+of S4.
+
+## S9: acceptance criteria and evidence
+
+Scope delivered (approved with "Vai"):
+- **GateFlow Simulator Studio**, `apps/studio/dist/gateflow-studio.html`: one HTML file of about
+  1.6 MB that holds the scenario library, the simulator and its worker, and loads nothing.
+- **What a person can do in it:**
+  - choose a checkpoint and day of the library, or give their own airport configuration, days
+    and flight lists (they stay in the browser);
+  - change ten what-if settings (lanes, screening time, passengers, arrival times, lane
+    outages, staff on call, time to open a lane, recommendations followed, K, GateFlow's target
+    wait), or any parameter with its source;
+  - choose the policies, each with the plan only, a supervisor's lanes or GateFlow's lanes, and
+    the status quo;
+  - simulate 10 to 1,000 days and read the CLI's report, in both themes;
+  - copy or save the results, the report and the scenario;
+  - compare two runs, of the session or results files.
+- **`@gateflow/studio-core`** (pure): SHA-256, files, library, setup, what-if settings, parameter
+  editor, comparison of runs. The default comparisons and the classification on arrival moved
+  from the CLI to sim-metrics.
+- CLI and metrics 0.9.0, studio core 0.1.0. Results are unchanged.
+
+| # | Criterion (kickoff, as proposed) | Evidence |
+|---|---|---|
+| 1 | Scenario editor with the source of each parameter | The what-if settings mark every parameter they change as a SYNTHETIC assumption, with a note giving the value of the scenario, and rename the scenario "what-if". "All parameters" edits any labelled value with its source and note; the scenario is validated again (`packages/studio-core/test`). |
+| 2 | Execution in the browser, on a Web Worker | Days run on one worker per core, up to 8; the forecast and the statistics on a worker too. Where workers are refused the page runs them itself, with the same results (end-to-end test). |
+| 3 | Report and comparison | The CLI's report inside the page, from the same results document. Two runs side by side: missed flights by policy, net flights saved, and the assumptions that differ (end-to-end test). |
+| 4 | Static, downloadable build that works offline | One file, opened from disk. Its Content Security Policy forbids every connection, and the end-to-end tests record no network request. CI publishes it as an artefact. |
+| 5 | Same scenario and seeds: identical `results.json` from the browser and the CLI | Byte for byte, except `manifest.generator`, which names the program (ADR-040, as ADR-012 refined S1). Tested in Chromium: the demo day; the TSF-like day with extra lanes and the arrival forecast, with workers and without; a what-if saved by the page and run by the CLI. The SHA-256 of the page equals node:crypto's on 500 random strings and every library file. Every library scenario loads with the CLI's hash. |
+
+Verification beyond the criteria:
+- The page fits a phone (390 px, no horizontal scroll) and follows the light and dark themes.
+- 30 days of the MX-like hub with six policies take about 4 s on four cores.
+- Report links are kept only for web addresses and relative paths (the page may show results
+  files a person loads).
+
 ## Later milestones (summary)
 
-- **M2 Simulator Studio:** a Next.js `/sim` page running the kernel in a Web Worker (the browser
-  must produce the same `results.json` as the CLI), persisted runs through a Fastify API and
-  PostgreSQL, per-passenger drill-down and day replay.
+- **M2 Simulator Studio:** S10 and S11 above.
 - **M3 Priority end-to-end:**
   - persistence with one writer per checkpoint, idempotency, event log and hash-chained audit;
   - BCBP parser and synthetic generator with HMAC deduplication;

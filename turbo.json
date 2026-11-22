@@ -1,6 +1,6 @@
 {
   "$schema": "https://turborepo.com/schema.json",
-  "globalDependencies": ["scenarios/**", "tsconfig.base.json", "eslint.config.js"],
+  "globalDependencies": ["airports/**", "scenarios/**", "tsconfig.base.json", "eslint.config.js"],
   "tasks": {
     "transit": {
       "dependsOn": ["^transit"]

@@ -61,6 +61,28 @@ jobs:
       - name: The library flight lists are up to date
         run: node scenarios/flights/make-library-flights.mjs --check
 
+  studio:
+    name: Simulator Studio in Chromium
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Install Chromium
+        run: pnpm --filter @gateflow/studio exec playwright install --with-deps chromium
+      - name: The page gives the CLI's results, with and without workers, and never uses the network
+        run: pnpm --filter @gateflow/studio run test:e2e
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gateflow-studio
+          path: apps/studio/dist/gateflow-studio.html
+
   demo-reports:
     name: Scenario reports (200 simulated days)
     needs: check

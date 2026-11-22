@@ -21,6 +21,7 @@ export type {
   PolicyComparison,
   SeedResult,
 } from './experiment';
+export { arrivalClassification, recommendedComparisons } from './setup';
 export { comparisonDayMetrics, dayDisruptions, policyDayMetrics } from './day-metrics';
 export type { ComparisonDayMetrics, DayDisruptions, PolicyDayMetrics } from './day-metrics';
 export {
@@ -84,6 +85,9 @@ export type {
 } from './sweep-results';
 export { SWEEP_PARAMETER_LABELS, harmComparisonKey, renderSweepReport } from './sweep-report';
 export {
+  REPORT_CONTENT_STYLE,
+  REPORT_TOKENS_DARK,
+  REPORT_TOKENS_LIGHT,
   escapeHtml,
   intervalsSvg,
   lineChartSvg,
@@ -93,7 +97,7 @@ export {
   rangeBarsSvg,
 } from './html';
 export type { IntervalRow, LineChartOptions, LineSeries, RangeBar } from './html';
-export { renderHtmlReport, renderSweepHtml } from './report-html';
+export { renderHtmlReport, renderHtmlReportBody, renderSweepHtml } from './report-html';
 export {
   acrossDays,
   bootstrapMeanInterval,

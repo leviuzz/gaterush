@@ -1,23 +1,17 @@
 import { dirname, isAbsolute, join } from 'node:path';
 import { parseArgs } from 'node:util';
-import type { ClassificationParams } from '@gateflow/priority-engine';
-import {
-  LANE_MODES,
-  POLICY_PRESETS,
-  PRIORITY_V3_POLICY,
-  classificationOf,
-} from '@gateflow/queue-core';
+import { LANE_MODES, POLICY_PRESETS } from '@gateflow/queue-core';
 import type { Policy } from '@gateflow/queue-core';
 import {
   DEFAULT_BOOTSTRAP,
   SweepConfigError,
   applyScenarioSettings,
+  arrivalClassification,
   assembleExperiment,
   assembleSweep,
   buildResults,
   buildSweepResults,
   comparisonKey,
-  defaultComparisons,
   planExperiment,
   planSweep,
   renderHtmlReport,
@@ -25,11 +19,11 @@ import {
   renderSweepHtml,
   renderSweepReport,
   stringifyResults,
+  recommendedComparisons,
   stringifySweep,
   sweepDayJob,
 } from '@gateflow/sim-metrics';
 import type {
-  PolicyComparison,
   ResultsDocument,
   SeedResult,
   SweepConfig,
@@ -166,94 +160,6 @@ function configuredPolicies(policies: readonly Policy[], scenario: Scenario): Po
   }
 }
 
-/** Classification for on-arrival risk classes: the first priority policy's, else priority-v3's. */
-function classificationFor(policies: readonly Policy[]): ClassificationParams {
-  for (const policy of policies) {
-    const classification = classificationOf(policy);
-    if (classification !== null) return classification;
-  }
-  const fallback = classificationOf(PRIORITY_V3_POLICY);
-  if (fallback === null) throw new Error('priority-v3 must define classification parameters');
-  return fallback;
-}
-
-/**
- * Default comparisons: every policy against the baseline; then each policy that reorders the queue
- * against the FIFO policy operating exactly the same queue (the difference is the reordering
- * alone); and each priority (constrained EDF) policy against today's practice with manual
- * handling (a physical queue with staff calls, baseline A') and against the priority policies
- * listed before it on the same queue (version against version). These references manage lanes
- * as the candidate does, so that one comparison changes one thing.
- *
- * Lane management (S8): a policy with a lane mode is compared with the same policy without it
- * (what the extra lanes buy) and, for GateFlow's recommendations, with the supervisor's
- * (`@predict` against `@reactive`); a priority policy with `@predict` is also compared with
- * today's practice as a whole (manual handling with a supervisor, `fifo-manual@reactive`).
- */
-export function defaultCompare(
-  policies: readonly Policy[],
-  baselineId: string,
-): PolicyComparison[] {
-  const pairs = defaultComparisons(policies, baselineId);
-  const keys = new Set(pairs.map(comparisonKey));
-  const add = (candidateId: string, referenceId: string) => {
-    const pair = { candidateId, referenceId };
-    if (keys.has(comparisonKey(pair))) return;
-    keys.add(comparisonKey(pair));
-    pairs.push(pair);
-  };
-  const sameQueue = (a: Policy, b: Policy) => canonicalJson(a.queue) === canonicalJson(b.queue);
-  const sameCalls = (a: Policy, b: Policy) =>
-    sameQueue(a, b) && canonicalJson(a.selection) === canonicalJson(b.selection);
-  const lanesOf = (p: Policy): string => p.lanes?.kind ?? 'plan';
-  const todaysPractice = (p: Policy) => p.queue.kind === 'physical' && p.selection.kind !== 'fifo';
-  policies.forEach((candidate, index) => {
-    if (candidate.id === baselineId) return;
-    const others = policies.filter((p) => p.id !== baselineId && p.id !== candidate.id);
-    const lanes = candidate.lanes;
-    if (lanes !== undefined) {
-      for (const reference of others) {
-        if (!sameCalls(reference, candidate)) continue;
-        if (
-          reference.lanes === undefined ||
-          (lanes.kind === 'predict' && reference.lanes.kind === 'reactive')
-        ) {
-          add(candidate.id, reference.id);
-        }
-      }
-    }
-    if (candidate.selection.kind === 'fifo') return;
-    const references = others.filter((p) => lanesOf(p) === lanesOf(candidate));
-    for (const reference of references) {
-      if (reference.selection.kind === 'fifo' && sameQueue(reference, candidate)) {
-        add(candidate.id, reference.id);
-      }
-    }
-    if (candidate.selection.kind !== 'constrained-edf') return;
-    for (const reference of references) {
-      if (todaysPractice(reference)) add(candidate.id, reference.id);
-    }
-    if (lanes?.kind === 'predict') {
-      for (const reference of others) {
-        if (todaysPractice(reference) && reference.lanes?.kind === 'reactive') {
-          add(candidate.id, reference.id);
-        }
-      }
-    }
-    for (const reference of policies.slice(0, index)) {
-      if (
-        reference.id !== baselineId &&
-        reference.selection.kind === 'constrained-edf' &&
-        sameQueue(reference, candidate) &&
-        lanesOf(reference) === lanesOf(candidate)
-      ) {
-        add(candidate.id, reference.id);
-      }
-    }
-  });
-  return pairs;
-}
-
 function summaryLines(doc: ResultsDocument): string[] {
   const lines: string[] = [];
   const pad = (text: string, width: number) => text.padEnd(width);
@@ -317,7 +223,7 @@ async function commandRun(argv: string[], io: CliIo): Promise<number> {
   }
   const comparisons =
     values.compare === undefined
-      ? defaultCompare(policies, baselinePolicyId)
+      ? recommendedComparisons(policies, baselinePolicyId)
       : parseComparisons(values.compare, policies);
   const resamples = parsePositiveInteger(values['bootstrap-resamples'], '--bootstrap-resamples');
 
@@ -332,7 +238,7 @@ async function commandRun(argv: string[], io: CliIo): Promise<number> {
     policies,
     baselinePolicyId,
     comparisons,
-    classification: classificationFor(policies),
+    classification: arrivalClassification(policies),
     bootstrap: { ...DEFAULT_BOOTSTRAP, resamples },
   };
   // Every simulated day is independent: they can run on any number of threads.
@@ -428,7 +334,7 @@ async function commandSweep(argv: string[], io: CliIo): Promise<number> {
     baselinePolicyId: spec.baseline,
     candidateId: spec.candidate,
     comparisons: parseComparisons(spec.compare.join(','), policies),
-    classification: classificationFor(policies),
+    classification: arrivalClassification(policies),
     bootstrap: {
       ...DEFAULT_BOOTSTRAP,
       resamples: parsePositiveInteger(values['bootstrap-resamples'], '--bootstrap-resamples'),

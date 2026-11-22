@@ -4,6 +4,43 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Any change that alters simulated numbers
 must be listed, together with the component versions it bumps.
 
+## [0.9.0] - 2026-11-22: Slice S9, GateFlow Simulator Studio
+
+The simulator in the browser, as one HTML page that works offline and on a phone and gives the
+CLI's results (ADR-040). First slice of milestone M2.
+
+### Simulated numbers change
+
+- None. The page runs the same code as the CLI; its `results.json` differs only in
+  `manifest.generator` (`gateflow-studio`). CLI results name `gateflow-sim 0.9.0`.
+
+### Added
+
+- `apps/studio`: GateFlow Simulator Studio, built into `dist/gateflow-studio.html` (about
+  1.6 MB, no external resource, no network access) and into the body of a claude.ai page:
+  - the scenario library, or a person's own airport configuration, days and flight lists, which
+    stay in the browser;
+  - ten what-if settings and every labelled parameter, edited with its source;
+  - the policies with their lane modes, the status quo and the number of days;
+  - days on Web Workers (the page itself where a frame refuses them), with progress and
+    cancellation;
+  - the CLI's report, copies or downloads of the results, the report and the scenario (the CLI
+    reproduces the scenario exactly), and the comparison of two runs.
+- `@gateflow/studio-core` 0.1.0 (pure): a synchronous SHA-256 identical to node:crypto, files by
+  path with the CLI's resolution, the library, the experiment setup, what-if settings, the
+  parameter editor and the comparison of runs.
+- sim-metrics: `recommendedComparisons` and `arrivalClassification` (moved from the CLI),
+  `renderHtmlReportBody`, `REPORT_CONTENT_STYLE` and the report's colour tokens.
+- Tests: unit tests of the Studio core; end-to-end tests in Chromium (the CLI's results byte for
+  byte, with and without workers, for a what-if saved as a scenario; a phone; no network
+  request); a CI job that runs them and publishes the page.
+
+### Changed
+
+- Report links are kept only for web addresses and relative paths.
+- Lint covers TSX files, and dependency-cruiser resolves them.
+- `airports/**` is a global dependency of the Turborepo cache.
+
 ## [0.8.0] - 2026-11-22: Airport configurations and slice S8
 
 One configuration file per airport, and extra lanes during the day: opened by today's supervisor

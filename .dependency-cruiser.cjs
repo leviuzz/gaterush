@@ -44,9 +44,9 @@ module.exports = {
       name: 'not-to-unresolvable',
       severity: 'error',
       comment:
-        'Every import must resolve: catches typos and dependencies missing from package.json.',
+        'Every import must resolve: catches typos and dependencies missing from package.json. The Studio build provides studio:build.',
       from: {},
-      to: { couldNotResolve: true },
+      to: { couldNotResolve: true, pathNot: '^studio:build$' },
     },
     {
       name: 'pure-packages-no-node-builtins',
@@ -86,6 +86,7 @@ module.exports = {
       'sim-model',
       'sim-scenarios',
     ]),
+    onlyAllowed('studio-core', ['queue-core', 'sim-metrics', 'sim-scenarios']),
   ],
   options: {
     doNotFollow: { path: 'node_modules' },
@@ -95,7 +96,7 @@ module.exports = {
     enhancedResolveOptions: {
       exportsFields: ['exports'],
       conditionNames: ['import', 'require', 'node', 'default', 'types'],
-      extensions: ['.ts', '.js', '.json'],
+      extensions: ['.ts', '.tsx', '.js', '.json'],
       mainFields: ['module', 'main', 'types'],
     },
   },

@@ -11,6 +11,12 @@ import {
 import { balancedTags } from './html-check';
 
 describe('markdownToHtml', () => {
+  it('links web addresses and relative paths only', () => {
+    expect(
+      markdownToHtml('[a](https://x.org/p) [b](../r.md) [c](javascript:void) [d](data:x)'),
+    ).toBe('<p><a href="https://x.org/p">a</a> <a href="../r.md">b</a> c d</p>');
+  });
+
   it('converts the subset our reports use, escaping everything else', () => {
     const md = [
       '# Title with `code` & <b>tags</b>',

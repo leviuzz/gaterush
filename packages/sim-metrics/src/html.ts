@@ -16,6 +16,12 @@ export function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;');
 }
 
+/** A link target a report may carry: web addresses and relative paths, never other schemes. */
+function safeUrl(url: string): boolean {
+  const scheme = /^[a-z][a-z0-9+.-]*:/i.exec(url);
+  return scheme === null || /^https?:$/i.test(scheme[0]);
+}
+
 /** Inline Markdown of our reports: `code`, **bold** and [links](url), on escaped text. */
 function inline(text: string): string {
   return text
@@ -25,7 +31,9 @@ function inline(text: string): string {
       if (i % 2 === 1) return `<code>${safe}</code>`;
       return safe
         .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-        .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2">$1</a>');
+        .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_link, label: string, url: string) =>
+          safeUrl(url) ? `<a href="${url}">${label}</a>` : label,
+        );
     })
     .join('');
 }
@@ -152,7 +160,8 @@ export function markdownSections(markdown: string): { preamble: string; sections
   return { preamble: first, sections: rest };
 }
 
-const TOKENS_LIGHT = `
+/** Light theme of every report page and of the Studio. */
+export const REPORT_TOKENS_LIGHT = `
   color-scheme: light;
   --page: #f9f9f7;
   --surface: #fcfcfb;
@@ -167,7 +176,8 @@ const TOKENS_LIGHT = `
   --series-2: #eb6834;
   --series-3: #1baf7a;`;
 
-const TOKENS_DARK = `
+/** Dark theme of every report page and of the Studio. */
+export const REPORT_TOKENS_DARK = `
   color-scheme: dark;
   --page: #0d0d0d;
   --surface: #1a1a19;
@@ -182,16 +192,20 @@ const TOKENS_DARK = `
   --series-2: #d95926;
   --series-3: #199e70;`;
 
-const STYLE = `
-:root {${TOKENS_LIGHT}
+/** Colour tokens of the light and dark themes (an explicit `data-theme` choice wins). */
+const TOKENS_STYLE = `
+:root {${REPORT_TOKENS_LIGHT}
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {${TOKENS_DARK}
+  :root:not([data-theme="light"]) {${REPORT_TOKENS_DARK}
   }
 }
-:root[data-theme="dark"] {${TOKENS_DARK}
+:root[data-theme="dark"] {${REPORT_TOKENS_DARK}
 }
-* { box-sizing: border-box; }
+`;
+
+/** The page around a report: box model, background, font and width. */
+const PAGE_STYLE = `* { box-sizing: border-box; }
 body {
   margin: 0;
   background: var(--page);
@@ -199,7 +213,13 @@ body {
   font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 48px; }
-h1 { font-size: 26px; line-height: 1.25; margin: 8px 0 16px; }
+`;
+
+/**
+ * Styles of a report's content (headings, tables, code, charts), on the colour tokens. The
+ * Studio uses them, with the same tokens, to show a report inside its own page.
+ */
+export const REPORT_CONTENT_STYLE = `h1 { font-size: 26px; line-height: 1.25; margin: 8px 0 16px; }
 h2 { font-size: 20px; margin: 36px 0 12px; }
 h3 { font-size: 16px; margin: 24px 0 8px; }
 p, li { color: var(--text-primary); }
@@ -240,6 +260,8 @@ figure.chart svg { display: block; width: 100%; min-width: 560px; height: auto; 
 .legend i { display: inline-block; width: 16px; height: 2px; border-radius: 1px; }
 svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 `;
+
+const STYLE = `${TOKENS_STYLE}${PAGE_STYLE}${REPORT_CONTENT_STYLE}`;
 
 /** A complete HTML page. */
 export function htmlPage(title: string, description: string, body: string): string {

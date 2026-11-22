@@ -26,6 +26,19 @@ function sectionHtml(markdown: string, inserted: string): string {
 /** The HTML twin of the Markdown report, with charts under the headline. Deterministic. */
 export function renderHtmlReport(doc: ResultsDocument): string {
   const { manifest, summary } = doc;
+  return htmlPage(
+    `GateFlow report: ${manifest.scenario.id}`,
+    `SIMULATED results for ${manifest.scenario.title}: ${summary.days} simulated days.`,
+    renderHtmlReportBody(doc),
+  );
+}
+
+/**
+ * The content of the HTML report, without its page: the Markdown report as HTML, with charts under
+ * the headline. Styled by `REPORT_CONTENT_STYLE`.
+ */
+export function renderHtmlReportBody(doc: ResultsDocument): string {
+  const { manifest, summary } = doc;
   const { preamble, sections } = markdownSections(renderReport(doc));
   const missed = rangeBarsSvg(
     manifest.policies.map((policy) => {
@@ -61,15 +74,10 @@ export function renderHtmlReport(doc: ResultsDocument): string {
       net,
     ),
   ].join('\n');
-  const body = [
+  return [
     markdownToHtml(preamble),
     ...sections.map((section, i) => sectionHtml(section, i === 0 ? charts : '')),
   ].join('\n');
-  return htmlPage(
-    `GateFlow report: ${manifest.scenario.id}`,
-    `SIMULATED results for ${manifest.scenario.title}: ${summary.days} simulated days.`,
-    body,
-  );
 }
 
 /** The series drawn on a sweep curve: the candidate, then up to two references. */

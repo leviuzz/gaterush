@@ -47,7 +47,7 @@ export default defineConfig(
     ],
   },
   {
-    files: ['**/*.ts'],
+    files: ['**/*.ts', '**/*.tsx'],
     extends: [js.configs.recommended, tseslint.configs.strictTypeChecked],
     languageOptions: {
       parserOptions: {
@@ -124,7 +124,7 @@ export default defineConfig(
     },
   },
   {
-    files: ['**/test/**/*.ts'],
+    files: ['**/test/**/*.ts', '**/e2e/**/*.ts'],
     rules: {
       '@typescript-eslint/no-non-null-assertion': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',

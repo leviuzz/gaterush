@@ -24,6 +24,7 @@ referenced as ADR-nnn ([DECISIONS.md](DECISIONS.md)).
 ```
 apps/
   sim-cli/          gateflow-sim: experiments and sweeps on worker threads; JSON, Markdown, HTML (bundled)
+  studio/           GateFlow Simulator Studio: the simulator in one offline HTML page (React, Web Workers)
 packages/
   domain/           shared domain types and units (integer milliseconds, segments, risk classes)
   priority-engine/  assessment and selection of the next call (pure)
@@ -32,6 +33,7 @@ packages/
   sim-model/        checkpoint simulation: physical queue or GateFlow virtual queue, extra lanes (pure)
   sim-scenarios/    scenario schema, validation, assumptions, synthetic population, arrival forecast (pure)
   sim-metrics/      experiments, sweeps, paired metrics, statistics, results, Markdown and HTML (pure)
+  studio-core/      what the Studio adds in the browser: SHA-256, files, library, setup, what-if, comparison (pure)
 airports/           airport configurations: parameters of each airport and checkpoint (YAML)
 airports/private/   airport-provided configurations, ignored by git
 scenarios/          scenario files (YAML), including the S7 library
@@ -53,7 +55,9 @@ flowchart LR
   model["sim-model"]
   scenarios["sim-scenarios"]
   metrics["sim-metrics"]
+  studiocore["studio-core"]
   cli["apps/sim-cli"]
+  studio["apps/studio"]
   engine --> domain
   queue --> engine
   queue --> domain
@@ -73,6 +77,11 @@ flowchart LR
   cli --> scenarios
   cli --> queue
   cli --> engine
+  studiocore --> metrics
+  studiocore --> scenarios
+  studiocore --> queue
+  studio --> studiocore
+  studio --> metrics
 ```
 
 Enforced automatically, on three levels:
@@ -479,6 +488,10 @@ changelog.
 - Packages export TypeScript sources. The CLI is bundled with esbuild into
   `apps/sim-cli/dist/gateflow-sim.mjs`. The banner adds a shebang and `createRequire` for
   CommonJS dependencies.
+- **Simulator Studio** (ADR-040). `apps/studio/build.mjs` bundles the React application and its
+  worker with esbuild into one HTML file, `apps/studio/dist/gateflow-studio.html`, with the
+  scenario library, the version and the commit inside. Its Content Security Policy forbids every
+  connection. A second output is the body of a claude.ai page. See section 11.
 - **Worker threads** (ADR-031). The bundle is also the script of its worker threads: started
   as a worker, it serves tasks (one simulated day of an experiment or of a sweep variant) and
   returns plain data. The pool hands each thread the next task as soon as it finishes one, and
@@ -489,9 +502,35 @@ changelog.
 - `pnpm check` runs Prettier, dependency-cruiser and every Turborepo task.
 - CI (GitHub Actions) runs `pnpm check` on Node 22 and 24, builds the CLI, compares runs and
   sweeps made with 1 and 4 worker threads byte for byte, and publishes 200-day reports for the
-  six scenarios and 20-day sweeps as an artefact.
+  six scenarios and 20-day sweeps as an artefact. A job runs the Studio's end-to-end tests in
+  Chromium and publishes the page.
 
-## 11. Target architecture of the operational product (ADR-013)
+## 11. Simulator Studio (`apps/studio`, `@gateflow/studio-core`, ADR-040)
+
+The simulator in the browser, as one self-contained page that works offline and on a phone.
+
+- **The same code as the CLI.** The page imports the pure packages. `@gateflow/studio-core` adds:
+  - a synchronous SHA-256 identical to node:crypto;
+  - files by path, resolved as the CLI resolves them on disk; files a person adds, which come
+    without folders, are also found by name (`looseFolder`);
+  - the library (`loadLibrary`), the experiment setup (`experimentConfig`, which calls
+    `recommendedComparisons` and `arrivalClassification` of sim-metrics as the CLI does) and
+    the results (`studioResults`, generator `gateflow-studio`);
+  - the what-if settings (`LEVERS`, `withLevers`), the parameter editor (`withParameter`) and
+    the comparison of runs (`compareRuns`).
+- **Workers.** `planRun` (the arrival forecast), `runDays` (one worker per core up to 8, each
+  taking the next day) and `resultsOfRun` (the statistics) run on Web Workers created from the
+  code inside the page. Results come back in seed order. Where workers are refused, the page
+  runs the same code itself.
+- **Interface** (React 19): the scenario (library or the person's files), the what-if settings,
+  every parameter with its source, the policies with their lane modes, the number of days, the
+  results with the CLI's report in a shadow root, copies or downloads of the results, the report
+  and the scenario, and the comparison of two runs (of the session or results files).
+- **Same results as the CLI.** The page's `results.json` equals the CLI's byte for byte, except
+  the generator. End-to-end tests in Chromium check it with and without workers, and for a
+  scenario changed in the page and saved for the CLI.
+
+## 12. Target architecture of the operational product (ADR-013)
 
 Direction agreed at kickoff, to be implemented from milestone M2/M3:
 

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EXIT_FAILURE, EXIT_OK, EXIT_USAGE, runCli } from '../src/cli';
 import { createNodeIo, detectCommit } from '../src/io';
+import { CLI_VERSION } from '../src/version';
 
 const DEMO = fileURLToPath(
   new URL('../../../scenarios/single-checkpoint-demo.yaml', import.meta.url),
@@ -172,7 +173,7 @@ describe('gateflow-sim validate, policies, help', () => {
 
   it('prints help and version', async () => {
     expect((await cli(['--help'])).stdout).toContain('Usage:');
-    expect((await cli(['--version'])).stdout.trim()).toBe('0.8.0');
+    expect((await cli(['--version'])).stdout.trim()).toBe(CLI_VERSION);
   });
 });
 

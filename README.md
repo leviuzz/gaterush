@@ -9,8 +9,8 @@ engine** brings forward passengers who would miss their flight under FIFO but ca
 It does so within **declared, measurable fairness bounds**. GateFlow never changes security or
 border procedures: it organises the flow before they start.
 
-> **Status: slices S1 to S8 done (milestone M1).** This repository contains the simulation
-> foundations:
+> **Status: milestone M1 done (slices S1 to S8); M2 started with S9, the Simulator Studio.**
+> This repository contains the simulation foundations:
 > - the priority engine;
 > - the queue state machine that the operational product will share;
 > - a reproducible discrete-event simulator of a checkpoint. It runs either as today's physical
@@ -24,7 +24,9 @@ border procedures: it organises the flow before they start.
 >   every CPU and writes JSON, Markdown and HTML reports with charts;
 > - scenarios that take their flights from the airport's own flight list (a CSV file), with the
 >   source and licence of every datum printed in every report, one configuration file per
->   airport, and a library of synthetic VCE-like, TSF-like and MX-like checkpoints.
+>   airport, and a library of synthetic VCE-like, TSF-like and MX-like checkpoints;
+> - **GateFlow Simulator Studio**: the same simulator in one HTML page that runs offline, on a
+>   phone too, and never connects to the network.
 >
 > There is no operational system, API or user interface yet. See
 > [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
@@ -49,7 +51,21 @@ pnpm check
 pnpm sim run --scenario scenarios/single-checkpoint-demo.yaml --seeds 1-200
 ```
 
-The last command simulates 200 days with four policies on every CPU (about 15 seconds on four
+### Simulator Studio
+
+```bash
+pnpm --filter @gateflow/studio build
+```
+
+Then open `apps/studio/dist/gateflow-studio.html` in a browser: one file, no server, no network.
+Choose a checkpoint and a day, change a what-if setting (lanes, screening time, staff on call,
+GateFlow's target wait...), choose the policies and simulate. The page shows the CLI's report,
+compares runs, and saves the results and the scenario: the CLI gives the same results from that
+scenario. An airport's own files can be added; they stay in the browser.
+
+### Command line
+
+The command above, `pnpm sim run`, simulates 200 days with four policies on every CPU (about 15 seconds on four
 cores), then writes `results.json`, `report.md` and `report.html` (a page with charts) in
 `out/single-checkpoint-demo/`:
 - `fifo`: today's physical queue without intervention (policy A);
@@ -211,7 +227,9 @@ How to read these numbers:
 | `packages/sim-model` | Checkpoint simulation: physical or virtual queue, calls, lane schedules, extra lanes, disruptions (pure) |
 | `packages/sim-scenarios` | Scenario schema, airport configurations, assumptions registry, synthetic population, arrival forecast (pure) |
 | `packages/sim-metrics` | Experiments, paired metrics, statistics, results and report (pure) |
+| `packages/studio-core` | What the Studio adds in the browser: SHA-256, files, library, what-if settings, comparison of runs (pure) |
 | `apps/sim-cli` | `gateflow-sim` command-line interface |
+| `apps/studio` | GateFlow Simulator Studio: the simulator in one offline HTML page |
 | `airports/` | Airport configurations: the parameters of each airport and checkpoint ([guide](airports/README.md)) |
 | `scenarios/` | Scenario files, including the S7 library |
 | `scenarios/flights/` | Flight lists (CSV) and the generator of the synthetic ones |

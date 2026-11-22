@@ -8,7 +8,7 @@ import {
   parsePositiveInteger,
   parseSeeds,
 } from '../src/args';
-import { defaultCompare } from '../src/cli';
+import { recommendedComparisons as defaultCompare } from '@gateflow/sim-metrics';
 import { CLI_VERSION } from '../src/version';
 
 describe('parseSeeds', () => {

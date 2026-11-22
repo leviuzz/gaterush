@@ -4,9 +4,10 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Any change that alters simulated numbers
 must be listed, together with the component versions it bumps.
 
-## [Unreleased]
+## [0.15.0] - 2026-11-22: Slice S15, the queue's life cycle and the lane station
 
-Slice S15 in progress. Part 1: the life cycle of a ticket on a clock. Part 2: staff sign in.
+The queue's timeouts on a clock, staff actions, staff who sign in, and the lane station
+(ADR-045).
 
 ### Simulated numbers change
 
@@ -59,6 +60,16 @@ Slice S15 in progress. Part 1: the life cycle of a ticket on a clock. Part 2: st
   - Contracts: `SignInRequest`, `StaffMemberResponse`, the staff cookie scheme and each route's
     role (`x-gateflow-role`) in the OpenAPI document. Migration `0006_staff`.
   - The CI's check of the bundle and the Chromium tests sign a supervisor in.
+- The lane station, `/lane/<checkpoint>` (part 3, web 0.15.0):
+  - staff sign in; the session stays in a cookie the page cannot read;
+  - call next; validate a ticket by its QR code, its boarding pass or its number;
+  - call again, mark an absence, bring it back, hold a ticket for a review; supervisors also end
+    reviews and cancel;
+  - manual tickets with a reason and the party's size, with their QR code and print;
+  - in Italian, English and Spanish; it asks for the queue every 5 seconds.
+- API 0.15.0: `GET /v1/checkpoints/{id}` and `GET /v1/checkpoints/{id}/flights` for the lane
+  station. `GET /v1/auth/me` answers `{ member: null }` when nobody is signed in.
+- CI: the Chromium job runs the lane station's tests too (17 tests).
 
 ## [0.14.0] - 2026-11-22: Slice S14, the kiosk and the passenger's page
 

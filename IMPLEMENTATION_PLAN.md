@@ -668,7 +668,7 @@ here once, for the product. The slices follow the kickoff (section 3, M3), renum
 | **S12** | Operational core: API server (Fastify), PostgreSQL with migrations, one writer per checkpoint, command and event log, current-state tables, idempotent commands, hash-chained audit, demo data. The queue runs the same `queue-core` as the simulator | 100 concurrent "call next" give no double call; the database refuses a second admission; the audit check finds tampering; the same command twice is applied once; a restart, or a second server, gives the same queue | **Done** |
 | **S13** | BCBP package: multi-leg parser, synthetic generator, validations, HMAC deduplication key; the kiosk's scan endpoint (a ticket, the same ticket again, or a reason) | Round trip and fuzzing pass; no boarding pass in the logs; Julian date to the right year across year end (ADR-043) | **Done** |
 | **S14** | Web application, kiosk and ticket: scan (paste, sample, HID scanner), outcomes, digital and printable ticket, ticket page, Italian, English and Spanish, privacy notice, kiosk credentials | A rescan returns the same ticket; another airport's boarding pass is refused with a reason (both already true of the API since S13); no personal data on screen | **Done** |
-| S15 | Queue life cycle and lane station: timers on a scheduler, recall, no-show, reactivation, admission, manual ticket, review; staff users and roles. From S14: a party's number at the kiosk, and the rule for a pass whose boarding has closed | The state machine is covered by tests; every transition is idempotent | Planned |
+| **S15** | Queue life cycle and lane station: timers on a scheduler, recall, no-show, reactivation, admission, manual ticket, review; staff users and roles. From S14: a party's number (at the lane), and the rule for a pass whose boarding has closed | The state machine is covered by tests; every transition is idempotent | **Done** |
 | S16 | Display over SSE: called and prepare numbers, data freshness, reconnection with `Last-Event-ID` | No event lost after a disconnection; "data not up to date" within the timeout | Planned |
 | S17 | Supervisor: modes (FIFO only, paused, emergency), overrides with a reason, lanes, audit view; versioned policies and their activation | Overrides and mode changes are always in the audit; in FIFO only the order is pure FIFO | Planned |
 | S18 | Digital twin: the simulator drives the live system at accelerated time; demo page | Same scenario and seed: the live system calls passengers in the same order as the offline simulator | Planned |
@@ -779,6 +779,64 @@ Verification beyond the criteria:
 
 Not verified: a physical barcode scanner and printer (lab hardware is M5). Scanners that type
 like keyboards are what the kiosk reads; the test types a pass the same way.
+
+## S15: acceptance criteria and evidence
+
+Scope delivered (part of M3, approved with "vai M3"), in three commits (ADR-045):
+- **The life cycle on a clock.**
+  - queue-core 0.7.0: staff actions guarded by the ticket's state, and the states `REVIEW` and
+    `CANCELLED`.
+  - operations 0.3.0: `ADVANCE` and the staff commands.
+  - API: the scheduler of timeouts; rescans that bring a no-show back; the closed-boarding rule;
+    admission by boarding pass.
+- **Staff sign in.** Local members with roles and checkpoints, sessions in HttpOnly cookies, every
+  staff route checked, the member recorded in the log.
+- **The lane station** (`/lane/<checkpoint>`):
+  - call next, and validate by QR code, boarding pass or number;
+  - call again, absence, back in the queue, review;
+  - manual tickets with a reason and the party's size;
+  - in Italian, English and Spanish.
+- API 0.15.0, contracts 0.4.0, web 0.15.0. No simulated number changes (golden files: the queue's
+  version only).
+
+| # | Criterion (kickoff, as proposed) | Evidence |
+|---|---|---|
+| 1 | The state machine is covered by tests | Every state against every staff action (9 by 7): the transition of the table, or a refusal that changes nothing and reports nothing. 1,000 random sequences mixing issues, calls, presentations, timeouts and staff actions keep every invariant (zero churn but by staff, counters, a single admission, final states, the cap and the overtake bound). Every staff action is reached in many runs (call again in 70, cancel in 205). |
+| 2 | Every transition is idempotent | The same `Idempotency-Key` applies a staff action once and answers the same; the key reused for another ticket is refused (409). A timeout due is applied once when two servers see it due. A refused transition changes nothing. |
+
+Verification beyond the criteria:
+- With nobody acting, the scheduler turns a call into a second call, a no-show and an expiry on
+  time; the passenger's page follows.
+- A staff's second call moves the no-show T2 later.
+- A ticket held for review keeps its place and cannot be admitted meanwhile.
+- A rescan within the window brings a no-show back with the same number. Past the window, the
+  expired ticket gives way to a new one.
+- Review, cancellation and a closed boarding send the passenger to staff. With
+  `afterBoardingClose: ISSUE`, a closed boarding gives a ticket.
+- Admission by boarding pass, with no pass, name or booking reference in any table.
+- The log of a day with timeouts and staff actions rebuilds the same day, next due time
+  included; the audit chain is intact.
+- Staff:
+  - every staff route refuses without a session;
+  - an operator cannot cancel or end a review;
+  - another airport and another checkpoint are refused, and so is a request from another site;
+  - the cookie is HttpOnly and SameSite=Strict, Secure over TLS;
+  - no password or token is stored or logged;
+  - failures are slowed;
+  - the session ends on sign-out, after a shift, on a new password and when the member is
+    disabled.
+- In Chromium, on the product (17 tests with the kiosk's):
+  - sign-in and sign-out;
+  - call, absence, back in the queue;
+  - admission by number, QR code and boarding pass;
+  - a review asked by an operator and ended by a supervisor;
+  - a family's manual ticket on a phone, in Spanish too;
+  - no request to another server.
+- The CI's check of the bundle signs a supervisor in with the command line and the API.
+
+Not done (ADR-045):
+- One number for a party at the kiosk: families get one at the lane.
+- OIDC/MFA: they come with the pilot.
 
 ## Later milestones (summary)
 

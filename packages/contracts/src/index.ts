@@ -227,6 +227,31 @@ export const ErrorResponse = z.object({
   error: z.object({ code: z.string(), message: z.string() }),
 });
 
+/** A checkpoint as its staff see it (S15): where it is, how its tickets are numbered. */
+export const CheckpointResponse = z.object({
+  checkpoint: z.object({ id: z.uuid(), label: z.string(), ticketPrefix: z.string() }),
+  airport: z.object({
+    label: z.string(),
+    iata: z.string().length(3),
+    timeZone: z.string(),
+    synthetic: z.boolean(),
+  }),
+});
+
+/** The flights staff can issue a manual ticket for: from an hour ago to 24 hours ahead (S15). */
+export const FlightsResponse = z.object({
+  flights: z.array(
+    z.object({
+      id: z.uuid(),
+      /** As passengers read it: `ZZ 12`, or the airport's own code without a designator. */
+      label: z.string(),
+      departure: Instant,
+      /** When boarding closes, as GateFlow knows it. */
+      boardingClose: Instant.nullable(),
+    }),
+  ),
+});
+
 /** The roles of airport staff (S15), each with what the previous one may do. */
 export const StaffRole = z.enum(['OPERATOR', 'SUPERVISOR', 'ADMIN']);
 
@@ -236,16 +261,20 @@ export const SignInRequest = z.strictObject({
   password: z.string().min(1).max(200),
 });
 
-/** The member of staff signed in: never their password, never their session's token. */
-export const StaffMemberResponse = z.object({
-  member: z.object({
-    id: z.uuid(),
-    login: z.string(),
-    role: StaffRole,
-    /** The checkpoints they work at; null for every checkpoint of their airport. */
-    checkpoints: z.array(z.uuid()).nullable(),
-  }),
+/** A member of staff: never their password, never their session's token. */
+export const StaffMember = z.object({
+  id: z.uuid(),
+  login: z.string(),
+  role: StaffRole,
+  /** The checkpoints they work at; null for every checkpoint of their airport. */
+  checkpoints: z.array(z.uuid()).nullable(),
 });
+
+/** The member of staff who signed in. */
+export const StaffMemberResponse = z.object({ member: StaffMember });
+
+/** Who is signed in on this browser: a member of staff, or nobody (`null`). */
+export const MeResponse = z.object({ member: StaffMember.nullable() });
 
 /** The types of the answers, for clients that do not validate them (the web application). */
 export type TicketState = z.infer<typeof TicketState>;
@@ -259,7 +288,14 @@ export type DemoFlightsResponse = z.infer<typeof DemoFlightsResponse>;
 export type ManualReason = z.infer<typeof ManualReason>;
 export type StaffActionResponse = z.infer<typeof StaffActionResponse>;
 export type StaffRole = z.infer<typeof StaffRole>;
+export type CheckpointResponse = z.infer<typeof CheckpointResponse>;
+export type FlightsResponse = z.infer<typeof FlightsResponse>;
+export type QueueResponse = z.infer<typeof QueueResponse>;
+export type AdmissionResponse = z.infer<typeof AdmissionResponse>;
+export type CallNextResponse = z.infer<typeof CallNextResponse>;
+export type IssueTicketResponse = z.infer<typeof IssueTicketResponse>;
 export type StaffMemberResponse = z.infer<typeof StaffMemberResponse>;
+export type MeResponse = z.infer<typeof MeResponse>;
 export type ErrorResponse = z.infer<typeof ErrorResponse>;
 
 /** An endpoint of the API, for the OpenAPI document. */
@@ -424,6 +460,30 @@ export const ROUTES: readonly Route[] = [
   },
   {
     method: 'get',
+    path: '/v1/checkpoints/{checkpointId}',
+    summary: 'The checkpoint and its airport, for its staff',
+    command: false,
+    staff: 'OPERATOR',
+    responses: {
+      '200': { description: 'The checkpoint', schema: CheckpointResponse },
+      ...errors,
+      ...staffErrors,
+    },
+  },
+  {
+    method: 'get',
+    path: '/v1/checkpoints/{checkpointId}/flights',
+    summary: 'The flights of the next 24 hours (and of the last hour), for manual tickets',
+    command: false,
+    staff: 'OPERATOR',
+    responses: {
+      '200': { description: 'The flights', schema: FlightsResponse },
+      ...errors,
+      ...staffErrors,
+    },
+  },
+  {
+    method: 'get',
     path: '/v1/checkpoints/{checkpointId}/queue',
     summary: "The day's tickets, as staff see them",
     command: false,
@@ -468,12 +528,9 @@ export const ROUTES: readonly Route[] = [
   {
     method: 'get',
     path: '/v1/auth/me',
-    summary: 'The member of staff signed in',
+    summary: 'Who is signed in on this browser: a member of staff, or nobody',
     command: false,
-    responses: {
-      '200': { description: 'Signed in', schema: StaffMemberResponse },
-      '401': staffErrors['401'],
-    },
+    responses: { '200': { description: 'The member, or null', schema: MeResponse } },
   },
   {
     method: 'post',

@@ -1618,3 +1618,118 @@ founder on 2026-11-21 together with all of its recommendations.
   - One pass gives one ticket: a family scans each pass and gets a number each. Grouping at the
     kiosk (one number for a party) waits for the lane station of S15, where staff can admit a
     party together.
+
+## ADR-045: The queue's life cycle on a clock, and staff who sign in
+
+- **Status:** Accepted (2026-11-22). Slice S15. queue-core 0.7.0, operations 0.3.0, API 0.15.0,
+  contracts 0.4.0, web 0.15.0. No simulated number changes: the golden files change only in the
+  version of the queue.
+- **Context:**
+  - The queue's timeouts (a second call, a no-show, the expiry of a no-show) were applied only
+    when the next command came. A called passenger who never came stayed called on the
+    passenger's page and on displays.
+  - Staff need to act on a ticket: call again, mark an absence, bring it back, hold it for a
+    review, end the review, cancel (kickoff 2.6 and 2.8). Every transition must be guarded by the
+    ticket's state, idempotent and audited.
+  - Until S14 anyone who reached the API could call, admit and issue tickets.
+- **Decision:**
+  - **The state machine** (`queue-core`) gains the staff actions and two states:
+    - `REVIEW`: a waiting ticket held out of the order of calls. It keeps its place and goes back
+      to it, or is cancelled, when the review ends.
+    - `CANCELLED`: final.
+    - Each action is allowed only in some states (ARCHITECTURE, section 6). Otherwise it answers
+      `NOT_ALLOWED` and changes nothing.
+    - The no-show timeout counts from the latest second call, by the first timeout or by staff.
+    - The simulator never takes these actions, and fails at once if one ever reaches it.
+  - **Timers are commands.** `ADVANCE` applies the timeouts due. It goes through the log like any
+    command, so a replay of the log gives the same day.
+    - Every command writes the day's next due time (`checkpoint_timer`).
+    - `serve` runs a scheduler that sends `ADVANCE` to each checkpoint whose next timeout is due,
+      once a second. Its idempotency key names the timeout (`advance:<day>:<due time>`), so the
+      timeout applies once whichever servers see it due.
+    - A rescan at a kiosk applies the due timeouts first: a passenger's answer is never a second
+      late.
+  - **At the kiosk:**
+    - a no-show who scans the pass again within the window is back in the queue with the same
+      number;
+    - a ticket under review or cancelled sends the passenger to staff;
+    - a pass whose flight's boarding has closed, as GateFlow knows it, sends the passenger to
+      staff, unless the checkpoint's `afterBoardingClose` is `ISSUE`.
+  - **At the access point** a ticket is found by its number, its QR code or its boarding pass. The
+    pass is read in memory: only its HMAC finds the ticket, and only that HMAC enters the request's
+    hash.
+  - **Manual tickets** carry a coded reason (no boarding pass, pass unreadable, assistance, group,
+    other), never free text, and the size of the party: a family gets one number at the lane.
+  - **Staff sign in** with local logins (`gateflow-api user add`). OIDC/SAML with MFA replace the
+    passwords for the pilot (kickoff 2.9); the roles and scopes stay.
+    - Passwords are kept as scrypt hashes from Node's own crypto, with one of the parameter sets
+      of the OWASP Password Storage Cheat Sheet (N = 2^15, r = 8, p = 3). A check takes about
+      0.2 seconds, off the server's event loop.
+    - A session is a random 256-bit token in a cookie: HttpOnly, SameSite=Strict, Secure over
+      TLS, for one shift (12 hours). Only its SHA-256 is kept. Signing out, a new password or a
+      disabled member end it at once.
+    - A request sent by a page of another site is refused (its `Origin` against `Host`).
+    - Ten failures in a quarter of an hour make a login wait (per server). A wrong password is
+      answered as an unknown login, in the same time.
+    - **Roles:** operators issue manual tickets, call, admit, call again, mark no-shows, bring
+      them back and ask for reviews. Supervisors also cancel, end reviews and check the audit.
+      Administrators may do what supervisors do. A member works at the checkpoints of their
+      airport that their account names, or at all of them.
+    - Every staff route checks, in this order, the site, the session (401), the checkpoint (404),
+      the role and scope (403). Nothing else of the request is read before.
+    - The log records the member who acted (`staff:<id>`).
+  - **The lane station** (`/lane/<checkpoint>`) is part of the web application (ADR-044). It asks
+    for the queue every 5 seconds until displays get server-sent events (S16).
+- **Alternatives considered:**
+  - **Timers held only in the server's memory.** They would be lost on a restart, and the log
+    could not replay them.
+  - **A database scheduler (pg_cron) or LISTEN/NOTIFY for timers.** pg_cron is one more extension
+    to install at each airport. A pass every second over an indexed table costs nothing at the
+    scale of a checkpoint.
+  - **Tokens in the page's storage, or JWTs.** A script could read a stored token. A JWT cannot be
+    ended at once, before it expires. Server sessions in HttpOnly cookies can.
+  - **Argon2.** It needs a native module. scrypt, with the parameters OWASP gives for it, is in
+    Node's own crypto.
+  - **REVIEW for anomalous scans.** An anomalous scan still gives no ticket and sends the
+    passenger to staff (ADR-043), who can issue a manual ticket. A review is staff's own decision.
+- **Evidence:**
+  - **queue-core:** every state against every action (9 by 7) gives the transition of the
+    table, or a refusal that changes nothing and reports nothing. 1,000 random sequences with
+    staff actions keep every invariant, and the staff actions are reached in many runs: call
+    again in 70, cancel in 205. Timing tests show the no-show T2 after a staff's second call.
+    Simulated results are unchanged.
+  - **operations:** a log with timeouts and staff actions rebuilds the same day, next due time
+    included. Its events are those of the queue driven with the same inputs.
+  - **API on PostgreSQL:**
+    - the scheduler applies a second call, a no-show and an expiry on time, with nobody acting;
+    - two servers apply a due timeout once;
+    - staff actions are allowed by state and idempotent, and a key reused for another ticket is
+      refused;
+    - a review keeps the ticket's place, and the ticket is not admitted meanwhile;
+    - a rescan brings a no-show back, and gives way to a new ticket after expiry;
+    - review, cancellation and a closed boarding send the passenger to staff;
+    - admission by boarding pass, with no pass, name or booking reference in any table;
+    - the log rebuilds the day, and the audit chain is intact.
+  - **Staff:**
+    - every staff route refuses without a session;
+    - roles, another airport and another checkpoint are refused;
+    - a request from another site is refused;
+    - the cookie is HttpOnly, SameSite=Strict, and Secure over TLS;
+    - no password or token is stored or logged;
+    - failures are slowed;
+    - sign-out, expiry, a new password and disabling all end the session.
+  - **In Chromium, on the product:**
+    - sign-in, a session the page cannot read, sign-out;
+    - call, absence, back in the queue, then admission by number, QR code and boarding pass;
+    - review asked by an operator and ended by a supervisor, who alone can cancel;
+    - a manual ticket for a family of three, on a phone, in Spanish too;
+    - no request to any other server.
+- **Consequences:**
+  - The pilot replaces the local passwords with the airport's identity provider and MFA.
+  - The slowing of failures is per server. Behind several servers it holds for each of them.
+  - A party at the kiosk (one number for several passes) is not offered. Families get one number
+    from staff at the lane, with the party's size. How a kiosk should prove a party is a question
+    for the airports.
+  - Overrides, modes (FIFO only, paused, emergency) and the audit view come with the supervisor's
+    console (S17).
+

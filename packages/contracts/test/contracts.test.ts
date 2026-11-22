@@ -135,6 +135,8 @@ describe('the API contracts', () => {
       [`post ${cp}/tickets/{ticketId}/review`]: 'OPERATOR',
       [`post ${cp}/tickets/{ticketId}/cancel`]: 'SUPERVISOR',
       [`post ${cp}/tickets/{ticketId}/resolve`]: 'SUPERVISOR',
+      [`get ${cp}`]: 'OPERATOR',
+      [`get ${cp}/flights`]: 'OPERATOR',
       [`get ${cp}/queue`]: 'OPERATOR',
       [`get ${cp}/audit/verify`]: 'SUPERVISOR',
     });

@@ -15,7 +15,14 @@ import {
   SignInRequest,
   openApiDocument,
 } from '@gateflow/contracts';
-import type { StaffActionResponse, StaffMemberResponse, Ticket } from '@gateflow/contracts';
+import type {
+  CheckpointResponse,
+  FlightsResponse,
+  MeResponse,
+  StaffActionResponse,
+  StaffMemberResponse,
+  Ticket,
+} from '@gateflow/contracts';
 import { OperationError } from '@gateflow/operations';
 import type { Command, CommandResult, TicketSummary } from '@gateflow/operations';
 import { requestHash } from './chain';
@@ -329,10 +336,9 @@ export function buildApp(options: AppOptions): FastifyInstance {
     setSessionCookie(reply, signed.token, request.protocol === 'https' || forwarded === 'https');
     return memberView(signed.member);
   });
-  app.get('/v1/auth/me', async (request) => {
+  app.get('/v1/auth/me', async (request): Promise<MeResponse> => {
     const member = await staffOf(options.db, clock, request);
-    if (member === null) throw new ApiError(401, 'SIGN_IN_REQUIRED', 'sign in as staff first');
-    return memberView(member);
+    return member === null ? { member: null } : memberView(member);
   });
   app.post('/v1/auth/sign-out', async (request, reply) => {
     requireSameOrigin(request);
@@ -757,6 +763,69 @@ export function buildApp(options: AppOptions): FastifyInstance {
         },
         acted,
       );
+    },
+  );
+
+  /** The checkpoint and its airport, for the lane station's header (S15). */
+  app.get<{ Params: { checkpointId: string } }>(
+    '/v1/checkpoints/:checkpointId',
+    async (request): Promise<CheckpointResponse> => {
+      const { checkpoint: cp } = await requireStaff(
+        options.db,
+        clock,
+        request,
+        'OPERATOR',
+        request.params.checkpointId,
+      );
+      const rows = await options.db.select().from(airport).where(eq(airport.id, cp.airportId));
+      const a = rows[0];
+      return {
+        checkpoint: { id: cp.id, label: cp.name, ticketPrefix: cp.ticketPrefix },
+        airport: {
+          label: a?.name ?? '',
+          iata: cp.iata,
+          timeZone: cp.timeZone,
+          synthetic: a?.dataClassification === 'SYNTHETIC',
+        },
+      };
+    },
+  );
+
+  /** The flights a manual ticket can be for: from an hour ago to 24 hours ahead (S15). */
+  app.get<{ Params: { checkpointId: string } }>(
+    '/v1/checkpoints/:checkpointId/flights',
+    async (request): Promise<FlightsResponse> => {
+      const { checkpoint: cp } = await requireStaff(
+        options.db,
+        clock,
+        request,
+        'OPERATOR',
+        request.params.checkpointId,
+      );
+      const now = clock.now();
+      const rows = await options.db
+        .select()
+        .from(flight)
+        .where(
+          and(
+            eq(flight.airportId, cp.airportId),
+            gte(flight.stdMs, now - 60 * 60 * 1000),
+            lte(flight.stdMs, now + 24 * 60 * 60 * 1000),
+          ),
+        )
+        .orderBy(asc(flight.stdMs));
+      return {
+        flights: rows.map((f) => ({
+          id: f.id,
+          label:
+            f.carrier === null || f.flightNumber === null
+              ? f.number
+              : `${f.carrier} ${f.flightNumber}`,
+          departure: new Date(f.stdMs).toISOString(),
+          boardingClose:
+            f.boardingCloseMs === null ? null : new Date(f.boardingCloseMs).toISOString(),
+        })),
+      };
     },
   );
 

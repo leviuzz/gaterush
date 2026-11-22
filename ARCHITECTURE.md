@@ -265,18 +265,30 @@ an explicit time, and time may never go backwards.
 | `callNext(t, estimates)` | Calls the head of the prepare window (or, without a window, the ticket the engine selects now). |
 | `present(id, t, estimates)` | Validation at the access point: `ADMITTED`, `REACTIVATED` (a no-show rescanning in time), `EXPIRED`, or a refusal (`NOT_CALLED`, `ALREADY_ADMITTED`, `UNKNOWN_TICKET`). |
 | `advance(t)` / `nextDueMs()` | Applies the timeouts due by `t` / tells when the next one is due. |
+| `recall`, `markNoShow`, `reactivate`, `hold`, `resolve`, `cancel` (S15) | Staff actions, each allowed only in the states the table below gives; otherwise `NOT_ALLOWED`, and nothing changes. The simulator never takes them. |
 
 States: `QUEUED -> PREPARE -> CALLED -> RECALLED -> NO_SHOW -> EXPIRED`, where:
 - `PREPARE` is skipped when there is no prepare window (M = 0);
 - `ADMITTED` is reachable from `CALLED` and `RECALLED`;
 - `NO_SHOW -> QUEUED` on reactivation (at the original place or at the back, at most `r` times);
-- a no-show that may not be reactivated again expires at once.
+- a no-show that may not be reactivated again expires at once;
+- `REVIEW` (S15): staff hold a waiting ticket (`QUEUED` or `PREPARE`) out of the order of calls; it
+  keeps its place and goes back to it, or is `CANCELLED`, when the review ends;
+- `CANCELLED` (S15) is final, from any state but `ADMITTED` and `EXPIRED`.
+
+| State | Call again | Mark no-show | Reactivate | Hold | End review | Cancel |
+|---|---|---|---|---|---|---|
+| `QUEUED`, `PREPARE` | | | | `REVIEW` | | `CANCELLED` |
+| `CALLED`, `RECALLED` | `RECALLED` | `NO_SHOW` | | | | `CANCELLED` |
+| `NO_SHOW` | | | `QUEUED` | | | `CANCELLED` |
+| `REVIEW` | | | | | `QUEUED` or `CANCELLED` | `CANCELLED` |
+| `ADMITTED`, `EXPIRED`, `CANCELLED` | | | | | | |
 
 - **Prepare window (M tickets).** Tickets are committed to the window by the engine and shown on
   displays; a committed ticket leaves the window only by being called (no churn).
-- **Timeouts.** Second call after T1, no-show after T1 + T2, expiry at the end of the reactivation
-  window. Timeouts strictly before `t` are applied before an operation at `t`, so a passenger
-  presenting exactly at a deadline is on time.
+- **Timeouts.** Second call after T1, no-show T2 after the second call (by the first timeout or
+  by staff), expiry at the end of the reactivation window. Timeouts strictly before `t` are
+  applied before an operation at `t`, so a passenger presenting exactly at a deadline is on time.
 - **Events.** Every transition is reported to a listener in chronological order (the audit log in
   production, metrics in simulation). A commitment carries what it was decided on: the reasons,
   the tickets and people it passes, the fast track, the urgent tickets waiting and the engine's
@@ -304,11 +316,14 @@ States: `QUEUED -> PREPARE -> CALLED -> RECALLED -> NO_SHOW -> EXPIRED`, where:
   production the operations console will.
 
 Property tests (1,000 random operation sequences on random policies, 300 for determinism) check,
-independently of the implementation: zero churn, window size at most M, state counters, a single admission per ticket,
+independently of the implementation: zero churn (a ticket leaves the window only by its call or
+by staff), window size at most M, state counters, a single admission per ticket,
 terminal states, chronological events, the cap and the K bound over commitments (with an
 independent overtake model), class changes and reversals against an independent record of the
-observed classes, and determinism. A coverage test guarantees that the sequences reach
-priority commitments, the cap, the guard and reactivations.
+observed classes, and determinism. The sequences include staff actions (S15): an action the state
+does not allow changes nothing and reports nothing; the others give the state of the table. A
+coverage test guarantees that the sequences reach priority commitments, the cap, the guard,
+reactivations and every staff action. A unit test runs every action on every state.
 
 ## 7. Checkpoint simulation model (model version 0.6.0)
 
@@ -638,10 +653,25 @@ flowchart LR
     a checkpoint's active tickets), and the flight's carrier, number and departure date.
   - Devices (ADR-044): `device` (kiosk, display or lane station of a checkpoint, the SHA-256 of
     its token, revocation).
+  - The queue's timers (ADR-045): `checkpoint_timer`, the time each checkpoint's next timeout is
+    due, written with every command.
+  - Staff (ADR-045): `staff_user` (login, scrypt hash of the password, role, checkpoints) and
+    `staff_session` (the SHA-256 of a session's token, its expiry, its end).
+- **Timers (ADR-045).** `serve` runs a scheduler: every second it sends `ADVANCE` to each
+  checkpoint whose next timeout is due. The command goes through the log like any other; its
+  idempotency key names the timeout, so it applies once whichever servers see it due. A rescan at
+  a kiosk applies the due timeouts first.
+- **Staff (ADR-045).** Every staff route checks, in this order: the request comes from this site,
+  a session (401), the checkpoint (404), the role and the checkpoints of the member (403). The
+  log records the member as the actor (`staff:<id>`).
 - **Endpoints** (OpenAPI at `/v1/openapi.json`):
   - `POST /v1/checkpoints/{id}/scans`: a boarding pass gives a ticket, the same ticket again, or
     a reason (ADR-043). Only a kiosk of the checkpoint may send one (ADR-044);
   - `GET /v1/devices/me` and `GET /v1/checkpoints/{id}/demo-flights`, for kiosks;
+  - `POST /v1/auth/sign-in`, `GET /v1/auth/me`, `POST /v1/auth/sign-out` (ADR-045);
+  - `POST /v1/checkpoints/{id}/tickets/{ticket}/recall`, `no-show`, `reactivate`, `review`,
+    `resolve` and `cancel` (ADR-045);
+  - `GET /v1/checkpoints/{id}` and `/flights`, for the lane station;
   - `POST /v1/checkpoints/{id}/tickets`, `/calls` and `/admissions`;
   - `GET /v1/checkpoints/{id}/queue` and `/audit/verify`;
   - `GET /v1/tickets/{ref}` (number, state, checkpoint and day only);
@@ -649,10 +679,10 @@ flowchart LR
 - **Privacy.** No field holds personal data; the request log keeps no client address and no
   ticket reference.
 - **Commands** of the bundle `gateflow-api`: `migrate`, `seed --scenario <file>` (demo data from
-  the library), `device add` and `device revoke`, and `serve`, which also serves the web
-  application.
+  the library), `device add` and `device revoke`, `user add`, `user password` and `user disable`,
+  and `serve`, which also serves the web application and runs the timers.
 
-## 14. The passengers' screens (`apps/web`, `@gateflow/i18n`, ADR-044)
+## 14. The screens (`apps/web`, `@gateflow/i18n`, ADR-044, ADR-045)
 
 One React application, built by esbuild into static files and served by the API: one process,
 one origin, one Content Security Policy.
@@ -686,6 +716,11 @@ flowchart LR
 - **Headers.** `nosniff` and `no-referrer` on every answer. Pages also get a policy allowing only
   the application's own files, and `X-Robots-Tag: noindex`. Ticket references are kept out of
   the log.
+- **The lane station** (`/lane/<checkpoint>`, ADR-045): staff sign in (the session is a cookie the
+  page cannot read), call the next passenger, validate a ticket by its QR code, its boarding pass
+  or its number, call again, mark an absence, bring it back, hold a ticket for a review and, as
+  supervisors, end reviews and cancel. Manual tickets carry a reason and the size of the party.
+  The station asks for the queue every 5 seconds; S16 brings server-sent events.
 - **Build** (`node build.mjs`): `index.html`, `assets/app.js` and `app.css` with Brotli and gzip
   copies, an icon, and `THIRD-PARTY-NOTICES.txt` with the licences of the bundled libraries.
 

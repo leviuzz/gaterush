@@ -316,7 +316,7 @@ describe('the API (S12)', () => {
     clock.t = zonedEpoch('2026-11-24', 3 * 60 * MIN + 5 * MIN, 'Europe/Rome');
     // A session lasts a shift: the next day's staff sign in again.
     const expired = await app.inject({ url: '/v1/auth/me', headers: { cookie } });
-    expect(expired.statusCode).toBe(401);
+    expect(expired.json()).toEqual({ member: null });
     cookie = await staffCookie(app, database.db, clock, airportId);
     const rows = await database.db.select().from(flight).where(eq(flight.serviceDate, DAY));
     const late = rows.sort((a, b) => b.stdMs - a.stdMs)[0]!;

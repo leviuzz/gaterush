@@ -114,7 +114,7 @@ jobs:
           path: apps/studio/dist/gateflow-studio.html
 
   web:
-    name: Kiosk and ticket page in Chromium
+    name: Passengers' and staff screens in Chromium
     needs: check
     runs-on: ubuntu-latest
     services:
@@ -140,7 +140,7 @@ jobs:
       - run: pnpm build
       - name: Install Chromium
         run: pnpm --filter @gateflow/web exec playwright install --with-deps chromium
-      - name: A passenger takes a number at the kiosk and follows it on a phone, in three languages
+      - name: A passenger takes a number at the kiosk, follows it on a phone; staff call and admit at the lane
         env:
           GATEFLOW_SHOTS: out/screens
         run: pnpm --filter @gateflow/web run test:e2e

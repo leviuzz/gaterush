@@ -38,8 +38,11 @@ export const SESSION_COOKIE = 'gateflow_session';
 export const SESSION_MS = 12 * 60 * 60 * 1000;
 const LOGIN = /^[a-z0-9][a-z0-9._-]{2,62}$/;
 
-/** scrypt with N = 2^15, r = 8, p = 1: about 50 ms, 32 MB, for each check of a password. */
-const SCRYPT = { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 } as const;
+/**
+ * scrypt with N = 2^15, r = 8, p = 3: one of the parameter sets the OWASP Password Storage Cheat
+ * Sheet recommends (32 MiB of memory for each check of a password).
+ */
+const SCRYPT = { N: 32768, r: 8, p: 3, maxmem: 64 * 1024 * 1024 } as const;
 
 function scryptOf(password: string, salt: Buffer): Promise<Buffer> {
   return new Promise((resolve, reject) => {

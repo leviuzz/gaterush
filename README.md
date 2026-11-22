@@ -11,7 +11,8 @@ border procedures: it organises the flow before they start.
 
 > **Status: M1 done (S1 to S8); M2: the Simulator Studio (S9) and the replay of a day (S11); M3,
 > the product an airport installs: its operational core (S12), boarding passes (S13), the kiosk
-> and the passenger's page (S14).**
+> and the passenger's page (S14), the queue's life cycle with staff who sign in and the lane
+> station (S15).**
 > This repository contains the simulation foundations:
 > - the priority engine;
 > - the queue state machine that the operational product will share;
@@ -37,9 +38,12 @@ border procedures: it organises the flow before they start.
 >   and gets a number, on screen with a QR code and on paper, then follows it on a phone. In
 >   Italian, English and Spanish; nothing of the pass is kept.
 >
-> There is no screen for airport staff yet (displays, lane station, supervisor: S15 to S17), and
-> staff do not sign in: calls and admissions are open to anyone who reaches the API, which is
-> for development and demos only. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+> - **The lane station**: staff sign in, call the next passenger, validate tickets by QR code,
+>   boarding pass or number, act on absences and reviews, and issue manual tickets.
+>
+> Displays (S16) and the supervisor's console (S17) come next; staff sign in with local passwords
+> until the pilot brings the airport's identity provider. See
+> [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 > **All results in this repository are SIMULATED on synthetic assumptions.** They are not
 > measurements and must not be presented as evidence of operational performance.
@@ -116,15 +120,29 @@ A barcode scanner that types like a keyboard reads boarding passes into the kios
 paste a pass's code, or on a demo airport press "Use a sample boarding pass". The number comes
 with a QR code to the passenger's page, `/t/<reference>`, which follows the ticket on a phone.
 
+Staff sign in at the lane station, `/lane/<checkpoint id>`. Add a member of staff with a role
+(operator, supervisor or admin) and, if they work at some checkpoints only, those:
+
+```bash
+node apps/api/dist/gateflow-api.mjs user add --airport vce-like --login m.rossi --role supervisor
+```
+
+This prints the member's password once. `user password --login <login>` gives a new one and
+`user disable --login <login>` ends their access; both end their sessions at once.
+
 The endpoints:
 - `POST /v1/checkpoints/{id}/scans`: a kiosk scans a boarding pass (with its token). The answer
   is a ticket, the same ticket again, or a reason. The pass is read in memory and never stored.
-- `POST /v1/checkpoints/{id}/tickets`: issue a ticket;
+- `POST /v1/auth/sign-in`, `GET /v1/auth/me`, `POST /v1/auth/sign-out`: staff sign in; the
+  session is a cookie the page cannot read. Every staff route below needs one, of the right role;
+- `POST /v1/checkpoints/{id}/tickets`: issue a manual ticket, with its reason and party size;
 - `POST /v1/checkpoints/{id}/calls`: call the next passenger;
 - `POST /v1/checkpoints/{id}/admissions`: admit a passenger at the access point;
 - `GET /v1/checkpoints/{id}/queue`: the day's tickets;
 - `GET /v1/checkpoints/{id}/audit/verify`: check the hash chain of the log;
 - `GET /v1/tickets/{ref}`: the passenger's view of a ticket;
+- `POST /v1/checkpoints/{id}/tickets/{ticket}/recall`, `no-show`, `reactivate`, `review`,
+  `resolve`, `cancel`: staff actions, as the ticket's state allows;
 - `GET /v1/devices/me` and `GET /v1/checkpoints/{id}/demo-flights`: for kiosks.
 
 Send an `Idempotency-Key` header with each command. The OpenAPI document is at

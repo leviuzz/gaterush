@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { asc, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
-import { ROUTES, StaffMemberResponse } from '@gateflow/contracts';
+import { MeResponse, ROUTES, StaffMemberResponse } from '@gateflow/contracts';
 import { parseScenarioText } from '@gateflow/sim-scenarios';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app';
@@ -196,7 +196,7 @@ describe('staff sign in (S15)', () => {
     expect(tls.cookies.find((c) => c.name === 'gateflow_session')?.secure).toBe(true);
     // Neither the password nor a token is stored, or logged.
     const [user] = await database.db.select().from(staffUser).where(eq(staffUser.id, member.id));
-    expect(user?.passwordHash).toMatch(/^scrypt\$32768\$8\$1\$/);
+    expect(user?.passwordHash).toMatch(/^scrypt\$32768\$8\$3\$/);
     const dump = JSON.stringify([
       await database.db.select().from(staffUser),
       await database.db.select().from(staffSession),
@@ -230,7 +230,10 @@ describe('staff sign in (S15)', () => {
       expect(r.statusCode).toBe(200);
       return `gateflow_session=${r.cookies.find((c) => c.name === 'gateflow_session')?.value ?? ''}`;
     };
-    const me = (cookie: string) => app.inject({ url: '/v1/auth/me', headers: { cookie } });
+    /** Who the session belongs to: a login, or null once it ended. */
+    const me = async (cookie: string) =>
+      MeResponse.parse((await app.inject({ url: '/v1/auth/me', headers: { cookie } })).json())
+        .member?.login ?? null;
     const { password } = await addStaff(database.db, randomIds(clock), {
       airportId,
       login: 'lane.three',
@@ -238,26 +241,26 @@ describe('staff sign in (S15)', () => {
       checkpointIds: null,
     });
     const first = await cookieOf('lane.three', password);
-    expect((await me(first)).statusCode).toBe(200);
+    expect(await me(first)).toBe('lane.three');
     const out = await app.inject({
       method: 'POST',
       url: '/v1/auth/sign-out',
       headers: { cookie: first },
     });
     expect(out.statusCode).toBe(204);
-    expect((await me(first)).statusCode).toBe(401);
+    expect(await me(first)).toBeNull();
     const second = await cookieOf('lane.three', password);
     const start = clock.t;
     clock.t = start + SESSION_MS + 1;
-    expect((await me(second)).statusCode).toBe(401);
+    expect(await me(second)).toBeNull();
     clock.t = start;
     const third = await cookieOf('lane.three', password);
     const renewed = await resetPassword(database.db, 'lane.three');
-    expect((await me(third)).statusCode).toBe(401);
+    expect(await me(third)).toBeNull();
     expect((await signIn('lane.three', password)).statusCode).toBe(401);
     const fourth = await cookieOf('lane.three', renewed ?? '');
     expect(await disableStaff(database.db, 'lane.three')).toBe(true);
-    expect((await me(fourth)).statusCode).toBe(401);
+    expect(await me(fourth)).toBeNull();
     expect((await signIn('lane.three', renewed ?? '')).statusCode).toBe(401);
   });
 

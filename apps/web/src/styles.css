@@ -673,6 +673,240 @@ input {
   color: var(--muted);
 }
 
+/* The lane station (S15): staff at a desk or a tablet, by the access point. */
+
+.lane {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  min-height: 100vh;
+  min-height: 100dvh;
+  font-size: 1rem;
+}
+
+.bar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75em;
+}
+
+.who {
+  color: var(--muted);
+}
+
+.lane-main {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  align-items: start;
+  gap: 1rem;
+  padding: 0.5rem clamp(0.75rem, 2vw, 1.5rem) 2rem;
+}
+
+.lane .card {
+  width: auto;
+  padding: 1rem 1.1rem;
+  text-align: left;
+}
+
+.lane-actions {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.call-next {
+  min-height: 4rem;
+  font-size: 1.35rem;
+}
+
+.last {
+  min-height: 1.5em;
+  font-size: 1.15rem;
+  font-weight: 650;
+}
+
+.validate {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.validate label,
+.manual label,
+.sign-in label {
+  color: var(--ink-2);
+  font-size: 0.92rem;
+}
+
+.lane input,
+.lane select {
+  min-height: 2.75rem;
+  padding: 0.35em 0.6em;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.outcome {
+  min-height: 1.5em;
+  padding: 0.5em 0.75em;
+  border-radius: 10px;
+  font-size: 1.1rem;
+  font-weight: 650;
+}
+
+.outcome:empty {
+  padding: 0;
+}
+
+.outcome[data-kind='ok'] {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.outcome[data-kind='warn'] {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.outcome[data-kind='stop'] {
+  background: var(--stop-soft);
+  color: var(--stop);
+}
+
+.lane-list h2,
+.manual h2 {
+  margin-bottom: 0.5rem;
+  font-size: 1.05rem;
+}
+
+.count {
+  margin-left: 0.3em;
+  padding: 0.05em 0.5em;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--ink-2);
+  font-size: 0.85em;
+}
+
+.lane-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ticket-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.75rem;
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.ticket-row:first-child {
+  border-top: 0;
+}
+
+.row-number {
+  min-width: 3.5em;
+  font-size: 1.15rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.row-detail {
+  flex: 1 1 8em;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.small-button {
+  min-height: 2.5rem;
+  padding: 0.25em 0.8em;
+  border: 1.5px solid var(--accent);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--accent-strong);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.small-button.danger {
+  border-color: var(--stop);
+  color: var(--stop);
+}
+
+.manual form,
+.sign-in form {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.manual fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0;
+  padding: 0.25rem 0;
+  border: 0;
+}
+
+.manual legend {
+  padding: 0;
+  color: var(--ink-2);
+  font-size: 0.92rem;
+}
+
+.choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+}
+
+.manual .issued {
+  display: grid;
+  justify-items: center;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+  text-align: center;
+}
+
+.manual .issued .number {
+  font-size: 3.5rem;
+}
+
+.manual .issued .qr {
+  width: 9rem;
+}
+
+.sign-in {
+  width: min(100%, 24rem);
+}
+
+.sign-in h1 {
+  margin-bottom: 0.75rem;
+  font-size: 1.4rem;
+}
+
+.form-error {
+  color: var(--stop);
+  font-weight: 600;
+}
+
+.stale {
+  margin: 0 clamp(0.75rem, 2vw, 1.5rem);
+  padding: 0.5em 0.8em;
+  border-radius: 10px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-weight: 650;
+}
+
 /* Printing a ticket: the number, the QR code, where and when; nothing else. */
 
 .print-only {
@@ -699,7 +933,12 @@ input {
   .scan-form,
   .kiosk-foot,
   .actions,
-  .privacy {
+  .privacy,
+  .lane-main > :not(.manual),
+  .manual form,
+  .manual h2,
+  .manual .issued button,
+  .stale {
     display: none !important;
   }
 

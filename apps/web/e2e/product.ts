@@ -27,6 +27,10 @@ export interface Product {
   readonly calendarDay: string;
   /** The `cookie` header of a supervisor signed in at the airport (S15). */
   readonly staffCookie: string;
+  /** Members of staff of the airport, to sign in at the lane station (S15). */
+  readonly staff: Readonly<
+    Record<'supervisor' | 'operator', { readonly login: string; readonly password: string }>
+  >;
   /** Runs a command of gateflow-api on the product's database. */
   cli(args: readonly string[]): string;
   stop(): Promise<void>;
@@ -111,6 +115,19 @@ export async function startProduct(serverUrl: string, scenario: string): Promise
   ]);
   const password = /^password (\S+)$/m.exec(added)?.[1];
   if (password === undefined) throw new Error(`no password in:\n${added}`);
+  const operatorAdded = cli([
+    'user',
+    'add',
+    '--airport',
+    'vce-like',
+    '--login',
+    'e2e.operator',
+    '--role',
+    'operator',
+    '--checkpoint',
+    checkpointId,
+  ]);
+  const operatorPassword = /^password (\S+)$/m.exec(operatorAdded)?.[1] ?? '';
 
   const port = await freePort();
   const server = spawn(
@@ -151,6 +168,10 @@ export async function startProduct(serverUrl: string, scenario: string): Promise
     displayToken,
     calendarDay,
     staffCookie: `gateflow_session=${session}`,
+    staff: {
+      supervisor: { login: 'e2e.supervisor', password },
+      operator: { login: 'e2e.operator', password: operatorPassword },
+    },
     cli,
     stop: async () => {
       const exited = new Promise((resolve) => server.once('exit', resolve));

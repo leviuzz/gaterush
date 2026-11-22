@@ -52,10 +52,10 @@ without disproportionate harm to passengers who are not prioritised (ADR-002).
 | FR-05 | Rescanning is idempotent: it retrieves the existing ticket, allows reprinting and shows the status; it never creates duplicates. Every command of the API is idempotent by its key (S12, ADR-042); at the kiosk a rescan shows the same number, to print again (S14). |
 | FR-06 | Compute eligibility, risk class and a deterministic explanation; reassess on every relevant event. |
 | FR-07 | Fairness controls: cap on priority calls, bound on overtakes, anti-churn, documented manual exceptions. |
-| FR-08 | Call only for real capacity; second call; no-show timeout; limited recovery window. |
+| FR-08 | Call only for real capacity; second call; no-show timeout; limited recovery window. Since S15 the timeouts apply on time in the live system (a scheduler through the log), staff can call again and mark a no-show, and a no-show comes back by a rescan or by staff within the window (ADR-045). |
 | FR-09 | Validate access by operator or reader; at most one admission per ticket (enforced by the database since S12). |
 | FR-10 | Public display: called numbers and direction, "prepare" numbers, data freshness; no personal data. |
-| FR-11 | Lane operator station: call next, validate, exceptions, overrides with a reason. |
+| FR-11 | Lane operator station: call next, validate, exceptions, overrides with a reason. Since S15: call next, validate by QR code, boarding pass or number, call again, absences, reviews, manual tickets with a coded reason and the party's size (ADR-045); overrides come with S17. |
 | FR-12 | Operations console: live queue, KPIs, alerts, lanes, modes (normal, FIFO only, paused, emergency). |
 | FR-13 | Administration: airports, checkpoints, lanes, devices, users; versioned policies with four-eyes approval and rollback. |
 | FR-14 | Audit of every state transition, override and configuration change. Since S12 every command and event of a checkpoint is in an append-only log with a chain of hashes, which an endpoint checks (ADR-042). |
@@ -75,7 +75,7 @@ without disproportionate harm to passengers who are not prioritised (ADR-002).
 | NFR-01 | Deterministic, explainable, verifiable engine, isolated from UI, infrastructure and devices. |
 | NFR-02 | Append-only or tamper-evident audit log. |
 | NFR-03 | Privacy by design (GDPR art. 5 and 25; Mexican LFPDPPP): minimisation, pseudonymisation, no raw boarding-pass data in logs, minimal retention. |
-| NFR-04 | Security: OIDC/SAML, MFA for administrators, scoped RBAC, TLS, encryption at rest, managed secrets, four-eyes approval, network segmentation. |
+| NFR-04 | Security: OIDC/SAML, MFA for administrators, scoped RBAC, TLS, encryption at rest, managed secrets, four-eyes approval, network segmentation. Since S15: local staff with roles scoped to an airport's checkpoints, scrypt passwords, HttpOnly sessions, same-site checks; OIDC/SAML and MFA come with the pilot (ADR-045). |
 | NFR-05 | Performance targets (hypotheses to negotiate): state propagation < 3 s on a healthy network; device heartbeat < 60 s. |
 | NFR-06 | Resilience: defined degraded modes, tested backup and restore; fail-safe never grants access to restricted areas. |
 | NFR-07 | Idempotent commands; no duplicates. |

@@ -16,6 +16,8 @@ export interface ApiRequest {
   readonly body?: unknown;
   /** The same key on a retry: the server applies the command once. */
   readonly idempotencyKey?: string;
+  /** Sends the staff's session cookie (S15); passengers' and kiosks' requests carry no cookie. */
+  readonly session?: boolean;
   readonly signal?: AbortSignal;
 }
 
@@ -30,7 +32,7 @@ export async function api<T>(path: string, request: ApiRequest = {}): Promise<Ap
       method: request.method ?? 'GET',
       headers,
       cache: 'no-store',
-      credentials: 'omit',
+      credentials: request.session === true ? 'same-origin' : 'omit',
       ...(request.body === undefined ? {} : { body: JSON.stringify(request.body) }),
       ...(request.signal === undefined ? {} : { signal: request.signal }),
     });

@@ -1,6 +1,6 @@
 {
   "name": "@gateflow/web",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "private": true,
   "description": "GateFlow's web application for passengers and staff (kiosk, ticket page; displays and stations follow), served by the API.",
   "type": "module",

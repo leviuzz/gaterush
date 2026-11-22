@@ -39,6 +39,8 @@ export interface CheckpointRow {
   readonly dayStartsAt: string;
   readonly settings: CheckpointSettings;
   readonly timeZone: string;
+  /** IATA code of the airport, matched with boarding passes. */
+  readonly iata: string;
 }
 
 /** What `build` receives: the open day, under the checkpoint's lock. */
@@ -54,12 +56,16 @@ export interface CommandRequest {
   readonly idempotencyKey: string;
   readonly requestHash: string;
   readonly actor: string;
-  /** Builds the command once the day is current (e.g. finds the ticket of a number). */
-  readonly build: (context: BuildContext) => Promise<Command> | Command;
+  /**
+   * Builds the command once the day is current (e.g. finds the ticket of a number), or gives null
+   * when there is nothing to apply (a boarding pass scanned again finds its ticket).
+   */
+  readonly build: (context: BuildContext) => Promise<Command | null> | Command | null;
 }
 
 export interface Executed {
-  readonly result: CommandResult;
+  /** What the command did; null when `build` found nothing to apply. */
+  readonly result: CommandResult | null;
   readonly seq: number;
   /** True when the idempotency key was known: the first answer, applied once. */
   readonly replayed: boolean;
@@ -105,6 +111,7 @@ export async function loadCheckpoint(db: Db | Tx, checkpointId: string): Promise
       dayStartsAt: checkpoint.dayStartsAt,
       settings: checkpoint.settings,
       timeZone: airport.timeZone,
+      iata: airport.iata,
     })
     .from(checkpoint)
     .innerJoin(airport, eq(airport.id, checkpoint.airportId))
@@ -197,6 +204,7 @@ export class Runtime {
       });
     }
     const command = await request.build({ tx, checkpoint: cp, day, atMs });
+    if (command === null) return { result: null, seq: memory.seq, replayed: false, checkpoint: cp };
     const record: CommandRecord = { seq: memory.seq + 1, atMs, command };
     const applied = day.apply(record);
     await this.write(tx, cp, memory, day, record, applied, request);
@@ -351,6 +359,7 @@ export class Runtime {
         firstCalledAtMs: t.firstCalledAtMs,
         admittedAtMs: t.admittedAtMs,
         updatedSeq: record.seq,
+        dedupKey: record.command.type === 'ISSUE_TICKET' ? record.command.dedupKey : null,
       });
     }
     const touched = new Set(

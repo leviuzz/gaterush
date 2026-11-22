@@ -6,7 +6,7 @@ import { z } from 'zod';
  * ticket is a number, a state and a flight, never a name.
  */
 
-export const CONTRACTS_VERSION = '0.1.0';
+export const CONTRACTS_VERSION = '0.2.0';
 
 export const Segment = z.enum(['DEPARTING', 'TRANSFER']);
 
@@ -43,7 +43,24 @@ export const Ticket = z.object({
 });
 export type Ticket = z.infer<typeof Ticket>;
 
-/** Staff issue a ticket for a passenger of a flight (kiosks scan a boarding pass from S14). */
+/**
+ * A kiosk scans a boarding pass (IATA BCBP). The pass is read in memory and never stored or logged
+ * (ADR-043).
+ */
+export const ScanRequest = z.strictObject({ bcbp: z.string().min(1).max(1100) });
+
+export const ScanOutcome = z.enum(['ISSUED', 'RETRIEVED', 'REJECTED', 'NEEDS_ASSISTANCE']);
+
+/** Why a scan gave no ticket, or sent the passenger to staff. */
+export const ScanReason = z.enum([
+  'UNREADABLE',
+  'WRONG_AIRPORT',
+  'WRONG_DAY',
+  'UNKNOWN_FLIGHT',
+  'ALREADY_ADMITTED',
+]);
+
+/** Staff issue a ticket for a passenger of a flight. */
 export const IssueTicketRequest = z.strictObject({
   flightId: z.uuid(),
   segment: Segment,
@@ -54,6 +71,15 @@ export const IssueTicketResponse = z.object({
   ticket: Ticket,
   /** The reference of the passenger's page and QR code: given only here. */
   ref: z.string(),
+});
+
+export const ScanResponse = z.object({
+  outcome: ScanOutcome,
+  reason: ScanReason.nullable(),
+  /** The ticket issued or found again; null when the scan gave none. */
+  ticket: Ticket.nullable(),
+  /** The reference of the ticket's page and QR code, to print it (again). */
+  ref: z.string().nullable(),
 });
 
 export const CallNextResponse = z.object({
@@ -147,6 +173,18 @@ export const ROUTES: readonly Route[] = [
       '201': { description: 'Issued', schema: IssueTicketResponse },
       ...errors,
       '409': { description: 'Idempotency key reused for another request', schema: ErrorResponse },
+    },
+  },
+  {
+    method: 'post',
+    path: '/v1/checkpoints/{checkpointId}/scans',
+    summary: 'A kiosk scans a boarding pass: a ticket, the same ticket again, or a reason',
+    command: true,
+    body: ScanRequest,
+    responses: {
+      '201': { description: 'A ticket was issued', schema: ScanResponse },
+      '200': { description: 'The ticket found again, or why there is none', schema: ScanResponse },
+      ...errors,
     },
   },
   {

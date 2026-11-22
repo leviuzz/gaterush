@@ -4,6 +4,32 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Any change that alters simulated numbers
 must be listed, together with the component versions it bumps.
 
+## [0.13.0] - 2026-11-22: Slice S13, boarding passes
+
+Boarding passes at the kiosk, read in memory and kept as an HMAC (ADR-043).
+
+### Simulated numbers change
+
+- None.
+
+### Added
+
+- `@gateflow/bcbp` 0.1.0 (pure): IATA Resolution 792, M format, one to four legs.
+  - `parseBoardingPass` never throws, never returns the name and never quotes the text.
+  - `encodeBoardingPass`, `syntheticBoardingPass`, `flightDateOf` (the year across year end),
+    `legForDeparture` and `dedupMaterial`.
+- API 0.13.0: `POST /v1/checkpoints/{id}/scans`.
+  - Outcomes `ISSUED`, `RETRIEVED`, `NEEDS_ASSISTANCE` and `REJECTED`, with their reasons.
+  - The deduplication key is an HMAC with a random secret per airport and flight date.
+  - One active ticket per pass by a partial unique index; every scan recorded without personal
+    data.
+  - Migrations: `dedup_secret`, `scan` (append-only), the flight's carrier, number and
+    departure date, and the airport's IATA code (`ZZZ` until configured).
+  - The seed gives library flights the placeholder carrier `ZZ` and `xxx-like` airports the
+    code `XXX`.
+- Contracts 0.2.0: `ScanRequest` and `ScanResponse`.
+- Operations 0.2.0: the issue command records the deduplication key (null for staff tickets).
+
 ## [0.12.0] - 2026-11-22: Slice S12, the operational core
 
 The product's server: a checkpoint's day on the simulator's own queue, behind HTTP, on

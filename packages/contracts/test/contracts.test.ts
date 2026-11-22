@@ -36,23 +36,42 @@ describe('the API contracts', () => {
   it('give an OpenAPI document with every route', () => {
     const doc = openApiDocument('0.12.0') as { paths: Record<string, Record<string, unknown>> };
     for (const route of ROUTES) expect(doc.paths[route.path]?.[route.method]).toBeDefined();
-    // No field of any schema holds personal data.
-    const fields: string[] = [];
-    const walk = (node: unknown): void => {
-      if (Array.isArray(node)) node.forEach(walk);
-      else if (typeof node === 'object' && node !== null) {
-        const record = node as Record<string, unknown>;
-        const properties = record.properties;
-        if (typeof properties === 'object' && properties !== null) {
-          fields.push(...Object.keys(properties));
+    // No answer holds personal data; only the scan request carries the boarding pass in, to be
+    // read in memory (ADR-043).
+    const fieldsOf = (node: unknown): string[] => {
+      const fields: string[] = [];
+      const walk = (n: unknown): void => {
+        if (Array.isArray(n)) n.forEach(walk);
+        else if (typeof n === 'object' && n !== null) {
+          const record = n as Record<string, unknown>;
+          const properties = record.properties;
+          if (typeof properties === 'object' && properties !== null) {
+            fields.push(...Object.keys(properties));
+          }
+          Object.values(record).forEach(walk);
         }
-        Object.values(record).forEach(walk);
-      }
+      };
+      walk(node);
+      return fields;
     };
-    walk(doc);
-    expect(fields.length).toBeGreaterThan(10);
-    for (const field of fields) {
-      expect(field).not.toMatch(/name|surname|pnr|passport|seat|bcbp|email|phone/i);
+    const personal = /name|surname|pnr|passport|seat|bcbp|email|phone/i;
+    let answers = 0;
+    for (const [path, methods] of Object.entries(doc.paths)) {
+      for (const operation of Object.values(methods) as {
+        responses: unknown;
+        requestBody?: unknown;
+      }[]) {
+        for (const field of fieldsOf(operation.responses)) {
+          answers++;
+          expect(field).not.toMatch(personal);
+        }
+        const inputs = fieldsOf(operation.requestBody);
+        const allowed = path.endsWith('/scans') ? ['bcbp'] : [];
+        for (const field of inputs) {
+          if (!allowed.includes(field)) expect(field).not.toMatch(personal);
+        }
+      }
     }
+    expect(answers).toBeGreaterThan(10);
   });
 });

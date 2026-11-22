@@ -45,9 +45,9 @@ without disproportionate harm to passengers who are not prioritised (ADR-002).
 
 | ID | Requirement |
 |---|---|
-| FR-01 | Read IATA BCBP (Resolution 792, one or more legs) from paper or phone; hands-free scanning. |
-| FR-02 | Select the leg relevant to the checkpoint (airport, date); check the flight feed when available. |
-| FR-03 | Unreadable, duplicate, expired or wrong-airport passes go to staff assistance, never to automatic access. |
+| FR-01 | Read IATA BCBP (Resolution 792, one or more legs) from paper or phone; hands-free scanning. The reader and the scan endpoint exist since S13 (ADR-043); the kiosk comes in S14. |
+| FR-02 | Select the leg relevant to the checkpoint (airport, date); check the flight feed when available. Since S13 the leg from this airport, dated within a day of the scan, for a flight in GateFlow's data. |
+| FR-03 | Unreadable, duplicate, expired or wrong-airport passes go to staff assistance, never to automatic access. Since S13 they are refused with a reason, or sent to staff, and create no ticket. |
 | FR-04 | Issue a ticket with a stable, readable public number and an opaque QR code (no PNR or name), plus area, status, multilingual instructions and expiry. |
 | FR-05 | Rescanning is idempotent: it retrieves the existing ticket, allows reprinting and shows the status; it never creates duplicates. Every command of the API is idempotent by its key (S12, ADR-042). |
 | FR-06 | Compute eligibility, risk class and a deterministic explanation; reassess on every relevant event. |

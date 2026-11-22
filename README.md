@@ -93,6 +93,8 @@ node apps/api/dist/gateflow-api.mjs serve --port 8080
 
 `seed` migrates the database and adds demo data: the VCE-like airport, its checkpoint run with
 GateFlow priority v3, and the day's flights. `serve` answers on `/v1`. The endpoints:
+- `POST /v1/checkpoints/{id}/scans`: a kiosk scans a boarding pass. The answer is a ticket, the
+  same ticket again, or a reason. The pass is read in memory and never stored.
 - `POST /v1/checkpoints/{id}/tickets`: issue a ticket;
 - `POST /v1/checkpoints/{id}/calls`: call the next passenger;
 - `POST /v1/checkpoints/{id}/admissions`: admit a passenger at the access point;
@@ -270,6 +272,7 @@ How to read these numbers:
 | Path | Content |
 |---|---|
 | `packages/domain` | Shared domain types and units |
+| `packages/bcbp` | IATA boarding passes: parser (never the name), encoder, synthetic passes, flight date, leg for a checkpoint (pure) |
 | `packages/contracts` | The API's request and answer schemas (Zod) and its OpenAPI document (pure) |
 | `packages/operations` | A live checkpoint's day on the simulator's queue, rebuilt from its command log (pure) |
 | `packages/priority-engine` | Deterministic priority engine (pure) |

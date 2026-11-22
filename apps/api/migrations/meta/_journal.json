@@ -15,6 +15,20 @@
       "when": 1795338715690,
       "tag": "0001_append_only",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795339869555,
+      "tag": "0002_boarding_pass_intake",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795339870195,
+      "tag": "0003_scan_append_only",
+      "breakpoints": true
     }
   ]
 }

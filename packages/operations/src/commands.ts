@@ -56,6 +56,12 @@ export interface IssueTicket {
   /** Nominal walking time from the checkpoint to the flight's gate zone. */
   readonly walkEstimateMs: Millis;
   readonly scheduledDepartureMs: Millis | null;
+  /**
+   * For a ticket from a boarding pass: the HMAC of the pass's flight, check-in sequence and
+   * booking reference (ADR-043), so that the same pass scanned again finds this ticket. The pass
+   * itself is never recorded. Null for a ticket issued by staff.
+   */
+  readonly dedupKey: string | null;
 }
 
 /** Staff call the next passenger: the engine chooses who. */

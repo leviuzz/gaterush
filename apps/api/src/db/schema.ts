@@ -12,6 +12,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -46,11 +47,16 @@ export const airport = pgTable(
     name: text('name').notNull(),
     /** IANA time zone: service days and clocks shown to people follow it. */
     timeZone: text('time_zone').notNull(),
+    /** IATA code, matched with boarding passes (`ZZZ` for a synthetic airport without one). */
+    iata: text('iata').notNull().default('ZZZ'),
     /** `SYNTHETIC`, `AIRPORT_PROVIDED`...: what the data of the airport are. */
     dataClassification: text('data_classification').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [unique('airport_org_code').on(t.orgId, t.code)],
+  (t) => [
+    unique('airport_org_code').on(t.orgId, t.code),
+    check('airport_iata', sql`${t.iata} ~ '^[A-Z]{3}$'`),
+  ],
 );
 
 /** How a checkpoint runs: its policy and lanes (versioned policies come with S17). */
@@ -97,6 +103,11 @@ export const flight = pgTable(
       .references(() => airport.id),
     serviceDate: date('service_date').notNull(),
     number: text('number').notNull(),
+    /** Operating carrier and flight number as boarding passes give them (`AZ`, `1462`). */
+    carrier: text('carrier'),
+    flightNumber: text('flight_number'),
+    /** Local date of the scheduled departure: the date of the flight on its boarding passes. */
+    departureDate: date('departure_date'),
     stdMs: ms('std_ms').notNull(),
     /** When boarding closes, as known (null when unknown). */
     boardingCloseMs: ms('boarding_close_ms'),
@@ -111,6 +122,7 @@ export const flight = pgTable(
   },
   (t) => [
     unique('flight_airport_date_number').on(t.airportId, t.serviceDate, t.number),
+    unique('flight_carrier_number').on(t.airportId, t.departureDate, t.carrier, t.flightNumber),
     check('flight_deadline_source', sql`${t.deadlineSource} IN ('FEED', 'RULE', 'NONE')`),
     check(
       'flight_deadline_known',
@@ -202,8 +214,14 @@ export const queueToken = pgTable(
     admittedAtMs: ms('admitted_at_ms'),
     /** The command that last changed the ticket. */
     updatedSeq: bigint('updated_seq', { mode: 'number' }).notNull(),
+    /** HMAC of the boarding pass it was issued from (ADR-043); null for a staff ticket. */
+    dedupKey: text('dedup_key'),
   },
   (t) => [
+    // A boarding pass holds one active ticket per checkpoint: a rescan finds it.
+    uniqueIndex('queue_token_dedup_active')
+      .on(t.checkpointId, t.dedupKey)
+      .where(sql`${t.dedupKey} IS NOT NULL AND ${t.state} NOT IN ('ADMITTED', 'EXPIRED')`),
     unique('queue_token_number').on(t.checkpointId, t.serviceDay, t.number),
     unique('queue_token_opaque_ref').on(t.opaqueRef),
     check('queue_token_party_size', sql`${t.partySize} BETWEEN 1 AND 20`),
@@ -230,4 +248,53 @@ export const admission = pgTable(
     commandSeq: bigint('command_seq', { mode: 'number' }).notNull(),
   },
   (t) => [check('admission_method', sql`${t.method} IN ('NUMBER', 'REF')`)],
+);
+
+/**
+ * The secret of the deduplication keys of one airport and flight date (ADR-043). Deleting it makes
+ * the keys of that date meaningless (crypto-shredding, with the retention of S-pilot).
+ */
+export const dedupSecret = pgTable(
+  'dedup_secret',
+  {
+    airportId: uuid('airport_id')
+      .notNull()
+      .references(() => airport.id),
+    flightDate: date('flight_date').notNull(),
+    /** 256 random bits, hexadecimal. */
+    secret: text('secret').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'dedup_secret_pkey', columns: [t.airportId, t.flightDate] }),
+    check('dedup_secret_hex', sql`${t.secret} ~ '^[0-9a-f]{64}$'`),
+  ],
+);
+
+/**
+ * Every scan of a boarding pass at a kiosk, with its outcome. Append-only. No name, booking
+ * reference or seat: only what describes the scan (its outcome, the pass's version and legs).
+ */
+export const scan = pgTable(
+  'scan',
+  {
+    id: uuid('id').primaryKey(),
+    checkpointId: uuid('checkpoint_id')
+      .notNull()
+      .references(() => checkpoint.id),
+    atMs: ms('at_ms').notNull(),
+    /** `ISSUED`, `RETRIEVED`, `REJECTED` or `NEEDS_ASSISTANCE`. */
+    outcome: text('outcome').notNull(),
+    reason: text('reason'),
+    ticketId: uuid('ticket_id'),
+    bcbpVersion: integer('bcbp_version'),
+    legs: integer('legs'),
+    securityData: boolean('security_data'),
+  },
+  (t) => [
+    check(
+      'scan_outcome',
+      sql`${t.outcome} IN ('ISSUED', 'RETRIEVED', 'REJECTED', 'NEEDS_ASSISTANCE')`,
+    ),
+  ],
 );

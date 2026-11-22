@@ -6,7 +6,28 @@ import type { Scenario } from '@gateflow/sim-scenarios';
 import type { Db } from './db/client';
 import { airport, checkpoint, flight, organization } from './db/schema';
 import type { Ids } from './ids';
-import { serviceDayOf, zonedEpoch } from './time';
+import { localDate, serviceDayOf, zonedEpoch } from './time';
+
+/**
+ * The carrier and number of a flight of the library, as boarding passes give them. Synthetic
+ * flights (`F001`) get `ZZ`, a placeholder designator of no airline.
+ */
+export function designatorOf(number: string): { carrier: string; flightNumber: string } | null {
+  const synthetic = /^F(\d{1,4})$/.exec(number);
+  if (synthetic !== null) return { carrier: 'ZZ', flightNumber: String(Number(synthetic[1])) };
+  const real = /^([A-Z0-9]{2})\s?(\d{1,4})([A-Z]?)$/.exec(number);
+  if (real === null) return null;
+  return { carrier: real[1] ?? '', flightNumber: `${String(Number(real[2]))}${real[3] ?? ''}` };
+}
+
+/**
+ * The IATA code of a library airport: `vce-like` gives `VCE`. Any other airport gets `ZZZ`, which
+ * matches no real boarding pass, until its own code is configured.
+ */
+export function iataOf(code: string): string {
+  const match = /^([a-z]{3})-like(-|$)/.exec(code);
+  return match === null ? 'ZZZ' : (match[1] ?? 'zzz').toUpperCase();
+}
 
 export interface Seeded {
   readonly airportId: string;
@@ -43,6 +64,7 @@ export async function seedDemo(
             code: airportCode,
             name: airportName,
             timeZone,
+            iata: iataOf(airportCode),
             dataClassification: scenario.dataClassification,
           })
           .returning()
@@ -81,7 +103,10 @@ export async function seedDemo(
     if (checkpointRow === undefined) throw new Error('the checkpoint could not be created');
     const flights = generateSchedule(scenario);
     const at = (msOfDay: number) => zonedEpoch(serviceDay, msOfDay, timeZone);
+    const two = (n: number) => String(n).padStart(2, '0');
     for (const f of flights) {
+      const designator = designatorOf(f.id);
+      const departure = localDate(at(f.stdMs), timeZone);
       const known = f.knownDeadline;
       await tx
         .insert(flight)
@@ -90,6 +115,9 @@ export async function seedDemo(
           airportId: airportRow.id,
           serviceDate: serviceDay,
           number: f.id,
+          carrier: designator?.carrier ?? null,
+          flightNumber: designator?.flightNumber ?? null,
+          departureDate: `${String(departure.year)}-${two(departure.month)}-${two(departure.day)}`,
           stdMs: at(f.stdMs),
           boardingCloseMs: known.atMs === null ? null : at(known.atMs),
           deadlineSource: known.source,

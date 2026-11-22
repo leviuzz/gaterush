@@ -75,3 +75,12 @@ export function zonedEpoch(date: string, msOfDay: number, timeZone: string): num
   const first = asUtc - offsetMs(asUtc, timeZone);
   return asUtc - offsetMs(first, timeZone);
 }
+
+/** The local calendar date of an instant in a time zone. */
+export function localDate(
+  ms: number,
+  timeZone: string,
+): { year: number; month: number; day: number } {
+  const c = wallClock(ms, timeZone);
+  return { year: c.year, month: c.month, day: c.day };
+}

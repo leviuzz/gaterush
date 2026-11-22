@@ -254,6 +254,9 @@ export class CheckpointDay {
       requireInteger(command.scheduledDepartureMs, 'the scheduled departure', 0);
     }
     validateDeadline(command.deadline);
+    if (command.dedupKey !== null && !/^[0-9a-f]{64}$/.test(command.dedupKey)) {
+      invalid('the deduplication key must be a hexadecimal SHA-256 HMAC');
+    }
     const number = `${this.config.ticketPrefix}${String(this.issueOrder.length + 1).padStart(3, '0')}`;
     const view = this.queue.issue(
       {

@@ -1441,3 +1441,77 @@ founder on 2026-11-21 together with all of its recommendations.
     them on time.
   - Until staff sign in (S15), commands are recorded as `staff:unauthenticated`: the API must
     not be exposed beyond a demo network.
+
+## ADR-043: Boarding passes at the kiosk: read in memory, kept as an HMAC
+
+- **Status:** Accepted (2026-11-22). Slice S13. BCBP 0.1.0, API 0.13.0, operations 0.2.0,
+  contracts 0.2.0. No simulated number changes.
+- **Context:**
+  - Passengers take a ticket by scanning the boarding pass they already have (IATA BCBP,
+    Resolution 792). A pass holds a name, a booking reference (PNR) and a seat, which GateFlow
+    must never keep (kickoff 2.13). A rescan must find the same ticket, and a pass of another
+    airport or day must be refused with a reason.
+  - The flight date on a pass is a day of the year without the year. Across the year end, a scan
+    on 31 December for a flight on 1 January must give the next year.
+- **Decision:**
+  - **`@gateflow/bcbp` (pure)** reads the M format strictly for the mandatory items of every leg
+    (up to four) and as far as they are consistent for the conditional ones (version, date of
+    issue, marketing carrier, fast track).
+    - It never throws: any text gives a pass or a typed error with a position.
+    - An error never quotes the text.
+    - The name is skipped and never returned.
+    - It also has an encoder and a generator of synthetic passes for demos and tests: sample
+      names such as `SAMPLE/ALEX`, never a person.
+  - **The year** is the one that puts the flight closest to the day of the scan. The leg for a
+    checkpoint is the one from this airport, dated within a day of the scan: a pass of another
+    airport is `WRONG_AIRPORT`, of another day `WRONG_DAY`.
+  - **Deduplication key:** an HMAC-SHA256 of carrier, flight, date, origin, check-in sequence
+    and booking reference.
+    - The secret is random per airport and flight date (`dedup_secret`); deleting it (with the
+      retention of the pilot) makes the keys of that date meaningless.
+    - The booking reference enters the HMAC and is never stored.
+    - A partial unique index allows one active ticket per key and checkpoint.
+  - **`POST /v1/checkpoints/{id}/scans`**:
+    - a pass that can give a ticket gives `ISSUED` (a ticket with its reference);
+    - a pass scanned again gives `RETRIEVED` (the same ticket and reference, to print again);
+    - a pass already admitted gives `NEEDS_ASSISTANCE` (`ALREADY_ADMITTED`);
+    - an unknown flight gives `NEEDS_ASSISTANCE` (`UNKNOWN_FLIGHT`);
+    - an unreadable pass, or one of another airport or day, gives `REJECTED` with its reason,
+      and creates no ticket.
+    - The lookup and the issue run under the checkpoint's lock, so the same pass at several
+      kiosks at once gives one ticket.
+    - A connecting passenger (the leg from here is not the first) gets a `TRANSFER` ticket.
+  - **Every scan is recorded** (`scan`, append-only): outcome, reason, ticket, and the pass's
+    version, number of legs and whether it carries security data. Nothing that identifies a
+    person.
+  - **Flights carry the designator of their passes:** carrier, flight number without leading
+    zeros, local departure date. Synthetic library flights get `ZZ`, a placeholder of no
+    airline; synthetic airports named `xxx-like` take the code `XXX` (`VCE` for `vce-like`), any
+    other synthetic airport `ZZZ`.
+- **Alternatives considered:**
+  - **Storing the pass or the PNR, encrypted.** Not needed: the HMAC finds the ticket again,
+    and data never kept cannot leak.
+  - **Deriving the secrets from one master key.** Simpler, but destroying one date's keys would
+    then be impossible.
+  - **Verifying the security data (airline signatures).** Needs every airline's public keys;
+    the flight feed and the check at the access point are the controls of the MVP (kickoff 2.13).
+- **Evidence:**
+  - The parser:
+    - the implementation guide's example reads with every mandatory item;
+    - 500 random passes of one to four legs read back exactly as encoded;
+    - 2,000 arbitrary or corrupted texts never make it throw, and its errors carry only a code
+      and a position;
+    - every day of four years gives back its date, across year ends and 29 February.
+  - Through the API on PostgreSQL:
+    - a scan issues a ticket and a rescan finds it;
+    - ten simultaneous scans of one pass give one ticket;
+    - a pass of another airport or day is refused with its reason;
+    - an unreadable pass, or a pass for an unknown flight, creates no ticket;
+    - a connecting passenger gets a transfer ticket, and a passenger already admitted is sent
+      to staff.
+  - After every scan, no table and no log line contains the pass, the name or the booking
+    reference.
+- **Consequences:**
+  - A pass gives a ticket only for a flight in GateFlow's flight data: the feed adapters of the
+    pilot decide what that covers.
+  - Groups and families scan one pass each until the kiosk offers grouping (S14).

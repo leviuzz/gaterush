@@ -666,8 +666,8 @@ here once, for the product. The slices follow the kickoff (section 3, M3), renum
 | Slice | Content | Acceptance (kickoff, renumbered) | Status |
 |---|---|---|---|
 | **S12** | Operational core: API server (Fastify), PostgreSQL with migrations, one writer per checkpoint, command and event log, current-state tables, idempotent commands, hash-chained audit, demo data. The queue runs the same `queue-core` as the simulator | 100 concurrent "call next" give no double call; the database refuses a second admission; the audit check finds tampering; the same command twice is applied once; a restart, or a second server, gives the same queue | **Done** |
-| S13 | BCBP package: multi-leg parser, synthetic generator, validations, HMAC deduplication key | Round trip and fuzzing pass; no boarding pass in the logs; Julian date to the right year across year end | Planned |
-| S14 | Web application, kiosk and ticket: scan (paste, sample, HID scanner), outcomes, digital and printable ticket, ticket page, Italian, English and Spanish, privacy notice, kiosk credentials | A rescan returns the same ticket; another airport's boarding pass is refused with a reason; no personal data on screen | Planned |
+| **S13** | BCBP package: multi-leg parser, synthetic generator, validations, HMAC deduplication key; the kiosk's scan endpoint (a ticket, the same ticket again, or a reason) | Round trip and fuzzing pass; no boarding pass in the logs; Julian date to the right year across year end (ADR-043) | **Done** |
+| S14 | Web application, kiosk and ticket: scan (paste, sample, HID scanner), outcomes, digital and printable ticket, ticket page, Italian, English and Spanish, privacy notice, kiosk credentials | A rescan returns the same ticket; another airport's boarding pass is refused with a reason (both already true of the API since S13); no personal data on screen | Planned |
 | S15 | Queue life cycle and lane station: timers on a scheduler, recall, no-show, reactivation, admission, manual ticket, review; staff users and roles | The state machine is covered by tests; every transition is idempotent | Planned |
 | S16 | Display over SSE: called and prepare numbers, data freshness, reconnection with `Last-Event-ID` | No event lost after a disconnection; "data not up to date" within the timeout | Planned |
 | S17 | Supervisor: modes (FIFO only, paused, emergency), overrides with a reason, lanes, audit view; versioned policies and their activation | Overrides and mode changes are always in the audit; in FIFO only the order is pure FIFO | Planned |
@@ -707,6 +707,36 @@ Verification beyond the criteria:
 - The bundle migrates, seeds the VCE-like day (138 flights) and serves. A ticket is issued,
   repeated with its key, called and admitted, and the audit check is intact, over real HTTP,
   locally and in CI.
+
+## S13: acceptance criteria and evidence
+
+Scope delivered (part of M3, approved with "vai M3"):
+- **`@gateflow/bcbp`** (pure): the M format of Resolution 792, one to four legs.
+  - The parser never throws, never returns the name and never quotes the text in an error.
+  - Also: an encoder, a generator of synthetic passes, the flight date's year, the leg for a
+    checkpoint and the material of the deduplication key.
+- **API**: `POST /v1/checkpoints/{id}/scans` gives `ISSUED`, `RETRIEVED`, `NEEDS_ASSISTANCE`
+  (`ALREADY_ADMITTED`, `UNKNOWN_FLIGHT`) or `REJECTED` (`UNREADABLE`, `WRONG_AIRPORT`,
+  `WRONG_DAY`).
+  - The deduplication key is an HMAC with a random secret per airport and flight date.
+  - Every scan is recorded without personal data; flights carry their designator.
+- BCBP 0.1.0, API 0.13.0, operations 0.2.0 (`dedupKey` in the issue command), contracts 0.2.0.
+
+| # | Criterion (kickoff, as proposed) | Evidence |
+|---|---|---|
+| 1 | Round trip and fuzzing | 500 random passes of one to four legs (versions 5 to 8, security data or not) read back exactly as encoded. 2,000 arbitrary or corrupted texts never make the parser throw; errors are typed, with a position, and quote nothing. |
+| 2 | No boarding pass in the logs | After scans of every outcome through the API, no line of the request log and no row of any table contains the pass, the name or the booking reference (test). |
+| 3 | Julian date to the right year across year end | Day 1 scanned on 31 December 2026 is 1 January 2027, day 365 scanned on 1 January 2027 is 31 December 2026, day 60 in a leap year is 29 February; every day of 2026 to 2029 gives back its date. |
+
+Verification beyond the criteria:
+- The example of the IATA implementation guide reads with every mandatory item.
+- A scan issues a ticket and a rescan finds the same ticket and reference. Ten simultaneous
+  scans of one pass give one ticket (the lookup runs under the checkpoint's lock, and a partial
+  unique index backs it).
+- A pass of another airport or day is refused with its reason. An unreadable pass, or one for an
+  unknown flight, creates no ticket.
+- A connecting passenger gets a transfer ticket for the leg from here; a passenger already
+  admitted is sent to staff.
 
 ## Later milestones (summary)
 

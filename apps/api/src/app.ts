@@ -4,11 +4,18 @@ import Fastify from 'fastify';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ZodError } from 'zod';
 import type { z } from 'zod';
-import { AdmissionRequest, IssueTicketRequest, openApiDocument } from '@gateflow/contracts';
+import {
+  AdmissionRequest,
+  IssueTicketRequest,
+  ScanRequest,
+  openApiDocument,
+} from '@gateflow/contracts';
 import type { Ticket } from '@gateflow/contracts';
 import { OperationError } from '@gateflow/operations';
 import type { Command, CommandResult, TicketSummary } from '@gateflow/operations';
 import { requestHash } from './chain';
+import { readPass, recordScan, ticketOfPass } from './intake';
+import type { ScanOutcome, ScanReason } from './intake';
 import type { Db } from './db/client';
 import { checkpoint, flight, queueToken } from './db/schema';
 import type { Ids } from './ids';
@@ -153,6 +160,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
       actor: ACTOR,
       build,
     });
+    if (executed.result === null) throw new Error('the command applied nothing');
     const { status, body: payload } = answer(executed.result);
     if (executed.replayed) void reply.header('Idempotent-Replayed', 'true');
     return reply.status(status).send(payload);
@@ -194,6 +202,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
                   },
             walkEstimateMs: f.walkEstimateMs,
             scheduledDepartureMs: f.stdMs,
+            dedupKey: null,
           };
         },
         (result) => {
@@ -201,6 +210,135 @@ export function buildApp(options: AppOptions): FastifyInstance {
           return { status: 201, body: { ticket: toTicket(result.ticket), ref: result.opaqueRef } };
         },
       );
+    },
+  );
+
+  /** A ticket as staff see it, from its current-state row. */
+  const ticketOfRow = (r: typeof queueToken.$inferSelect): Ticket =>
+    toTicket({
+      ticketId: r.id,
+      number: r.number,
+      state: r.state as TicketSummary['state'],
+      source: r.source as TicketSummary['source'],
+      flightId: r.flightId,
+      segment: r.segment as TicketSummary['segment'],
+      partySize: r.partySize,
+      riskClass: r.riskClass,
+      priority: r.priority,
+      calls: r.calls,
+      issuedAtMs: r.issuedAtMs,
+      firstCalledAtMs: r.firstCalledAtMs,
+      admittedAtMs: r.admittedAtMs,
+    });
+
+  app.post<{ Params: { checkpointId: string } }>(
+    '/v1/checkpoints/:checkpointId/scans',
+    async (request, reply) => {
+      const body = parse(ScanRequest, request.body);
+      const cp = await loadCheckpoint(options.db, request.params.checkpointId);
+      const intake = await readPass(options.db, cp, body.bcbp, clock.now());
+      if (!intake.ok) {
+        await recordScan(options.db, {
+          id: ids.uuid(),
+          checkpointId: cp.id,
+          atMs: clock.now(),
+          outcome: intake.outcome,
+          reason: intake.reason,
+          ticketId: null,
+          pass: intake.pass,
+        });
+        return reply
+          .status(200)
+          .send({ outcome: intake.outcome, reason: intake.reason, ticket: null, ref: null });
+      }
+      // Under the checkpoint's lock: the same pass at two kiosks at once still gives one ticket.
+      const found: {
+        value?: { outcome: ScanOutcome; reason: ScanReason | null; ticketId: string; ref: string };
+      } = {};
+      const executed = await runtime.execute({
+        checkpointId: cp.id,
+        idempotencyKey: idempotencyKeyOf(request),
+        requestHash: requestHash('POST /v1/checkpoints/:checkpointId/scans', {
+          pass: intake.dedupKey,
+        }),
+        actor: 'kiosk:unauthenticated',
+        build: async ({ tx, day, atMs }) => {
+          const existing = await ticketOfPass(tx, cp.id, intake.dedupKey);
+          const current = existing === undefined ? undefined : day.ticket(existing.id);
+          if (existing !== undefined && current !== undefined && current.state !== 'EXPIRED') {
+            const admitted = current.state === 'ADMITTED';
+            found.value = {
+              outcome: admitted ? 'NEEDS_ASSISTANCE' : 'RETRIEVED',
+              reason: admitted ? 'ALREADY_ADMITTED' : null,
+              ticketId: existing.id,
+              ref: existing.opaqueRef,
+            };
+            await recordScan(tx, {
+              id: ids.uuid(),
+              checkpointId: cp.id,
+              atMs,
+              outcome: found.value.outcome,
+              reason: found.value.reason,
+              ticketId: existing.id,
+              pass: intake.pass,
+            });
+            return null;
+          }
+          const ticketId = ids.uuid();
+          await recordScan(tx, {
+            id: ids.uuid(),
+            checkpointId: cp.id,
+            atMs,
+            outcome: 'ISSUED',
+            reason: null,
+            ticketId,
+            pass: intake.pass,
+          });
+          const f = intake.flight;
+          return {
+            type: 'ISSUE_TICKET',
+            ticketId,
+            opaqueRef: ids.opaqueRef(),
+            source: 'KIOSK',
+            flightId: f.id,
+            segment: intake.segment,
+            partySize: 1,
+            deadline:
+              f.boardingCloseMs === null || f.deadlineSource === 'NONE'
+                ? { atMs: null, source: 'NONE' }
+                : {
+                    atMs: f.boardingCloseMs,
+                    source: f.deadlineSource === 'RULE' ? 'RULE' : 'FEED',
+                    ...(f.observedAtMs === null ? {} : { observedAtMs: f.observedAtMs }),
+                  },
+            walkEstimateMs: f.walkEstimateMs,
+            scheduledDepartureMs: f.stdMs,
+            dedupKey: intake.dedupKey,
+          };
+        },
+      });
+      if (executed.result?.type === 'TICKET_ISSUED') {
+        return reply.status(201).send({
+          outcome: 'ISSUED',
+          reason: null,
+          ticket: toTicket(executed.result.ticket),
+          ref: executed.result.opaqueRef,
+        });
+      }
+      const again = found.value;
+      if (again === undefined) throw new Error('the scan found no ticket and issued none');
+      const rows = await options.db
+        .select()
+        .from(queueToken)
+        .where(eq(queueToken.id, again.ticketId));
+      const row = rows[0];
+      if (row === undefined) throw new Error('the ticket of the pass is gone');
+      return reply.status(200).send({
+        outcome: again.outcome,
+        reason: again.reason,
+        ticket: ticketOfRow(row),
+        ref: again.ref,
+      });
     },
   );
 

@@ -1,5 +1,5 @@
 /** Version of the operational checkpoint. Bump on any change to commands, results or events. */
-export const OPERATIONS_VERSION = '0.1.0';
+export const OPERATIONS_VERSION = '0.2.0';
 
 export { PRESENT_METHODS, TICKET_SOURCES } from './commands';
 export type {

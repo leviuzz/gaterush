@@ -44,6 +44,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@gateflow/bcbp':
+        specifier: workspace:*
+        version: link:../../packages/bcbp
       '@gateflow/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -173,6 +176,12 @@ importers:
       playwright:
         specifier: 1.63.0
         version: 1.63.0
+
+  packages/bcbp:
+    dependencies:
+      '@gateflow/sim-kernel':
+        specifier: workspace:*
+        version: link:../sim-kernel
 
   packages/contracts:
     dependencies:

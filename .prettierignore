@@ -6,3 +6,6 @@ out/
 *.md
 **/test/golden/**
 docs/reports/**
+
+# Written by drizzle-kit on every `db:generate`.
+apps/api/migrations/meta/

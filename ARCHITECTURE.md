@@ -27,6 +27,7 @@ apps/
   sim-cli/          gateflow-sim: experiments and sweeps on worker threads; JSON, Markdown, HTML (bundled)
   studio/           GateFlow Simulator Studio: the simulator in one offline HTML page (React, Web Workers)
 packages/
+  bcbp/             IATA boarding passes: a parser that never throws or returns the name, encoder, generator (pure)
   domain/           shared domain types and units (integer milliseconds, segments, risk classes)
   contracts/        the API's request, answer and OpenAPI schemas (Zod, pure)
   operations/       one service day of a live checkpoint on the simulator's queue, rebuilt from its log (pure)
@@ -63,6 +64,7 @@ flowchart LR
   studiocore["studio-core"]
   operations["operations"]
   contracts["contracts"]
+  bcbp["bcbp"]
   api["apps/api"]
   cli["apps/sim-cli"]
   studio["apps/studio"]
@@ -102,8 +104,10 @@ flowchart LR
   operations --> engine
   operations --> domain
   contracts --> domain
+  bcbp --> kernel
   api --> operations
   api --> contracts
+  api --> bcbp
   api --> metrics
   api --> scenarios
 ```
@@ -622,7 +626,12 @@ flowchart LR
     `prev_hash`, `hash`) and `queue_event`. Both are append-only by trigger.
   - Current state: `queue_token` (number per checkpoint and day, opaque reference).
   - `admission`: its primary key is the ticket, so a second admission is impossible.
+  - Boarding passes (ADR-043): `scan` (append-only, no personal data), `dedup_secret` (one
+    random secret per airport and flight date), `queue_token.dedup_key` (an HMAC, unique among
+    a checkpoint's active tickets), and the flight's carrier, number and departure date.
 - **Endpoints** (OpenAPI at `/v1/openapi.json`):
+  - `POST /v1/checkpoints/{id}/scans`: a boarding pass gives a ticket, the same ticket again, or
+    a reason (ADR-043);
   - `POST /v1/checkpoints/{id}/tickets`, `/calls` and `/admissions`;
   - `GET /v1/checkpoints/{id}/queue` and `/audit/verify`;
   - `GET /v1/tickets/{ref}` (number, state, checkpoint and day only);

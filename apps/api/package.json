@@ -1,6 +1,6 @@
 {
   "name": "@gateflow/api",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "private": true,
   "description": "GateFlow API: the operational checkpoint behind HTTP, on PostgreSQL. One writer per checkpoint, idempotent commands, a hash-chained log.",
   "type": "module",
@@ -15,6 +15,7 @@
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
+    "@gateflow/bcbp": "workspace:*",
     "@gateflow/contracts": "workspace:*",
     "@gateflow/domain": "workspace:*",
     "@gateflow/operations": "workspace:*",

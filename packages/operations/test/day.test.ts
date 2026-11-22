@@ -47,6 +47,7 @@ function issue(n: number, overrides: Partial<IssueTicket> = {}): IssueTicket {
     deadline: { atMs: DAY_START + 90 * MIN, source: 'FEED' },
     walkEstimateMs: 5 * MIN,
     scheduledDepartureMs: DAY_START + 110 * MIN,
+    dedupKey: null,
     ...overrides,
   };
 }
@@ -166,6 +167,7 @@ describe('a checkpoint day', () => {
       issue(9, { partySize: 21 }),
       issue(9, { deadline: { atMs: 1.5, source: 'FEED' } }),
       issue(9, { deadline: { atMs: 5, source: 'NONE' } as unknown as KnownDeadline }),
+      issue(9, { dedupKey: 'not-a-hash' }),
     ];
     for (const command of bad) {
       expect(code(() => day.apply({ seq: 3, atMs: at, command }))).toBe('INVALID_COMMAND');

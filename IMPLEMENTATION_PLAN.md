@@ -936,6 +936,42 @@ Verification beyond the criteria:
   most); two lane stations show at once what the other, or a kiosk, does; no request to another
   server.
 
+## S17: the supervisor's console (proposed)
+
+Proposed on 2026-11-22, from the kickoff (FR-11, FR-14, FR-17, L-02, 2.4.6, 2.6 F7 to F12, 2.11).
+The decisions marked **[to confirm]** are the founder's.
+
+- **Modes of a checkpoint** (supervisor, in the log with who and when):
+  - `NORMAL`;
+  - `FIFO_ONLY`: the next entries to the prepare window are the oldest waiting tickets; the
+    numbers already announced stay (no churn);
+  - `PAUSED`: no calls; kiosks keep issuing numbers; displays say calls are paused;
+  - `EMERGENCY`: no calls, kiosks stop issuing, displays and kiosks show a predefined message in
+    the airport's languages, and the call timers stop, so that nobody becomes a no-show during
+    an evacuation **[to confirm]**;
+  - on resuming, the supervisor chooses: carry on in the same order, or start again in order of
+    arrival (the prepare window is announced again) **[to confirm]**.
+- **Overrides** (supervisor, with a coded reason: flight closing, assistance, airline's request,
+  operational, other) **[to confirm]**:
+  - `BOOST`: the ticket enters the prepare window at the first free place (`MANUAL_OVERRIDE`);
+  - `CALL_NOW`: the ticket is called at once, ahead of the window;
+  - hold and release exist since S15 (reviews);
+  - overrides are counted apart in the fairness metrics, and never hidden.
+- **Lanes:** the supervisor sets the lanes open; the engine's capacity follows at once (the
+  estimates and the classification of every waiting ticket). Lane types (assisted, fast track)
+  and calls to a given lane ("A012 → lane 3") wait for the pilot's layout **[to confirm]**.
+- **Versioned policies:** immutable versions with a hash of their content; an administrator
+  activates a version for a checkpoint, from the next service day (the current day keeps the
+  policy it opened with, as its log records); FIFO_ONLY is the immediate fallback. Approval by
+  a second person (four eyes) comes with the pilot, as the kickoff has it **[to confirm]**.
+- **Audit view:** the day's commands of a checkpoint, with who, when, what and why, by ticket
+  or number; the check of the chain of hashes.
+- **The console:** `/supervisor/<checkpoint>` in the web application, for supervisors and
+  administrators.
+
+Acceptance (kickoff, renumbered): overrides and mode changes are always in the audit; in
+FIFO_ONLY the order is pure FIFO.
+
 ## Later milestones (summary)
 
 - **M2 Simulator Studio:** S9 and S11 done; S10 moved into M3 (S12 and S19).

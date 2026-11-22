@@ -8,7 +8,8 @@ import type { Scenario } from '@gateflow/sim-scenarios';
  * - the GateFlow settings (`scenario.gateflow`) set the fairness bounds of every priority
  *   policy, the hysteresis and maximum data age of the versions that have these rules (v3), the
  *   call-ahead, response estimate and prepare window of every virtual queue, and the target wait
- *   and horizon of GateFlow's lane recommendations (`@predict`);
+ *   and horizon of GateFlow's lane recommendations (`@predict`); the console's (`@advise`, S22.3)
+ *   keep the console's own numbers, as the console does;
  * - today's practice (`scenario.todayPractice`) sets when staff call closing flights in baseline
  *   A' (`fifo-manual` and any flight-call policy), and when the supervisor opens and closes extra
  *   lanes (`@reactive`).

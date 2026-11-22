@@ -582,6 +582,19 @@ describe('lane modes (S8)', () => {
       selection: findPolicyPreset('priority-v3')?.selection,
       lanes: { kind: 'predict', horizonMs: 45 * MIN, targetWaitMs: 10 * MIN },
     });
+    // The console's recommendations (S22.3): its own numbers, an hour ahead, 15 minutes apart.
+    expect(findPolicyPreset('fifo-manual@advise')).toMatchObject({
+      id: 'fifo-manual@advise',
+      selection: FIFO_MANUAL_POLICY.selection,
+      lanes: {
+        kind: 'advise',
+        reviewIntervalMs: 5 * MIN,
+        horizonMs: 60 * MIN,
+        targetWaitMs: 10 * MIN,
+        closeWhenWaitMs: 2 * MIN,
+        cooldownMs: 15 * MIN,
+      },
+    });
     expect(findPolicyPreset('fifo@nowhere')).toBeUndefined();
     expect(findPolicyPreset('nobody@reactive')).toBeUndefined();
     expect(() => withLaneMode(FIFO_POLICY, 'nowhere')).toThrow(/unknown lane mode "nowhere"/);
@@ -601,6 +614,8 @@ describe('lane modes (S8)', () => {
       [{ ...predict, horizonMs: 0 }, /horizonMs/],
       [{ ...predict, targetWaitMs: predict.closeWhenWaitMs }, /below lanes.targetWaitMs/],
       [{ ...predict, kind: 'hunch' } as unknown as Policy['lanes'], /unknown lane management/],
+      [{ ...predict, kind: 'advise', targetWaitMs: 0 }, /targetWaitMs/],
+      [{ ...predict, kind: 'advise', closeWhenWaitMs: predict.targetWaitMs }, /below/],
     ];
     for (const [lanes, message] of invalid) {
       expect(() => {
@@ -609,6 +624,9 @@ describe('lane modes (S8)', () => {
     }
     expect(() => {
       validatePolicy({ ...FIFO_POLICY, lanes: predict });
+    }).not.toThrow();
+    expect(() => {
+      validatePolicy({ ...FIFO_POLICY, lanes: LANE_MODES.advise?.lanes });
     }).not.toThrow();
   });
 });

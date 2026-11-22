@@ -1,10 +1,12 @@
+import type { CheckpointProfile } from '@gateflow/forecast';
 import type { ClassificationParams } from '@gateflow/priority-engine';
 import type { Policy } from '@gateflow/queue-core';
-import { simulateCheckpoint } from '@gateflow/sim-model';
 import type { ArrivalForecast, Population, RunResult } from '@gateflow/sim-model';
 import { arrivalForecast, generatePopulation } from '@gateflow/sim-scenarios';
 import type { Scenario } from '@gateflow/sim-scenarios';
 import { comparisonDayMetrics, dayDisruptions, policyDayMetrics } from './day-metrics';
+import { needsProfile, simulatePolicy } from './lane-advice';
+import { checkpointProfile } from './profile';
 import type { ComparisonDayMetrics, DayDisruptions, PolicyDayMetrics } from './day-metrics';
 
 export interface BootstrapSettings {
@@ -137,6 +139,8 @@ export interface DayJob {
   readonly classification: ClassificationParams;
   /** Arrival forecast of the scenario, when a policy manages lanes from one (S8). */
   readonly forecast?: ArrivalForecast;
+  /** What GateFlow's forecasts know of the scenario, when the console recommends lanes (S22.3). */
+  readonly profile?: CheckpointProfile;
 }
 
 /** True when a policy recommends lanes from a forecast of arrivals (S8). */
@@ -150,6 +154,20 @@ export function forecastFor(
   policies: readonly Policy[],
 ): { forecast?: ArrivalForecast } {
   return needsForecast(policies) ? { forecast: arrivalForecast(scenario) } : {};
+}
+
+/**
+ * What the policies' lanes need of the scenario, computed once for all its days: S8's forecast of
+ * arrivals for `@predict`, the forecasts' profile for the console's `@advise` (S22.3).
+ */
+export function laneInputsFor(
+  scenario: Scenario,
+  policies: readonly Policy[],
+): { forecast?: ArrivalForecast; profile?: CheckpointProfile } {
+  return {
+    ...forecastFor(scenario, policies),
+    ...(needsProfile(policies) ? { profile: checkpointProfile(scenario) } : {}),
+  };
 }
 
 /** The population of one day, with the forecast of the job when it has one. */
@@ -180,7 +198,7 @@ export function planExperiment(config: ExperimentConfig): ExperimentPlan {
       policies: config.policies,
       comparisons,
       classification: config.classification,
-      ...forecastFor(config.scenario, config.policies),
+      ...laneInputsFor(config.scenario, config.policies),
     },
     seeds: normaliseSeeds(config.seeds),
   };
@@ -196,7 +214,12 @@ export function runDay(job: DayJob, seed: number): SeedResult {
   const runs = new Map<string, RunResult>();
   const policies: Record<string, PolicyDayMetrics> = {};
   for (const policy of job.policies) {
-    const run = simulateCheckpoint(population, policy, { classification: job.classification });
+    const run = simulatePolicy(
+      population,
+      policy,
+      { classification: job.classification },
+      job.profile,
+    );
     runs.set(policy.id, run);
     policies[policy.id] = policyDayMetrics(population, run);
   }

@@ -2528,10 +2528,12 @@ founder on 2026-11-21 together with all of its recommendations.
 
 ## ADR-056: Lane recommendations from the forecast, with the decision and its outcome in the log
 
-- **Status:** Proposed (2026-11-22). Slice S22, on "Confermo vai avanti" (the outline confirmed).
-  The choices marked **[to confirm]** are for the founder. forecast 0.3.0, operations 0.10.0,
-  sim-metrics 0.13.0, twin 0.1.1, contracts 0.15.0, API and web 0.22.0. No simulated number
-  changes; the forecasts do not change either.
+- **Status:** Accepted (2026-11-22). Slice S22, as the founder confirmed it ("Confermo vai
+  avanti"): the rule, the room below the plan, the day's rules (none during a pause or an
+  emergency), accepting that opens no lane, the outcome, the log rather than a table of alerts,
+  the review before answering a change of lanes. forecast 0.3.0, operations 0.10.0, sim-metrics
+  0.13.0, twin 0.1.1, contracts 0.15.0, API and web 0.22.0. No simulated number changes; the
+  forecasts do not change either.
 - **Context:**
   - The kickoff's F10: a forecast beyond capacity for N blocks gives an alert with its lead time,
     interval and expected benefit; the supervisor accepts, postpones or declines with a reason;
@@ -2605,6 +2607,60 @@ founder on 2026-11-21 together with all of its recommendations.
     the profile, the opening delay and the room are its own.
   - At most four recommendations an hour per checkpoint, each followed by a decision and an
     outcome: a dozen commands an hour in the log.
+  - The outcome of a recommendation made in the last 75 minutes or so before the service day
+    changes (03:00 at the library's airports) is not recorded: the next day's log holds the
+    commands from then on. Few recommendations fall there, at night.
   - What following the recommendations buys was measured by S8 on simulated days with S8's
-    projection; measuring this rule's recommendations in the simulator (followed or not, as S8's
-    operator model does) is the next step for the pitch's figures.
+    projection; this rule's own recommendations are measured in the simulator in S22.3
+    (ADR-057).
+
+## ADR-057: The console's recommendations measured in the simulator (`@advise`)
+
+- **Status:** Proposed (2026-11-22). Slice S22.3, on "Confermo vai avanti". The choices marked
+  **[to confirm]** are for the founder. queue-core 0.12.0, model 0.7.0, sim-metrics 0.14.0,
+  sim-trace 0.2.0, command line 0.14.0, API 0.22.1. No simulated number of an existing policy
+  changes; the new lane mode gives new ones.
+- **Context:**
+  - S8 measured GateFlow's lanes with its own projection (`@predict`: one path of the backlog over
+    45 minutes from a forecast of arrivals; ADR-039). The console recommends with another rule
+    (S22, ADR-056): the median of 200 paths of S21's forecast over an hour, the library's
+    calibration, 15 minutes between recommendations. The pitch needs what the console's own
+    recommendations buy.
+  - The simulator (sim-model) does not depend on the forecasts: the forecasts depend on the
+    simulator's days (sim-metrics builds their profile).
+- **Decision:**
+  - **A third lane mode, `@advise` [to confirm]:** at each review (every 5 minutes) the simulator
+    asks a function given in its options (`laneAdvisor`) for the recommendation; sim-metrics gives
+    it the console's rule (`adviseLanes`, the profile of the scenario's 50 simulated days, the
+    library's calibration) and what the live system would know of the day then, worked out from
+    the day's events as they happen (`LiveView`): the people who took a number in the last hour,
+    the people not yet admitted, the lanes open and when they last changed. The backtest reads the
+    same after the day with its own code; a test checks they agree at every review of a day (but
+    for the console's own decision at that instant, which the backtest sees and the console has
+    not made yet).
+  - **The console's numbers, not the airport's [to confirm]:** 10 minutes to open, 2 to close, 60
+    ahead, 15 between two recommendations, as the console runs; the airport's settings of
+    `@predict` do not apply. A test of the API checks the mode has the console's numbers.
+  - **The duty manager of S8 [to confirm]:** decides at once, follows 4 recommendations in 5 (the
+    airport's share, drawn day by day); the lanes open after the day's delays, within the staff on
+    call and the lanes the checkpoint has, which the console's rule does not see on their way.
+  - **Comparisons:** `@advise` against the plan only, against the supervisor (`@reactive`) and
+    against S8's rule (`@predict`) on the same calls; a priority policy `@advise` against the same
+    lanes without priority and against today's practice as a whole (`fifo-manual@reactive`).
+  - **Records:** the results name the forecast and its calibration when a policy is `@advise`
+    (`versions.forecast`; schema unchanged). Sweeps, the trace of a day and the API's simulations
+    run `@advise` too; CI runs it on the library (200 days), checks it is the same on 1 and 4
+    worker threads, and runs the two new sweeps of the share followed (20 days per point).
+- **Alternatives considered:**
+  - **S8's projection with the console's numbers:** cheaper, but it would not be the console's
+    rule: the paths, the median and the calibration are what the console shows.
+  - **The forecasts inside the simulator:** a dependency of the simulator on what is built from
+    its own days; the function in the options keeps the simulator pure.
+  - **The live system's own commands (the twin with an advisor):** S22 does it for one morning;
+    200 days of five scenarios through the database would take hours, for the same rule.
+- **Evidence:** the S22.3 section of IMPLEMENTATION_PLAN.md and `docs/reports/slice-22`.
+- **Consequences:**
+  - The pitch can quote the console's own recommendations, SIMULATED, scenario by scenario, with
+    what one extra lane-hour buys and how much depends on the duty manager following them.
+  - A review costs a forecast of 200 paths (about 5 ms): a simulated day `@advise` takes about a
+    second more than the plan only.

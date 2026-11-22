@@ -7,7 +7,13 @@ import {
   fastTrackResponseEstimateMs,
   responseEstimateMs,
 } from '@gateflow/queue-core';
-import type { Policy, PredictiveLanes, QueueEvent, ReactiveLanes } from '@gateflow/queue-core';
+import type {
+  AdvisedLanes,
+  Policy,
+  PredictiveLanes,
+  QueueEvent,
+  ReactiveLanes,
+} from '@gateflow/queue-core';
 import { DiscreteEventSimulation } from '@gateflow/sim-kernel';
 import type {
   CheckpointSpec,
@@ -368,6 +374,11 @@ export function simulateCheckpoint(
   const staffing = management === undefined ? undefined : population.staffing;
   if (management?.kind === 'predict' && population.forecast === undefined) {
     throw new PopulationError('predictive lane management needs an arrival forecast');
+  }
+  /** GateFlow's console (S22.3): the caller's, for a policy whose lanes are `advise`. */
+  const advisor = options.laneAdvisor;
+  if (management?.kind === 'advise' && advisor === undefined) {
+    throw new Error("the console's recommendations of lanes need an advisor (laneAdvisor)");
   }
   const lanesAvailable = Math.max(laneCount, staffing?.lanesAvailable ?? 0);
 
@@ -1028,6 +1039,48 @@ export function simulateCheckpoint(
     }
   };
 
+  /**
+   * GateFlow's console (S22.3): the console's rule, through the advisor, none within the cooldown
+   * of the previous recommendation. The duty manager decides at once, as for `predict`: followed,
+   * the lanes open after the day's delay, within the staff on call and the lanes the checkpoint
+   * has (the console does not see lanes on their way, the staff do).
+   */
+  const reviewAdvised = (now: number, lanes: AdvisedLanes): void => {
+    if (staffing === undefined || advisor === undefined) return;
+    if (now - lastDecisionMs < lanes.cooldownMs) return;
+    const recommendation = advisor(now, lanes);
+    if (recommendation === null) return;
+    const action: string = recommendation.action;
+    if (action !== 'OPEN' && action !== 'CLOSE')
+      throw new Error(`unknown recommendation ${action}`);
+    if (!Number.isSafeInteger(recommendation.lanes) || recommendation.lanes < 1) {
+      throw new Error('a recommendation names at least one lane');
+    }
+    laneDecisions++;
+    lastDecisionMs = now;
+    const followed = at(
+      staffing.follows,
+      recommendationIndex++ % staffing.follows.length,
+      'follow decision',
+    );
+    decision(
+      'GATEFLOW',
+      recommendation.action,
+      recommendation.lanes,
+      followed,
+      recommendation.waitMs,
+      now,
+    );
+    if (!followed) return;
+    laneDecisionsFollowed++;
+    if (recommendation.action === 'OPEN') {
+      const free = room(now);
+      if (free > 0) decideOpen(now, Math.min(recommendation.lanes, free));
+    } else if (extraOpen > 0) {
+      closeExtraLane(now);
+    }
+  };
+
   observer?.({
     type: 'LANES',
     atMs: startMs,
@@ -1091,8 +1144,17 @@ export function simulateCheckpoint(
         break;
       case LANE_REVIEW: {
         if (management === undefined) break;
-        if (management.kind === 'reactive') reviewReactive(now, management);
-        else reviewPredictive(now, management);
+        switch (management.kind) {
+          case 'reactive':
+            reviewReactive(now, management);
+            break;
+          case 'predict':
+            reviewPredictive(now, management);
+            break;
+          case 'advise':
+            reviewAdvised(now, management);
+            break;
+        }
         const screening = open - freeOpen + busyClosing;
         if (now < lastArrivalMs || waitingPeople() > 0 || screening > 0) {
           sim.scheduleAt(now + management.reviewIntervalMs, LANE_REVIEW, { kind: LANE_REVIEW });

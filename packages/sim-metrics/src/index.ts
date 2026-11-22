@@ -6,6 +6,7 @@ export {
   dayPopulation,
   defaultComparisons,
   forecastFor,
+  laneInputsFor,
   needsForecast,
   normaliseSeeds,
   planExperiment,
@@ -114,19 +115,20 @@ export { renderDataSources, scenarioProvenance, sourceLabel } from './provenance
 export type { AirportSummary, ScenarioProvenance, ScheduleSummary } from './provenance';
 export { applyScenarioSettings, differencesFromPreset } from './policy-settings';
 export type { PresetDifference } from './policy-settings';
+export { arrivalsByBucket, checkpointProfile, planOf, profileOf } from './profile';
+export { needsProfile, simulatePolicy, simulatedConsole } from './lane-advice';
+export type { SimulatedConsole } from './lane-advice';
+export { LiveView } from './live';
+export type { CheckpointPlan } from './profile';
 export {
   BACKTEST_SCHEMA,
   ORIGIN_EVERY_MS,
   SimulatedDay,
-  arrivalsByBucket,
   backtestDay,
   buildBacktest,
   calibrationDay,
   calibrationOfDays,
-  checkpointProfile,
   planBacktest,
-  planOf,
-  profileOf,
   renderBacktestReport,
   stringifyBacktest,
   summariseBacktest,
@@ -134,7 +136,6 @@ export {
 export type {
   BacktestDocument,
   BacktestJob,
-  CheckpointPlan,
   BacktestObservation,
   BacktestSummary,
   HorizonErrors,

@@ -1,6 +1,7 @@
 import type { KnownDeadline, Millis, RiskClass, Segment } from '@gateflow/domain';
 import type { ClassificationParams, ReasonCode } from '@gateflow/priority-engine';
 import type {
+  AdvisedLanes,
   FlightKnowledge,
   PresentOutcome,
   QueueEvent,
@@ -409,6 +410,25 @@ export type TapeEntry =
   /** The timeouts due are applied (second calls, no-shows, expiries). */
   | { readonly type: 'ADVANCE'; readonly atMs: Millis };
 
+/**
+ * A recommendation of lanes as GateFlow's console makes it (S22.3): open `lanes` extra lanes, or
+ * close one beyond the plan. `waitMs` is what motivated it: the longest median wait the console's
+ * forecast gave over its horizon, as things are to open, with one lane fewer to close.
+ */
+export interface LaneRecommendation {
+  readonly action: 'OPEN' | 'CLOSE';
+  readonly lanes: number;
+  readonly waitMs: Millis;
+}
+
+/**
+ * GateFlow's console in the simulator (S22.3): asked at each review of a policy whose lanes are
+ * `advise`, after everything that happened at that instant, with the policy's rule. It reads what
+ * the live system would know of the day through its own observer of the day (`observer`), and
+ * answers with a recommendation or null. It must not change the run otherwise.
+ */
+export type LaneAdvisor = (nowMs: Millis, rule: AdvisedLanes) => LaneRecommendation | null;
+
 export interface SimulationOptions {
   /**
    * Parameters used to classify each ticket on arrival (`classAtArrival`). Using the same values
@@ -424,4 +444,6 @@ export interface SimulationOptions {
    * result, and must not change the run.
    */
   readonly recorder?: (entry: TapeEntry) => void;
+  /** GateFlow's console (S22.3), for a policy whose lanes are `advise`: required by it. */
+  readonly laneAdvisor?: LaneAdvisor;
 }

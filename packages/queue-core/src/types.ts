@@ -94,8 +94,25 @@ export interface PredictiveLanes {
   readonly cooldownMs: Millis;
 }
 
-/** How lanes are opened beyond the plan during the day (S8). */
-export type LaneManagement = ReactiveLanes | PredictiveLanes;
+/**
+ * GateFlow's recommendations of lanes as the console makes them (S22, ADR-056), simulated (S22.3,
+ * ADR-057): every `reviewIntervalMs` the console's rule reads the forecast of the next `horizonMs`
+ * from what the live system knows, and recommends the fewest extra lanes that keep the median wait
+ * within `targetWaitMs`, counting the time staff need to open them, or closing a lane beyond the
+ * plan when one fewer keeps it below `closeWhenWaitMs`; none within `cooldownMs` of the previous
+ * one. The simulator asks the caller for the recommendation; the duty manager follows it or not.
+ */
+export interface AdvisedLanes {
+  readonly kind: 'advise';
+  readonly reviewIntervalMs: Millis;
+  readonly horizonMs: Millis;
+  readonly targetWaitMs: Millis;
+  readonly closeWhenWaitMs: Millis;
+  readonly cooldownMs: Millis;
+}
+
+/** How lanes are opened beyond the plan during the day (S8, S22.3). */
+export type LaneManagement = ReactiveLanes | PredictiveLanes | AdvisedLanes;
 
 export interface Policy {
   readonly id: string;

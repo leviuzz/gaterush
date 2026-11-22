@@ -194,8 +194,8 @@ describe('results document', () => {
       comparisons: COMPARISONS,
       versions: {
         engine: '0.5.0',
-        queueCore: '0.11.0',
-        model: '0.6.0',
+        queueCore: '0.12.0',
+        model: '0.7.0',
         kernel: '0.1.0',
         populationGenerator: '0.6.0',
         scenarioSchema: 5,

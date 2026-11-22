@@ -389,6 +389,11 @@ day (`DayEvent`, ADR-041) and never changes the run:
     last hour. It recommends the fewest lanes that keep the projected wait below the target, and
     closing a lane when the projection without it stays short. The duty manager follows the n-th
     recommendation when `staffing.follows[n]` is true.
+  - *Advise* (GateFlow's console, S22.3, ADR-057): the simulator asks `options.laneAdvisor`, a
+    function, for the recommendation; sim-metrics gives it the console's rule (`adviseLanes` on
+    S21's forecast) and what the live system would know of the day (`LiveView`, from the day's
+    events as they happen). None within 15 minutes of the previous one; the duty manager decides
+    at once, as for *Predict*. The simulator itself does not depend on the forecasts.
 - **Ground truth and knowledge (S5, ADR-030).** The system starts the day with the known
   deadlines and learns of delays and gate changes from the feed messages, at the time the feed
   sends them. During a feed outage the messages are held until the feed recovers, and every known

@@ -1,11 +1,18 @@
 import { FIFO_MANUAL_POLICY, LANE_MODES, withLaneMode } from '@gateflow/queue-core';
-import type { Policy, PredictiveLanes, QueueEvent, ReactiveLanes } from '@gateflow/queue-core';
+import type {
+  AdvisedLanes,
+  Policy,
+  PredictiveLanes,
+  QueueEvent,
+  ReactiveLanes,
+} from '@gateflow/queue-core';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { PopulationError, simulateCheckpoint } from '../src';
 import type {
   ArrivalForecast,
   DayEvent,
+  LaneAdvisor,
   LaneStaffing,
   Population,
   RunResult,
@@ -29,8 +36,9 @@ import {
 
 const REACTIVE = LANE_MODES.reactive?.lanes as ReactiveLanes;
 const PREDICT = LANE_MODES.predict?.lanes as PredictiveLanes;
+const ADVISE = LANE_MODES.advise?.lanes as AdvisedLanes;
 
-function withLanes(policy: Policy, lanes: ReactiveLanes | PredictiveLanes): Policy {
+function withLanes(policy: Policy, lanes: ReactiveLanes | PredictiveLanes | AdvisedLanes): Policy {
   return { ...policy, id: `${policy.id}@${lanes.kind}`, lanes };
 }
 
@@ -38,6 +46,20 @@ const reactive = (overrides: Partial<ReactiveLanes> = {}) =>
   withLanes(FIFO, { ...REACTIVE, ...overrides });
 const predict = (overrides: Partial<PredictiveLanes> = {}) =>
   withLanes(FIFO, { ...PREDICT, ...overrides });
+const advise = (overrides: Partial<AdvisedLanes> = {}) =>
+  withLanes(FIFO, { ...ADVISE, ...overrides });
+
+/** A console that recommends opening before minute 30 and closing after, and says when it was asked. */
+function scriptedConsole(lanes = 1): { advisor: LaneAdvisor; asked: number[] } {
+  const asked: number[] = [];
+  const advisor: LaneAdvisor = (nowMs) => {
+    asked.push(nowMs / MINUTE);
+    return nowMs < 30 * MINUTE
+      ? { action: 'OPEN', lanes, waitMs: 12 * MINUTE }
+      : { action: 'CLOSE', lanes: 1, waitMs: MINUTE };
+  };
+  return { advisor, asked };
+}
 
 function staffing(overrides: Partial<LaneStaffing> = {}): LaneStaffing {
   return {
@@ -214,6 +236,59 @@ describe("extra lanes recommended by GateFlow's forecast (S8, predict)", () => {
   });
 });
 
+describe("extra lanes recommended by GateFlow's console (S22.3, advise)", () => {
+  it('asks the console at each review, never within 15 minutes of a recommendation', () => {
+    const { advisor, asked } = scriptedConsole();
+    const events: DayEvent[] = [];
+    const run = simulateCheckpoint(ramp(), advise(), {
+      ...OPTIONS,
+      laneAdvisor: advisor,
+      observer: (e) => events.push(e),
+    });
+    // The reviews come every 5 minutes; after each recommendation, the next 15 minutes are quiet.
+    expect(asked.slice(0, 4)).toEqual([0, 15, 30, 45]);
+    const decided = events.flatMap((e) => (e.type === 'LANE_DECISION' ? [e] : []));
+    expect(decided.slice(0, 3)).toMatchObject([
+      { atMs: 0, by: 'GATEFLOW', action: 'OPEN', lanes: 1, followed: true, waitMs: 12 * MINUTE },
+      { atMs: 15 * MINUTE, action: 'OPEN', followed: true },
+      { atMs: 30 * MINUTE, action: 'CLOSE', followed: true, waitMs: MINUTE },
+    ]);
+    // Opened at 0, ready at 5; the second recommendation finds no staff left; closed at 30.
+    expect(run.stats).toMatchObject({ lanesOpened: 1, lanesClosed: 1 });
+    expect(startsMin(run).slice(0, 4)).toEqual([10, 10, 11, 11]);
+    expect(run.stats.laneDecisions).toBe(decided.length);
+  });
+
+  it('changes nothing when the duty manager does not follow, and needs a console', () => {
+    const population = ramp(staffing({ follows: [false] }));
+    const ignored = simulateCheckpoint(population, advise(), {
+      ...OPTIONS,
+      laneAdvisor: scriptedConsole().advisor,
+    });
+    expect(decisions(ignored)).toEqual(decisions(simulateCheckpoint(population, FIFO, OPTIONS)));
+    expect(ignored.stats.laneDecisions).toBeGreaterThan(0);
+    expect(ignored.stats).toMatchObject({ laneDecisionsFollowed: 0, lanesOpened: 0 });
+    expect(() => simulateCheckpoint(population, advise(), OPTIONS)).toThrow(/advisor/);
+  });
+
+  it('opens what the staff on call and the lanes allow, whatever the console asks', () => {
+    const run = simulateCheckpoint(
+      ramp(staffing({ lanesAvailable: 4, maxExtraLanes: 2 })),
+      advise(),
+      {
+        ...OPTIONS,
+        laneAdvisor: scriptedConsole(5).advisor,
+      },
+    );
+    expect(run.stats.maxOpenLanes).toBe(3);
+    expect(run.stats.lanesOpened).toBe(2);
+    const wrong: LaneAdvisor = () => ({ action: 'OPEN', lanes: 0, waitMs: 0 });
+    expect(() => simulateCheckpoint(ramp(), advise(), { ...OPTIONS, laneAdvisor: wrong })).toThrow(
+      /at least one lane/,
+    );
+  });
+});
+
 describe('lane management: equivalences and inputs (S8)', () => {
   it('without staff on call, a policy that manages lanes runs exactly as without', () => {
     const population = withCallBehaviour(
@@ -221,12 +296,12 @@ describe('lane management: equivalences and inputs (S8)', () => {
     );
     for (const base of [FIFO, edfWith(), FIFO_MANUAL_POLICY]) {
       const plain = simulateCheckpoint(population, base, OPTIONS);
-      for (const mode of ['reactive', 'predict'] as const) {
+      for (const mode of ['reactive', 'predict', 'advise'] as const) {
         const managed = withLaneMode(base, mode);
         const run = simulateCheckpoint(
           { ...population, forecast: { startMs: 0, peoplePerMinute: [] } },
           managed,
-          OPTIONS,
+          { ...OPTIONS, laneAdvisor: scriptedConsole().advisor },
         );
         expect(decisions(run)).toEqual(decisions(plain));
         expect(run.stats).toEqual({ ...plain.stats });
@@ -292,7 +367,7 @@ describe('lane management: properties (S8)', () => {
         staffArb,
         fc.integer({ min: 1, max: 3 }),
         fc.array(fc.integer({ min: 0, max: 90 }), { minLength: 1, maxLength: 120 }),
-        fc.constantFrom('reactive', 'predict'),
+        fc.constantFrom('reactive', 'predict', 'advise'),
         fc.integer({ min: 1, max: 4 }),
         (staff, planned, arrivals, mode, ratePerMin) => {
           const lanesAvailable = Math.max(staff.lanesAvailable, planned);
@@ -312,13 +387,20 @@ describe('lane management: properties (S8)', () => {
               peoplePerMinute: Array.from({ length: 100 }, () => ratePerMin / 2),
             },
           };
-          const policy = mode === 'reactive' ? reactive() : predict();
-          const run = simulateCheckpoint(population, policy, OPTIONS);
+          const policy =
+            mode === 'reactive' ? reactive() : mode === 'predict' ? predict() : advise();
+          // A console that alternates between opening one or two lanes and closing one.
+          const laneAdvisor: LaneAdvisor = (nowMs) =>
+            Math.floor(nowMs / (5 * MINUTE)) % 3 === 2
+              ? { action: 'CLOSE', lanes: 1, waitMs: 0 }
+              : { action: 'OPEN', lanes: 1 + (nowMs % 2), waitMs: 11 * MINUTE };
+          const options = { ...OPTIONS, laneAdvisor };
+          const run = simulateCheckpoint(population, policy, options);
           const { stats } = run;
           // The day observer (S11) changes nothing and accounts for every decision and lane.
           const events: DayEvent[] = [];
           const observed = simulateCheckpoint(population, policy, {
-            ...OPTIONS,
+            ...options,
             observer: (e) => events.push(e),
           });
           expect(observed).toEqual(run);
@@ -326,7 +408,7 @@ describe('lane management: properties (S8)', () => {
           const tape: TapeEntry[] = [];
           const queueEvents: QueueEvent[] = [];
           const taped = simulateCheckpoint(population, policy, {
-            ...OPTIONS,
+            ...options,
             listener: (e) => queueEvents.push(e),
             recorder: (e) => tape.push(e),
           });

@@ -51,7 +51,7 @@ describe('parsePolicies', () => {
       ['priority-v3@predict', 'predict'],
     ]);
     expect(() => parsePolicies('fifo@later')).toThrow(
-      'unknown lane mode "later" in "fifo@later" (known: @reactive, @predict)',
+      'unknown lane mode "later" in "fifo@later" (known: @reactive, @predict, @advise)',
     );
     expect(() => parsePolicies('nope@reactive')).toThrow(/unknown policy "nope@reactive"/);
   });
@@ -168,6 +168,25 @@ describe('comparisons', () => {
       'priority-v3@predict:priority-v3',
       'priority-v3@predict:fifo-manual@predict',
       'priority-v3@predict:fifo-manual@reactive',
+    ]);
+    // The console's recommendations (S22.3): against the plan, the supervisor and S8's rule; with
+    // priority, against the same lanes without it and against today's practice as a whole.
+    const advised = parsePolicies(
+      'fifo,fifo-manual,fifo-manual@reactive,fifo-manual@predict,fifo-manual@advise,priority-v3,priority-v3@predict,priority-v3@advise',
+    );
+    expect(
+      defaultCompare(advised, 'fifo')
+        .slice(7)
+        .map((c) => `${c.candidateId}:${c.referenceId}`)
+        .filter((pair) => pair.includes('@advise')),
+    ).toEqual([
+      'fifo-manual@advise:fifo-manual',
+      'fifo-manual@advise:fifo-manual@reactive',
+      'fifo-manual@advise:fifo-manual@predict',
+      'priority-v3@advise:priority-v3',
+      'priority-v3@advise:priority-v3@predict',
+      'priority-v3@advise:fifo-manual@advise',
+      'priority-v3@advise:fifo-manual@reactive',
     ]);
     // Without lane modes, the comparisons of S7.
     const plain = parsePolicies('fifo,fifo-manual,virtual-fifo,priority-v2,priority-v3');

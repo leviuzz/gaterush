@@ -1,0 +1,29 @@
+# GateFlow sensitivity sweep (schema version 1).
+#
+# SYNTHETIC: every number comes from the synthetic library scenario mx-like-transfer-hub. Results are
+# simulated and must never be presented as operational evidence.
+
+schemaVersion: 1
+id: mx-like-hub-console
+title: The console's lane recommendations on the MX-like transfer hub, followed or not
+description: >-
+  What do the console's recommendations of lanes buy (S22.3), and how much of it depends on the
+  duty manager following them? Today's practice with staff calls (fifo-manual) runs with the plan
+  only, with a supervisor who opens a lane when the queue is long (@reactive), and with the
+  recommendations of GateFlow's console (@advise), as the share of recommendations followed varies
+  (base 4 out of 5; none followed is the plan only).
+scenario: ../scenarios/mx-like-transfer-hub.yaml
+seeds: 1-200
+policies: [fifo-manual, fifo-manual@reactive, fifo-manual@advise]
+baseline: fifo-manual
+candidate: fifo-manual@advise
+# The first comparison is drawn in the charts: the console's lanes against today's supervisor.
+compare:
+  - fifo-manual@advise:fifo-manual@reactive
+  - fifo-manual@advise:fifo-manual
+  - fifo-manual@reactive:fifo-manual
+dimensions:
+  - id: follow
+    title: Recommendations followed
+    parameter: laneFollowShare
+    values: [0, 0.5, 0.8, 1]

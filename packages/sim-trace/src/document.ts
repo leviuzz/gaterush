@@ -3,9 +3,9 @@ import type { ClassificationParams } from '@gateflow/priority-engine';
 import { QUEUE_CORE_VERSION } from '@gateflow/queue-core';
 import type { Policy } from '@gateflow/queue-core';
 import { KERNEL_VERSION } from '@gateflow/sim-kernel';
-import { MODEL_VERSION, simulateCheckpoint } from '@gateflow/sim-model';
+import { MODEL_VERSION } from '@gateflow/sim-model';
 import type { DayEvent, PassengerOutcome, Population, RunStats } from '@gateflow/sim-model';
-import { DISCLAIMER, comparisonKey, dayPopulation } from '@gateflow/sim-metrics';
+import { DISCLAIMER, comparisonKey, dayPopulation, simulatePolicy } from '@gateflow/sim-metrics';
 import type { DayJob, PolicyComparison } from '@gateflow/sim-metrics';
 import { GENERATOR_VERSION, SCENARIO_SCHEMA_VERSION, canonicalJson } from '@gateflow/sim-scenarios';
 
@@ -13,7 +13,7 @@ import { GENERATOR_VERSION, SCENARIO_SCHEMA_VERSION, canonicalJson } from '@gate
 export const TRACE_SCHEMA = 'gateflow.sim.trace/1';
 
 /** Version of this package. Bump on any change to the trace or to what is derived from it. */
-export const TRACE_VERSION = '0.1.0';
+export const TRACE_VERSION = '0.2.0';
 
 /** One policy's day: every event in the order the simulator processed it, and its outcomes. */
 export interface TracedRun {
@@ -82,19 +82,28 @@ export class TraceError extends Error {
   }
 }
 
-/** Simulates `policy` on `population` and keeps every event of the day. */
+/**
+ * Simulates `policy` on `population` and keeps every event of the day; a policy `@advise` asks
+ * GateFlow's console, from the scenario's `profile` (S22.3).
+ */
 export function recordRun(
   population: Population,
   policy: Policy,
   classification: ClassificationParams,
+  profile?: DayJob['profile'],
 ): TracedRun {
   const events: DayEvent[] = [];
-  const run = simulateCheckpoint(population, policy, {
-    classification,
-    observer: (event) => {
-      events.push(event);
+  const run = simulatePolicy(
+    population,
+    policy,
+    {
+      classification,
+      observer: (event) => {
+        events.push(event);
+      },
     },
-  });
+    profile,
+  );
   return { policyId: policy.id, events, outcomes: run.outcomes, stats: run.stats };
 }
 
@@ -156,8 +165,8 @@ export function traceDay(
     },
     day: population,
     runs: [
-      recordRun(population, reference, job.classification),
-      recordRun(population, candidate, job.classification),
+      recordRun(population, reference, job.classification, job.profile),
+      recordRun(population, candidate, job.classification, job.profile),
     ],
   };
 }

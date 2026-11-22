@@ -4,6 +4,33 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Any change that alters simulated numbers
 must be listed, together with the component versions it bumps.
 
+## [0.22.1] - 2026-11-22: Slice S22.3, the console's recommendations measured in the simulator
+
+A third lane mode, `@advise`, simulates the recommendations of GateFlow's console (S22): at each
+review the console's own rule reads what the live system would know of the simulated day, and the
+duty manager of S8 follows it 4 times in 5 (ADR-057).
+
+### Simulated numbers change
+
+- None for the existing policies: the golden files change only in the versions they record, and
+  the calibration module only in its line of versions. The new lane mode gives new numbers.
+
+### Added
+
+- queue-core 0.12.0: the lane mode `advise` (`AdvisedLanes`), with the console's numbers.
+- model 0.7.0: `laneAdvisor` in the options of a simulation, asked at each review of a policy
+  `@advise`; the duty manager decides at once, within the staff on call and the lanes.
+- sim-metrics 0.14.0: `LiveView` (what the live system knows of a day, as it goes),
+  `simulatedConsole` and `simulatePolicy` (the console's rule in a simulated day), `laneInputsFor`;
+  experiments, sweeps and the backtest run `@advise`; comparisons with the plan, the supervisor
+  and S8's rule; the report describes the mode; results name the forecast it read
+  (`versions.forecast`). The profile functions move to their own module.
+- sim-trace 0.2.0: the trace of a day runs `@advise`.
+- Command line 0.14.0: `<policy>@advise`; two sweeps of the share of recommendations followed
+  (`sweeps/tsf-like-peak-console.yaml`, `sweeps/mx-like-hub-console.yaml`).
+- API 0.22.1: its simulations run `@advise`; a test checks the mode has the console's numbers.
+- CI: the library with `@advise` (200 days), the same results on 1 and 4 worker threads.
+
 ## [0.22.0] - 2026-11-22: Slice S22, lane recommendations with the decision and its outcome
 
 GateFlow reviews a checkpoint's lanes every 5 minutes and when they change: when the forecast puts

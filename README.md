@@ -312,10 +312,12 @@ Any policy can also open extra lanes during the day (S8), when the checkpoint ha
 - `<policy>@reactive`: a supervisor opens a lane when the queue shows more than 10 minutes of
   waiting (today's practice);
 - `<policy>@predict`: GateFlow recommends lanes from a forecast of arrivals, and the duty
-  manager follows 4 recommendations out of 5.
+  manager follows 4 recommendations out of 5;
+- `<policy>@advise` (S22.3): the console's own rule (S22) recommends them, from the forecast of
+  the next hour and what the live system knows of the day, and the duty manager follows 4 out of 5.
 
 ```bash
-pnpm sim run --scenario scenarios/mx-like-transfer-hub.yaml --policies fifo,fifo-manual,fifo-manual@reactive,fifo-manual@predict,priority-v3,priority-v3@predict
+pnpm sim run --scenario scenarios/mx-like-transfer-hub.yaml --policies fifo,fifo-manual,fifo-manual@reactive,fifo-manual@predict,fifo-manual@advise,priority-v3,priority-v3@predict,priority-v3@advise
 ```
 
 Other commands:

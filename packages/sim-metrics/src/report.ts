@@ -67,6 +67,9 @@ function laneRule(policy: Policy): string {
   if (lanes.kind === 'reactive') {
     return `supervisor: opens when the queue shows more than ${minutesOf(lanes.openWhenWaitMs)} min, closes below ${minutesOf(lanes.closeWhenWaitMs)} min`;
   }
+  if (lanes.kind === 'advise') {
+    return `GateFlow's console: keeps the median wait forecast below ${minutesOf(lanes.targetWaitMs)} min over the next ${minutesOf(lanes.horizonMs)} min, closes a lane beyond the plan below ${minutesOf(lanes.closeWhenWaitMs)} min, ${minutesOf(lanes.cooldownMs)} min between recommendations`;
+  }
   return `GateFlow: keeps the projected wait below ${minutesOf(lanes.targetWaitMs)} min over the next ${minutesOf(lanes.horizonMs)} min, closes below ${minutesOf(lanes.closeWhenWaitMs)} min`;
 }
 
@@ -359,7 +362,11 @@ export function renderReport(doc: ResultsDocument): string {
             `${num(staffing.openDelayMinutes.median, 0)} min to put a lane into service (varying from day to day), and an extra lane ` +
             `stays open at least ${num(staffing.minOpenMinutes, 0)} min. The supervisor of today's practice (\`@reactive\`) ` +
             'decides on the wait the queue shows; GateFlow (`@predict`) projects the queue from the forecast of arrivals ' +
-            `and recommends lanes, and the duty manager follows ${pct(staffing.followShare, 0)} of its recommendations. ` +
+            'and recommends lanes' +
+            (managed.some((p) => p.lanes?.kind === 'advise')
+              ? ', as the console does (`@advise`, S22: its rule on the forecast of the next hour, from what the live system knows)'
+              : '') +
+            `, and the duty manager follows ${pct(staffing.followShare, 0)} of its recommendations. ` +
             'Means per day; "most" is the largest value over all simulated days.',
       '',
       '| Policy | Rule | Staffed lane-hours | of which extra | Extra lanes opened (closed) | Decisions (followed) | Most lanes open |',

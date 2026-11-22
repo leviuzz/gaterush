@@ -1,7 +1,7 @@
 import { MS_PER_MINUTE } from '@gateflow/domain';
 import type { ClassificationParams, ConstrainedEdfSelection } from '@gateflow/priority-engine';
+import type { CheckpointProfile } from '@gateflow/forecast';
 import type { Policy } from '@gateflow/queue-core';
-import { simulateCheckpoint } from '@gateflow/sim-model';
 import type { ArrivalForecast, RunResult } from '@gateflow/sim-model';
 import { canonicalJson, parseScenario } from '@gateflow/sim-scenarios';
 import type { Scenario } from '@gateflow/sim-scenarios';
@@ -11,10 +11,11 @@ import {
   ExperimentConfigError,
   comparisonKey,
   dayPopulation,
-  forecastFor,
+  laneInputsFor,
   normaliseSeeds,
 } from './experiment';
 import type { BootstrapSettings, PolicyComparison } from './experiment';
+import { simulatePolicy } from './lane-advice';
 
 /**
  * Parameters a sensitivity sweep can vary. Policy parameters change the candidate policy (the
@@ -374,6 +375,8 @@ export interface SweepDayJob {
   readonly classification: ClassificationParams;
   /** Arrival forecast of the variant's scenario, when a policy manages lanes from one (S8). */
   readonly forecast?: ArrivalForecast;
+  /** What the forecasts know of the variant's scenario, for the console's `@advise` (S22.3). */
+  readonly profile?: CheckpointProfile;
 }
 
 export interface SweepRunDay {
@@ -476,7 +479,7 @@ export function sweepDayJob(config: SweepConfig, variant: SweepVariant): SweepDa
     runs: variant.runs,
     comparisons: config.comparisons,
     classification: config.classification,
-    ...forecastFor(variant.scenario, variant.runs.flat()),
+    ...laneInputsFor(variant.scenario, variant.runs.flat()),
   };
 }
 
@@ -491,7 +494,12 @@ export function runSweepDay(job: SweepDayJob, seed: number): SweepDayResult {
     const key = canonicalJson(policy);
     let entry = cache.get(key);
     if (entry === undefined) {
-      const run = simulateCheckpoint(population, policy, { classification: job.classification });
+      const run = simulatePolicy(
+        population,
+        policy,
+        { classification: job.classification },
+        job.profile,
+      );
       entry = { run, metrics: policyDayMetrics(population, run) };
       cache.set(key, entry);
     }

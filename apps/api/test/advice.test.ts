@@ -18,11 +18,13 @@ import {
 import type { Advice } from '@gateflow/contracts';
 import {
   FORECAST_VERSION,
+  LANE_ADVICE,
   LIBRARY_CALIBRATION,
   LIBRARY_CALIBRATION_SOURCE,
   adviseLanes,
 } from '@gateflow/forecast';
-import { PRIORITY_V3_POLICY } from '@gateflow/queue-core';
+import { ADVICE_RULES } from '@gateflow/operations';
+import { LANE_MODES, PRIORITY_V3_POLICY } from '@gateflow/queue-core';
 import {
   SimulatedDay,
   applyScenarioSettings,
@@ -461,6 +463,17 @@ describe("GateFlow's recommendations of lanes (S22)", () => {
     expect(chain.intact).toBe(true);
     const replayed = OverviewVerifyResponse.parse(await get(run.checkpointId, 'overview/verify'));
     expect(replayed).toMatchObject({ intact: true, differences: [] });
+  });
+
+  it('has the numbers the simulator measures it with (S22.3, @advise)', () => {
+    expect(LANE_MODES.advise?.lanes).toEqual({
+      kind: 'advise',
+      reviewIntervalMs: LANE_ADVICE.reviewEveryMs,
+      horizonMs: LANE_ADVICE.horizonMs,
+      targetWaitMs: LANE_ADVICE.targetWaitMs,
+      closeWhenWaitMs: LANE_ADVICE.closeBelowWaitMs,
+      cooldownMs: ADVICE_RULES.cooldownMs,
+    });
   });
 
   it('is for supervisors and administrators', async () => {

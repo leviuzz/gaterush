@@ -48,10 +48,10 @@ export function validateQueueOperation(input: QueueOperation): void {
   }
 }
 
-/** Validates the lane management of a policy (S8). */
+/** Validates the lane management of a policy (S8, S22.3). */
 export function validateLaneManagement(lanes: LaneManagement): void {
   const kind: string = lanes.kind;
-  if (kind !== 'reactive' && kind !== 'predict') {
+  if (kind !== 'reactive' && kind !== 'predict' && kind !== 'advise') {
     throw new QueueError(`unknown lane management: ${kind}`);
   }
   requireInteger(lanes.reviewIntervalMs, 'lanes.reviewIntervalMs', 60_000);
@@ -351,6 +351,18 @@ export const LANE_MODES: Readonly<
       targetWaitMs: 10 * MS_PER_MINUTE,
       closeWhenWaitMs: 3 * MS_PER_MINUTE,
       cooldownMs: 10 * MS_PER_MINUTE,
+    },
+  },
+  // The console's rule (S22): its numbers are the console's, checked by a test of the API.
+  advise: {
+    title: "extra lanes recommended by GateFlow's console",
+    lanes: {
+      kind: 'advise',
+      reviewIntervalMs: 5 * MS_PER_MINUTE,
+      horizonMs: 60 * MS_PER_MINUTE,
+      targetWaitMs: 10 * MS_PER_MINUTE,
+      closeWhenWaitMs: 2 * MS_PER_MINUTE,
+      cooldownMs: 15 * MS_PER_MINUTE,
     },
   },
 };

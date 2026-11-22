@@ -146,14 +146,17 @@ Options for "sweep" (a sensitivity sweep is described in a file, see sweeps/):
   --bootstrap-resamples, --workers, --commit, --quiet: as for "run"
 
 A policy id may end with a lane mode: <policy>@reactive (a supervisor opens extra lanes when the
-queue is long, today's practice) or <policy>@predict (GateFlow recommends extra lanes from a
-forecast of arrivals). Extra lanes need staff on call in the scenario (checkpoint.laneStaffing).
+queue is long, today's practice), <policy>@predict (GateFlow recommends extra lanes from a
+forecast of arrivals) or <policy>@advise (the rule of GateFlow's console, on the forecast of the
+next hour from what the live system knows). Extra lanes need staff on call in the scenario
+(checkpoint.laneStaffing).
 
 By default every policy is compared with the baseline. Each priority policy is also compared with
 the FIFO policy that runs the same virtual queue (this isolates the prioritisation), with today's
 practice with manual handling (fifo-manual) and with the priority policies listed before it, each
 with the same lane mode. A policy with a lane mode is compared with the same policy without it and,
-for @predict, with @reactive; a priority policy with @predict also with fifo-manual@reactive.
+for @predict and @advise, with @reactive; @advise also with @predict; a priority policy with
+@predict or @advise also with fifo-manual@reactive.
 Risk classes on arrival use the parameters of the first priority policy listed.
 
 A scenario can take its flights from a CSV file (format gateflow.flights/1: columns flight, std,

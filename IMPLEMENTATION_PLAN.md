@@ -1481,11 +1481,12 @@ Evidence:
 ## S22: lane-opening recommendations, with the decision and its outcome (done)
 
 Proposed on 2026-11-22 from the kickoff (F10, the `alert` of the data model, `/ops/forecast`), and
-confirmed in its outline by the founder ("Confermo vai avanti"): the recommendation from S21's
-forecast with the lanes varied, open above 10 minutes of wait and close below 2, a reason, a lead
-time, an interval and the expected benefit, a cooldown of 15 minutes and no repeat while one is
-open, the recommendation, the decision and the outcome in the checkpoint's log, a card in the
-console. The details marked **[to confirm]** are mine. ADR-056.
+confirmed by the founder in its outline and then in its details ("Confermo vai avanti", twice):
+the recommendation from S21's forecast with the lanes varied, open above 10 minutes of wait and
+close below 2, a reason, a lead time, an interval and the expected benefit, a cooldown of 15
+minutes and no repeat while one is open, the recommendation, the decision and the outcome in the
+checkpoint's log, a card in the console. The details marked **[to confirm]** were mine; all are
+confirmed. ADR-056.
 
 - **The rule [to confirm]: S8's GateFlow recommendation, on S21's forecast** (`adviseLanes`,
   forecast, pure). Every 5 minutes of the checkpoint's clock, and at once when the lanes open
@@ -1563,6 +1564,39 @@ interval and the expected benefit. Evidence:
   lead time, interval and benefit; declining needs a reason; accepted, it is in the day's list and
   in the audit after GateFlow's; in Italian; no sideways scroll;
 - the forecasts' calibration unchanged (`pnpm calibrate:check`): the forecasts are the same.
+
+### S22.3: GateFlow's recommendations measured in the simulator (in progress)
+
+On "Confermo vai avanti" (2026-11-22), the next step proposed with S22: what following the
+console's recommendations buys, on the simulated days of the scenario library, for the pitch's
+figures. S8 measured GateFlow's lanes with its own projection (`@predict`, ADR-039); this measures
+the rule the console runs. ADR-057.
+
+- **`@advise`, the console's rule in the simulator [to confirm]:** a third lane mode beside
+  `@reactive` (today's supervisor) and `@predict` (S8). Every 5 minutes of the simulated day the
+  very code of the console (`adviseLanes`, the forecast of S21 from the scenario's 50 simulated
+  days and the library's calibration) reads what the live system would know then: the people who
+  took a number in the last hour, the people not yet admitted, the lanes open and when they last
+  changed, as the backtest reads them (S21). Its numbers are the console's (10 minutes to open,
+  2 to close, 60 minutes ahead, 15 minutes between two recommendations), not the airport's
+  settings of `@predict`; a test checks they are the same.
+- **The duty manager, as in S8 [to confirm]:** follows a recommendation or declines it at once,
+  4 times in 5 (the airport's share, drawn day by day); the lanes open after the day's delays; the
+  staff on call and the lanes the checkpoint has bound what opens (the console's rule does not see
+  lanes on their way, the staff do). A recommendation declined or followed lets the next come 15
+  minutes after it, as in the console.
+- **The simulator stays pure:** the simulation asks a function for the recommendation and the
+  metrics package plugs in the console's rule and what the live system knows (from the day's
+  events), so the simulator does not depend on the forecasts.
+- **The experiment [to confirm]:** the five library scenarios with staff on call, 200 days each:
+  `fifo`, `fifo-manual`, `fifo-manual@reactive`, `fifo-manual@predict`, `fifo-manual@advise`,
+  `priority-v3`, `priority-v3@predict`, `priority-v3@advise`. Comparisons: `@advise` against the
+  plan only, against the supervisor and against S8's `@predict`; `priority-v3@advise` against
+  today's practice (`fifo-manual@reactive`), GateFlow as a whole.
+- **Followed or not [to confirm]:** a sweep of the share of recommendations followed (0, 0.5,
+  0.8, 1) for `@advise` on the days where it acts, 200 days per point.
+- **Records:** results name the forecast and its calibration when a policy uses `@advise`
+  (schema unchanged); CI runs the library with `@advise` and the new sweep with 20 days per point.
 
 ## Later milestones (summary)
 

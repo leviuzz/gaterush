@@ -1,3 +1,4 @@
+import { FORECAST_VERSION, LIBRARY_CALIBRATION_SOURCE } from '@gateflow/forecast';
 import { ENGINE_VERSION } from '@gateflow/priority-engine';
 import type { ClassificationParams } from '@gateflow/priority-engine';
 import { QUEUE_CORE_VERSION } from '@gateflow/queue-core';
@@ -101,6 +102,8 @@ export interface ResultsDocument {
       readonly kernel: string;
       readonly populationGenerator: string;
       readonly scenarioSchema: number;
+      /** The forecasts of the console's rule, when a policy is `@advise` (S22.3). */
+      readonly forecast?: string;
     };
     readonly scenario: {
       readonly id: string;
@@ -272,6 +275,9 @@ export function buildResults(experiment: ExperimentResult, input: ManifestInput)
         kernel: KERNEL_VERSION,
         populationGenerator: GENERATOR_VERSION,
         scenarioSchema: SCENARIO_SCHEMA_VERSION,
+        ...(config.policies.some((p) => p.lanes?.kind === 'advise')
+          ? { forecast: `${FORECAST_VERSION}, calibrated on ${LIBRARY_CALIBRATION_SOURCE}` }
+          : {}),
       },
       scenario: {
         id: scenario.id,

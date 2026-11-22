@@ -34,8 +34,10 @@ export function arrivalClassification(policies: readonly Policy[]): Classificati
  *
  * Lane management (S8): a policy with a lane mode is compared with the same policy without it
  * (what the extra lanes buy) and, for GateFlow's recommendations, with the supervisor's
- * (`@predict` against `@reactive`); a priority policy with `@predict` is also compared with
- * today's practice as a whole (manual handling with a supervisor, `fifo-manual@reactive`).
+ * (`@predict` or `@advise` against `@reactive`); a priority policy with GateFlow's
+ * recommendations is also compared with today's practice as a whole (manual handling with a
+ * supervisor, `fifo-manual@reactive`). The console's recommendations (`@advise`, S22.3) are also
+ * compared with S8's (`@predict`) on the same calls.
  */
 export function recommendedComparisons(
   policies: readonly Policy[],
@@ -54,6 +56,8 @@ export function recommendedComparisons(
     sameQueue(a, b) && canonicalJson(a.selection) === canonicalJson(b.selection);
   const lanesOf = (p: Policy): string => p.lanes?.kind ?? 'plan';
   const todaysPractice = (p: Policy) => p.queue.kind === 'physical' && p.selection.kind !== 'fifo';
+  /** GateFlow recommends the lanes: S8's projection or the console's rule. */
+  const gateflowLanes = (p: Policy) => p.lanes?.kind === 'predict' || p.lanes?.kind === 'advise';
   policies.forEach((candidate, index) => {
     if (candidate.id === baselineId) return;
     const others = policies.filter((p) => p.id !== baselineId && p.id !== candidate.id);
@@ -63,7 +67,8 @@ export function recommendedComparisons(
         if (!sameCalls(reference, candidate)) continue;
         if (
           reference.lanes === undefined ||
-          (lanes.kind === 'predict' && reference.lanes.kind === 'reactive')
+          (gateflowLanes(candidate) && reference.lanes.kind === 'reactive') ||
+          (lanes.kind === 'advise' && reference.lanes.kind === 'predict')
         ) {
           add(candidate.id, reference.id);
         }
@@ -80,7 +85,7 @@ export function recommendedComparisons(
     for (const reference of references) {
       if (todaysPractice(reference)) add(candidate.id, reference.id);
     }
-    if (lanes?.kind === 'predict') {
+    if (gateflowLanes(candidate)) {
       for (const reference of others) {
         if (todaysPractice(reference) && reference.lanes?.kind === 'reactive') {
           add(candidate.id, reference.id);

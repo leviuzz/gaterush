@@ -153,7 +153,7 @@ describe('gateflow-sim validate, policies, help', () => {
       'priority-v2',
       'priority-v3',
     ]);
-    expect(Object.keys(listed.laneModes)).toEqual(['reactive', 'predict']);
+    expect(Object.keys(listed.laneModes)).toEqual(['reactive', 'predict', 'advise']);
   });
 
   it.each([
@@ -414,6 +414,47 @@ describe('airport configurations', () => {
       'never more than the 6 lanes the checkpoint has, and at most 1 at the same time',
     );
   });
+
+  it("simulates the console's recommendations, the same on any number of threads (S22.3)", async () => {
+    const run = async (workers: string) => {
+      const out = join(dir, `out-advise-${workers}`);
+      const result = await cli([
+        'run',
+        '--scenario',
+        join(repo, 'scenarios', 'tsf-like-peak-day.yaml'),
+        '--seeds',
+        '1-2',
+        '--policies',
+        'fifo-manual,fifo-manual@reactive,fifo-manual@advise',
+        '--out',
+        out,
+        '--bootstrap-resamples',
+        '50',
+        '--workers',
+        workers,
+        '--commit',
+        'test',
+        '--quiet',
+      ]);
+      expect(result.code, result.stderr).toBe(EXIT_OK);
+      return { result, out };
+    };
+    const one = await run('1');
+    const three = await run('3');
+    expect(one.result.stdout).toContain('fifo-manual@advise vs fifo-manual@reactive');
+    const results = readFileSync(join(one.out, 'results.json'), 'utf8');
+    expect(readFileSync(join(three.out, 'results.json'), 'utf8')).toBe(results);
+    const doc = JSON.parse(results) as {
+      manifest: { versions: { forecast?: string } };
+      summary: { policies: Record<string, { laneDecisions: { mean: number } }> };
+    };
+    expect(doc.manifest.versions.forecast).toMatch(
+      /^\d+\.\d+\.\d+, calibrated on the scenario library/,
+    );
+    expect(doc.summary.policies['fifo-manual@advise']?.laneDecisions.mean).toBeGreaterThan(0);
+    const report = readFileSync(join(one.out, 'report.md'), 'utf8');
+    expect(report).toContain("GateFlow's console: keeps the median wait forecast below 10 min");
+  }, 300_000);
 });
 
 const SWEEP = `schemaVersion: 1

@@ -45,11 +45,11 @@ without disproportionate harm to passengers who are not prioritised (ADR-002).
 
 | ID | Requirement |
 |---|---|
-| FR-01 | Read IATA BCBP (Resolution 792, one or more legs) from paper or phone; hands-free scanning. The reader and the scan endpoint exist since S13 (ADR-043); the kiosk comes in S14. |
+| FR-01 | Read IATA BCBP (Resolution 792, one or more legs) from paper or phone; hands-free scanning. The reader and the scan endpoint exist since S13 (ADR-043); since S14 the kiosk reads passes from a scanner that types like a keyboard, or typed or pasted by staff (ADR-044). |
 | FR-02 | Select the leg relevant to the checkpoint (airport, date); check the flight feed when available. Since S13 the leg from this airport, dated within a day of the scan, for a flight in GateFlow's data. |
 | FR-03 | Unreadable, duplicate, expired or wrong-airport passes go to staff assistance, never to automatic access. Since S13 they are refused with a reason, or sent to staff, and create no ticket. |
-| FR-04 | Issue a ticket with a stable, readable public number and an opaque QR code (no PNR or name), plus area, status, multilingual instructions and expiry. |
-| FR-05 | Rescanning is idempotent: it retrieves the existing ticket, allows reprinting and shows the status; it never creates duplicates. Every command of the API is idempotent by its key (S12, ADR-042). |
+| FR-04 | Issue a ticket with a stable, readable public number and an opaque QR code (no PNR or name), plus area, status, multilingual instructions and expiry. Since S14: the number, a QR code to the passenger's page, instructions in Italian, English or Spanish, on screen and on paper; area and expiry are not shown yet. |
+| FR-05 | Rescanning is idempotent: it retrieves the existing ticket, allows reprinting and shows the status; it never creates duplicates. Every command of the API is idempotent by its key (S12, ADR-042); at the kiosk a rescan shows the same number, to print again (S14). |
 | FR-06 | Compute eligibility, risk class and a deterministic explanation; reassess on every relevant event. |
 | FR-07 | Fairness controls: cap on priority calls, bound on overtakes, anti-churn, documented manual exceptions. |
 | FR-08 | Call only for real capacity; second call; no-show timeout; limited recovery window. |
@@ -64,7 +64,7 @@ without disproportionate harm to passengers who are not prioritised (ADR-002).
 | FR-17 | Defined degraded modes for network or device failure; never disable security barriers. |
 | FR-18 | Simulator: scenarios (synthetic or from the airport's flight list, with the source and licence of every datum), policies (FIFO, rules, variants, lane opening by a supervisor or by recommendation, with the staff on call and a duty manager who may not follow), multi-seed batches, KPIs, reports, comparisons; in the command line and in the Simulator Studio, a page that runs offline in the browser (ADR-040); the replay of a day with each passenger's journey, the paired outcome and the reason for every call (ADR-041). |
 | FR-19 | Forecasts at 15/30/60/90 min, saturation, lane-opening recommendations with logged decisions and outcomes (simulated in S8: ADR-039). |
-| FR-20 | Passenger information: current waits, forecast at arrival time, flight-based estimate, indicative priority only. |
+| FR-20 | Passenger information: current waits, forecast at arrival time, flight-based estimate, indicative priority only. Since S14 the passenger's page shows the ticket's state and what to do now; waits and estimates are not shown yet. |
 | FR-21 | Coordination between checkpoints: informative first, operator-driven later, never automatic reassignment. |
 | FR-22 | Analytics and exports, with simulated and observed results clearly separated. |
 
@@ -81,8 +81,8 @@ without disproportionate harm to passengers who are not prioritised (ADR-002).
 | NFR-07 | Idempotent commands; no duplicates. |
 | NFR-08 | Reproducible simulations: seeds, versions, explicit assumptions, byte-identical outputs. |
 | NFR-09 | Scalable from small to large airports; multi-airport and multi-tenant from day one in the data model. |
-| NFR-10 | Sellable in Italy and Mexico: IT, EN and ES; IANA time zones only; data residency options. |
-| NFR-11 | Accessibility of kiosk, display and passenger pages (WCAG 2.2 AA / EN 301 549 target). |
+| NFR-10 | Sellable in Italy and Mexico: IT, EN and ES; IANA time zones only; data residency options. The passengers' screens are in Italian, English and Mexican Spanish since S14. |
+| NFR-11 | Accessibility of kiosk, display and passenger pages (WCAG 2.2 AA / EN 301 549 target). Since S14 the pages set their language, announce changes of state, keep a visible focus and large touch targets; a formal audit is still to do. |
 | NFR-12 | No mandatory hardware in the first phase; replaceable adapters. |
 | NFR-13 | Simple infrastructure: no microservices or Kubernetes in phase one. |
 

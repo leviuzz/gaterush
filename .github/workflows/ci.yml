@@ -33,7 +33,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 20
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
     steps:
@@ -57,6 +57,9 @@ jobs:
           curl -sf -X POST "http://127.0.0.1:18080/v1/checkpoints/$CP/calls" -H 'Idempotency-Key: ci-1'
           curl -sf "http://127.0.0.1:18080/v1/checkpoints/$CP/audit/verify" | tee verify.json
           grep -q '"intact":true' verify.json
+          # The same bundle serves the web application (S14), under its security policy.
+          curl -sfD headers.txt "http://127.0.0.1:18080/kiosk/$CP" | grep -q '<div id="root">'
+          grep -qi '^content-security-policy:' headers.txt
       - name: End-to-end determinism of the CLI, whatever the number of worker threads
         run: |
           node apps/sim-cli/dist/gateflow-sim.mjs run --scenario scenarios/single-checkpoint-demo.yaml --seeds 1-20 --out out/a --quiet --workers 1
@@ -104,6 +107,44 @@ jobs:
         with:
           name: gateflow-studio
           path: apps/studio/dist/gateflow-studio.html
+
+  web:
+    name: Kiosk and ticket page in Chromium
+    needs: check
+    runs-on: ubuntu-latest
+    services:
+      # The product itself runs in these tests: the API's bundle on PostgreSQL.
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Install Chromium
+        run: pnpm --filter @gateflow/web exec playwright install --with-deps chromium
+      - name: A passenger takes a number at the kiosk and follows it on a phone, in three languages
+        env:
+          GATEFLOW_SHOTS: out/screens
+        run: pnpm --filter @gateflow/web run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gateflow-web-screens
+          path: apps/web/out/screens
+          if-no-files-found: ignore
 
   demo-reports:
     name: Scenario reports (200 simulated days)

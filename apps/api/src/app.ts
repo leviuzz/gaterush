@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import fastifyStatic from '@fastify/static';
 import { and, asc, eq } from 'drizzle-orm';
 import Fastify from 'fastify';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -17,12 +19,13 @@ import { requestHash } from './chain';
 import { readPass, recordScan, ticketOfPass } from './intake';
 import type { ScanOutcome, ScanReason } from './intake';
 import type { Db } from './db/client';
-import { checkpoint, flight, queueToken } from './db/schema';
+import { airport, checkpoint, flight, queueToken } from './db/schema';
+import { deviceOf, requireDevice } from './devices';
 import type { Ids } from './ids';
 import { randomIds } from './ids';
 import { ApiError, Runtime, loadCheckpoint } from './runtime';
 import type { BuildContext } from './runtime';
-import { serviceDayOf, systemClock } from './time';
+import { localDate, serviceDayOf, systemClock } from './time';
 import type { Clock } from './time';
 import { verifyChain } from './verify';
 import { API_VERSION } from './version';
@@ -33,11 +36,23 @@ export interface AppOptions {
   readonly ids?: Ids;
   /** Log requests (to standard output, or to `stream`). */
   readonly logger?: boolean | { readonly stream: { write(line: string): void } };
+  /** The built web application (kiosk, ticket page...), served at `/` when given. */
+  readonly webRoot?: string;
 }
 
 /**
+ * The Content Security Policy of the web application: its own scripts and styles only, no third
+ * party, no framing. With `Referrer-Policy: no-referrer`, the reference in a ticket's address
+ * never leaves the page.
+ */
+export const WEB_CSP =
+  "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; " +
+  "font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+
+/**
  * What the log keeps of a request: the method and the route, with no client address and no
- * ticket reference (a passenger's phone and their ticket would be personal data, ADR-042).
+ * ticket reference, neither the API's nor that of the passenger's page (a passenger's phone and
+ * their ticket would be personal data, ADR-042).
  */
 export function loggedRequest(request: { method: string; url: string }): {
   method: string;
@@ -45,7 +60,9 @@ export function loggedRequest(request: { method: string; url: string }): {
 } {
   return {
     method: request.method,
-    url: request.url.replace(/\/v1\/tickets\/[^/?#]+/, '/v1/tickets/:ref'),
+    url: request.url
+      .replace(/\/v1\/tickets\/[^/?#]+/, '/v1/tickets/:ref')
+      .replace(/^\/t\/[^/?#]+/, '/t/:ref'),
   };
 }
 
@@ -166,7 +183,103 @@ export function buildApp(options: AppOptions): FastifyInstance {
     return reply.status(status).send(payload);
   };
 
+  app.addHook('onSend', (_request, reply, payload, done) => {
+    void reply.header('X-Content-Type-Options', 'nosniff');
+    void reply.header('Referrer-Policy', 'no-referrer');
+    const type = reply.getHeader('content-type');
+    if (typeof type === 'string' && type.startsWith('text/html')) {
+      void reply.header('Content-Security-Policy', WEB_CSP);
+      // A ticket's address is its key: no search engine may keep one.
+      void reply.header('X-Robots-Tag', 'noindex, nofollow');
+    }
+    done(null, payload);
+  });
+
+  const web = options.webRoot !== undefined && existsSync(options.webRoot);
+  if (web) {
+    void app.register(fastifyStatic, {
+      root: options.webRoot,
+      index: 'index.html',
+      wildcard: false,
+      // The build writes Brotli and gzip copies: phones on an airport's network get a third.
+      preCompressed: true,
+    });
+  }
+  // The web application routes its own pages (/kiosk/..., /t/...): every address that is not the
+  // API's or a file's is one of its pages. Fastify's own handler would log a missing address
+  // whole, with the reference of a ticket in it.
+  app.setNotFoundHandler((request, reply) => {
+    const path = request.url.split('?')[0] ?? '';
+    if (
+      web &&
+      request.method === 'GET' &&
+      !path.startsWith('/v1/') &&
+      !path.startsWith('/assets/')
+    ) {
+      return reply.header('Cache-Control', 'no-cache').type('text/html').sendFile('index.html');
+    }
+    return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'no such route' } });
+  });
+
   app.get('/v1/health', () => ({ status: 'ok', version: API_VERSION }));
+
+  /** The device's own view: what a kiosk needs to show where it is. */
+  app.get('/v1/devices/me', async (request) => {
+    const d = await deviceOf(options.db, request);
+    const cp = await loadCheckpoint(options.db, d.checkpointId);
+    const rows = await options.db.select().from(airport).where(eq(airport.id, cp.airportId));
+    const a = rows[0];
+    return {
+      device: { id: d.id, kind: d.kind, label: d.name },
+      checkpoint: { id: cp.id, label: cp.name },
+      airport: {
+        label: a?.name ?? '',
+        iata: cp.iata,
+        timeZone: cp.timeZone,
+        synthetic: a?.dataClassification === 'SYNTHETIC',
+      },
+    };
+  });
+
+  /**
+   * The demo flights of today at a kiosk's airport, for its sample boarding passes. Only flights
+   * marked DEMO are listed: live flight data never goes to a kiosk.
+   */
+  app.get<{ Params: { checkpointId: string } }>(
+    '/v1/checkpoints/:checkpointId/demo-flights',
+    async (request) => {
+      await requireDevice(options.db, request, request.params.checkpointId, 'KIOSK');
+      const cp = await loadCheckpoint(options.db, request.params.checkpointId);
+      const today = localDate(clock.now(), cp.timeZone);
+      const two = (n: number) => String(n).padStart(2, '0');
+      const date = `${String(today.year)}-${two(today.month)}-${two(today.day)}`;
+      const rows = await options.db
+        .select()
+        .from(flight)
+        .where(
+          and(
+            eq(flight.airportId, cp.airportId),
+            eq(flight.environment, 'DEMO'),
+            eq(flight.departureDate, date),
+          ),
+        )
+        .orderBy(asc(flight.stdMs));
+      return {
+        date,
+        flights: rows.flatMap((f) =>
+          f.carrier === null || f.flightNumber === null
+            ? []
+            : [
+                {
+                  carrier: f.carrier,
+                  flightNumber: f.flightNumber,
+                  departure: new Date(f.stdMs).toISOString(),
+                },
+              ],
+        ),
+      };
+    },
+  );
 
   app.get('/v1/openapi.json', () => openApiDocument(API_VERSION));
 
@@ -234,6 +347,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
   app.post<{ Params: { checkpointId: string } }>(
     '/v1/checkpoints/:checkpointId/scans',
     async (request, reply) => {
+      const kiosk = await requireDevice(options.db, request, request.params.checkpointId, 'KIOSK');
       const body = parse(ScanRequest, request.body);
       const cp = await loadCheckpoint(options.db, request.params.checkpointId);
       const intake = await readPass(options.db, cp, body.bcbp, clock.now());
@@ -261,7 +375,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
         requestHash: requestHash('POST /v1/checkpoints/:checkpointId/scans', {
           pass: intake.dedupKey,
         }),
-        actor: 'kiosk:unauthenticated',
+        actor: `kiosk:${kiosk.id}`,
         build: async ({ tx, day, atMs }) => {
           const existing = await ticketOfPass(tx, cp.id, intake.dedupKey);
           const current = existing === undefined ? undefined : day.ticket(existing.id);

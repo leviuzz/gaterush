@@ -667,8 +667,8 @@ here once, for the product. The slices follow the kickoff (section 3, M3), renum
 |---|---|---|---|
 | **S12** | Operational core: API server (Fastify), PostgreSQL with migrations, one writer per checkpoint, command and event log, current-state tables, idempotent commands, hash-chained audit, demo data. The queue runs the same `queue-core` as the simulator | 100 concurrent "call next" give no double call; the database refuses a second admission; the audit check finds tampering; the same command twice is applied once; a restart, or a second server, gives the same queue | **Done** |
 | **S13** | BCBP package: multi-leg parser, synthetic generator, validations, HMAC deduplication key; the kiosk's scan endpoint (a ticket, the same ticket again, or a reason) | Round trip and fuzzing pass; no boarding pass in the logs; Julian date to the right year across year end (ADR-043) | **Done** |
-| S14 | Web application, kiosk and ticket: scan (paste, sample, HID scanner), outcomes, digital and printable ticket, ticket page, Italian, English and Spanish, privacy notice, kiosk credentials | A rescan returns the same ticket; another airport's boarding pass is refused with a reason (both already true of the API since S13); no personal data on screen | Planned |
-| S15 | Queue life cycle and lane station: timers on a scheduler, recall, no-show, reactivation, admission, manual ticket, review; staff users and roles | The state machine is covered by tests; every transition is idempotent | Planned |
+| **S14** | Web application, kiosk and ticket: scan (paste, sample, HID scanner), outcomes, digital and printable ticket, ticket page, Italian, English and Spanish, privacy notice, kiosk credentials | A rescan returns the same ticket; another airport's boarding pass is refused with a reason (both already true of the API since S13); no personal data on screen | **Done** |
+| S15 | Queue life cycle and lane station: timers on a scheduler, recall, no-show, reactivation, admission, manual ticket, review; staff users and roles. From S14: a party's number at the kiosk, and the rule for a pass whose boarding has closed | The state machine is covered by tests; every transition is idempotent | Planned |
 | S16 | Display over SSE: called and prepare numbers, data freshness, reconnection with `Last-Event-ID` | No event lost after a disconnection; "data not up to date" within the timeout | Planned |
 | S17 | Supervisor: modes (FIFO only, paused, emergency), overrides with a reason, lanes, audit view; versioned policies and their activation | Overrides and mode changes are always in the audit; in FIFO only the order is pure FIFO | Planned |
 | S18 | Digital twin: the simulator drives the live system at accelerated time; demo page | Same scenario and seed: the live system calls passengers in the same order as the offline simulator | Planned |
@@ -737,6 +737,48 @@ Verification beyond the criteria:
   unknown flight, creates no ticket.
 - A connecting passenger gets a transfer ticket for the leg from here; a passenger already
   admitted is sent to staff.
+
+## S14: acceptance criteria and evidence
+
+Scope delivered (part of M3, approved with "vai M3"):
+- **`apps/web`**: one React application, built by esbuild and served by the API (ADR-044).
+  - The kiosk, `/kiosk/<checkpoint>`: scanner, typing or pasting; the number with a QR code and
+    a print layout, or the reason; sample passes on demo airports; the privacy notice (a draft).
+  - The passenger's page, `/t/<reference>`.
+- **`@gateflow/i18n`** (pure): Italian, English and Mexican Spanish.
+- **API**: device tokens (`device add`, `device revoke`); scans only from a kiosk of the
+  checkpoint; `devices/me` and the demo flights; the web application under a strict Content
+  Security Policy.
+- API 0.14.0, contracts 0.3.0, i18n 0.1.0, web 0.14.0. No simulated number changes.
+
+| # | Criterion (kickoff, as proposed) | Evidence |
+|---|---|---|
+| 1 | A rescan returns the same ticket | In Chromium, on the product (the API's bundle on PostgreSQL): a pass typed as a scanner types gives a number; the same pass again, from the ticket's screen, says "You already have a number" with the same number and the same QR code. |
+| 2 | Another airport's boarding pass is refused with a reason | In Chromium: a pass from MXP gives the reason in the language the passenger chose (Italian in the test). An unreadable code, a pass for another day and an unknown flight give theirs (Spanish in the test). |
+| 3 | No personal data on screen | After scans, neither the page nor the browser's storage holds the passenger's name, the booking reference or the pass. The passenger's page shows the number, the state and the checkpoint only. |
+
+Verification beyond the criteria:
+- A kiosk without the token of a kiosk of its checkpoint (none, wrong, a display's, another
+  checkpoint's) says it is not set up. The token leaves the address at once; the API refuses
+  scans without it (401), from another device (403) or after revocation.
+- The QR code is exactly the address of the ticket's page (drawn again by the test from the same
+  text).
+- Printing shows the number, the QR code, the place and the time, nothing else; one page on an
+  80 mm roll.
+- The kiosk fits 1080x1920, 1920x1080, 1280x800 and 768x1024 without scrolling. A number of seven
+  characters fits on the kiosk and on a 320 px phone.
+- The passenger's page in each language, light and dark, on a 360 px phone, has no overflow.
+  Called by staff, it says "go now" by itself within 15 seconds. Admitted, it says so, and the
+  same pass at the kiosk sends the passenger to staff.
+- No page loads anything from another server or logs an error. Pages have the Content Security
+  Policy, `nosniff`, `no-referrer` and `noindex`.
+- The request log holds no ticket reference, including the passenger's page's; the bundle serves
+  the screens with no option, with Brotli copies (72 KB of code instead of 263).
+- Screens checked by eye from the test's screenshots (kiosk portrait and landscape, refusal,
+  privacy notice, phone light and dark, called).
+
+Not verified: a physical barcode scanner and printer (lab hardware is M5). Scanners that type
+like keyboards are what the kiosk reads; the test types a pass the same way.
 
 ## Later milestones (summary)
 

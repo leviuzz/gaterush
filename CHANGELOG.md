@@ -4,10 +4,49 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Any change that alters simulated numbers
 must be listed, together with the component versions it bumps.
 
-## [Unreleased]
+## [0.14.0] - 2026-11-22: Slice S14, the kiosk and the passenger's page
+
+The first screens of the product, served by the API (ADR-044).
+
+### Simulated numbers change
+
+- None.
+
+### Added
+
+- `apps/web` 0.14.0: one React application, built by esbuild and served by `gateflow-api serve`.
+  - The kiosk, `/kiosk/<checkpoint>`:
+    - a barcode scanner, typing or pasting reads a boarding pass;
+    - the answer is a number with a QR code to its page and a print layout (one page on an
+      80 mm roll), or the reason in the passenger's language;
+    - sample boarding passes on demo airports;
+    - a privacy notice, marked as a draft;
+    - back to its welcome screen and language after 45 seconds.
+  - The passenger's page, `/t/<reference>`: the number and what to do now, updated every 15
+    seconds, in the phone's language or the one chosen, light or dark.
+  - The build writes Brotli and gzip copies and the licences of the bundled libraries.
+- `@gateflow/i18n` 0.1.0 (pure): every text in Italian, English and Mexican Spanish.
+- API 0.14.0:
+  - devices: `gateflow-api device add` and `device revoke`. The token is shown once and only
+    its SHA-256 is kept. Migration `device`.
+  - Scans need the token of a kiosk of the checkpoint (401, 403).
+  - `GET /v1/devices/me` and `GET /v1/checkpoints/{id}/demo-flights` (DEMO flights only).
+  - `serve` serves the web application (`--web <dir>`, by default the built one next to it).
+    Pages get a Content Security Policy allowing only the application's own files, and
+    `X-Robots-Tag: noindex`; every answer gets `nosniff` and `no-referrer`.
+- Contracts 0.3.0: `DeviceResponse`, `DemoFlightsResponse`, the types of the answers for
+  clients, and the device bearer scheme in the OpenAPI document.
+- CI: the job "Kiosk and ticket page in Chromium" runs the product (the API's bundle on
+  PostgreSQL 17) and keeps the screens it saw. The bundle's check also loads a kiosk page.
+
+### Changed
+
+- ADR-013: the screens are one React application served by the API, not Next.js (ADR-044).
 
 ### Fixed
 
+- The request log no longer holds the ticket reference of the passenger's page (`/t/<ref>`).
+  Fastify's own handler of missing addresses logged them whole; it is replaced.
 - CI: the time limits of tests are budgets against hangs, not speed checks. On a shared runner all
   suites run side by side, and CPU-bound property tests take five to seven times longer than
   alone: one took 62 s against a 60 s limit on Node 22 (9 s for its whole file alone). The limit

@@ -1,10 +1,12 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { dirname, isAbsolute, join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { parseArgs } from 'node:util';
 import { parseScenarioText } from '@gateflow/sim-scenarios';
 import { buildApp } from './app';
 import { connect, runMigrations } from './db/client';
+import { addDevice, revokeDevice } from './devices';
 import { randomIds } from './ids';
 import { seedDemo } from './seed';
 import { systemClock } from './time';
@@ -16,9 +18,19 @@ Usage (DATABASE_URL names the database):
   gateflow-api migrate                       Bring the database to the latest schema
   gateflow-api seed --scenario <file>        Demo data: the scenario's airport, checkpoint and
                     [--day YYYY-MM-DD]       flights of today's service day (or --day)
-  gateflow-api serve [--port 8080] [--host 127.0.0.1]
-                                             Serve the API (OpenAPI at /v1/openapi.json)
+  gateflow-api device add --checkpoint <id> --kind kiosk|display|lane --name <name>
+                                             Add a device; prints its token once
+  gateflow-api device revoke --id <id>       Revoke a device: its token stops working
+  gateflow-api serve [--port 8080] [--host 127.0.0.1] [--web <dir>]
+                                             Serve the API (OpenAPI at /v1/openapi.json) and
+                                             the web application (kiosk, ticket page)
 `;
+
+/** The built web application next to the API, when there is one. */
+function defaultWebRoot(): string | undefined {
+  const dir = fileURLToPath(new URL('../../web/dist/', import.meta.url));
+  return existsSync(`${dir}index.html`) ? dir : undefined;
+}
 
 function databaseUrl(): string {
   const url = process.env.DATABASE_URL;
@@ -66,18 +78,77 @@ async function main(argv: string[]): Promise<number> {
       );
       return 0;
     }
+    case 'device': {
+      const [action, ...args] = rest;
+      const { values } = parseArgs({
+        args,
+        options: {
+          checkpoint: { type: 'string' },
+          kind: { type: 'string' },
+          name: { type: 'string' },
+          id: { type: 'string' },
+        },
+        strict: true,
+      });
+      const database = connect(databaseUrl(), { maxConnections: 1 });
+      try {
+        if (action === 'add') {
+          const kind = values.kind?.toUpperCase();
+          if (values.checkpoint === undefined || values.name === undefined) {
+            throw new Error('--checkpoint and --name are required');
+          }
+          if (kind !== 'KIOSK' && kind !== 'DISPLAY' && kind !== 'LANE') {
+            throw new Error('--kind is kiosk, display or lane');
+          }
+          const added = await addDevice(database.db, randomIds(systemClock), {
+            checkpointId: values.checkpoint,
+            kind,
+            name: values.name,
+          });
+          process.stdout.write(
+            [
+              `added ${kind.toLowerCase()} ${added.device.id} (${added.device.name})`,
+              `token ${added.token}`,
+              ...(kind === 'KIOSK'
+                ? [`open the kiosk at /kiosk/${values.checkpoint}#device=${added.token}`]
+                : []),
+              'The token is shown once: keep it on the device only.',
+              '',
+            ].join('\n'),
+          );
+          return 0;
+        }
+        if (action === 'revoke') {
+          if (values.id === undefined) throw new Error('--id is required');
+          const revoked = await revokeDevice(database.db, values.id);
+          process.stdout.write(
+            revoked ? `revoked ${values.id}\n` : `no active device ${values.id}\n`,
+          );
+          return revoked ? 0 : 1;
+        }
+        throw new Error('device add or device revoke');
+      } finally {
+        await database.close();
+      }
+    }
     case 'serve': {
       const { values } = parseArgs({
         args: rest,
         options: {
           port: { type: 'string', default: '8080' },
           host: { type: 'string', default: '127.0.0.1' },
+          web: { type: 'string' },
         },
         strict: true,
       });
       const database = connect(databaseUrl());
       await runMigrations(database.db);
-      const app = buildApp({ db: database.db, logger: true });
+      const webRoot = values.web ?? defaultWebRoot();
+      const app = buildApp({
+        db: database.db,
+        logger: true,
+        ...(webRoot === undefined ? {} : { webRoot }),
+      });
       const stop = () => {
         void app.close().then(() => database.close());
       };

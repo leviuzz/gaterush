@@ -298,3 +298,28 @@ export const scan = pgTable(
     ),
   ],
 );
+
+/**
+ * A device of a checkpoint: a kiosk, a display or a lane station. It proves itself with a token
+ * given once when it is added; only the token's SHA-256 is kept, and a device can be revoked.
+ */
+export const device = pgTable(
+  'device',
+  {
+    id: uuid('id').primaryKey(),
+    checkpointId: uuid('checkpoint_id')
+      .notNull()
+      .references(() => checkpoint.id),
+    /** `KIOSK`, `DISPLAY` or `LANE`. */
+    kind: text('kind').notNull(),
+    name: text('name').notNull(),
+    tokenHash: text('token_hash').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (t) => [
+    unique('device_token_hash').on(t.tokenHash),
+    check('device_kind', sql`${t.kind} IN ('KIOSK', 'DISPLAY', 'LANE')`),
+    check('device_token_hash_hex', sql`${t.tokenHash} ~ '^[0-9a-f]{64}$'`),
+  ],
+);

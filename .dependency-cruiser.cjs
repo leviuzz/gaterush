@@ -63,6 +63,14 @@ module.exports = {
       to: { path: '^apps/' },
     },
     {
+      name: 'web-takes-only-types-of-contracts',
+      severity: 'error',
+      comment:
+        'The browser gets only the types of the API contracts: Zod stays on the server (ADR-044).',
+      from: { path: '^apps/web/src/' },
+      to: { path: '^packages/contracts/', dependencyTypesNot: ['type-only'] },
+    },
+    {
       name: 'src-does-not-import-tests',
       severity: 'error',
       from: { path: '/src/' },
@@ -88,6 +96,7 @@ module.exports = {
     ]),
     onlyAllowed('operations', ['domain', 'priority-engine', 'queue-core']),
     onlyAllowed('bcbp', ['sim-kernel']),
+    onlyAllowed('i18n', []),
     onlyAllowed('contracts', ['domain'], ['zod']),
     onlyAllowed('sim-trace', [
       'domain',

@@ -6,7 +6,7 @@ import { z } from 'zod';
  * ticket is a number, a state and a flight, never a name.
  */
 
-export const CONTRACTS_VERSION = '0.2.0';
+export const CONTRACTS_VERSION = '0.3.0';
 
 export const Segment = z.enum(['DEPARTING', 'TRANSFER']);
 
@@ -133,9 +133,46 @@ export const AuditVerifyResponse = z.object({
 
 export const HealthResponse = z.object({ status: z.literal('ok'), version: z.string() });
 
+export const DeviceKind = z.enum(['KIOSK', 'DISPLAY', 'LANE']);
+
+/**
+ * A device's view of itself (S14): where a kiosk stands, to show it. Display names are labels of
+ * places and devices, never of people.
+ */
+export const DeviceResponse = z.object({
+  device: z.object({ id: z.uuid(), kind: DeviceKind, label: z.string() }),
+  checkpoint: z.object({ id: z.uuid(), label: z.string() }),
+  airport: z.object({
+    label: z.string(),
+    /** IATA code of the airport, `ZZZ` until it is configured. */
+    iata: z.string().length(3),
+    timeZone: z.string(),
+    /** A synthetic airport of demos: its kiosks offer sample boarding passes. */
+    synthetic: z.boolean(),
+  }),
+});
+
+/** Today's demo flights at a kiosk's airport, for sample boarding passes; never live flights. */
+export const DemoFlightsResponse = z.object({
+  /** The day at the airport. */
+  date: z.iso.date(),
+  flights: z.array(z.object({ carrier: z.string(), flightNumber: z.string(), departure: Instant })),
+});
+
 export const ErrorResponse = z.object({
   error: z.object({ code: z.string(), message: z.string() }),
 });
+
+/** The types of the answers, for clients that do not validate them (the web application). */
+export type TicketState = z.infer<typeof TicketState>;
+export type ScanOutcome = z.infer<typeof ScanOutcome>;
+export type ScanReason = z.infer<typeof ScanReason>;
+export type ScanResponse = z.infer<typeof ScanResponse>;
+export type PublicTicketResponse = z.infer<typeof PublicTicketResponse>;
+export type DeviceKind = z.infer<typeof DeviceKind>;
+export type DeviceResponse = z.infer<typeof DeviceResponse>;
+export type DemoFlightsResponse = z.infer<typeof DemoFlightsResponse>;
+export type ErrorResponse = z.infer<typeof ErrorResponse>;
 
 /** An endpoint of the API, for the OpenAPI document. */
 export interface Route {
@@ -144,6 +181,8 @@ export interface Route {
   readonly summary: string;
   /** Commands take an `Idempotency-Key`: the same key gives the same answer, applied once. */
   readonly command: boolean;
+  /** Only a registered device may call it, with its token (`Authorization: Bearer`). */
+  readonly device?: boolean;
   readonly body?: z.ZodType;
   readonly responses: Readonly<
     Record<string, { readonly description: string; readonly schema: z.ZodType }>
@@ -153,6 +192,11 @@ export interface Route {
 const errors = {
   '400': { description: 'The request is invalid', schema: ErrorResponse },
   '404': { description: 'Not found', schema: ErrorResponse },
+} as const;
+
+const deviceErrors = {
+  '401': { description: 'No device token, or one that is not valid', schema: ErrorResponse },
+  '403': { description: 'Not a device of this kind at this checkpoint', schema: ErrorResponse },
 } as const;
 
 export const ROUTES: readonly Route[] = [
@@ -180,11 +224,36 @@ export const ROUTES: readonly Route[] = [
     path: '/v1/checkpoints/{checkpointId}/scans',
     summary: 'A kiosk scans a boarding pass: a ticket, the same ticket again, or a reason',
     command: true,
+    device: true,
     body: ScanRequest,
     responses: {
       '201': { description: 'A ticket was issued', schema: ScanResponse },
       '200': { description: 'The ticket found again, or why there is none', schema: ScanResponse },
       ...errors,
+      ...deviceErrors,
+    },
+  },
+  {
+    method: 'get',
+    path: '/v1/devices/me',
+    summary: 'The device that calls: its kind, its checkpoint and its airport',
+    command: false,
+    device: true,
+    responses: {
+      '200': { description: 'The device', schema: DeviceResponse },
+      '401': deviceErrors['401'],
+    },
+  },
+  {
+    method: 'get',
+    path: '/v1/checkpoints/{checkpointId}/demo-flights',
+    summary: "Today's demo flights, for a kiosk's sample boarding passes",
+    command: false,
+    device: true,
+    responses: {
+      '200': { description: 'The demo flights', schema: DemoFlightsResponse },
+      ...errors,
+      ...deviceErrors,
     },
   },
   {
@@ -264,6 +333,7 @@ export function openApiDocument(version: string): Record<string, unknown> {
         ]),
       ),
     };
+    if (route.device === true) operation.security = [{ device: [] }];
     if (route.body !== undefined) {
       operation.requestBody = {
         required: true,
@@ -283,5 +353,15 @@ export function openApiDocument(version: string): Record<string, unknown> {
         'The operational checkpoint: tickets, calls and admissions, one writer per checkpoint, idempotent commands and a hash-chained log.',
     },
     paths,
+    components: {
+      securitySchemes: {
+        device: {
+          type: 'http',
+          scheme: 'bearer',
+          description:
+            'The token of a registered device (kiosk, display, lane station), given once by `gateflow-api device add`; only its hash is stored.',
+        },
+      },
+    },
   };
 }

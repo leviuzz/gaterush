@@ -193,7 +193,8 @@ founder on 2026-11-21 together with all of its recommendations.
 
 ## ADR-013: Architecture direction for the operational product
 
-- **Status:** Accepted, not yet implemented (target: milestones M2 to M5).
+- **Status:** Accepted, being implemented in M3 (S12 on). The user interfaces were revised by
+  ADR-044: one React application served by the API, not Next.js.
 - **Decision:** As recommended in the kickoff proposal:
   - a modular monolith;
   - Fastify + Zod/OpenAPI API;
@@ -1515,3 +1516,105 @@ founder on 2026-11-21 together with all of its recommendations.
   - A pass gives a ticket only for a flight in GateFlow's flight data: the feed adapters of the
     pilot decide what that covers.
   - Groups and families scan one pass each until the kiosk offers grouping (S14).
+
+## ADR-044: The passengers' screens: one web application served by the API, kiosks with device tokens
+
+- **Status:** Accepted (2026-11-22). Slice S14. API 0.14.0, contracts 0.3.0, i18n 0.1.0, web
+  0.14.0. Revises ADR-013 for the user interfaces. No simulated number changes.
+- **Context:**
+  - The kiosk and the passenger's page are the first screens airports and passengers see.
+    - They must work on a kiosk PC with a barcode scanner and on any phone, in Italian, English
+      and Mexican Spanish.
+    - They must keep nothing of a boarding pass.
+  - ADR-013 planned one Next.js application for every interface. The screens of M3 need no
+    server rendering and no search engine; each is driven by the API. The product must install
+    at an airport as one service (Docker Compose, edge-capable).
+  - Until S13 the API knew nobody: anyone could send boarding passes as a kiosk.
+- **Decision:**
+  - **One React application, `apps/web`, built by esbuild into static files and served by the
+    API** (`gateflow-api serve`, `@fastify/static`).
+    - Pages: `/kiosk/<checkpoint>` and `/t/<ticket reference>`. Displays, lane stations and
+      the supervisor join it in S15 to S17.
+    - One process and one origin: no CORS, no cookies, one Content Security Policy.
+    - The build writes Brotli and gzip copies (the code is 263 KB, 72 KB with Brotli) and the
+      licences of the libraries in the bundle (React, qrcode-generator: MIT). No source maps in
+      the production build.
+  - **Security headers** on every answer: `nosniff` and `no-referrer`.
+    - Pages: a policy that allows the application's own files only (no inline script or style,
+      no other origin, no frame) and `X-Robots-Tag: noindex`, because a ticket's address is its
+      key.
+    - The request log removes the reference from `/t/...` as from `/v1/tickets/...`. Missing
+      addresses are no longer logged whole (Fastify's own handler did).
+  - **Device tokens:**
+    - `gateflow-api device add --checkpoint <id> --kind kiosk|display|lane --name <name>`
+      prints a random 256-bit token once. The database keeps only its SHA-256.
+      `device revoke --id <id>` stops it at once.
+    - Scans, the demo flights and `GET /v1/devices/me` need `Authorization: Bearer <token>` of
+      a kiosk of that checkpoint (401 without a valid token, 403 for another device).
+    - The kiosk gets its token once in the address's fragment (`#device=`), which never reaches
+      a server. It keeps it in the browser's storage and takes it off the address at once.
+  - **The kiosk:**
+    - A keyboard-wedge scanner types into a field that keeps the focus: keystrokes elsewhere
+      are sent to it, and buttons never take it. Staff can type or paste a code.
+    - A scan gives either the number, with a QR code to its page and a print layout (one page
+      on an 80 mm roll), or the reason, with "ask a member of staff". All in the passenger's
+      language.
+    - The kiosk returns to its welcome screen and its own language after 45 seconds (20 for a
+      refusal).
+    - A synthetic airport offers sample boarding passes for today's demo flights
+      (`GET /v1/checkpoints/{id}/demo-flights`, DEMO flights only).
+  - **The passenger's page:**
+    - It shows the number and what to do now, with no personal data.
+    - It asks again every 15 seconds while the ticket is open, and at once when the phone shows
+      the page again.
+    - The language chosen stays on the phone.
+  - **Languages:** `@gateflow/i18n` (pure) holds every text in the three languages. A test
+    checks that none is missing, that placeholders match, and that no text promises priority.
+  - **Privacy notice:** a short line on the kiosk and a full notice. It is marked as a draft, to
+    be completed with each airport (controller, retention, rights).
+- **Alternatives considered:**
+  - **Next.js (ADR-013).** Server rendering is not needed. It would add a second server (or a
+    Node runtime behind the API) for static screens, and a heavier build and runtime on an
+    airport's network. It stays possible for the supervisor if one day it needs it.
+  - **One application per screen.** More builds and origins for the same components and
+    languages.
+  - **Cookie sessions for kiosks.** They need protection against cross-site requests, for
+    devices that have no users. A revocable token per device is simpler.
+  - **The token in the query string.** It would reach the server's logs and the browser's
+    history.
+- **Evidence:**
+  - **In Chromium, on the product itself** (the API's bundle on PostgreSQL, migrated, seeded and
+    serving the built application):
+    - a kiosk without the token of a kiosk of its checkpoint says it is not set up;
+    - the token leaves the address at once;
+    - a sample pass gives a number whose QR code is exactly the address of its page;
+    - a pass typed as a scanner types gives a number, and again the same number;
+    - nothing of the pass stays in the page or in the browser's storage;
+    - refusals are in the passenger's language (another airport, unreadable, another day,
+      unknown flight);
+    - the privacy notice is marked as a draft;
+    - a print is the number and its QR code, one page on an 80 mm roll;
+    - the kiosk fits portrait and landscape screens without scrolling, and a number of seven
+      characters fits;
+    - the passenger's page works in the three languages, light and dark, on a 320 px phone;
+    - called by staff, the page says "go now" by itself; admitted, it says so, and the same
+      pass at the kiosk sends the passenger to staff;
+    - no page loads anything from another server or logs an error.
+  - **API:**
+    - scans need a kiosk of the checkpoint (401, 403, revoked);
+    - `devices/me` and the demo flights match the contracts;
+    - pages have the policy and the headers, compressed copies are served, and a missing file
+      is a 404;
+    - the log holds no ticket reference.
+  - **Contracts:** the device routes carry the bearer scheme, and no answer has a field named
+    like personal data.
+- **Consequences:**
+  - Staff actions (calls, admissions, the queue) stay without sign-in until S15 (staff users and
+    roles).
+  - The kiosk prints through the browser. Silent printing is a setting of the kiosk's browser
+    (Chrome's `--kiosk-printing`).
+  - A pass for a flight whose boarding has closed still gives a ticket. Whether to send such a
+    passenger to staff instead is a rule to agree with each airport (S15).
+  - One pass gives one ticket: a family scans each pass and gets a number each. Grouping at the
+    kiosk (one number for a party) waits for the lane station of S15, where staff can admit a
+    party together.

@@ -1,0 +1,722 @@
+/*
+ * GateFlow's screens for passengers: the kiosk (portrait or landscape, read from a step away, used
+ * by touch) and the ticket page (a phone in one hand). System fonts only: the page loads nothing
+ * from anywhere else.
+ */
+
+:root {
+  --bg: #f2f4f7;
+  --surface: #ffffff;
+  --ink: #0d1b2a;
+  --ink-2: #33465a;
+  --muted: #5a6778;
+  --line: #d3dae3;
+  --accent: #0b57c4;
+  --accent-strong: #08449b;
+  --accent-ink: #ffffff;
+  --accent-soft: #e6eefb;
+  --go: #0b57c4;
+  --go-soft: #e6eefb;
+  --warn: #8a5000;
+  --warn-soft: #fdf0db;
+  --stop: #a0261c;
+  --stop-soft: #fbe8e6;
+  --ok: #146b39;
+  --ok-soft: #e3f3e9;
+  --shadow: 0 1px 2px rgb(13 27 42 / 6%), 0 10px 30px rgb(13 27 42 / 7%);
+  --radius: 22px;
+  color-scheme: light;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #0b1118;
+    --surface: #141c26;
+    --ink: #e9eef4;
+    --ink-2: #c4cfdb;
+    --muted: #97a4b3;
+    --line: #283444;
+    --accent: #6aa8ff;
+    --accent-strong: #8dbcff;
+    --accent-ink: #06121f;
+    --accent-soft: #15283f;
+    --go: #6aa8ff;
+    --go-soft: #15283f;
+    --warn: #f2b45a;
+    --warn-soft: #33240e;
+    --stop: #ff8f84;
+    --stop-soft: #3a1714;
+    --ok: #6fd39a;
+    --ok-soft: #12301f;
+    --shadow: 0 1px 2px rgb(0 0 0 / 40%);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #0b1118;
+  --surface: #141c26;
+  --ink: #e9eef4;
+  --ink-2: #c4cfdb;
+  --muted: #97a4b3;
+  --line: #283444;
+  --accent: #6aa8ff;
+  --accent-strong: #8dbcff;
+  --accent-ink: #06121f;
+  --accent-soft: #15283f;
+  --go: #6aa8ff;
+  --go-soft: #15283f;
+  --warn: #f2b45a;
+  --warn-soft: #33240e;
+  --stop: #ff8f84;
+  --stop-soft: #3a1714;
+  --ok: #6fd39a;
+  --ok-soft: #12301f;
+  --shadow: 0 1px 2px rgb(0 0 0 / 40%);
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+body {
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+h1,
+h2,
+p,
+figure {
+  margin: 0;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Bars, cards and buttons, shared by every page. */
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75em 1.25em;
+  padding: 0.9em clamp(1rem, 3vw, 2rem);
+}
+
+.place {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25em 0.9em;
+  min-width: 0;
+}
+
+.brand {
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--accent-strong);
+}
+
+.where {
+  color: var(--ink-2);
+}
+
+.languages {
+  display: flex;
+  gap: 0.4em;
+  flex-wrap: wrap;
+}
+
+.language {
+  min-height: 2.75rem;
+  padding: 0.35em 0.9em;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.language[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 650;
+}
+
+.card {
+  width: min(100%, 46rem);
+  padding: clamp(1.25rem, 4.5vmin, 3rem);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.message-card {
+  display: grid;
+  justify-items: center;
+  gap: 1em;
+}
+
+.message {
+  font-size: 1.2em;
+  color: var(--ink);
+  max-width: 34em;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.eyebrow {
+  font-size: 1em;
+  font-weight: 650;
+  color: var(--ink-2);
+}
+
+.number {
+  margin: 0.08em 0 0.12em;
+  font-size: clamp(4.5rem, 17vmin, 11rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  /* A number is read whole: it never breaks across lines. */
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+/* Past 999 tickets in a day a number has five characters or more: it gets smaller to fit. */
+.number[data-length='5'] {
+  font-size: clamp(4rem, 14vmin, 9rem);
+}
+
+.number[data-length='6'],
+.number[data-length='7'],
+.number[data-length='8'] {
+  font-size: clamp(3.5rem, 11vmin, 7.5rem);
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3.2rem;
+  padding: 0.55em 1.4em;
+  border: 2px solid transparent;
+  border-radius: 14px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.button.primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.button.primary:hover {
+  background: var(--accent-strong);
+}
+
+.button.secondary {
+  border-color: var(--accent);
+  background: var(--surface);
+  color: var(--accent-strong);
+}
+
+.link-button,
+.link {
+  padding: 0.3em 0.2em;
+  border: 0;
+  background: none;
+  color: var(--accent-strong);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  cursor: pointer;
+}
+
+.spinner {
+  width: 3rem;
+  height: 3rem;
+  border: 5px solid var(--accent-soft);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 3s;
+  }
+}
+
+/* The kiosk: everything larger, readable from a step away. */
+
+.kiosk {
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  font-size: clamp(1.05rem, 0.75rem + 1.15vmin, 1.85rem);
+}
+
+.kiosk .language,
+.kiosk .button {
+  min-height: max(3.2rem, 2.6em);
+}
+
+.kiosk-main {
+  display: grid;
+  place-items: center;
+  padding: clamp(0.5rem, 1.5vmin, 1.5rem) clamp(1rem, 3vw, 2rem);
+}
+
+/* The kiosk's cards grow with the screen, as its text does. */
+.kiosk .card {
+  width: min(100%, 36em);
+}
+
+.welcome {
+  display: grid;
+  justify-items: center;
+  gap: 0.8em;
+}
+
+.welcome h1 {
+  font-size: 1.9em;
+  line-height: 1.15;
+  font-weight: 800;
+}
+
+.lead {
+  font-size: 1.15em;
+  color: var(--ink-2);
+  max-width: 28em;
+}
+
+.illustration {
+  width: min(60vw, 16em);
+  height: auto;
+}
+
+.ill-pass {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.ill-line {
+  fill: var(--accent);
+  opacity: 0.45;
+}
+
+.ill-code rect,
+.ill-code-solid {
+  fill: var(--ink);
+}
+
+.ill-phone {
+  fill: var(--surface);
+  stroke: var(--ink-2);
+  stroke-width: 2.5;
+}
+
+.ill-beam {
+  stroke: var(--stop);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.ticket {
+  display: grid;
+  justify-items: center;
+  gap: 0.5em;
+}
+
+.ticket-text {
+  display: grid;
+  justify-items: center;
+  gap: 0.5em;
+}
+
+/* On a landscape screen the code stands beside the number: the whole ticket without scrolling. */
+@media (orientation: landscape) and (min-width: 900px) {
+  .kiosk .ticket {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'text qr'
+      'actions qr';
+    align-items: center;
+    column-gap: 2.5em;
+    width: min(100%, 52em);
+    text-align: left;
+  }
+
+  .kiosk .ticket .number {
+    font-size: clamp(4.5rem, 15vmin, 10rem);
+  }
+
+  .kiosk .ticket figcaption {
+    max-width: 13em;
+  }
+
+  .kiosk .ticket-text {
+    grid-area: text;
+    justify-self: stretch;
+    justify-items: start;
+  }
+
+  .kiosk .ticket .qr-block {
+    grid-area: qr;
+  }
+
+  .kiosk .ticket .actions {
+    grid-area: actions;
+    justify-self: start;
+  }
+}
+
+.wait {
+  font-size: 1.1em;
+  color: var(--ink-2);
+  max-width: 30em;
+}
+
+.qr-block {
+  display: grid;
+  justify-items: center;
+  gap: 0.45em;
+  margin-top: 0.3em;
+}
+
+.qr {
+  width: clamp(9rem, 24vmin, 15rem);
+  height: auto;
+  border-radius: 8px;
+}
+
+.qr-block figcaption {
+  font-size: 0.9em;
+  color: var(--muted);
+  max-width: 20em;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75em;
+  margin-top: 0.5em;
+}
+
+.refused {
+  border-top: 8px solid var(--warn);
+}
+
+.notice-icon {
+  width: 3.5em;
+  height: 3.5em;
+  fill: var(--warn-soft);
+  stroke: var(--warn);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+}
+
+.scan-form {
+  display: grid;
+  gap: 0.35em;
+  width: min(100% - 2rem, 46rem);
+  margin: 0 auto 0.6em;
+  font-size: 0.85em;
+}
+
+.scan-form label {
+  color: var(--muted);
+}
+
+/* Past the welcome screen the field stays for the scanner, its label for screen readers only. */
+.kiosk:not([data-screen='welcome']) .scan-form label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.scan-row {
+  display: flex;
+  gap: 0.5em;
+}
+
+.scan-row input {
+  flex: 1;
+  min-width: 0;
+  min-height: 3rem;
+  padding: 0.4em 0.75em;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 0.95em;
+}
+
+.kiosk-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5em 1.5em;
+  padding: 0.75em clamp(1rem, 3vw, 2rem) 1em;
+  border-top: 1px solid var(--line);
+  font-size: 0.8em;
+  color: var(--muted);
+}
+
+.kiosk-foot p {
+  flex: 1 1 24em;
+}
+
+.foot-actions {
+  display: flex;
+  align-items: center;
+  gap: 1em;
+}
+
+.demo-badge {
+  padding: 0.25em 0.75em;
+  border-radius: 999px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.privacy {
+  width: min(100% - 2rem, 42rem);
+  padding: clamp(1.25rem, 4vmin, 2.5rem);
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+.privacy::backdrop {
+  background: rgb(13 27 42 / 55%);
+}
+
+.privacy h2 {
+  margin-bottom: 0.6em;
+  font-size: 1.35em;
+}
+
+.privacy p {
+  margin-bottom: 0.9em;
+}
+
+.privacy .draft {
+  padding: 0.5em 0.8em;
+  border-radius: 10px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 0.9em;
+}
+
+/* The ticket page: a phone in one hand. */
+
+.ticket-page,
+.home {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 100vh;
+  min-height: 100dvh;
+  font-size: 1.05rem;
+}
+
+.page-main {
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  padding: clamp(0.5rem, 3vh, 2.5rem) 1rem 2rem;
+}
+
+.home .page-main {
+  align-content: center;
+}
+
+.brand-title {
+  font-size: 2rem;
+  color: var(--accent-strong);
+}
+
+.ticket-status {
+  display: grid;
+  justify-items: center;
+  gap: 0.75em;
+}
+
+.ticket-page .number {
+  font-size: clamp(3.5rem, 23vw, 8rem);
+}
+
+.ticket-page .number[data-length='5'] {
+  font-size: clamp(3rem, 18vw, 6.5rem);
+}
+
+.ticket-page .number[data-length='6'],
+.ticket-page .number[data-length='7'],
+.ticket-page .number[data-length='8'] {
+  font-size: clamp(2.5rem, 14vw, 5.5rem);
+}
+
+.state {
+  width: 100%;
+  padding: 0.85em 1em;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-size: 1.15em;
+  font-weight: 600;
+}
+
+.ticket-page[data-state='CALLED'] .state,
+.ticket-page[data-state='RECALLED'] .state {
+  background: var(--go);
+  color: var(--accent-ink);
+  font-size: 1.3em;
+}
+
+.ticket-page[data-state='NO_SHOW'] .state {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.ticket-page[data-state='ADMITTED'] .state {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.ticket-page[data-state='EXPIRED'] .state {
+  background: var(--stop-soft);
+  color: var(--stop);
+}
+
+.updated {
+  font-size: 0.9em;
+  color: var(--muted);
+}
+
+/* Printing a ticket: the number, the QR code, where and when; nothing else. */
+
+.print-only {
+  display: none;
+}
+
+@media print {
+  @page {
+    margin: 6mm;
+  }
+
+  :root {
+    --ink: #000;
+    --ink-2: #000;
+    --muted: #000;
+  }
+
+  html,
+  body {
+    background: #fff;
+  }
+
+  .bar,
+  .scan-form,
+  .kiosk-foot,
+  .actions,
+  .privacy {
+    display: none !important;
+  }
+
+  .kiosk {
+    display: block;
+    min-height: 0;
+    font-size: 12pt;
+  }
+
+  .kiosk-main {
+    display: block;
+    padding: 0;
+  }
+
+  .card,
+  .kiosk .ticket {
+    display: block;
+    width: auto;
+    padding: 0;
+    box-shadow: none;
+    text-align: center;
+  }
+
+  .kiosk .ticket-text {
+    justify-items: center;
+  }
+
+  .print-only {
+    display: block;
+  }
+
+  .number {
+    font-size: 54pt;
+  }
+
+  .qr {
+    width: 38mm;
+  }
+}

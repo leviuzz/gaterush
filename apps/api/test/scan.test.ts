@@ -4,12 +4,13 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { asc } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
-import { ScanResponse } from '@gateflow/contracts';
+import { DemoFlightsResponse, DeviceResponse, ScanResponse } from '@gateflow/contracts';
 import { encodeBoardingPass } from '@gateflow/bcbp';
 import type { LegInput } from '@gateflow/bcbp';
 import { parseScenarioText } from '@gateflow/sim-scenarios';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app';
+import { addDevice, revokeDevice } from '../src/devices';
 import { flight, queueToken, scan } from '../src/db/schema';
 import { randomIds } from '../src/ids';
 import { designatorOf, iataOf, seedDemo } from '../src/seed';
@@ -35,6 +36,7 @@ let checkpointId: string;
 let app: FastifyInstance;
 const lines: string[] = [];
 let flights: (typeof flight.$inferSelect)[];
+let kioskToken: string;
 
 beforeAll(async () => {
   database = await freshDatabase({ maxConnections: 12 });
@@ -46,6 +48,9 @@ beforeAll(async () => {
     })
   ).checkpointId;
   flights = await database.db.select().from(flight).orderBy(asc(flight.stdMs));
+  kioskToken = (
+    await addDevice(database.db, randomIds(clock), { checkpointId, kind: 'KIOSK', name: 'Kiosk 1' })
+  ).token;
   app = buildApp({ db: database.db, clock, logger: { stream: { write: (l) => lines.push(l) } } });
 });
 
@@ -95,13 +100,61 @@ async function scanPass(bcbp: string, key?: string) {
     method: 'POST',
     url: `/v1/checkpoints/${checkpointId}/scans`,
     payload: { bcbp },
-    headers: key === undefined ? {} : { 'idempotency-key': key },
+    headers: {
+      authorization: `Bearer ${kioskToken}`,
+      ...(key === undefined ? {} : { 'idempotency-key': key }),
+    },
   });
   expect([200, 201], response.body).toContain(response.statusCode);
   return { status: response.statusCode, body: ScanResponse.parse(response.json()) };
 }
 
 describe('scanning boarding passes (S13)', () => {
+  it('takes scans only from a kiosk of this checkpoint (S14)', async () => {
+    const send = (authorization?: string) =>
+      app.inject({
+        method: 'POST',
+        url: `/v1/checkpoints/${checkpointId}/scans`,
+        payload: { bcbp: 'M1X' },
+        headers: authorization === undefined ? {} : { authorization },
+      });
+    expect((await send()).statusCode).toBe(401);
+    expect((await send('Bearer not-a-token')).statusCode).toBe(401);
+    const display = await addDevice(database.db, randomIds(clock), {
+      checkpointId,
+      kind: 'DISPLAY',
+      name: 'Display 1',
+    });
+    expect((await send(`Bearer ${display.token}`)).statusCode).toBe(403);
+    const old = await addDevice(database.db, randomIds(clock), {
+      checkpointId,
+      kind: 'KIOSK',
+      name: 'Old kiosk',
+    });
+    expect((await send(`Bearer ${old.token}`)).statusCode).toBe(200);
+    expect(await revokeDevice(database.db, old.device.id)).toBe(true);
+    expect((await send(`Bearer ${old.token}`)).statusCode).toBe(401);
+    // A kiosk learns where it is, and lists only the demo flights of today.
+    const me = await app.inject({
+      url: '/v1/devices/me',
+      headers: { authorization: `Bearer ${kioskToken}` },
+    });
+    // The answers are those of the contracts.
+    expect(DeviceResponse.parse(me.json())).toMatchObject({
+      device: { kind: 'KIOSK', label: 'Kiosk 1' },
+      checkpoint: { id: checkpointId },
+      airport: { iata: 'VCE', timeZone: 'Europe/Rome', synthetic: true },
+    });
+    const demo = await app.inject({
+      url: `/v1/checkpoints/${checkpointId}/demo-flights`,
+      headers: { authorization: `Bearer ${kioskToken}` },
+    });
+    const listed = DemoFlightsResponse.parse(demo.json());
+    expect(listed.date).toBe(DAY);
+    expect(listed.flights.length).toBe(flights.length);
+    expect(listed.flights.every((f) => f.carrier === 'ZZ')).toBe(true);
+  });
+
   it('gives the library flights the designators of their boarding passes', () => {
     expect(designatorOf('F001')).toEqual({ carrier: 'ZZ', flightNumber: '1' });
     expect(designatorOf('AZ1462')).toEqual({ carrier: 'AZ', flightNumber: '1462' });

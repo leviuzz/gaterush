@@ -26,10 +26,12 @@ apps/
   api/              gateflow-api: the operational checkpoint behind HTTP (Fastify) on PostgreSQL (Drizzle)
   sim-cli/          gateflow-sim: experiments and sweeps on worker threads; JSON, Markdown, HTML (bundled)
   studio/           GateFlow Simulator Studio: the simulator in one offline HTML page (React, Web Workers)
+  web/              the product's screens, served by the API: kiosk and passenger's ticket page (React)
 packages/
   bcbp/             IATA boarding passes: a parser that never throws or returns the name, encoder, generator (pure)
   domain/           shared domain types and units (integer milliseconds, segments, risk classes)
   contracts/        the API's request, answer and OpenAPI schemas (Zod, pure)
+  i18n/             every text of the passengers' screens in Italian, English and Mexican Spanish (pure)
   operations/       one service day of a live checkpoint on the simulator's queue, rebuilt from its log (pure)
   priority-engine/  assessment and selection of the next call (pure)
   queue-core/       queue state machine: tickets, prepare window, calls, no-shows; policies and lane modes (pure)
@@ -65,7 +67,9 @@ flowchart LR
   operations["operations"]
   contracts["contracts"]
   bcbp["bcbp"]
+  i18n["i18n"]
   api["apps/api"]
+  web["apps/web"]
   cli["apps/sim-cli"]
   studio["apps/studio"]
   engine --> domain
@@ -110,13 +114,16 @@ flowchart LR
   api --> bcbp
   api --> metrics
   api --> scenarios
+  web --> i18n
+  web --> bcbp
+  web -.->|"types only"| contracts
 ```
 
 Enforced automatically, on three levels:
 
 | Level | Tool | Rule |
 |---|---|---|
-| Imports | dependency-cruiser (`pnpm boundaries`) | Packages may import only the dependencies shown above. Allowed npm modules: `zod` and `yaml` in `sim-scenarios`, `zod` in `contracts`, nothing elsewhere. No Node.js built-ins in `packages/*/src`: the database, HTTP and the clock live in `apps/api`. No cycles. No unresolvable imports. |
+| Imports | dependency-cruiser (`pnpm boundaries`) | Packages may import only the dependencies shown above. Allowed npm modules: `zod` and `yaml` in `sim-scenarios`, `zod` in `contracts`, nothing elsewhere. No Node.js built-ins in `packages/*/src`: the database, HTTP and the clock live in `apps/api`. No cycles. No unresolvable imports. The web application takes only the types of the contracts, so Zod never reaches the browser. |
 | Environment | `tsconfig.src.json` | Package sources compile with `lib: ES2023` and no Node or DOM types, so they cannot use `process`, `console`, timers or browser APIs. |
 | Determinism | ESLint | `packages/*/src` may not use `Math.random`, `Date`, `**`, implementation-approximated `Math` functions, `localeCompare` or `Intl`. |
 
@@ -599,7 +606,7 @@ PostgreSQL.
 
 ```mermaid
 flowchart LR
-  client["Staff, kiosk, display (S14 to S17)"] -->|"REST + Idempotency-Key"| routes["Fastify routes<br/>(contracts: Zod)"]
+  client["Kiosk (S14), staff, display (S15 to S17)"] -->|"REST + Idempotency-Key"| routes["Fastify routes<br/>(contracts: Zod)"]
   routes --> runtime["Runtime: one writer per checkpoint"]
   runtime -->|"pg_advisory_xact_lock"| db[("PostgreSQL")]
   runtime --> day["CheckpointDay (operations)<br/>= CheckpointQueue of queue-core"]
@@ -629,9 +636,12 @@ flowchart LR
   - Boarding passes (ADR-043): `scan` (append-only, no personal data), `dedup_secret` (one
     random secret per airport and flight date), `queue_token.dedup_key` (an HMAC, unique among
     a checkpoint's active tickets), and the flight's carrier, number and departure date.
+  - Devices (ADR-044): `device` (kiosk, display or lane station of a checkpoint, the SHA-256 of
+    its token, revocation).
 - **Endpoints** (OpenAPI at `/v1/openapi.json`):
   - `POST /v1/checkpoints/{id}/scans`: a boarding pass gives a ticket, the same ticket again, or
-    a reason (ADR-043);
+    a reason (ADR-043). Only a kiosk of the checkpoint may send one (ADR-044);
+  - `GET /v1/devices/me` and `GET /v1/checkpoints/{id}/demo-flights`, for kiosks;
   - `POST /v1/checkpoints/{id}/tickets`, `/calls` and `/admissions`;
   - `GET /v1/checkpoints/{id}/queue` and `/audit/verify`;
   - `GET /v1/tickets/{ref}` (number, state, checkpoint and day only);
@@ -639,15 +649,54 @@ flowchart LR
 - **Privacy.** No field holds personal data; the request log keeps no client address and no
   ticket reference.
 - **Commands** of the bundle `gateflow-api`: `migrate`, `seed --scenario <file>` (demo data from
-  the library) and `serve`.
+  the library), `device add` and `device revoke`, and `serve`, which also serves the web
+  application.
 
-## 14. Target architecture of the operational product (ADR-013)
+## 14. The passengers' screens (`apps/web`, `@gateflow/i18n`, ADR-044)
 
-Direction agreed at kickoff, to be implemented from milestone M2/M3:
+One React application, built by esbuild into static files and served by the API: one process,
+one origin, one Content Security Policy.
 
 ```mermaid
 flowchart LR
-  subgraph WEB["apps/web (Next.js, one app)"]
+  scanner["Barcode scanner<br/>(keyboard wedge)"] --> kiosk
+  subgraph WEB["apps/web, served by gateflow-api"]
+    kiosk["/kiosk/&lt;checkpoint&gt;<br/>scan, number, QR, print"]
+    page["/t/&lt;reference&gt;<br/>the passenger's page"]
+  end
+  kiosk -->|"Bearer device token"| scans["POST /v1/checkpoints/{id}/scans"]
+  kiosk --> me["GET /v1/devices/me<br/>GET .../demo-flights"]
+  kiosk -.->|"QR code"| phone["Passenger's phone"]
+  phone --> page
+  page -->|"every 15 s"| ticket["GET /v1/tickets/{ref}"]
+```
+
+- **The kiosk** knows its checkpoint from its device token. The token arrives once in the
+  address's fragment, is kept in the browser and leaves the address at once.
+  - A scanner's keystrokes always reach the scan field: buttons never take the focus, and
+    keystrokes elsewhere are sent to it.
+  - A number comes with a QR code to its page and a print layout; a refusal comes with its
+    reason, in the passenger's language.
+  - The kiosk is back on its welcome screen, in its own language, 45 seconds later.
+- **The passenger's page** shows the number and what to do now, in the phone's language or the
+  one chosen. It asks the API again every 15 seconds while the ticket is open; S16 replaces this
+  with server-sent events for displays.
+- **Texts** are in `@gateflow/i18n`, pure and checked by tests: the same keys and placeholders in
+  every language, and nothing that promises priority.
+- **Headers.** `nosniff` and `no-referrer` on every answer. Pages also get a policy allowing only
+  the application's own files, and `X-Robots-Tag: noindex`. Ticket references are kept out of
+  the log.
+- **Build** (`node build.mjs`): `index.html`, `assets/app.js` and `app.css` with Brotli and gzip
+  copies, an icon, and `THIRD-PARTY-NOTICES.txt` with the licences of the bundled libraries.
+
+## 15. Target architecture of the operational product (ADR-013, ADR-044)
+
+Direction agreed at kickoff, being implemented in M3 (S12 on); the screens are one React
+application served by the API (ADR-044):
+
+```mermaid
+flowchart LR
+  subgraph WEB["apps/web (React, served by the API)"]
     kiosk["Kiosk"]
     display["Display"]
     lane["Lane operator"]

@@ -1,0 +1,30 @@
+{
+  "name": "@gateflow/web",
+  "version": "0.14.0",
+  "private": true,
+  "description": "GateFlow's web application for passengers and staff (kiosk, ticket page; displays and stations follow), served by the API.",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "test:e2e": "vitest run --config vitest.e2e.config.mjs"
+  },
+  "dependencies": {
+    "@gateflow/bcbp": "workspace:*",
+    "@gateflow/contracts": "workspace:*",
+    "@gateflow/i18n": "workspace:*",
+    "qrcode-generator": "2.0.4",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@gateflow/api": "workspace:*",
+    "@types/pg": "^8.15.6",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "esbuild": "^0.28.2",
+    "pg": "^8.23.1",
+    "playwright": "1.63.0"
+  }
+}

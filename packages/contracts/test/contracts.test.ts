@@ -2,6 +2,7 @@ import { RISK_CLASSES, SEGMENTS } from '@gateflow/domain';
 import { describe, expect, it } from 'vitest';
 import {
   AdmissionRequest,
+  DeviceResponse,
   IssueTicketRequest,
   RiskClass,
   Segment,
@@ -73,5 +74,38 @@ describe('the API contracts', () => {
       }
     }
     expect(answers).toBeGreaterThan(10);
+  });
+
+  it('mark the routes only a registered device may call (S14)', () => {
+    const doc = openApiDocument('0.14.0') as {
+      paths: Record<string, Record<string, { security?: unknown }>>;
+      components: { securitySchemes: Record<string, { type: string; scheme: string }> };
+    };
+    expect(doc.components.securitySchemes.device).toMatchObject({ type: 'http', scheme: 'bearer' });
+    const guarded = ROUTES.filter((r) => r.device === true).map((r) => `${r.method} ${r.path}`);
+    expect(guarded).toEqual([
+      'post /v1/checkpoints/{checkpointId}/scans',
+      'get /v1/devices/me',
+      'get /v1/checkpoints/{checkpointId}/demo-flights',
+    ]);
+    for (const route of ROUTES) {
+      const operation = doc.paths[route.path]?.[route.method];
+      expect(operation?.security, `${route.method} ${route.path}`).toEqual(
+        route.device === true ? [{ device: [] }] : undefined,
+      );
+    }
+    const id = '0193a0b2-7c1d-7e5f-8a9b-0c1d2e3f4a5b';
+    expect(
+      DeviceResponse.safeParse({
+        device: { id, kind: 'KIOSK', label: 'Kiosk 1' },
+        checkpoint: { id, label: 'Main checkpoint' },
+        airport: {
+          label: 'Synthetic airport',
+          iata: 'XXX',
+          timeZone: 'Europe/Rome',
+          synthetic: true,
+        },
+      }).success,
+    ).toBe(true);
   });
 });

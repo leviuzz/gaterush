@@ -320,6 +320,8 @@ describe('the API (S12)', () => {
     const [token] = await database.db.select().from(queueToken).limit(1);
     const ref = token!.opaqueRef;
     await logged.inject({ url: `/v1/tickets/${ref}`, remoteAddress: '203.0.113.7' });
+    // The passenger's page carries the same reference (S14).
+    await logged.inject({ url: `/t/${ref}?lang=it`, remoteAddress: '203.0.113.7' });
     await logged.inject({
       method: 'POST',
       url: `/v1/checkpoints/${checkpointId}/calls`,
@@ -328,6 +330,7 @@ describe('the API (S12)', () => {
     await logged.close();
     const text = lines.join('');
     expect(text).toContain('/v1/tickets/:ref');
+    expect(text).toContain('/t/:ref?lang=it');
     expect(text).toContain('/calls');
     expect(text).not.toContain(ref);
     expect(text).not.toContain('203.0.113.7');

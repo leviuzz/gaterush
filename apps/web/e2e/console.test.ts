@@ -160,7 +160,9 @@ describe("the supervisor's console (S17)", () => {
     expect(await boost.isDisabled()).toBe(true);
     await page.selectOption('#console-reason', 'AIRLINE_REQUEST');
     await boost.click();
+    // The list can move with the stream before the answer comes: wait for both.
     await page.waitForSelector(`#console-prepare [data-ticket="${last}"]`);
+    await page.waitForSelector(`#console-notice:has-text("${last}")`);
     expect(await page.textContent('#console-notice')).toBe(`${last}: ${en['supervisor.boost']}`);
     expect(await page.textContent(`#console-prepare [data-ticket="${last}"]`)).toContain(
       en['lane.overridden'],

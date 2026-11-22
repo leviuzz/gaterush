@@ -1993,3 +1993,70 @@ founder on 2026-11-21 together with all of its recommendations.
     are stopped, no jump of the order in `FIFO_ONLY`.
   - The messages are predefined texts in the three languages; an airport's own texts come with
     its configuration.
+
+## ADR-049: A supervisor's overrides of the order, and the lanes open
+
+- **Status:** Accepted (2026-11-22). Slice S17, part 2, as the founder confirmed it.
+  queue-core 0.10.0, operations 0.7.0, contracts 0.8.0, migration `0009_overrides`. No simulated
+  number changes: the golden files change only in the version of the queue.
+- **Context:**
+  - The kickoff asks for manual exceptions, with a reason, always audited and measured apart
+    (FR-07, FR-11, FR-14): a flight closing, a passenger needing help, an airline's request.
+  - The engine's guarantees (the cap on priority calls, the bound K on overtakes) are promises
+    about its own decisions; a person's decision must not be hidden inside them, nor be blocked by
+    them.
+  - Capacity changes during the day: the supervisor opens and closes lanes, and the engine's
+    estimates must follow (the risk class of every waiting ticket depends on them).
+- **Decision:**
+  - **Two overrides**, for supervisors and administrators, each with a coded reason
+    (`FLIGHT_CLOSING`, `ASSISTANCE`, `AIRLINE_REQUEST`, `OPERATIONAL`, `OTHER`), never free text:
+    - `BOOST`: a waiting ticket (`QUEUED`) enters the prepare window at once, after the numbers
+      already announced. None of them loses its place: the window holds one more until the next
+      call takes its head. Without a window, a boosted ticket is the next called;
+    - `CALL_NOW`: a waiting or announced ticket is called at once; its call timers start as any
+      call's.
+  - **Following the modes (ADR-048):** none in `FIFO_ONLY` (the order is the order of arrival) nor
+    in an emergency; a call now neither while paused; a boost while paused prepares the window.
+    A reset on resuming puts a boosted ticket back at its place, as every announced ticket.
+  - **Counted apart.** An override is the event `OVERRIDDEN` (the override, the reason, the
+    tickets and people it passed), not a commitment of the engine: it counts neither in the cap
+    nor in the overtakes the engine bounds, but in its own counters (`boosts`, `callsNow`,
+    `overridePeople`). A ticket keeps the mark (`overridden`): the lane station shows "moved up by
+    the supervisor". Refused overrides are in the log too.
+  - **Lanes open** (`SET_LANES`, 1 to 200): the engine's estimates follow at once, and every
+    waiting ticket is assessed again; for the rest of the service day, the next one opening with
+    the checkpoint's own number. The queue's answer gives the lanes open. Lane types and calls to
+    a given lane ("A012 → lane 3") wait for the pilot's layout, as decided.
+- **Alternatives considered:**
+  - **A boost as the next commitment** (the ticket enters the window at the next free place): the
+    window keeps its size, but the passenger appears on the displays only after the next call,
+    and a boost decided in `NORMAL` would meet a later mode. Entering at once is visible at once,
+    and the numbers announced keep their places either way.
+  - **A boost displacing the last announced ticket:** churn on the displays, which the queue
+    never does.
+  - **Overrides inside the engine's cap:** a person's urgent decision could be refused because the
+    engine used its share; and the engine's own fairness would be hidden behind human decisions.
+    Counting them apart keeps both readable.
+  - **Overrides in `FIFO_ONLY`:** today's practice calls closing flights by hand, but the
+    acceptance criterion is a pure order of arrival; the supervisor goes back to `NORMAL` for an
+    exception, which the log shows.
+- **Evidence:**
+  - **queue-core:** 6 tests (a boost after the numbers announced, nobody's overtakes changed; a
+    call now from the queue and from the window, its timers; the modes; a queue without a window;
+    a reset; a new assessment when the lanes change). Among the property tests' random operations,
+    overrides keep the window equal to an independent model after every operation, with at most M
+    tickets of the engine besides the boosted ones, the engine's cap and bound unchanged, refused
+    overrides changing nothing (500 sampled runs: boosts in 136, calls now in 201).
+  - **operations:** results and events; refusals in `FIFO_ONLY`; lanes from 1 to 200; random days
+    with overrides and lanes replay to the same day and the same events as the simulator's queue
+    driven with the same inputs.
+  - **API on PostgreSQL:** supervisors only, with a coded reason (400 without, or with a free
+    text); a boost appears on the displays' board after the announced numbers; the log keeps who
+    and why, the event whom it passed; a call now is first on the board; the modes refuse them;
+    the lanes open for the rest of the day, back to the checkpoint's own number the next day; the
+    chain of hashes holds.
+- **Consequences:**
+  - The console's buttons come with S17, part 3, with the audit view that lists every override
+    and its reason.
+  - Fairness reports of the live product (S19, M4) show the engine's priority calls and the
+    supervisor's overrides side by side.

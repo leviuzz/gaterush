@@ -176,6 +176,8 @@ export interface TicketView {
   readonly fastTracked: boolean;
   /** True when any commitment of this ticket was a priority jump. */
   readonly everPrioritized: boolean;
+  /** True when a supervisor ever overrode the order for this ticket (S17): boost or call now. */
+  readonly overridden: boolean;
   /** Reasons of the latest commitment. */
   readonly selectionReasons: readonly ReasonCode[];
   readonly admittedAtMs: Millis | null;
@@ -212,6 +214,29 @@ export type ReviewDecision = 'QUEUE' | 'CANCEL';
  */
 export const CHECKPOINT_MODES = ['NORMAL', 'FIFO_ONLY', 'PAUSED', 'EMERGENCY'] as const;
 export type CheckpointMode = (typeof CHECKPOINT_MODES)[number];
+
+/**
+ * How a supervisor overrides the order of calls (S17):
+ * - `BOOST`: a waiting ticket enters the prepare window at once, after the tickets already
+ *   announced, none of which loses its place;
+ * - `CALL_NOW`: a waiting or announced ticket is called at once.
+ */
+export const OVERRIDES = ['BOOST', 'CALL_NOW'] as const;
+export type Override = (typeof OVERRIDES)[number];
+
+/** Why a supervisor overrides the order (S17): a coded reason, never free text. */
+export const OVERRIDE_REASONS = [
+  /** The passenger's flight is closing. */
+  'FLIGHT_CLOSING',
+  /** A passenger who needs assistance. */
+  'ASSISTANCE',
+  /** The airline asked for it. */
+  'AIRLINE_REQUEST',
+  /** The checkpoint's own operations (a lane, crew, a security reason). */
+  'OPERATIONAL',
+  'OTHER',
+] as const;
+export type OverrideReason = (typeof OVERRIDE_REASONS)[number];
 
 /** Transitions, reported to an optional listener (audit log in production, metrics in simulation). */
 export type QueueEvent =
@@ -274,7 +299,23 @@ export type QueueEvent =
       readonly reset: boolean;
     }
   /** A ticket of the prepare window goes back to waiting at its place (a reset, S17). */
-  | { readonly type: 'UNCOMMITTED'; readonly ticketId: string; readonly atMs: Millis };
+  | { readonly type: 'UNCOMMITTED'; readonly ticketId: string; readonly atMs: Millis }
+  /**
+   * A supervisor overrode the order (S17): `BOOST`, the ticket entered the prepare window after
+   * the tickets already announced; `CALL_NOW`, it is called at once (its CALLED event follows).
+   * Not the engine's decision: it counts neither in its cap nor in its overtakes, but apart.
+   */
+  | {
+      readonly type: 'OVERRIDDEN';
+      readonly ticketId: string;
+      readonly atMs: Millis;
+      readonly override: Override;
+      readonly reason: OverrideReason;
+      /** Tickets that were to be called before this one, announced or waiting, now passed. */
+      readonly passedTickets: number;
+      /** People on those tickets. */
+      readonly passedPeople: number;
+    };
 
 export type QueueListener = (event: QueueEvent) => void;
 
@@ -298,4 +339,9 @@ export interface QueueStats {
   readonly classChanges: number;
   /** Changes that reverse the direction of the ticket's previous change (flapping). */
   readonly classReversals: number;
+  /** A supervisor's overrides (S17), counted apart from the engine's priority calls. */
+  readonly boosts: number;
+  readonly callsNow: number;
+  /** People on the tickets of those overrides. */
+  readonly overridePeople: number;
 }

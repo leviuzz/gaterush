@@ -90,6 +90,7 @@ function stepsOf(view: RunView, party: number): Step[] {
           case 'PARTY_GROWN':
           case 'MODE_CHANGED':
           case 'UNCOMMITTED':
+          case 'OVERRIDDEN':
             break;
           case 'ADMITTED':
             if (!view.physical) {

@@ -6,7 +6,7 @@ import { z } from 'zod';
  * ticket is a number, a state and a flight, never a name.
  */
 
-export const CONTRACTS_VERSION = '0.7.0';
+export const CONTRACTS_VERSION = '0.8.0';
 
 export const Segment = z.enum(['DEPARTING', 'TRANSFER']);
 
@@ -31,6 +31,21 @@ export const RiskClass = z.enum(['UNVERIFIED', 'NORMAL', 'ATTENTION', 'URGENT', 
  */
 export const CheckpointMode = z.enum(['NORMAL', 'FIFO_ONLY', 'PAUSED', 'EMERGENCY']);
 
+/**
+ * How a supervisor overrides the order of calls (S17): `BOOST`, the ticket enters the prepare
+ * window at once, after the numbers already announced; `CALL_NOW`, it is called at once.
+ */
+export const Override = z.enum(['BOOST', 'CALL_NOW']);
+
+/** Why a supervisor overrides the order (S17): a coded reason, never free text. */
+export const OverrideReason = z.enum([
+  'FLIGHT_CLOSING',
+  'ASSISTANCE',
+  'AIRLINE_REQUEST',
+  'OPERATIONAL',
+  'OTHER',
+]);
+
 const Instant = z.iso.datetime();
 
 /** A ticket as staff see it. */
@@ -45,6 +60,8 @@ export const Ticket = z.object({
   riskClass: RiskClass,
   /** Called out of the order of arrival at least once. */
   priority: z.boolean(),
+  /** A supervisor overrode the order for it (S17): a boost or a call now. */
+  overridden: z.boolean(),
   calls: z.int().min(0),
   issuedAt: Instant,
   firstCalledAt: Instant.nullable(),
@@ -191,7 +208,32 @@ export const QueueResponse = z.object({
   serviceDay: z.iso.date(),
   /** The mode of the checkpoint (S17): no calls while PAUSED or in an EMERGENCY. */
   mode: CheckpointMode,
+  /** The lanes open (S17): the day's configuration, until the supervisor sets them. */
+  lanesOpen: z.int().min(1),
   tickets: z.array(Ticket),
+});
+
+/** A supervisor's override of one ticket (S17), with its coded reason. */
+export const OverrideRequest = z.strictObject({ reason: OverrideReason });
+
+/**
+ * `DONE` when the override was applied; `NOT_ALLOWED` leaves the ticket as it was: its state, or
+ * the mode (no override in FIFO_ONLY nor in an emergency, no call now while paused).
+ */
+export const OverrideResponse = z.object({
+  override: Override,
+  reason: OverrideReason,
+  outcome: z.enum(['DONE', 'NOT_ALLOWED']),
+  ticket: Ticket,
+});
+
+/** The supervisor sets the lanes open (S17). */
+export const SetLanesRequest = z.strictObject({ lanesOpen: z.int().min(1).max(200) });
+
+/** The lanes open now, and before. */
+export const SetLanesResponse = z.object({
+  lanesOpen: z.int().min(1),
+  previous: z.int().min(1),
 });
 
 /**
@@ -396,6 +438,9 @@ export type DisplayMessage = z.infer<typeof DisplayMessage>;
 export type Heartbeat = z.infer<typeof Heartbeat>;
 export type QueueChanged = z.infer<typeof QueueChanged>;
 export type CheckpointMode = z.infer<typeof CheckpointMode>;
+export type OverrideReason = z.infer<typeof OverrideReason>;
+export type OverrideResponse = z.infer<typeof OverrideResponse>;
+export type SetLanesResponse = z.infer<typeof SetLanesResponse>;
 export type KioskStatus = z.infer<typeof KioskStatus>;
 export type SetModeResponse = z.infer<typeof SetModeResponse>;
 export type DemoFlightsResponse = z.infer<typeof DemoFlightsResponse>;
@@ -657,6 +702,46 @@ export const ROUTES: readonly Route[] = [
     body: ResolveReviewRequest,
     responses: {
       '200': { description: 'Done, or not allowed in its state', schema: StaffActionResponse },
+      ...errors,
+      ...staffErrors,
+      '409': { description: 'Idempotency key reused for another request', schema: ErrorResponse },
+    },
+  },
+  ...(
+    [
+      [
+        'boost',
+        'A supervisor boosts a waiting ticket (S17): it enters the prepare window at once, after the numbers announced',
+      ],
+      ['call-now', 'A supervisor calls a waiting or announced ticket at once (S17)'],
+    ] as const
+  ).map(([action, summary]): Route => ({
+    method: 'post',
+    path: `/v1/checkpoints/{checkpointId}/tickets/{ticketId}/${action}`,
+    summary,
+    command: true,
+    staff: 'SUPERVISOR',
+    body: OverrideRequest,
+    responses: {
+      '200': {
+        description: 'Done, or not allowed in its state or in the mode',
+        schema: OverrideResponse,
+      },
+      ...errors,
+      ...staffErrors,
+      '409': { description: 'Idempotency key reused for another request', schema: ErrorResponse },
+    },
+  })),
+  {
+    method: 'post',
+    path: '/v1/checkpoints/{checkpointId}/lanes',
+    summary:
+      "A supervisor sets the lanes open (S17): the engine's estimates follow at once, for the rest of the service day",
+    command: true,
+    staff: 'SUPERVISOR',
+    body: SetLanesRequest,
+    responses: {
+      '200': { description: 'The lanes open now, and before', schema: SetLanesResponse },
       ...errors,
       ...staffErrors,
       '409': { description: 'Idempotency key reused for another request', schema: ErrorResponse },

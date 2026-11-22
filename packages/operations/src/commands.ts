@@ -2,6 +2,8 @@ import type { KnownDeadline, Millis, Segment } from '@gateflow/domain';
 import type { ClassificationParams } from '@gateflow/priority-engine';
 import type {
   CheckpointMode,
+  Override,
+  OverrideReason,
   Policy,
   PresentOutcome,
   QueueEvent,
@@ -194,6 +196,29 @@ export interface SetMode {
   readonly reset: boolean;
 }
 
+/**
+ * A supervisor overrides the order of calls for one ticket (S17), with a coded reason: `BOOST`,
+ * the ticket enters the prepare window at once, after the numbers already announced; `CALL_NOW`,
+ * it is called at once. Never in FIFO_ONLY nor in an emergency; a call now neither while paused.
+ * Counted apart from the engine's priority calls.
+ */
+export interface OverrideTicket {
+  readonly type: 'OVERRIDE';
+  readonly ticketId: string;
+  readonly override: Override;
+  readonly reason: OverrideReason;
+}
+
+/**
+ * The supervisor sets the number of lanes open (S17): the engine's estimates follow at once, and
+ * the waiting tickets are assessed again. The next service day opens with the checkpoint's own
+ * number.
+ */
+export interface SetLanes {
+  readonly type: 'SET_LANES';
+  readonly lanesOpen: number;
+}
+
 export type Command =
   | OpenDay
   | IssueTicket
@@ -203,7 +228,9 @@ export type Command =
   | ActOnTicket
   | ResolveReview
   | AddToParty
-  | SetMode;
+  | SetMode
+  | OverrideTicket
+  | SetLanes;
 export type CommandType = Command['type'];
 
 /** A command as recorded in a checkpoint's log: its place in the log and its time. */
@@ -228,6 +255,8 @@ export interface TicketSummary {
   readonly riskClass: string;
   /** True when a commitment of the ticket jumped the order of arrival. */
   readonly priority: boolean;
+  /** True when a supervisor overrode the order for it (S17): a boost or a call now. */
+  readonly overridden: boolean;
   readonly calls: number;
   readonly issuedAtMs: Millis;
   readonly firstCalledAtMs: Millis | null;
@@ -291,7 +320,17 @@ export type CommandResult =
       readonly mode: CheckpointMode;
       readonly previous: CheckpointMode;
       readonly reset: boolean;
-    };
+    }
+  /** The override was applied; NOT_ALLOWED, nothing changed: the ticket's state or the mode. */
+  | {
+      readonly type: 'OVERRIDDEN';
+      readonly override: Override;
+      readonly reason: OverrideReason;
+      readonly outcome: 'DONE' | 'NOT_ALLOWED';
+      readonly ticket: TicketSummary;
+    }
+  /** The lanes open now, and before the command. */
+  | { readonly type: 'LANES_SET'; readonly lanesOpen: number; readonly previous: number };
 
 /** An event of the day: the queue's own events, and the opening of the day. */
 export type DayLogEvent =

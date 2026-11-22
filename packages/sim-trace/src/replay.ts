@@ -83,6 +83,9 @@ function stageAfterQueueEvent(event: QueueEvent): Stage | null {
     case 'MODE_CHANGED':
     case 'UNCOMMITTED':
       return null;
+    // A supervisor's override (S17): the ticket waits still, or its CALLED event follows.
+    case 'OVERRIDDEN':
+      return null;
   }
 }
 

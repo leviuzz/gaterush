@@ -1,0 +1,1 @@
+ALTER TABLE "queue_token" ADD COLUMN "overridden" boolean DEFAULT false NOT NULL;

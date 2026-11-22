@@ -4,6 +4,8 @@ import {
   CHECKPOINT_MODES,
   CheckpointQueue,
   FIFO_POLICY,
+  OVERRIDES,
+  OVERRIDE_REASONS,
   PRIORITY_V3_POLICY,
   VIRTUAL_FIFO_POLICY,
   classificationOf,
@@ -297,6 +299,57 @@ describe('the modes of the checkpoint (S17)', () => {
     expect(normal.day.mode).toBe('NORMAL');
   });
 
+  it("records a supervisor's overrides with their reason, and the lanes open", () => {
+    const { day, applied } = run(
+      log([
+        { type: 'OPEN_DAY', config: config() },
+        issue(1),
+        issue(2),
+        issue(3),
+        { type: 'OVERRIDE', ticketId: 't-3', override: 'CALL_NOW', reason: 'FLIGHT_CLOSING' },
+        { type: 'SET_MODE', mode: 'FIFO_ONLY', reset: false },
+        { type: 'OVERRIDE', ticketId: 't-2', override: 'BOOST', reason: 'OTHER' },
+        { type: 'SET_LANES', lanesOpen: 4 },
+      ]),
+    );
+    expect(applied[4]!.result).toMatchObject({
+      type: 'OVERRIDDEN',
+      override: 'CALL_NOW',
+      reason: 'FLIGHT_CLOSING',
+      outcome: 'DONE',
+      ticket: { number: 'A003', state: 'CALLED', overridden: true, priority: false },
+    });
+    expect(applied[4]!.events.map((e) => e.type)).toEqual(['OVERRIDDEN', 'CALLED']);
+    // In FIFO_ONLY the order is the order of arrival: refused, and still in the log.
+    expect(applied[6]!.result).toMatchObject({ outcome: 'NOT_ALLOWED' });
+    expect(applied[6]!.events).toEqual([]);
+    expect(applied[7]!.result).toEqual({ type: 'LANES_SET', lanesOpen: 4, previous: 2 });
+    expect(day.lanesOpen).toBe(4);
+    expect(day.ticket('t-1')?.overridden).toBe(false);
+    const at = DAY_START + 2 * MIN;
+    const code = (command: Command) => {
+      try {
+        day.apply({ seq: 9, atMs: at, command });
+      } catch (error) {
+        return error instanceof OperationError ? error.code : 'other';
+      }
+      return 'none';
+    };
+    expect(code({ type: 'SET_LANES', lanesOpen: 0 })).toBe('INVALID_COMMAND');
+    expect(code({ type: 'SET_LANES', lanesOpen: 2.5 })).toBe('INVALID_COMMAND');
+    expect(code({ type: 'OVERRIDE', ticketId: 'nobody', override: 'BOOST', reason: 'OTHER' })).toBe(
+      'UNKNOWN_TICKET',
+    );
+    expect(
+      code({
+        type: 'OVERRIDE',
+        ticketId: 't-1',
+        override: 'BOOST',
+        reason: 'VIP',
+      } as unknown as Command),
+    ).toBe('INVALID_COMMAND');
+  });
+
   it('refuses an unknown mode, and a change that does not say whether it resets', () => {
     const { day } = run(log([{ type: 'OPEN_DAY', config: config() }]));
     const bad = [
@@ -335,13 +388,29 @@ const dayArb = fc
         },
         // The scheduler's timeouts and the staff's actions (S15).
         { weight: 2, arbitrary: fc.record({ kind: fc.constant('advance' as const) }) },
-        // The supervisor's modes (S17).
+        // The supervisor's modes, overrides and lanes (S17).
         {
           weight: 1,
           arbitrary: fc.record({
             kind: fc.constant('mode' as const),
             mode: fc.constantFrom(...CHECKPOINT_MODES),
             reset: fc.boolean(),
+          }),
+        },
+        {
+          weight: 1,
+          arbitrary: fc.record({
+            kind: fc.constant('override' as const),
+            override: fc.constantFrom(...OVERRIDES),
+            reason: fc.constantFrom(...OVERRIDE_REASONS),
+            pick: fc.nat(),
+          }),
+        },
+        {
+          weight: 1,
+          arbitrary: fc.record({
+            kind: fc.constant('lanes' as const),
+            lanesOpen: fc.integer({ min: 1, max: 4 }),
           }),
         },
         {
@@ -376,7 +445,17 @@ const dayArb = fc
     const stopped = (m: CheckpointMode) => m === 'PAUSED' || m === 'EMERGENCY';
     steps.forEach((step, i) => {
       t += gaps[i] ?? 0;
-      if (step.kind === 'mode') {
+      if (step.kind === 'override') {
+        if (issued === 0) return;
+        commands.push({
+          type: 'OVERRIDE',
+          ticketId: `t-${(step.pick % issued) + 1}`,
+          override: step.override,
+          reason: step.reason,
+        });
+      } else if (step.kind === 'lanes') {
+        commands.push({ type: 'SET_LANES', lanesOpen: step.lanesOpen });
+      } else if (step.kind === 'mode') {
         const allowed = step.reset ? stopped(mode) && !stopped(step.mode) : step.mode !== mode;
         if (allowed) mode = step.mode;
         commands.push({ type: 'SET_MODE', mode: step.mode, reset: step.reset });
@@ -551,6 +630,7 @@ describe('the log of a day', () => {
         expect(again.lastSeq).toBe(records.length);
         expect(again.nextDueMs()).toBe(first.day.nextDueMs());
         expect(again.mode).toBe(first.day.mode);
+        expect(again.lanesOpen).toBe(first.day.lanesOpen);
         expect(board.mode).toBe(first.day.mode);
         // Replaying one more time from scratch gives the same events, command by command.
         const third = run(records);
@@ -570,7 +650,7 @@ describe('the log of a day', () => {
         const queue = new CheckpointQueue(open.config.policy, open.config.classification, {
           listener: (e) => events.push(e),
         });
-        const estimates = estimatesOf(open.config);
+        let estimates = estimatesOf(open.config);
         for (const { command, atMs } of records.slice(1)) {
           if (command.type === 'ISSUE_TICKET') {
             queue.issue(
@@ -609,6 +689,11 @@ describe('the log of a day', () => {
             queue.grow(command.ticketId, command.people, atMs, estimates);
           } else if (command.type === 'SET_MODE') {
             queue.setMode(command.mode, atMs, estimates, command.reset);
+          } else if (command.type === 'OVERRIDE') {
+            queue.override(command.ticketId, command.override, command.reason, atMs, estimates);
+          } else if (command.type === 'SET_LANES') {
+            estimates = estimatesOf({ ...open.config, lanesOpen: command.lanesOpen });
+            queue.reassess(atMs, estimates);
           }
         }
         expect(applied.slice(1).flatMap((a) => a.events)).toEqual(events);

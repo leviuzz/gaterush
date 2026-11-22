@@ -139,6 +139,7 @@ function TicketRow({
       <span className="row-detail">
         {flight}
         {ticket.partySize > 1 ? ` · ${t(locale, 'lane.people', { count: ticket.partySize })}` : ''}
+        {ticket.overridden ? ` · ${t(locale, 'lane.overridden')}` : ''}
         {calledAt === null || ticket.state === 'QUEUED' || ticket.state === 'PREPARE'
           ? ''
           : ` · ${t(locale, 'lane.minutesAgo', {

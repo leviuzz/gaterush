@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import fastifyCookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
-import { and, asc, eq, gte, lte } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, lte } from 'drizzle-orm';
 import Fastify from 'fastify';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ZodError } from 'zod';
@@ -10,8 +10,10 @@ import type { z } from 'zod';
 import {
   AdmissionRequest,
   IssueTicketRequest,
+  OverrideRequest,
   ResolveReviewRequest,
   ScanRequest,
+  SetLanesRequest,
   SetModeRequest,
   SignInRequest,
   openApiDocument,
@@ -21,8 +23,10 @@ import type {
   FlightsResponse,
   KioskStatus,
   MeResponse,
+  OverrideResponse,
   PublicTicketResponse,
   QueueResponse,
+  SetLanesResponse,
   SetModeResponse,
   StaffActionResponse,
   StaffMemberResponse,
@@ -58,7 +62,7 @@ import {
 import type { StaffMember, StaffRole } from './staff';
 import type { Accepted, ScanOutcome, ScanReason } from './intake';
 import type { Db } from './db/client';
-import { airport, checkpoint, flight, queueToken } from './db/schema';
+import { airport, checkpoint, flight, queueCommand, queueToken } from './db/schema';
 import { deviceOf, requireDevice } from './devices';
 import type { Ids } from './ids';
 import { randomIds } from './ids';
@@ -136,6 +140,7 @@ export function toTicket(t: TicketSummary): Ticket {
     partySize: t.partySize,
     riskClass: t.riskClass as Ticket['riskClass'],
     priority: t.priority,
+    overridden: t.overridden,
     calls: t.calls,
     issuedAt: new Date(t.issuedAtMs).toISOString(),
     firstCalledAt: iso(t.firstCalledAtMs),
@@ -213,6 +218,29 @@ function idempotencyKeyOf(request: FastifyRequest): string {
     );
   }
   return key;
+}
+
+/**
+ * The lanes open at a checkpoint on a service day (S17): its latest `SET_LANES`, else what the day
+ * opened with, else the checkpoint's settings (the day is not open yet).
+ */
+async function lanesOf(db: Db, cp: CheckpointRow, serviceDay: string): Promise<number> {
+  const rows = await db
+    .select({ command: queueCommand.command })
+    .from(queueCommand)
+    .where(
+      and(
+        eq(queueCommand.checkpointId, cp.id),
+        eq(queueCommand.serviceDay, serviceDay),
+        inArray(queueCommand.type, ['OPEN_DAY', 'SET_LANES']),
+      ),
+    )
+    .orderBy(desc(queueCommand.seq))
+    .limit(1);
+  const command = rows[0]?.command as Command | undefined;
+  if (command?.type === 'SET_LANES') return command.lanesOpen;
+  if (command?.type === 'OPEN_DAY') return command.config.lanesOpen;
+  return cp.settings.lanesOpen;
 }
 
 /** The Fastify application of the API. */
@@ -696,6 +724,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
       partySize: r.partySize,
       riskClass: r.riskClass,
       priority: r.priority,
+      overridden: r.overridden,
       calls: r.calls,
       issuedAtMs: r.issuedAtMs,
       firstCalledAtMs: r.firstCalledAtMs,
@@ -1144,6 +1173,63 @@ export function buildApp(options: AppOptions): FastifyInstance {
     },
   );
 
+  /** A supervisor's overrides of one ticket (S17): a boost or a call now, with a coded reason. */
+  for (const [path, override] of [
+    ['boost', 'BOOST'],
+    ['call-now', 'CALL_NOW'],
+  ] as const) {
+    app.post<{ Params: { checkpointId: string; ticketId: string } }>(
+      `/v1/checkpoints/:checkpointId/tickets/:ticketId/${path}`,
+      async (request, reply) => {
+        const member = await staffFor(request, 'SUPERVISOR');
+        const { ticketId } = request.params;
+        const body = parse(OverrideRequest, request.body);
+        return command(
+          request,
+          reply,
+          member,
+          { ...body, ticketId, override },
+          ({ day }) => {
+            if (day.ticket(ticketId) === undefined) throw unknownTicket();
+            return { type: 'OVERRIDE', ticketId, override, reason: body.reason };
+          },
+          (result): { status: number; body: OverrideResponse } => {
+            if (result.type !== 'OVERRIDDEN') throw new Error(`unexpected result ${result.type}`);
+            return {
+              status: 200,
+              body: {
+                override: result.override,
+                reason: result.reason,
+                outcome: result.outcome,
+                ticket: toTicket(result.ticket),
+              },
+            };
+          },
+        );
+      },
+    );
+  }
+
+  /** The supervisor sets the lanes open (S17): the engine's estimates follow at once. */
+  app.post<{ Params: { checkpointId: string } }>(
+    '/v1/checkpoints/:checkpointId/lanes',
+    async (request, reply) => {
+      const member = await staffFor(request, 'SUPERVISOR');
+      const body = parse(SetLanesRequest, request.body);
+      return command(
+        request,
+        reply,
+        member,
+        body,
+        () => ({ type: 'SET_LANES', lanesOpen: body.lanesOpen }),
+        (result): { status: number; body: SetLanesResponse } => {
+          if (result.type !== 'LANES_SET') throw new Error(`unexpected result ${result.type}`);
+          return { status: 200, body: { lanesOpen: result.lanesOpen, previous: result.previous } };
+        },
+      );
+    },
+  );
+
   /** The checkpoint and its airport, for the lane station's header (S15). */
   app.get<{ Params: { checkpointId: string } }>(
     '/v1/checkpoints/:checkpointId',
@@ -1227,6 +1313,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
         checkpointId: cp.id,
         serviceDay,
         mode: await modeOf(options.db, cp.id),
+        lanesOpen: await lanesOf(options.db, cp, serviceDay),
         tickets: rows.map(ticketOfRow),
       } satisfies QueueResponse;
     },

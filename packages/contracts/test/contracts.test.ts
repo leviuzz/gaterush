@@ -1,5 +1,5 @@
 import { RISK_CLASSES, SEGMENTS } from '@gateflow/domain';
-import { CHECKPOINT_MODES, TICKET_STATES } from '@gateflow/queue-core';
+import { CHECKPOINT_MODES, OVERRIDES, OVERRIDE_REASONS, TICKET_STATES } from '@gateflow/queue-core';
 import { describe, expect, it } from 'vitest';
 import {
   AdmissionRequest,
@@ -7,8 +7,12 @@ import {
   DeviceResponse,
   DisplayMessage,
   IssueTicketRequest,
+  Override,
+  OverrideReason,
+  OverrideRequest,
   RiskClass,
   Segment,
+  SetLanesRequest,
   SetModeRequest,
   TicketState,
   ROUTES,
@@ -21,8 +25,10 @@ describe('the API contracts', () => {
     expect(RiskClass.options).toEqual([...RISK_CLASSES]);
     // The states of a ticket are the queue's own (S15 added REVIEW and CANCELLED).
     expect(TicketState.options).toEqual([...TICKET_STATES]);
-    // The modes of a checkpoint are the queue's own (S17).
+    // The modes of a checkpoint, the overrides and their reasons are the queue's own (S17).
     expect(CheckpointMode.options).toEqual([...CHECKPOINT_MODES]);
+    expect(Override.options).toEqual([...OVERRIDES]);
+    expect(OverrideReason.options).toEqual([...OVERRIDE_REASONS]);
   });
 
   it('validate requests strictly', () => {
@@ -44,6 +50,13 @@ describe('the API contracts', () => {
     expect(SetModeRequest.safeParse({ mode: 'CLOSED' }).success).toBe(false);
     expect(SetModeRequest.safeParse({ mode: 'NORMAL', reset: 'yes' }).success).toBe(false);
     expect(SetModeRequest.safeParse({ mode: 'NORMAL', why: 'lunch' }).success).toBe(false);
+    // An override has a coded reason, never a free text (S17); lanes are a whole number.
+    expect(OverrideRequest.safeParse({ reason: 'FLIGHT_CLOSING' }).success).toBe(true);
+    expect(OverrideRequest.safeParse({ reason: 'a friend' }).success).toBe(false);
+    expect(OverrideRequest.safeParse({}).success).toBe(false);
+    expect(SetLanesRequest.safeParse({ lanesOpen: 3 }).success).toBe(true);
+    expect(SetLanesRequest.safeParse({ lanesOpen: 0 }).success).toBe(false);
+    expect(SetLanesRequest.safeParse({ lanesOpen: 1.5 }).success).toBe(false);
   });
 
   it('give an OpenAPI document with every route', () => {
@@ -192,6 +205,9 @@ describe('the API contracts', () => {
       [`post ${cp}/tickets/{ticketId}/review`]: 'OPERATOR',
       [`post ${cp}/tickets/{ticketId}/cancel`]: 'SUPERVISOR',
       [`post ${cp}/tickets/{ticketId}/resolve`]: 'SUPERVISOR',
+      [`post ${cp}/tickets/{ticketId}/boost`]: 'SUPERVISOR',
+      [`post ${cp}/tickets/{ticketId}/call-now`]: 'SUPERVISOR',
+      [`post ${cp}/lanes`]: 'SUPERVISOR',
       [`get ${cp}`]: 'OPERATOR',
       [`get ${cp}/flights`]: 'OPERATOR',
       [`get ${cp}/queue`]: 'OPERATOR',

@@ -164,6 +164,7 @@ const EN = {
   'lane.mode.EMERGENCY': 'Emergency: no calls, no new tickets',
   'lane.callsPaused': 'Calls are stopped by the supervisor.',
   'lane.emergency': 'Emergency: no tickets can be issued.',
+  'lane.overridden': 'moved up by the supervisor',
 } as const;
 
 export type MessageKey = keyof typeof EN;
@@ -321,6 +322,7 @@ const IT: Readonly<Record<MessageKey, string>> = {
   'lane.mode.EMERGENCY': 'Emergenza: nessuna chiamata, nessun nuovo ticket',
   'lane.callsPaused': 'Le chiamate sono ferme per decisione del supervisore.',
   'lane.emergency': 'Emergenza: non si possono emettere ticket.',
+  'lane.overridden': 'anticipato dal supervisore',
 };
 
 const ES: Readonly<Record<MessageKey, string>> = {
@@ -474,6 +476,7 @@ const ES: Readonly<Record<MessageKey, string>> = {
   'lane.mode.EMERGENCY': 'Emergencia: sin llamadas ni boletos nuevos',
   'lane.callsPaused': 'El supervisor detuvo las llamadas.',
   'lane.emergency': 'Emergencia: no se pueden emitir boletos.',
+  'lane.overridden': 'adelantado por el supervisor',
 };
 
 export const MESSAGES: Readonly<Record<Locale, Readonly<Record<MessageKey, string>>>> = {

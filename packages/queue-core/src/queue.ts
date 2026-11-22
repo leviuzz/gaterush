@@ -16,10 +16,12 @@ import type {
   WaitingTicket,
 } from '@gateflow/priority-engine';
 import { QueueError, prepareWindowSizeOf, validatePolicy } from './policy';
-import { CHECKPOINT_MODES } from './types';
+import { CHECKPOINT_MODES, OVERRIDES, OVERRIDE_REASONS } from './types';
 import type {
   CheckpointMode,
   FlightKnowledge,
+  Override,
+  OverrideReason,
   Policy,
   PresentOutcome,
   QueueEvent,
@@ -78,6 +80,8 @@ interface TicketRecord {
   reactivations: number;
   priorityCommitment: boolean;
   everPrioritized: boolean;
+  /** A supervisor overrode the order for this ticket at least once (S17). */
+  overridden: boolean;
   selectionReasons: readonly ReasonCode[];
   admittedAtMs: Millis | null;
 }
@@ -111,6 +115,7 @@ function view(record: TicketRecord): TicketView {
     priorityCommitment: record.priorityCommitment,
     fastTracked: record.fastTracked,
     everPrioritized: record.everPrioritized,
+    overridden: record.overridden,
     selectionReasons: record.selectionReasons,
     admittedAtMs: record.admittedAtMs,
   };
@@ -156,10 +161,13 @@ function insertionIndex(list: readonly TicketRecord[], fifoKey: number): number 
  *
  * Invariants (checked by property tests):
  * - a ticket is admitted at most once and `ADMITTED`/`EXPIRED` are terminal;
- * - a ticket in the prepare window leaves it only by being called (no churn on displays);
- * - the window never holds more than M tickets, and keeps its order except that a fast-track
- *   priority commitment goes ahead of the tickets that are not fast-tracked;
- * - the engine's cap and overtake bound hold over the sequence of commitments;
+ * - a ticket in the prepare window leaves it only by being called (no churn on displays), or by
+ *   staff and the supervisor's reset;
+ * - the window never holds more than M tickets the engine committed (a supervisor's boost adds
+ *   one), and keeps its order except that a fast-track priority commitment goes ahead of the
+ *   tickets that are not fast-tracked;
+ * - the engine's cap and overtake bound hold over the sequence of commitments; a supervisor's
+ *   overrides are counted apart (S17);
  * - events reach the listener in chronological order.
  */
 export class CheckpointQueue {
@@ -205,6 +213,9 @@ export class CheckpointQueue {
     admissions: 0,
     classChanges: 0,
     classReversals: 0,
+    boosts: 0,
+    callsNow: 0,
+    overridePeople: 0,
   };
 
   constructor(
@@ -339,6 +350,7 @@ export class CheckpointQueue {
       reactivations: 0,
       priorityCommitment: false,
       everPrioritized: false,
+      overridden: false,
       selectionReasons: [],
       admittedAtMs: null,
     };
@@ -410,9 +422,99 @@ export class CheckpointQueue {
       this.refillWindow(nowMs, estimates);
       record = this.window.shift();
     } else {
-      record = this.commit(nowMs, estimates);
+      // Without a window, it holds only the tickets a supervisor boosted (S17): they come first.
+      record = this.window.shift() ?? this.commit(nowMs, estimates);
     }
     if (record === undefined) return null;
+    this.call(record, nowMs);
+    if (this.windowSize > 0) this.refillWindow(nowMs, estimates);
+    this.reclassify(nowMs, estimates);
+    return view(record);
+  }
+
+  /**
+   * A supervisor overrides the order of calls (S17), with a coded reason:
+   * - `BOOST`: a waiting ticket (QUEUED) enters the prepare window at once, after the tickets
+   *   already announced: none of them loses its place, and the window holds one more until a
+   *   call. In NORMAL and PAUSED;
+   * - `CALL_NOW`: a waiting or announced ticket (QUEUED or PREPARE) is called at once. In NORMAL
+   *   only: no call while calls are stopped.
+   * Neither in FIFO_ONLY, where the order is the order of arrival, nor in an emergency. Not the
+   * engine's decision: it counts neither in its cap nor in the overtakes it bounds, but apart
+   * (`boosts`, `callsNow`, `overridePeople`, and the event `OVERRIDDEN` with its reason).
+   */
+  override(
+    ticketId: string,
+    override: Override,
+    reason: OverrideReason,
+    nowMs: Millis,
+    estimates: CheckpointEstimates,
+  ): StaffActionOutcome {
+    // A command read back from a log is not trusted to carry known values.
+    const given: string = override;
+    if (!(OVERRIDES as readonly string[]).includes(given)) {
+      throw new QueueError(`unknown override ${given}`);
+    }
+    const why: string = reason;
+    if (!(OVERRIDE_REASONS as readonly string[]).includes(why)) {
+      throw new QueueError(`unknown reason for an override ${why}`);
+    }
+    this.begin(nowMs, estimates);
+    const record = this.byId.get(ticketId);
+    if (record === undefined) return 'UNKNOWN_TICKET';
+    const mode = this.modeNow;
+    const allowed =
+      override === 'BOOST'
+        ? record.state === 'QUEUED' && (mode === 'NORMAL' || mode === 'PAUSED')
+        : (record.state === 'QUEUED' || record.state === 'PREPARE') && mode === 'NORMAL';
+    if (!allowed) return 'NOT_ALLOWED';
+    // Whoever was to be called before it: announced tickets ahead, then waiting tickets ahead.
+    const passed =
+      record.state === 'PREPARE'
+        ? this.window.slice(0, this.window.indexOf(record))
+        : [
+            ...(override === 'CALL_NOW' ? this.window : []),
+            ...this.waiting.slice(0, this.waiting.indexOf(record)),
+          ];
+    this.remove(record.state === 'PREPARE' ? this.window : this.waiting, record);
+    record.priorityCommitment = false;
+    record.fastTracked = false;
+    record.overridden = true;
+    record.selectionReasons = [];
+    if (override === 'BOOST') this.counters.boosts++;
+    else this.counters.callsNow++;
+    this.counters.overridePeople += record.partySize;
+    this.emit({
+      type: 'OVERRIDDEN',
+      ticketId: record.id,
+      atMs: nowMs,
+      override,
+      reason,
+      passedTickets: passed.length,
+      passedPeople: peopleOn(passed),
+    });
+    if (override === 'BOOST') {
+      record.state = 'PREPARE';
+      this.window.push(record);
+    } else {
+      this.call(record, nowMs);
+      this.refillWindow(nowMs, estimates);
+    }
+    this.reclassify(nowMs, estimates);
+    return 'DONE';
+  }
+
+  /**
+   * The checkpoint's capacity changed (S17: lanes opened or closed): the waiting tickets are
+   * assessed again with the new estimates. Nothing else changes.
+   */
+  reassess(nowMs: Millis, estimates: CheckpointEstimates): void {
+    this.begin(nowMs, estimates);
+    this.reclassify(nowMs, estimates);
+  }
+
+  /** Calls a ticket now: its call timers start. */
+  private call(record: TicketRecord, nowMs: Millis): void {
     record.state = 'CALLED';
     record.calls++;
     record.firstCalledAtMs ??= nowMs;
@@ -422,9 +524,6 @@ export class CheckpointQueue {
     this.outstanding.push(record);
     this.counters.calls++;
     this.emit({ type: 'CALLED', ticketId: record.id, atMs: nowMs });
-    if (this.windowSize > 0) this.refillWindow(nowMs, estimates);
-    this.reclassify(nowMs, estimates);
-    return view(record);
   }
 
   /**

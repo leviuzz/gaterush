@@ -20,7 +20,9 @@ import type {
   DayConfig,
   DayLogEvent,
   IssueTicket,
+  OverrideTicket,
   PassInfant,
+  SetLanes,
   SetMode,
   StaffAction,
   TicketSource,
@@ -151,7 +153,9 @@ export function estimatesOf(config: DayConfig): CheckpointEstimates {
 export class CheckpointDay {
   readonly config: DayConfig;
   private readonly queue: CheckpointQueue;
-  private readonly estimates: CheckpointEstimates;
+  /** The engine's estimates: they follow the lanes open (S17). */
+  private estimates: CheckpointEstimates;
+  private lanes: number;
   private readonly info = new Map<string, TicketInfo>();
   private readonly issueOrder: string[] = [];
   private readonly byNumber = new Map<string, string>();
@@ -170,6 +174,7 @@ export class CheckpointDay {
     validateConfig(config);
     this.config = config;
     this.estimates = estimatesOf(config);
+    this.lanes = config.lanesOpen;
     try {
       this.queue = new CheckpointQueue(config.policy, config.classification, {
         listener: (event) => {
@@ -227,6 +232,11 @@ export class CheckpointDay {
   /** The mode of the checkpoint (S17). */
   get mode(): CheckpointMode {
     return this.queue.mode;
+  }
+
+  /** The lanes open (S17): the day's configuration, until the supervisor sets them. */
+  get lanesOpen(): number {
+    return this.lanes;
   }
 
   /** Applies the next command of the log. */
@@ -325,6 +335,10 @@ export class CheckpointDay {
         }
         case 'SET_MODE':
           return this.setMode(command, nowMs);
+        case 'OVERRIDE':
+          return this.override(command, nowMs);
+        case 'SET_LANES':
+          return this.setLanes(command, nowMs);
       }
     } catch (error) {
       if (error instanceof QueueError) invalid(error.message);
@@ -352,6 +366,34 @@ export class CheckpointDay {
       previous,
       reset: command.reset,
     };
+  }
+
+  private override(command: OverrideTicket, nowMs: number): CommandResult {
+    this.requireTicket(command.ticketId);
+    // The queue refuses an unknown override or reason (a command read back from a log).
+    const outcome = this.queue.override(
+      command.ticketId,
+      command.override,
+      command.reason,
+      nowMs,
+      this.estimates,
+    );
+    return {
+      type: 'OVERRIDDEN',
+      override: command.override,
+      reason: command.reason,
+      outcome: outcome === 'DONE' ? 'DONE' : 'NOT_ALLOWED',
+      ticket: this.summaryOf(this.view(command.ticketId)),
+    };
+  }
+
+  private setLanes(command: SetLanes, nowMs: number): CommandResult {
+    requireInteger(command.lanesOpen, 'lanes open', 1, 200);
+    const previous = this.lanes;
+    this.lanes = command.lanesOpen;
+    this.estimates = estimatesOf({ ...this.config, lanesOpen: command.lanesOpen });
+    this.queue.reassess(nowMs, this.estimates);
+    return { type: 'LANES_SET', lanesOpen: this.lanes, previous };
   }
 
   private requireTicket(ticketId: string): void {
@@ -468,6 +510,7 @@ export class CheckpointDay {
       partySize: view.partySize,
       riskClass: view.riskClass ?? view.classAtIssue,
       priority: view.everPrioritized,
+      overridden: view.overridden,
       calls: view.calls,
       issuedAtMs: view.issuedAtMs,
       firstCalledAtMs: view.firstCalledAtMs,

@@ -7,9 +7,18 @@ import type {
   SelectionParams,
 } from '@gateflow/priority-engine';
 import { describe, expect, it } from 'vitest';
-import { CHECKPOINT_MODES, CheckpointQueue, PRIORITY_V0_POLICY, classificationOf } from '../src';
+import {
+  CHECKPOINT_MODES,
+  CheckpointQueue,
+  OVERRIDES,
+  OVERRIDE_REASONS,
+  PRIORITY_V0_POLICY,
+  classificationOf,
+} from '../src';
 import type {
   CheckpointMode,
+  Override,
+  OverrideReason,
   Policy,
   QueueEvent,
   QueueStats,
@@ -112,6 +121,18 @@ type Op =
       readonly targeted: boolean;
       readonly dt: number;
     }
+  /**
+   * A supervisor's override (S17) of a ticket: one the override may move when `targeted` (and
+   * there is one), any ticket otherwise.
+   */
+  | {
+      readonly kind: 'override';
+      readonly override: Override;
+      readonly reason: OverrideReason;
+      readonly pick: number;
+      readonly targeted: boolean;
+      readonly dt: number;
+    }
   /** The supervisor sets the checkpoint's mode (S17), resetting the window on resuming. */
   | {
       readonly kind: 'mode';
@@ -182,6 +203,17 @@ const opArb: fc.Arbitrary<Op> = fc.oneof(
   {
     weight: 1,
     arbitrary: fc.record({
+      kind: fc.constant('override' as const),
+      override: fc.constantFrom(...OVERRIDES),
+      reason: fc.constantFrom(...OVERRIDE_REASONS),
+      pick: fc.nat(),
+      targeted: fc.boolean(),
+      dt: fc.integer({ min: 0, max: MIN }),
+    }),
+  },
+  {
+    weight: 1,
+    arbitrary: fc.record({
       kind: fc.constant('mode' as const),
       // Mostly back to NORMAL: the other modes stop calls or priority, which the other
       // properties need exercised.
@@ -221,6 +253,14 @@ interface Trace {
     readonly emergencies: number;
     readonly refusedCalls: number;
   };
+  /** What the supervisor's overrides did (S17). */
+  readonly overrides: {
+    readonly boosts: number;
+    readonly callsNow: number;
+    readonly refused: number;
+    /** Boosts that passed somebody. */
+    readonly passing: number;
+  };
 }
 
 /** Runs `ops` and checks the invariants after every operation. */
@@ -245,6 +285,11 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
   const personFlags: boolean[] = [];
   const done = Object.fromEntries(ACTIONS.map((a) => [a, 0])) as Record<Action, number>;
   const modes = { fifoOnlyCommitments: 0, resets: 0, emergencies: 0, refusedCalls: 0 };
+  const overrides = { boosts: 0, callsNow: 0, refused: 0, passing: 0 };
+  /** Window tickets that a boost put there (S17): the window holds M others at most. */
+  const boostedInWindow = new Set<string>();
+  /** The ticket an override calls now: its CALLED event need not be the head of the window. */
+  let callingNow: string | null = null;
   /** The mode as the events tell it. */
   let modelMode: CheckpointMode = 'NORMAL';
   let seen = 0;
@@ -324,6 +369,46 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
         }
         break;
       }
+      case 'override': {
+        // Timeouts due by now first, so that the ticket's state is the one the override meets.
+        q.advance(now);
+        const movable = (id: string) => {
+          const state = q.ticket(id)!.state;
+          return op.override === 'BOOST'
+            ? state === 'QUEUED'
+            : state === 'QUEUED' || state === 'PREPARE';
+        };
+        const candidates = ids.filter(movable);
+        const pool = op.targeted && candidates.length > 0 ? candidates : ids;
+        if (pool.length === 0) break;
+        const id = pool[op.pick % pool.length]!;
+        const mode = q.mode;
+        const allowed =
+          movable(id) &&
+          (op.override === 'BOOST' ? mode === 'NORMAL' || mode === 'PAUSED' : mode === 'NORMAL');
+        const reported = events.length;
+        const snapshot = JSON.stringify([ids.map((t) => q.ticket(t)), q.stats()]);
+        const outcome = q.override(id, op.override, op.reason, now, EST);
+        if (!allowed) {
+          // Refused: nothing changed and nothing was reported.
+          expect(outcome).toBe('NOT_ALLOWED');
+          expect(events.length).toBe(reported);
+          expect(JSON.stringify([ids.map((t) => q.ticket(t)), q.stats()])).toBe(snapshot);
+          overrides.refused++;
+        } else {
+          expect(outcome).toBe('DONE');
+          expect(q.ticket(id)).toMatchObject({
+            state: op.override === 'BOOST' ? 'PREPARE' : 'CALLED',
+            overridden: true,
+          });
+          if (op.override === 'BOOST') overrides.boosts++;
+          else {
+            overrides.callsNow++;
+            calledId = id;
+          }
+        }
+        break;
+      }
       case 'present':
         if (ids.length > 0) {
           const outcome = q.present(ids[op.pick % ids.length]!, now, EST);
@@ -375,15 +460,14 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
     }
     const after = q.prepareWindow().map((t) => t.id);
 
-    // Window: never above M; a committed ticket leaves only by being called or taken out by
-    // staff (zero churn), and the remaining tickets keep their order. New tickets are appended at
-    // the end, except fast-track priority commitments, which go ahead of every ticket that is not
-    // fast-tracked.
-    expect(after.length).toBeLessThanOrEqual(windowSize);
+    // Window: never above M but for boosts; a committed ticket leaves only by being called
+    // (from its head, or at once by an override) or taken out by staff (zero churn), and the
+    // remaining tickets keep their order. New tickets are appended at the end, except fast-track
+    // priority commitments, which go ahead of every ticket that is not fast-tracked.
     const byStaff = (id: string) => ['REVIEW', 'CANCELLED'].includes(q.ticket(id)!.state);
     const remaining = (
       calledId !== null && before[0] === calledId ? before.slice(1) : before
-    ).filter((id) => !byStaff(id));
+    ).filter((id) => !byStaff(id) && id !== calledId);
     if (reset) {
       // A reset announces the window again, in order of arrival (S17).
       const keys = after.map((id) => q.ticket(id)!.fifoKey);
@@ -399,6 +483,35 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
 
     for (; seen < events.length; seen++) {
       const e = events[seen]!;
+      if (e.type === 'OVERRIDDEN') {
+        // Not the engine's decision: nobody's overtakes change, the cap does not count it.
+        expect(stopped(modelMode) && e.override === 'CALL_NOW').toBe(false);
+        expect(['FIFO_ONLY', 'EMERGENCY']).not.toContain(modelMode);
+        const at = modelWindow.indexOf(e.ticketId);
+        const key = queuedKeys.get(e.ticketId);
+        const passed =
+          at >= 0
+            ? modelWindow.slice(0, at)
+            : [
+                ...(e.override === 'CALL_NOW' ? modelWindow : []),
+                ...[...queuedKeys].filter(([, k]) => k < key!).map(([id]) => id),
+              ];
+        expect(e.passedTickets).toBe(passed.length);
+        expect(e.passedPeople).toBe(passed.reduce((sum, id) => sum + q.ticket(id)!.partySize, 0));
+        queuedKeys.delete(e.ticketId);
+        if (e.override === 'BOOST') {
+          expect(at).toBe(-1);
+          modelWindow.push(e.ticketId);
+          boostedInWindow.add(e.ticketId);
+          if (passed.length > 0) overrides.passing++;
+        } else {
+          if (at >= 0) modelWindow.splice(at, 1);
+          modelFast.delete(e.ticketId);
+          boostedInWindow.delete(e.ticketId);
+          callingNow = e.ticketId;
+        }
+        continue;
+      }
       if (e.type === 'MODE_CHANGED') {
         expect(e.previous).toBe(modelMode);
         modelMode = e.mode;
@@ -412,6 +525,7 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
         expect(at).toBeGreaterThanOrEqual(0);
         modelWindow.splice(at, 1);
         modelFast.delete(e.ticketId);
+        boostedInWindow.delete(e.ticketId);
         continue;
       }
       if (e.type === 'COMMITTED' && (modelMode === 'FIFO_ONLY' || refillInArrivalOrder)) {
@@ -433,6 +547,7 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
         const at = modelWindow.indexOf(e.ticketId);
         if (at >= 0) modelWindow.splice(at, 1);
         modelFast.delete(e.ticketId);
+        boostedInWindow.delete(e.ticketId);
       } else if (e.type === 'COMMITTED') {
         const key = queuedKeys.get(e.ticketId)!;
         const size = q.ticket(e.ticketId)!.partySize;
@@ -460,12 +575,22 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
             modelWindow.push(e.ticketId);
           }
         }
-      } else if (e.type === 'CALLED' && windowSize > 0) {
-        expect(modelWindow[0]).toBe(e.ticketId);
-        modelWindow.shift();
-        modelFast.delete(e.ticketId);
+      } else if (e.type === 'CALLED') {
+        if (callingNow === e.ticketId) {
+          // Called at once by an override: it left the window, if it was there, already.
+          callingNow = null;
+        } else if (windowSize > 0 || modelWindow.length > 0) {
+          // Without a window, it holds only boosted tickets, called first.
+          expect(modelWindow[0]).toBe(e.ticketId);
+          modelWindow.shift();
+          modelFast.delete(e.ticketId);
+        }
+        boostedInWindow.delete(e.ticketId);
       }
     }
+    // The window holds the tickets the engine committed, M at most, and the boosted ones.
+    expect(after.filter((id) => !boostedInWindow.has(id)).length).toBeLessThanOrEqual(windowSize);
+    expect(after).toEqual(modelWindow);
 
     // Every ticket is in exactly one state, and the counters agree with the states and the model.
     const counts = new Map<TicketState, number>();
@@ -535,7 +660,7 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
       expect(window.filter(Boolean).length).toBeLessThanOrEqual(selection.capMaxPriorityCalls);
     }
   }
-  return { events, snapshots, stats: q.stats(), done, modes };
+  return { events, snapshots, stats: q.stats(), done, modes, overrides };
 }
 
 describe('queue state machine properties', () => {
@@ -569,7 +694,9 @@ describe('queue state machine properties', () => {
           if (previous === 'ADMITTED' || previous === 'EXPIRED' || previous === 'CANCELLED') {
             throw new Error(`event ${e.type} after terminal ${previous} for ${e.ticketId}`);
           }
-          if (e.type !== 'COMMITTED' && e.type !== 'UNCOMMITTED') lastState.set(e.ticketId, e.type);
+          if (e.type !== 'COMMITTED' && e.type !== 'UNCOMMITTED' && e.type !== 'OVERRIDDEN') {
+            lastState.set(e.ticketId, e.type);
+          }
         }
       }),
       RUNS,
@@ -594,8 +721,13 @@ describe('queue state machine properties', () => {
     const staffHits = Object.fromEntries(ACTIONS.map((a) => [a, 0])) as Record<Action, number>;
     /** Runs in which the modes did something (S17). */
     const modeHits = { fifoOnlyCommitments: 0, resets: 0, emergencies: 0, refusedCalls: 0 };
+    /** Runs in which the supervisor's overrides did something (S17). */
+    const overrideHits = { boosts: 0, callsNow: 0, refused: 0, passing: 0 };
     for (const [policy, ops] of samples) {
-      const { stats, events, done, modes } = run(policy, ops);
+      const { stats, events, done, modes, overrides } = run(policy, ops);
+      for (const key of Object.keys(overrideHits) as (keyof typeof overrideHits)[]) {
+        if (overrides[key] > 0) overrideHits[key]++;
+      }
       for (const action of ACTIONS) if (done[action] > 0) staffHits[action]++;
       for (const key of Object.keys(modeHits) as (keyof typeof modeHits)[]) {
         if (modes[key] > 0) modeHits[key]++;
@@ -603,13 +735,22 @@ describe('queue state machine properties', () => {
       const windowSize = policy.queue.kind === 'virtual' ? policy.queue.prepareWindowSize : 0;
       const fastTrack = policy.selection.kind === 'constrained-edf' && policy.selection.fastTrack;
       // A fast-track commitment while the window was not empty passed somebody.
-      let inWindow = 0;
+      const inWindow = new Set<string>();
       let passed = false;
       for (const e of events) {
         if (e.type === 'COMMITTED' && windowSize > 0) {
-          if (fastTrack && e.priority && inWindow > 0) passed = true;
-          inWindow++;
-        } else if (e.type === 'CALLED' && windowSize > 0) inWindow--;
+          if (fastTrack && e.priority && inWindow.size > 0) passed = true;
+          inWindow.add(e.ticketId);
+        } else if (e.type === 'OVERRIDDEN' && e.override === 'BOOST') {
+          inWindow.add(e.ticketId);
+        } else if (
+          e.type === 'CALLED' ||
+          e.type === 'UNCOMMITTED' ||
+          e.type === 'REVIEW' ||
+          e.type === 'CANCELLED'
+        ) {
+          inWindow.delete(e.ticketId);
+        }
       }
       if (passed) hits.fastTrackPasses++;
       const guardIsTrivial =
@@ -655,5 +796,11 @@ describe('queue state machine properties', () => {
     expect(modeHits.resets).toBeGreaterThanOrEqual(6);
     expect(modeHits.emergencies).toBeGreaterThanOrEqual(13);
     expect(modeHits.refusedCalls).toBeGreaterThanOrEqual(20);
+    // The overrides act in many runs (S17; observed: boosts 136, calls now 201, refused 255,
+    // boosts that passed somebody 88).
+    expect(overrideHits.boosts).toBeGreaterThanOrEqual(65);
+    expect(overrideHits.callsNow).toBeGreaterThanOrEqual(100);
+    expect(overrideHits.refused).toBeGreaterThanOrEqual(125);
+    expect(overrideHits.passing).toBeGreaterThanOrEqual(40);
   });
 });

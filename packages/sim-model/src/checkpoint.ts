@@ -443,14 +443,15 @@ export function simulateCheckpoint(
       case 'ADMITTED':
       case 'EXPIRED':
         break;
-      // Staff's actions, a party growing at the kiosk and the supervisor's modes happen in the
-      // live product only (S15, S17).
+      // Staff's actions, a party growing at the kiosk, the supervisor's modes and overrides
+      // happen in the live product only (S15, S17).
       case 'REVIEW':
       case 'RELEASED':
       case 'CANCELLED':
       case 'PARTY_GROWN':
       case 'MODE_CHANGED':
       case 'UNCOMMITTED':
+      case 'OVERRIDDEN':
         throw new Error(`${event.type} in a simulated day: only the live product has it`);
     }
   };

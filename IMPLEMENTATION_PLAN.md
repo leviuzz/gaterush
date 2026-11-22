@@ -670,7 +670,7 @@ here once, for the product. The slices follow the kickoff (section 3, M3), renum
 | **S14** | Web application, kiosk and ticket: scan (paste, sample, HID scanner), outcomes, digital and printable ticket, ticket page, Italian, English and Spanish, privacy notice, kiosk credentials | A rescan returns the same ticket; another airport's boarding pass is refused with a reason (both already true of the API since S13); no personal data on screen | **Done** |
 | **S15** | Queue life cycle and lane station: timers on a scheduler, recall, no-show, reactivation, admission, manual ticket, review; staff users and roles. From S14: a party's number (at the lane; at the kiosk since 0.15.1), and the rule for a pass whose boarding has closed | The state machine is covered by tests; every transition is idempotent | **Done** |
 | **S16** | Display over SSE: called and prepare numbers, data freshness, reconnection with `Last-Event-ID` | No event lost after a disconnection; "data not up to date" within the timeout | **Done** |
-| S17 | Supervisor: modes (FIFO only, paused, emergency), overrides with a reason, lanes, audit view; versioned policies and their activation | Overrides and mode changes are always in the audit; in FIFO only the order is pure FIFO | In progress (part 1: modes, done) |
+| S17 | Supervisor: modes (FIFO only, paused, emergency), overrides with a reason, lanes, audit view; versioned policies and their activation | Overrides and mode changes are always in the audit; in FIFO only the order is pure FIFO | In progress (parts 1 and 2 done: modes, overrides and lanes) |
 | S18 | Digital twin: the simulator drives the live system at accelerated time; demo page | Same scenario and seed: the live system calls passengers in the same order as the offline simulator | Planned |
 | S19 | Simulations through the API (from S10): saved scenarios and runs, history, export; the Studio saves its runs | `POST /v1/simulations` gives a run reproducible from its manifest | Planned |
 
@@ -990,6 +990,21 @@ FIFO_ONLY the order is pure FIFO.
   - Chromium: a display, a kiosk, a lane station and a passenger's page through a pause, an
     emergency and its end; the paused display fits three screens;
   - no simulated number changes (the golden files differ only in the queue's version).
+
+### S17.2: overrides and lanes (done, ADR-049)
+
+- **Built:** `BOOST` and `CALL_NOW` with a coded reason, for supervisors, refused in FIFO_ONLY
+  and in an emergency (a call now also while paused), counted apart from the engine's priority
+  calls; `SET_LANES`, the engine's estimates following at once for the rest of the day; the
+  `overridden` mark on tickets and at the lane station.
+- **Evidence:**
+  - queue-core: 6 tests, and overrides among the property tests' operations, with the window
+    checked against an independent model after every operation;
+  - operations: a test, and overrides and lanes in the random days that replay to the
+    simulator's queue's events;
+  - API on PostgreSQL: 5 tests (rights and reasons, a boost on the board, a call now, the modes,
+    the lanes across two days);
+  - no simulated number changes.
 
 ## Later milestones (summary)
 

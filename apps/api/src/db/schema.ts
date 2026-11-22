@@ -214,6 +214,8 @@ export const queueToken = pgTable(
     state: text('state').notNull(),
     riskClass: text('risk_class').notNull(),
     priority: boolean('priority').notNull(),
+    /** A supervisor overrode the order for it (S17): a boost or a call now. */
+    overridden: boolean('overridden').notNull().default(false),
     calls: integer('calls').notNull(),
     issuedAtMs: ms('issued_at_ms').notNull(),
     firstCalledAtMs: ms('first_called_at_ms'),

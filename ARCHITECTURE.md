@@ -685,6 +685,11 @@ flowchart LR
   - on resuming, a reset takes the prepare window back and announces it in order of arrival.
   The board carries the mode, so displays learn it with their next message; kiosks follow their
   own stream. A new service day opens in the mode the previous one ended in.
+- **Overrides and lanes (ADR-049).** `OVERRIDE` (`BOOST`: a waiting ticket enters the prepare
+  window at once, after the numbers announced; `CALL_NOW`: a ticket is called at once), with a
+  coded reason, is the queue's event `OVERRIDDEN`, counted apart from the engine's commitments;
+  `queue_token.overridden` keeps the mark. `SET_LANES` changes the engine's estimates for the
+  rest of the service day; the queue's answer reads the lanes open from the day's log.
 - **Staff (ADR-045).** Every staff route checks, in this order: the request comes from this site,
   a session (401), the checkpoint (404), the role and the checkpoints of the member (403). The
   log records the member as the actor (`staff:<id>`).
@@ -697,6 +702,8 @@ flowchart LR
     the lane stations' (ADR-047);
   - `POST /v1/checkpoints/{id}/mode`, for supervisors, and `GET /v1/checkpoints/{id}/kiosk`, a
     kiosk's stream of the mode (ADR-048);
+  - `POST /v1/checkpoints/{id}/tickets/{ticket}/boost` and `/call-now` with a coded reason, and
+    `POST /v1/checkpoints/{id}/lanes`, for supervisors (ADR-049);
   - `POST /v1/auth/sign-in`, `GET /v1/auth/me`, `POST /v1/auth/sign-out` (ADR-045);
   - `POST /v1/checkpoints/{id}/tickets/{ticket}/recall`, `no-show`, `reactivate`, `review`,
     `resolve` and `cancel` (ADR-045);
@@ -773,7 +780,8 @@ flowchart LR
   supervisors, end reviews and cancel. Manual tickets carry a reason and the size of the party.
   The station follows the checkpoint's stream (ADR-047): it asks for the queue whenever it
   changes, and every 20 seconds in case the stream is down. It shows the mode the supervisor set,
-  and its call button is off while calls are paused or stopped (ADR-048).
+  and its call button is off while calls are paused or stopped (ADR-048); a ticket the supervisor
+  moved up says so (ADR-049).
 - **Build** (`node build.mjs`): `index.html`, `assets/app.js` and `app.css` with Brotli and gzip
   copies, an icon, and `THIRD-PARTY-NOTICES.txt` with the licences of the bundled libraries.
 

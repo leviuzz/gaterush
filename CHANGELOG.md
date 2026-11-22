@@ -7,11 +7,12 @@ must be listed, together with the component versions it bumps.
 ## [Unreleased]
 
 Slice S17 in progress, the supervisor's console. Part 1: the modes of a checkpoint (ADR-048).
+Part 2: a supervisor's overrides and the lanes open (ADR-049).
 
 ### Simulated numbers change
 
-- None. The golden files change only in the version of the queue (0.9.0); the simulator never
-  changes mode, and fails at once if it is ever asked to.
+- None. The golden files change only in the version of the queue (0.9.0, then 0.10.0); the
+  simulator never changes mode nor overrides the order, and fails at once if it is ever asked to.
 
 ### Added
 
@@ -45,6 +46,20 @@ Slice S17 in progress, the supervisor's console. Part 1: the modes of a checkpoi
   - the passenger's page says when calls are paused, and in an emergency that the staff's
     instructions come first;
   - i18n: the texts of the modes, in the three languages.
+
+- Part 2 (ADR-049):
+  - queue-core 0.10.0: `override` with `BOOST` (a waiting ticket enters the prepare window at
+    once, after the numbers announced) and `CALL_NOW` (a ticket is called at once), each with a
+    coded reason, the event `OVERRIDDEN` and counters apart from the engine's (`boosts`,
+    `callsNow`, `overridePeople`); `reassess` for a change of capacity; the property tests check
+    the window against an independent model after every operation;
+  - operations 0.7.0: the commands `OVERRIDE` and `SET_LANES`; a ticket's `overridden` mark;
+  - API: `POST /v1/checkpoints/{id}/tickets/{ticket}/boost` and `/call-now`, and
+    `POST /v1/checkpoints/{id}/lanes`, for supervisors; the lanes open in the queue's answer;
+    migration `0009_overrides` (`queue_token.overridden`);
+  - contracts 0.8.0: `Override`, `OverrideReason`, `OverrideRequest`, `OverrideResponse`,
+    `SetLanesRequest`, `SetLanesResponse`; `overridden` on a ticket, `lanesOpen` in the queue;
+  - the lane station marks a ticket the supervisor moved up, in the three languages.
 
 ### Fixed
 

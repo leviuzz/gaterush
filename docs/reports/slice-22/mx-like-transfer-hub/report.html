@@ -1,0 +1,1016 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GateFlow report: mx-like-transfer-hub</title>
+<meta name="description" content="SIMULATED results for MX-like hub, transfer security checkpoint (synthetic): 200 simulated days.">
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.1);
+  --deemph: #a9a79f;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --text-primary: #f0efec;
+  --text-secondary: #c3c2b7;
+  --muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255, 255, 255, 0.1);
+  --deemph: #6e6d67;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --text-primary: #f0efec;
+  --text-secondary: #c3c2b7;
+  --muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255, 255, 255, 0.1);
+  --deemph: #6e6d67;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text-primary);
+  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font-size: 26px; line-height: 1.25; margin: 8px 0 16px; }
+h2 { font-size: 20px; margin: 36px 0 12px; }
+h3 { font-size: 16px; margin: 24px 0 8px; }
+p, li { color: var(--text-primary); }
+a { color: var(--series-1); }
+blockquote {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+blockquote p { margin: 0; }
+code {
+  font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 4px;
+  overflow-wrap: anywhere;
+}
+pre { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow-x: auto; }
+pre code { border: 0; padding: 0; background: none; white-space: pre; overflow-wrap: normal; }
+.table { overflow-x: auto; margin: 12px 0 20px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { padding: 6px 10px; border-bottom: 1px solid var(--grid); text-align: left; vertical-align: top; }
+th { color: var(--text-secondary); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+.right { text-align: right; }
+.center { text-align: center; }
+td code { white-space: nowrap; overflow-wrap: normal; }
+td.right { white-space: nowrap; }
+figure.chart { margin: 16px 0 24px; padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; }
+figure.chart figcaption { font-weight: 600; margin-bottom: 4px; }
+figure.chart .note { color: var(--text-secondary); font-size: 13px; margin: 0 0 8px; }
+figure.chart svg { display: block; width: 100%; min-width: 560px; height: auto; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 4px 0 8px; font-size: 13px; color: var(--text-secondary); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { display: inline-block; width: 16px; height: 2px; border-radius: 1px; }
+svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+</style>
+</head>
+<body>
+<main>
+<h1 id="gateflow-simulation-report-mx-like-hub-transfer-security-checkpoint-synthetic">GateFlow simulation report: MX-like hub, transfer security checkpoint (synthetic)</h1>
+<blockquote><p><strong>SIMULATED RESULTS ON SYNTHETIC OR HYPOTHETICAL DATA. These numbers are model outputs, not measurements, and must not be presented as evidence of operational performance.</strong></p></blockquote>
+<p>Scenario <code>mx-like-transfer-hub</code> (data: SYNTHETIC), 200 simulated days, about 4473 passengers per day (3390 parties). Status quo (baseline): <code>fifo</code>.</p>
+<h2 id="1-headline">1. Headline</h2>
+<figure class="chart">
+<figcaption>Missed flights per day</figcaption>
+<p class="note">Mean per simulated day; the whisker spans P5 to P95 across days. GateFlow priority policies in blue, the others in grey. The values are in the tables below.</p>
+<svg viewBox="0 0 720 308" role="img" aria-label="Missed flights per day by policy">
+<line x1="144" y1="8" x2="144" y2="280" stroke="var(--grid)" stroke-width="1"/>
+<text x="144" y="300" text-anchor="middle" font-size="11" fill="var(--muted)">0</text>
+<line x1="246.4" y1="8" x2="246.4" y2="280" stroke="var(--grid)" stroke-width="1"/>
+<text x="246.4" y="300" text-anchor="middle" font-size="11" fill="var(--muted)">50</text>
+<line x1="348.8" y1="8" x2="348.8" y2="280" stroke="var(--grid)" stroke-width="1"/>
+<text x="348.8" y="300" text-anchor="middle" font-size="11" fill="var(--muted)">100</text>
+<line x1="451.2" y1="8" x2="451.2" y2="280" stroke="var(--grid)" stroke-width="1"/>
+<text x="451.2" y="300" text-anchor="middle" font-size="11" fill="var(--muted)">150</text>
+<line x1="553.6" y1="8" x2="553.6" y2="280" stroke="var(--grid)" stroke-width="1"/>
+<text x="553.6" y="300" text-anchor="middle" font-size="11" fill="var(--muted)">200</text>
+<line x1="656" y1="8" x2="656" y2="280" stroke="var(--grid)" stroke-width="1"/>
+<text x="656" y="300" text-anchor="middle" font-size="11" fill="var(--muted)">250</text>
+<g><title>fifo: 131.6 (spread 80.0 to 201.3)</title>
+<rect x="0" y="8" width="720" height="34" fill="transparent"/>
+<text x="134" y="29" text-anchor="end" font-size="12" fill="var(--text-primary)">fifo</text>
+<path d="M144 17H409.6Q413.6 17 413.6 21V29Q413.6 33 409.6 33H144Z" fill="var(--deemph)"/>
+<line x1="307.7" y1="25" x2="556.4" y2="25" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="307.7" y1="21" x2="307.7" y2="29" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="556.4" y1="21" x2="556.4" y2="29" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<text x="562.4" y="29" font-size="12" fill="var(--text-primary)">131.6</text>
+</g>
+<g><title>fifo-manual: 96.7 (spread 50.0 to 145.1)</title>
+<rect x="0" y="42" width="720" height="34" fill="transparent"/>
+<text x="134" y="63" text-anchor="end" font-size="12" fill="var(--text-primary)">fifo-manual</text>
+<path d="M144 51H337.9Q341.9 51 341.9 55V63Q341.9 67 337.9 67H144Z" fill="var(--deemph)"/>
+<line x1="246.4" y1="59" x2="441.2" y2="59" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="246.4" y1="55" x2="246.4" y2="63" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="441.2" y1="55" x2="441.2" y2="63" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<text x="447.2" y="63" font-size="12" fill="var(--text-primary)">96.7</text>
+</g>
+<g><title>fifo-manual@reactive: 81.5 (spread 42.0 to 121.0)</title>
+<rect x="0" y="76" width="720" height="34" fill="transparent"/>
+<text x="134" y="97" text-anchor="end" font-size="12" fill="var(--text-primary)">fifo-manual@reactive</text>
+<path d="M144 85H306.9Q310.9 85 310.9 89V97Q310.9 101 306.9 101H144Z" fill="var(--deemph)"/>
+<line x1="230" y1="93" x2="391.9" y2="93" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="230" y1="89" x2="230" y2="97" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="391.9" y1="89" x2="391.9" y2="97" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<text x="397.9" y="97" font-size="12" fill="var(--text-primary)">81.5</text>
+</g>
+<g><title>fifo-manual@predict: 64.5 (spread 35.0 to 94.0)</title>
+<rect x="0" y="110" width="720" height="34" fill="transparent"/>
+<text x="134" y="131" text-anchor="end" font-size="12" fill="var(--text-primary)">fifo-manual@predict</text>
+<path d="M144 119H272.1Q276.1 119 276.1 123V131Q276.1 135 272.1 135H144Z" fill="var(--deemph)"/>
+<line x1="215.6" y1="127" x2="336.6" y2="127" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="215.6" y1="123" x2="215.6" y2="131" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="336.6" y1="123" x2="336.6" y2="131" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<text x="342.6" y="131" font-size="12" fill="var(--text-primary)">64.5</text>
+</g>
+<g><title>fifo-manual@advise: 63.8 (spread 33.0 to 93.0)</title>
+<rect x="0" y="144" width="720" height="34" fill="transparent"/>
+<text x="134" y="165" text-anchor="end" font-size="12" fill="var(--text-primary)">fifo-manual@advise</text>
+<path d="M144 153H270.6Q274.6 153 274.6 157V165Q274.6 169 270.6 169H144Z" fill="var(--deemph)"/>
+<line x1="211.6" y1="161" x2="334.6" y2="161" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="211.6" y1="157" x2="211.6" y2="165" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="334.6" y1="157" x2="334.6" y2="165" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<text x="340.6" y="165" font-size="12" fill="var(--text-primary)">63.8</text>
+</g>
+<g><title>priority-v3: 87.9 (spread 48.0 to 138.2)</title>
+<rect x="0" y="178" width="720" height="34" fill="transparent"/>
+<text x="134" y="199" text-anchor="end" font-size="12" fill="var(--text-primary)">priority-v3</text>
+<path d="M144 187H320.1Q324.1 187 324.1 191V199Q324.1 203 320.1 203H144Z" fill="var(--series-1)"/>
+<line x1="242.3" y1="195" x2="426.9" y2="195" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="242.3" y1="191" x2="242.3" y2="199" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="426.9" y1="191" x2="426.9" y2="199" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<text x="432.9" y="199" font-size="12" fill="var(--text-primary)">87.9</text>
+</g>
+<g><title>priority-v3@predict: 61.8 (spread 37.0 to 89.0)</title>
+<rect x="0" y="212" width="720" height="34" fill="transparent"/>
+<text x="134" y="233" text-anchor="end" font-size="12" fill="var(--text-primary)">priority-v3@predict</text>
+<path d="M144 221H266.5Q270.5 221 270.5 225V233Q270.5 237 266.5 237H144Z" fill="var(--series-1)"/>
+<line x1="219.7" y1="229" x2="326.4" y2="229" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="219.7" y1="225" x2="219.7" y2="233" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="326.4" y1="225" x2="326.4" y2="233" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<text x="332.4" y="233" font-size="12" fill="var(--text-primary)">61.8</text>
+</g>
+<g><title>priority-v3@advise: 63.5 (spread 36.9 to 94.1)</title>
+<rect x="0" y="246" width="720" height="34" fill="transparent"/>
+<text x="134" y="267" text-anchor="end" font-size="12" fill="var(--text-primary)">priority-v3@advise</text>
+<path d="M144 255H270.1Q274.1 255 274.1 259V267Q274.1 271 270.1 271H144Z" fill="var(--series-1)"/>
+<line x1="219.6" y1="263" x2="336.7" y2="263" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="219.6" y1="259" x2="219.6" y2="267" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="336.7" y1="259" x2="336.7" y2="267" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<text x="342.7" y="267" font-size="12" fill="var(--text-primary)">63.5</text>
+</g>
+<line x1="144" y1="8" x2="144" y2="280" stroke="var(--axis)" stroke-width="1"/>
+</svg>
+</figure>
+<figure class="chart">
+<figcaption>Net flights saved per day</figcaption>
+<p class="note">Candidate compared with reference, passenger by passenger: mean per day and 95% confidence interval. Right of zero, the candidate catches more flights.</p>
+<svg viewBox="0 0 720 666" role="img" aria-label="Net flights saved per day, by comparison">
+<line x1="295.8" y1="8" x2="295.8" y2="638" stroke="var(--grid)" stroke-width="1"/>
+<text x="295.8" y="658" text-anchor="middle" font-size="11" fill="var(--muted)">-20</text>
+<line x1="356.6" y1="8" x2="356.6" y2="638" stroke="var(--axis)" stroke-width="1"/>
+<text x="356.6" y="658" text-anchor="middle" font-size="11" fill="var(--muted)">0</text>
+<line x1="417.5" y1="8" x2="417.5" y2="638" stroke="var(--grid)" stroke-width="1"/>
+<text x="417.5" y="658" text-anchor="middle" font-size="11" fill="var(--muted)">20</text>
+<line x1="478.3" y1="8" x2="478.3" y2="638" stroke="var(--grid)" stroke-width="1"/>
+<text x="478.3" y="658" text-anchor="middle" font-size="11" fill="var(--muted)">40</text>
+<line x1="539.2" y1="8" x2="539.2" y2="638" stroke="var(--grid)" stroke-width="1"/>
+<text x="539.2" y="658" text-anchor="middle" font-size="11" fill="var(--muted)">60</text>
+<line x1="600" y1="8" x2="600" y2="638" stroke="var(--grid)" stroke-width="1"/>
+<text x="600" y="658" text-anchor="middle" font-size="11" fill="var(--muted)">80</text>
+<g><title>fifo-manual vs fifo: 35.0 [32.4, 37.7]</title>
+<rect x="0" y="8" width="720" height="30" fill="transparent"/>
+<text x="285.8" y="27" text-anchor="end" font-size="12" fill="var(--text-primary)">fifo-manual vs fifo</text>
+<line x1="455.1" y1="23" x2="471.2" y2="23" stroke="var(--series-1)" stroke-width="2" stroke-linecap="round"/>
+<circle cx="463" cy="23" r="5" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+<text x="610" y="27" font-size="12" fill="var(--text-primary)">35.0 [32.4, 37.7]</text>
+</g>
+<g><title>fifo-manual@reactive vs fifo: 50.1 [45.4, 55.4]</title>
+<rect x="0" y="38" width="720" height="30" fill="transparent"/>
+<text x="285.8" y="57" text-anchor="end" font-size="12" fill="var(--text-primary)">fifo-manual@reactive vs fifo</text>
+<line x1="494.9" y1="53" x2="525" y2="53" stroke="var(--series-1)" stroke-width="2" stroke-linecap="round"/>
+<circle cx="509.2" cy="53" r="5" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+<text x="610" y="57" font-size="12" fill="var(--text-primary)">50.1 [45.4, 55.4]</text>
+</g>
+<g><title>fifo-manual@predict vs fifo: 67.1 [61.9, 72.5]</title>
+<rect x="0" y="68" width="720" height="30" fill="transparent"/>
+<text x="285.8" y="87" text-anchor="end" font-size="12" fill="var(--text-primary)">fifo-manual@predict vs fifo</text>
+<line x1="545.1" y1="83" x2="577.2" y2="83" stroke="var(--series-1)" stroke-width="2" stroke-linecap="round"/>
+<circle cx="560.9" cy="83" r="5" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+<text x="610" y="87" font-size="12" fill="var(--text-primary)">67.1 [61.9, 72.5]</text>
+</g>
+<g><title>fifo-manual@advise vs fifo: 67.8 [62.7, 73.8]</title>
+<rect x="0" y="98" width="720" height="30" fill="transparent"/>
+<text x="285.8" y="117" text-anchor="end" font-size="12" fill="var(--text-primary)">fifo-manual@advise vs fifo</text>
+<line x1="547.4" y1="113" x2="581" y2="113" stroke="var(--series-1)" stroke-width="2" stroke-linecap="round"/>
+<circle cx="563" cy="113" r="5" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+<text x="610" y="117" font-size="12" fill="var(--text-primary)">67.8 [62.7, 73.8]</text>
+</g>
+<g><title>priority-v3 vs fifo: 43.7 [41.1, 46.5]</title>
+<rect x="0" y="128" width="720" height="30" fill="transparent"/>
+<text x="285.8" y="147" text-anchor="end" font-size="12" fill="var(--text-primary)">priority-v3 vs fifo</text>
+<line x1="481.6" y1="143" x2="498.1" y2="143" stroke="var(--series-1)" stroke-width="2" stroke-linecap="round"/>
+<circle cx="489.5" cy="143" r="5" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+<text x="610" y="147" font-size="12" fill="var(--text-primary)">43.7 [41.1, 46.5]</text>
+</g>
+<g><title>priority-v3@predict vs fifo: 69.8 [64.8, 75.4]</title>
+<rect x="0" y="158" width="720" height="30" fill="transparent"/>
+<text x="285.8" y="177" text-anchor="end" font-size="12" fill="var(--text-primary)">priority-v3@predict vs fifo</text>
+<line x1="553.9" y1="173" x2="585.9" y2="173" stroke="var(--series-1)" stroke-width="2" stroke-linecap="round"/>
+<circle cx="569.1" cy="173" r="5" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+<text x="610" y="177" font-size="12" fill="var(--text-primary)">69.8 [64.8, 75.4]</text>
+</g>
+<g><title>priority-v3@advise vs fifo: 68.1 [62.7, 73.9]</title>
+<rect x="0" y="188" width="720" height="30" fill="transparent"/>
+<text x="285.8" y="207" text-anchor="end" font-size="12" fill="var(--text-primary)">priority-v3@advise vs fifo</text>
+<line x1="547.3" y1="203" x2="581.5" y2="203" stroke="var(--series-1)" stroke-width="2" stroke-linecap="round"/>
+<circle cx="563.8" cy="203" r="5" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+<text x="610" y="207" font-size="12" fill="var(--text-primary)">68.1 [62.7, 73.9]</text>
+</g>
+<g><title>fifo-manual@reactive vs fifo-manual: 15.2 [12.3, 18.4]</title>
+<rect x="0" y="218" width="720" height="30" fill="transparent"/>
+<text x="285.8" y="237" text-anchor="end" font-size="12" fill="var(--text-primary)">fifo-manual@reactive vs fifo-manual</text>
+<line x1="394.2" y1="233" x2="412.5" y2="233" stroke="var(--series-1)" stroke-width="2" stroke-linecap="round"/>
+<circle cx="402.8" cy="233" r="5" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+<text x="610" y="237" font-size="12" fill="var(--text-primary)">15.2 [12.3, 18.4]</text>
+</g>
+<g><title>fifo-manual@predict vs fifo-manual: 32.2 [28.5, 36.4]</title>
+<rect x="0" y="248" width="720" height="30" fill="transparent"/>
+<text x="285.8" y="267" text-anchor="end" font-size="12" fill="var(--text-primary)">fifo-manual@predict vs fifo-manual</text>
+<line x1="443.3" y1="263" x2="467.4" y2="263" stroke="var(--series-1)" stroke-width="2" stroke-linecap="round"/>
+<circle cx="454.5" cy="263" r="5" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+<text x="610" y="267" font-size="12" fill="var(--text-primary)">32.2 [28.5, 36.4]</text>
+</g>
+<g><title>fifo-manual@predict vs fifo-manual@reactive: 17.0 [15.3, 18.7]</title>
+<rect x="0" y="278" width="720" height="30" fill="transparent"/>
+<text x="285.8" y="297" text-anchor="end" font-size="12" fill="var(--text-primary)">fifo-manual@predict vs fifo-manual@reactive</text>
+<line x1="403.2" y1="293" x2="413.5" y2="293" stroke="var(--series-1)" stroke-width="2" stroke-linecap="round"/>
+<circle cx="408.3" cy="293" r="5" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+<text x="610" y="297" font-size="12" fill="var(--text-primary)">17.0 [15.3, 18.7]</text>
+</g>
+<g><title>fifo-manual@advise vs fifo-manual: 32.9 [29.1, 37.2]</title>
+<rect x="0" y="308" width="720" height="30" fill="transparent"/>
+<text x="285.8" y="327" text-anchor="end" font-size="12" fill="var(--text-primary)">fifo-manual@advise vs fifo-manual</text>
+<line x1="445.3" y1="323" x2="469.8" y2="323" stroke="var(--series-1)" stroke-width="2" stroke-linecap="round"/>
+<circle cx="456.6" cy="323" r="5" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+<text x="610" y="327" font-size="12" fill="var(--text-primary)">32.9 [29.1, 37.2]</text>
+</g>
+<g><title>fifo-manual@advise vs fifo-manual@reactive: 17.7 [16.0, 19.4]</title>
+<rect x="0" y="338" width="720" height="30" fill="transparent"/>
+<text x="285.8" y="357" text-anchor="end" font-size="12" fill="var(--text-primary)">fifo-manual@advise vs fifo-manual@reactive</text>
+<line x1="405.2" y1="353" x2="415.6" y2="353" stroke="var(--series-1)" stroke-width="2" stroke-linecap="round"/>
+<circle cx="410.5" cy="353" r="5" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+<text x="610" y="357" font-size="12" fill="var(--text-primary)">17.7 [16.0, 19.4]</text>
+</g>
+<g><title>fifo-manual@advise vs fifo-manual@predict: 0.7 [0.0, 1.4]</title>
+<rect x="0" y="368" width="720" height="30" fill="transparent"/>
+<text x="285.8" y="387" text-anchor="end" font-size="12" fill="var(--text-primary)">fifo-manual@advise vs fifo-manual@predict</text>
+<line x1="356.7" y1="383" x2="360.8" y2="383" stroke="var(--series-1)" stroke-width="2" stroke-linecap="round"/>
+<circle cx="358.8" cy="383" r="5" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+<text x="610" y="387" font-size="12" fill="var(--text-primary)">0.7 [0.0, 1.4]</text>
+</g>
+<g><title>priority-v3 vs fifo-manual: 8.7 [7.2, 10.4]</title>
+<rect x="0" y="398" width="720" height="30" fill="transparent"/>
+<text x="285.8" y="417" text-anchor="end" font-size="12" fill="var(--text-primary)">priority-v3 vs fifo-manual</text>
+<line x1="378.6" y1="413" x2="388.3" y2="413" stroke="var(--series-1)" stroke-width="2" stroke-linecap="round"/>
+<circle cx="383.2" cy="413" r="5" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+<text x="610" y="417" font-size="12" fill="var(--text-primary)">8.7 [7.2, 10.4]</text>
+</g>
+<g><title>priority-v3@predict vs priority-v3: 26.2 [22.6, 30.4]</title>
+<rect x="0" y="428" width="720" height="30" fill="transparent"/>
+<text x="285.8" y="447" text-anchor="end" font-size="12" fill="var(--text-primary)">priority-v3@predict vs priority-v3</text>
+<line x1="425.2" y1="443" x2="449.1" y2="443" stroke="var(--series-1)" stroke-width="2" stroke-linecap="round"/>
+<circle cx="436.2" cy="443" r="5" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+<text x="610" y="447" font-size="12" fill="var(--text-primary)">26.2 [22.6, 30.4]</text>
+</g>
+<g><title>priority-v3@predict vs fifo-manual@predict: 2.7 [1.8, 3.6]</title>
+<rect x="0" y="458" width="720" height="30" fill="transparent"/>
+<text x="285.8" y="477" text-anchor="end" font-size="12" fill="var(--text-primary)">priority-v3@predict vs fifo-manual@predict</text>
+<line x1="362.2" y1="473" x2="367.6" y2="473" stroke="var(--series-1)" stroke-width="2" stroke-linecap="round"/>
+<circle cx="364.9" cy="473" r="5" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+<text x="610" y="477" font-size="12" fill="var(--text-primary)">2.7 [1.8, 3.6]</text>
+</g>
+<g><title>priority-v3@predict vs fifo-manual@reactive: 19.7 [17.8, 21.6]</title>
+<rect x="0" y="488" width="720" height="30" fill="transparent"/>
+<text x="285.8" y="507" text-anchor="end" font-size="12" fill="var(--text-primary)">priority-v3@predict vs fifo-manual@reactive</text>
+<line x1="410.9" y1="503" x2="422.2" y2="503" stroke="var(--series-1)" stroke-width="2" stroke-linecap="round"/>
+<circle cx="416.6" cy="503" r="5" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+<text x="610" y="507" font-size="12" fill="var(--text-primary)">19.7 [17.8, 21.6]</text>
+</g>
+<g><title>priority-v3@advise vs priority-v3: 24.4 [20.8, 28.5]</title>
+<rect x="0" y="518" width="720" height="30" fill="transparent"/>
+<text x="285.8" y="537" text-anchor="end" font-size="12" fill="var(--text-primary)">priority-v3@advise vs priority-v3</text>
+<line x1="419.8" y1="533" x2="443.4" y2="533" stroke="var(--series-1)" stroke-width="2" stroke-linecap="round"/>
+<circle cx="430.9" cy="533" r="5" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+<text x="610" y="537" font-size="12" fill="var(--text-primary)">24.4 [20.8, 28.5]</text>
+</g>
+<g><title>priority-v3@advise vs priority-v3@predict: -1.7 [-2.4, -1.1]</title>
+<rect x="0" y="548" width="720" height="30" fill="transparent"/>
+<text x="285.8" y="567" text-anchor="end" font-size="12" fill="var(--text-primary)">priority-v3@advise vs priority-v3@predict</text>
+<line x1="349.4" y1="563" x2="353.4" y2="563" stroke="var(--series-1)" stroke-width="2" stroke-linecap="round"/>
+<circle cx="351.3" cy="563" r="5" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+<text x="610" y="567" font-size="12" fill="var(--text-primary)">-1.7 [-2.4, -1.1]</text>
+</g>
+<g><title>priority-v3@advise vs fifo-manual@advise: 0.3 [-0.8, 1.3]</title>
+<rect x="0" y="578" width="720" height="30" fill="transparent"/>
+<text x="285.8" y="597" text-anchor="end" font-size="12" fill="var(--text-primary)">priority-v3@advise vs fifo-manual@advise</text>
+<line x1="354.2" y1="593" x2="360.5" y2="593" stroke="var(--series-1)" stroke-width="2" stroke-linecap="round"/>
+<circle cx="357.4" cy="593" r="5" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+<text x="610" y="597" font-size="12" fill="var(--text-primary)">0.3 [-0.8, 1.3]</text>
+</g>
+<g><title>priority-v3@advise vs fifo-manual@reactive: 18.0 [16.1, 19.9]</title>
+<rect x="0" y="608" width="720" height="30" fill="transparent"/>
+<text x="285.8" y="627" text-anchor="end" font-size="12" fill="var(--text-primary)">priority-v3@advise vs fifo-manual@reactive</text>
+<line x1="405.6" y1="623" x2="417.3" y2="623" stroke="var(--series-1)" stroke-width="2" stroke-linecap="round"/>
+<circle cx="411.3" cy="623" r="5" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+<text x="610" y="627" font-size="12" fill="var(--text-primary)">18.0 [16.1, 19.9]</text>
+</g>
+</svg>
+</figure>
+<p>Means per simulated day. P5-P95 is the spread across days; brackets give the 95% confidence interval of the mean (bootstrap over days).</p>
+<div class="table"><table><thead><tr><th>Policy</th><th class="right">Missed flights per day</th><th class="right">of which connecting</th><th class="right">Missed per 1,000 passengers</th></tr></thead><tbody>
+<tr><td>Physical FIFO queue (status quo, policy A): <code>fifo</code> 1.1.0</td><td class="right">131.6 (P5-P95 80.0-201.3)</td><td class="right">131.6</td><td class="right">29.43</td></tr>
+<tr><td>Physical FIFO queue with staff calling closing flights (status quo with manual handling, policy A'): <code>fifo-manual</code> 0.1.0</td><td class="right">96.7 (P5-P95 50.0-145.1)</td><td class="right">96.7</td><td class="right">21.61</td></tr>
+<tr><td>Physical FIFO queue with staff calling closing flights (status quo with manual handling, policy A'), with extra lanes opened by a supervisor when the queue is long (today): <code>fifo-manual@reactive</code> 0.1.0</td><td class="right">81.5 (P5-P95 42.0-121.0)</td><td class="right">81.5</td><td class="right">18.21</td></tr>
+<tr><td>Physical FIFO queue with staff calling closing flights (status quo with manual handling, policy A'), with extra lanes recommended by GateFlow's forecast: <code>fifo-manual@predict</code> 0.1.0</td><td class="right">64.5 (P5-P95 35.0-94.0)</td><td class="right">64.5</td><td class="right">14.42</td></tr>
+<tr><td>Physical FIFO queue with staff calling closing flights (status quo with manual handling, policy A'), with extra lanes recommended by GateFlow's console: <code>fifo-manual@advise</code> 0.1.0</td><td class="right">63.8 (P5-P95 33.0-93.0)</td><td class="right">63.8</td><td class="right">14.26</td></tr>
+<tr><td>GateFlow virtual queue with constrained EDF priority v3: fast track, stale-data rule and hysteresis (policy B): <code>priority-v3</code> 0.2.0</td><td class="right">87.9 (P5-P95 48.0-138.2)</td><td class="right">87.9</td><td class="right">19.66</td></tr>
+<tr><td>GateFlow virtual queue with constrained EDF priority v3: fast track, stale-data rule and hysteresis (policy B), with extra lanes recommended by GateFlow's forecast: <code>priority-v3@predict</code> 0.2.0</td><td class="right">61.8 (P5-P95 37.0-89.0)</td><td class="right">61.8</td><td class="right">13.81</td></tr>
+<tr><td>GateFlow virtual queue with constrained EDF priority v3: fast track, stale-data rule and hysteresis (policy B), with extra lanes recommended by GateFlow's console: <code>priority-v3@advise</code> 0.2.0</td><td class="right">63.5 (P5-P95 36.9-94.1)</td><td class="right">63.5</td><td class="right">14.20</td></tr>
+</tbody></table></div>
+<div class="table"><table><thead><tr><th><code>fifo-manual</code> compared with <code>fifo</code></th><th class="right">Mean per day [95% CI]</th></tr></thead><tbody>
+<tr><td>Flights saved: missed with <code>fifo</code>, caught with <code>fifo-manual</code></td><td class="right">39.3 [36.5, 42.1]</td></tr>
+<tr><td>Flights lost: caught with <code>fifo</code>, missed with <code>fifo-manual</code></td><td class="right">4.3 [3.5, 5.2]</td></tr>
+<tr><td><strong>Net flights saved</strong></td><td class="right"><strong>35.0 [32.4, 37.7]</strong></td></tr>
+<tr><td>Days with a net gain / with a net loss</td><td class="right">99.5% / 0.5%</td></tr>
+<tr><td>At-risk passengers reaching the gate in time (244.1 per day classified URGENT on arrival under <code>fifo</code>)</td><td class="right">61.0% with <code>fifo</code>, 74.9% with <code>fifo-manual</code></td></tr>
+<tr><td>Change in mean time from arrival to screening (min)</td><td class="right">0.00 [-0.01, 0.00]</td></tr>
+<tr><td>Change in mean time standing in a queue (min)</td><td class="right">0.00 [-0.01, 0.00]</td></tr>
+</tbody></table></div>
+<div class="table"><table><thead><tr><th><code>fifo-manual@reactive</code> compared with <code>fifo</code></th><th class="right">Mean per day [95% CI]</th></tr></thead><tbody>
+<tr><td>Flights saved: missed with <code>fifo</code>, caught with <code>fifo-manual@reactive</code></td><td class="right">52.3 [47.6, 57.3]</td></tr>
+<tr><td>Flights lost: caught with <code>fifo</code>, missed with <code>fifo-manual@reactive</code></td><td class="right">2.1 [1.7, 2.5]</td></tr>
+<tr><td><strong>Net flights saved</strong></td><td class="right"><strong>50.1 [45.4, 55.4]</strong></td></tr>
+<tr><td>Days with a net gain / with a net loss</td><td class="right">100.0% / 0.0%</td></tr>
+<tr><td>At-risk passengers reaching the gate in time (244.1 per day classified URGENT on arrival under <code>fifo</code>)</td><td class="right">61.0% with <code>fifo</code>, 80.1% with <code>fifo-manual@reactive</code></td></tr>
+<tr><td>Change in mean time from arrival to screening (min)</td><td class="right">-0.34 [-0.40, -0.29]</td></tr>
+<tr><td>Change in mean time standing in a queue (min)</td><td class="right">-0.34 [-0.40, -0.29]</td></tr>
+</tbody></table></div>
+<div class="table"><table><thead><tr><th><code>fifo-manual@predict</code> compared with <code>fifo</code></th><th class="right">Mean per day [95% CI]</th></tr></thead><tbody>
+<tr><td>Flights saved: missed with <code>fifo</code>, caught with <code>fifo-manual@predict</code></td><td class="right">67.7 [62.4, 73.3]</td></tr>
+<tr><td>Flights lost: caught with <code>fifo</code>, missed with <code>fifo-manual@predict</code></td><td class="right">0.6 [0.4, 0.8]</td></tr>
+<tr><td><strong>Net flights saved</strong></td><td class="right"><strong>67.1 [61.9, 72.5]</strong></td></tr>
+<tr><td>Days with a net gain / with a net loss</td><td class="right">100.0% / 0.0%</td></tr>
+<tr><td>At-risk passengers reaching the gate in time (244.1 per day classified URGENT on arrival under <code>fifo</code>)</td><td class="right">61.0% with <code>fifo</code>, 86.1% with <code>fifo-manual@predict</code></td></tr>
+<tr><td>Change in mean time from arrival to screening (min)</td><td class="right">-0.85 [-0.92, -0.78]</td></tr>
+<tr><td>Change in mean time standing in a queue (min)</td><td class="right">-0.85 [-0.93, -0.78]</td></tr>
+</tbody></table></div>
+<div class="table"><table><thead><tr><th><code>fifo-manual@advise</code> compared with <code>fifo</code></th><th class="right">Mean per day [95% CI]</th></tr></thead><tbody>
+<tr><td>Flights saved: missed with <code>fifo</code>, caught with <code>fifo-manual@advise</code></td><td class="right">68.4 [63.0, 74.2]</td></tr>
+<tr><td>Flights lost: caught with <code>fifo</code>, missed with <code>fifo-manual@advise</code></td><td class="right">0.6 [0.4, 0.8]</td></tr>
+<tr><td><strong>Net flights saved</strong></td><td class="right"><strong>67.8 [62.7, 73.8]</strong></td></tr>
+<tr><td>Days with a net gain / with a net loss</td><td class="right">100.0% / 0.0%</td></tr>
+<tr><td>At-risk passengers reaching the gate in time (244.1 per day classified URGENT on arrival under <code>fifo</code>)</td><td class="right">61.0% with <code>fifo</code>, 86.4% with <code>fifo-manual@advise</code></td></tr>
+<tr><td>Change in mean time from arrival to screening (min)</td><td class="right">-0.91 [-0.99, -0.83]</td></tr>
+<tr><td>Change in mean time standing in a queue (min)</td><td class="right">-0.91 [-0.99, -0.84]</td></tr>
+</tbody></table></div>
+<div class="table"><table><thead><tr><th><code>priority-v3</code> compared with <code>fifo</code></th><th class="right">Mean per day [95% CI]</th></tr></thead><tbody>
+<tr><td>Flights saved: missed with <code>fifo</code>, caught with <code>priority-v3</code></td><td class="right">52.8 [49.8, 55.9]</td></tr>
+<tr><td>Flights lost: caught with <code>fifo</code>, missed with <code>priority-v3</code></td><td class="right">9.1 [8.2, 10.1]</td></tr>
+<tr><td><strong>Net flights saved</strong></td><td class="right"><strong>43.7 [41.1, 46.5]</strong></td></tr>
+<tr><td>Days with a net gain / with a net loss</td><td class="right">100.0% / 0.0%</td></tr>
+<tr><td>At-risk passengers reaching the gate in time (244.1 per day classified URGENT on arrival under <code>fifo</code>)</td><td class="right">61.0% with <code>fifo</code>, 81.0% with <code>priority-v3</code></td></tr>
+<tr><td>Change in mean time from arrival to screening (min)</td><td class="right">0.01 [0.00, 0.01]</td></tr>
+<tr><td>Change in mean time standing in a queue (min)</td><td class="right">-1.12 [-1.20, -1.05]</td></tr>
+</tbody></table></div>
+<div class="table"><table><thead><tr><th><code>priority-v3@predict</code> compared with <code>fifo</code></th><th class="right">Mean per day [95% CI]</th></tr></thead><tbody>
+<tr><td>Flights saved: missed with <code>fifo</code>, caught with <code>priority-v3@predict</code></td><td class="right">72.0 [67.0, 78.1]</td></tr>
+<tr><td>Flights lost: caught with <code>fifo</code>, missed with <code>priority-v3@predict</code></td><td class="right">2.2 [1.9, 2.6]</td></tr>
+<tr><td><strong>Net flights saved</strong></td><td class="right"><strong>69.8 [64.8, 75.4]</strong></td></tr>
+<tr><td>Days with a net gain / with a net loss</td><td class="right">100.0% / 0.0%</td></tr>
+<tr><td>At-risk passengers reaching the gate in time (244.1 per day classified URGENT on arrival under <code>fifo</code>)</td><td class="right">61.0% with <code>fifo</code>, 88.6% with <code>priority-v3@predict</code></td></tr>
+<tr><td>Change in mean time from arrival to screening (min)</td><td class="right">-0.85 [-0.92, -0.78]</td></tr>
+<tr><td>Change in mean time standing in a queue (min)</td><td class="right">-1.24 [-1.32, -1.17]</td></tr>
+</tbody></table></div>
+<div class="table"><table><thead><tr><th><code>priority-v3@advise</code> compared with <code>fifo</code></th><th class="right">Mean per day [95% CI]</th></tr></thead><tbody>
+<tr><td>Flights saved: missed with <code>fifo</code>, caught with <code>priority-v3@advise</code></td><td class="right">71.0 [66.0, 76.4]</td></tr>
+<tr><td>Flights lost: caught with <code>fifo</code>, missed with <code>priority-v3@advise</code></td><td class="right">2.9 [2.5, 3.3]</td></tr>
+<tr><td><strong>Net flights saved</strong></td><td class="right"><strong>68.1 [62.7, 73.9]</strong></td></tr>
+<tr><td>Days with a net gain / with a net loss</td><td class="right">100.0% / 0.0%</td></tr>
+<tr><td>At-risk passengers reaching the gate in time (244.1 per day classified URGENT on arrival under <code>fifo</code>)</td><td class="right">61.0% with <code>fifo</code>, 88.3% with <code>priority-v3@advise</code></td></tr>
+<tr><td>Change in mean time from arrival to screening (min)</td><td class="right">-0.70 [-0.78, -0.62]</td></tr>
+<tr><td>Change in mean time standing in a queue (min)</td><td class="right">-1.24 [-1.31, -1.16]</td></tr>
+</tbody></table></div>
+<div class="table"><table><thead><tr><th><code>fifo-manual@reactive</code> compared with <code>fifo-manual</code></th><th class="right">Mean per day [95% CI]</th></tr></thead><tbody>
+<tr><td>Flights saved: missed with <code>fifo-manual</code>, caught with <code>fifo-manual@reactive</code></td><td class="right">15.2 [12.3, 18.6]</td></tr>
+<tr><td>Flights lost: caught with <code>fifo-manual</code>, missed with <code>fifo-manual@reactive</code></td><td class="right">0.1 [0.0, 0.1]</td></tr>
+<tr><td><strong>Net flights saved</strong></td><td class="right"><strong>15.2 [12.3, 18.4]</strong></td></tr>
+<tr><td>Days with a net gain / with a net loss</td><td class="right">79.0% / 0.0%</td></tr>
+<tr><td>At-risk passengers reaching the gate in time (243.7 per day classified URGENT on arrival under <code>fifo-manual</code>)</td><td class="right">74.9% with <code>fifo-manual</code>, 80.1% with <code>fifo-manual@reactive</code></td></tr>
+<tr><td>Change in mean time from arrival to screening (min)</td><td class="right">-0.34 [-0.40, -0.29]</td></tr>
+<tr><td>Change in mean time standing in a queue (min)</td><td class="right">-0.34 [-0.40, -0.29]</td></tr>
+</tbody></table></div>
+<div class="table"><table><thead><tr><th><code>fifo-manual@predict</code> compared with <code>fifo-manual</code></th><th class="right">Mean per day [95% CI]</th></tr></thead><tbody>
+<tr><td>Flights saved: missed with <code>fifo-manual</code>, caught with <code>fifo-manual@predict</code></td><td class="right">32.3 [28.6, 36.4]</td></tr>
+<tr><td>Flights lost: caught with <code>fifo-manual</code>, missed with <code>fifo-manual@predict</code></td><td class="right">0.1 [0.0, 0.2]</td></tr>
+<tr><td><strong>Net flights saved</strong></td><td class="right"><strong>32.2 [28.5, 36.4]</strong></td></tr>
+<tr><td>Days with a net gain / with a net loss</td><td class="right">100.0% / 0.0%</td></tr>
+<tr><td>At-risk passengers reaching the gate in time (243.7 per day classified URGENT on arrival under <code>fifo-manual</code>)</td><td class="right">74.9% with <code>fifo-manual</code>, 86.1% with <code>fifo-manual@predict</code></td></tr>
+<tr><td>Change in mean time from arrival to screening (min)</td><td class="right">-0.85 [-0.93, -0.78]</td></tr>
+<tr><td>Change in mean time standing in a queue (min)</td><td class="right">-0.85 [-0.93, -0.77]</td></tr>
+</tbody></table></div>
+<div class="table"><table><thead><tr><th><code>fifo-manual@predict</code> compared with <code>fifo-manual@reactive</code></th><th class="right">Mean per day [95% CI]</th></tr></thead><tbody>
+<tr><td>Flights saved: missed with <code>fifo-manual@reactive</code>, caught with <code>fifo-manual@predict</code></td><td class="right">17.5 [15.8, 19.3]</td></tr>
+<tr><td>Flights lost: caught with <code>fifo-manual@reactive</code>, missed with <code>fifo-manual@predict</code></td><td class="right">0.5 [0.3, 0.8]</td></tr>
+<tr><td><strong>Net flights saved</strong></td><td class="right"><strong>17.0 [15.3, 18.7]</strong></td></tr>
+<tr><td>Days with a net gain / with a net loss</td><td class="right">97.5% / 1.5%</td></tr>
+<tr><td>At-risk passengers reaching the gate in time (217.3 per day classified URGENT on arrival under <code>fifo-manual@reactive</code>)</td><td class="right">77.9% with <code>fifo-manual@reactive</code>, 84.6% with <code>fifo-manual@predict</code></td></tr>
+<tr><td>Change in mean time from arrival to screening (min)</td><td class="right">-0.51 [-0.55, -0.47]</td></tr>
+<tr><td>Change in mean time standing in a queue (min)</td><td class="right">-0.51 [-0.55, -0.47]</td></tr>
+</tbody></table></div>
+<div class="table"><table><thead><tr><th><code>fifo-manual@advise</code> compared with <code>fifo-manual</code></th><th class="right">Mean per day [95% CI]</th></tr></thead><tbody>
+<tr><td>Flights saved: missed with <code>fifo-manual</code>, caught with <code>fifo-manual@advise</code></td><td class="right">33.0 [29.3, 37.0]</td></tr>
+<tr><td>Flights lost: caught with <code>fifo-manual</code>, missed with <code>fifo-manual@advise</code></td><td class="right">0.1 [0.0, 0.1]</td></tr>
+<tr><td><strong>Net flights saved</strong></td><td class="right"><strong>32.9 [29.1, 37.2]</strong></td></tr>
+<tr><td>Days with a net gain / with a net loss</td><td class="right">99.0% / 0.0%</td></tr>
+<tr><td>At-risk passengers reaching the gate in time (243.7 per day classified URGENT on arrival under <code>fifo-manual</code>)</td><td class="right">74.9% with <code>fifo-manual</code>, 86.4% with <code>fifo-manual@advise</code></td></tr>
+<tr><td>Change in mean time from arrival to screening (min)</td><td class="right">-0.91 [-0.99, -0.83]</td></tr>
+<tr><td>Change in mean time standing in a queue (min)</td><td class="right">-0.91 [-0.99, -0.83]</td></tr>
+</tbody></table></div>
+<div class="table"><table><thead><tr><th><code>fifo-manual@advise</code> compared with <code>fifo-manual@reactive</code></th><th class="right">Mean per day [95% CI]</th></tr></thead><tbody>
+<tr><td>Flights saved: missed with <code>fifo-manual@reactive</code>, caught with <code>fifo-manual@advise</code></td><td class="right">18.3 [16.5, 20.1]</td></tr>
+<tr><td>Flights lost: caught with <code>fifo-manual@reactive</code>, missed with <code>fifo-manual@advise</code></td><td class="right">0.6 [0.3, 0.9]</td></tr>
+<tr><td><strong>Net flights saved</strong></td><td class="right"><strong>17.7 [16.0, 19.4]</strong></td></tr>
+<tr><td>Days with a net gain / with a net loss</td><td class="right">97.0% / 2.0%</td></tr>
+<tr><td>At-risk passengers reaching the gate in time (217.3 per day classified URGENT on arrival under <code>fifo-manual@reactive</code>)</td><td class="right">77.9% with <code>fifo-manual@reactive</code>, 84.9% with <code>fifo-manual@advise</code></td></tr>
+<tr><td>Change in mean time from arrival to screening (min)</td><td class="right">-0.57 [-0.61, -0.52]</td></tr>
+<tr><td>Change in mean time standing in a queue (min)</td><td class="right">-0.57 [-0.61, -0.52]</td></tr>
+</tbody></table></div>
+<div class="table"><table><thead><tr><th><code>fifo-manual@advise</code> compared with <code>fifo-manual@predict</code></th><th class="right">Mean per day [95% CI]</th></tr></thead><tbody>
+<tr><td>Flights saved: missed with <code>fifo-manual@predict</code>, caught with <code>fifo-manual@advise</code></td><td class="right">1.8 [1.3, 2.3]</td></tr>
+<tr><td>Flights lost: caught with <code>fifo-manual@predict</code>, missed with <code>fifo-manual@advise</code></td><td class="right">1.1 [0.7, 1.5]</td></tr>
+<tr><td><strong>Net flights saved</strong></td><td class="right"><strong>0.7 [0.0, 1.4]</strong></td></tr>
+<tr><td>Days with a net gain / with a net loss</td><td class="right">33.0% / 17.0%</td></tr>
+<tr><td>At-risk passengers reaching the gate in time (173.2 per day classified URGENT on arrival under <code>fifo-manual@predict</code>)</td><td class="right">81.0% with <code>fifo-manual@predict</code>, 81.5% with <code>fifo-manual@advise</code></td></tr>
+<tr><td>Change in mean time from arrival to screening (min)</td><td class="right">-0.06 [-0.09, -0.03]</td></tr>
+<tr><td>Change in mean time standing in a queue (min)</td><td class="right">-0.06 [-0.09, -0.04]</td></tr>
+</tbody></table></div>
+<div class="table"><table><thead><tr><th><code>priority-v3</code> compared with <code>fifo-manual</code></th><th class="right">Mean per day [95% CI]</th></tr></thead><tbody>
+<tr><td>Flights saved: missed with <code>fifo-manual</code>, caught with <code>priority-v3</code></td><td class="right">22.7 [21.1, 24.4]</td></tr>
+<tr><td>Flights lost: caught with <code>fifo-manual</code>, missed with <code>priority-v3</code></td><td class="right">14.0 [12.7, 15.4]</td></tr>
+<tr><td><strong>Net flights saved</strong></td><td class="right"><strong>8.7 [7.2, 10.4]</strong></td></tr>
+<tr><td>Days with a net gain / with a net loss</td><td class="right">79.5% / 17.0%</td></tr>
+<tr><td>At-risk passengers reaching the gate in time (243.7 per day classified URGENT on arrival under <code>fifo-manual</code>)</td><td class="right">74.9% with <code>fifo-manual</code>, 81.0% with <code>priority-v3</code></td></tr>
+<tr><td>Change in mean time from arrival to screening (min)</td><td class="right">0.01 [0.00, 0.01]</td></tr>
+<tr><td>Change in mean time standing in a queue (min)</td><td class="right">-1.12 [-1.20, -1.05]</td></tr>
+</tbody></table></div>
+<div class="table"><table><thead><tr><th><code>priority-v3@predict</code> compared with <code>priority-v3</code></th><th class="right">Mean per day [95% CI]</th></tr></thead><tbody>
+<tr><td>Flights saved: missed with <code>priority-v3</code>, caught with <code>priority-v3@predict</code></td><td class="right">26.6 [23.1, 31.2]</td></tr>
+<tr><td>Flights lost: caught with <code>priority-v3</code>, missed with <code>priority-v3@predict</code></td><td class="right">0.5 [0.3, 0.6]</td></tr>
+<tr><td><strong>Net flights saved</strong></td><td class="right"><strong>26.2 [22.6, 30.4]</strong></td></tr>
+<tr><td>Days with a net gain / with a net loss</td><td class="right">99.5% / 0.0%</td></tr>
+<tr><td>At-risk passengers reaching the gate in time (313.0 per day classified URGENT on arrival under <code>priority-v3</code>)</td><td class="right">84.8% with <code>priority-v3</code>, 90.7% with <code>priority-v3@predict</code></td></tr>
+<tr><td>Change in mean time from arrival to screening (min)</td><td class="right">-0.86 [-0.93, -0.79]</td></tr>
+<tr><td>Change in mean time standing in a queue (min)</td><td class="right">-0.12 [-0.13, -0.11]</td></tr>
+</tbody></table></div>
+<div class="table"><table><thead><tr><th><code>priority-v3@predict</code> compared with <code>fifo-manual@predict</code></th><th class="right">Mean per day [95% CI]</th></tr></thead><tbody>
+<tr><td>Flights saved: missed with <code>fifo-manual@predict</code>, caught with <code>priority-v3@predict</code></td><td class="right">8.5 [7.7, 9.5]</td></tr>
+<tr><td>Flights lost: caught with <code>fifo-manual@predict</code>, missed with <code>priority-v3@predict</code></td><td class="right">5.8 [5.3, 6.3]</td></tr>
+<tr><td><strong>Net flights saved</strong></td><td class="right"><strong>2.7 [1.8, 3.6]</strong></td></tr>
+<tr><td>Days with a net gain / with a net loss</td><td class="right">59.0% / 34.0%</td></tr>
+<tr><td>At-risk passengers reaching the gate in time (173.2 per day classified URGENT on arrival under <code>fifo-manual@predict</code>)</td><td class="right">81.0% with <code>fifo-manual@predict</code>, 84.7% with <code>priority-v3@predict</code></td></tr>
+<tr><td>Change in mean time from arrival to screening (min)</td><td class="right">0.00 [-0.01, 0.01]</td></tr>
+<tr><td>Change in mean time standing in a queue (min)</td><td class="right">-0.39 [-0.42, -0.36]</td></tr>
+</tbody></table></div>
+<div class="table"><table><thead><tr><th><code>priority-v3@predict</code> compared with <code>fifo-manual@reactive</code></th><th class="right">Mean per day [95% CI]</th></tr></thead><tbody>
+<tr><td>Flights saved: missed with <code>fifo-manual@reactive</code>, caught with <code>priority-v3@predict</code></td><td class="right">24.8 [22.9, 26.5]</td></tr>
+<tr><td>Flights lost: caught with <code>fifo-manual@reactive</code>, missed with <code>priority-v3@predict</code></td><td class="right">5.0 [4.5, 5.6]</td></tr>
+<tr><td><strong>Net flights saved</strong></td><td class="right"><strong>19.7 [17.8, 21.6]</strong></td></tr>
+<tr><td>Days with a net gain / with a net loss</td><td class="right">95.5% / 3.5%</td></tr>
+<tr><td>At-risk passengers reaching the gate in time (217.3 per day classified URGENT on arrival under <code>fifo-manual@reactive</code>)</td><td class="right">77.9% with <code>fifo-manual@reactive</code>, 87.4% with <code>priority-v3@predict</code></td></tr>
+<tr><td>Change in mean time from arrival to screening (min)</td><td class="right">-0.51 [-0.54, -0.47]</td></tr>
+<tr><td>Change in mean time standing in a queue (min)</td><td class="right">-0.90 [-0.93, -0.86]</td></tr>
+</tbody></table></div>
+<div class="table"><table><thead><tr><th><code>priority-v3@advise</code> compared with <code>priority-v3</code></th><th class="right">Mean per day [95% CI]</th></tr></thead><tbody>
+<tr><td>Flights saved: missed with <code>priority-v3</code>, caught with <code>priority-v3@advise</code></td><td class="right">24.7 [21.1, 29.1]</td></tr>
+<tr><td>Flights lost: caught with <code>priority-v3</code>, missed with <code>priority-v3@advise</code></td><td class="right">0.3 [0.2, 0.5]</td></tr>
+<tr><td><strong>Net flights saved</strong></td><td class="right"><strong>24.4 [20.8, 28.5]</strong></td></tr>
+<tr><td>Days with a net gain / with a net loss</td><td class="right">97.5% / 0.5%</td></tr>
+<tr><td>At-risk passengers reaching the gate in time (313.0 per day classified URGENT on arrival under <code>priority-v3</code>)</td><td class="right">84.8% with <code>priority-v3</code>, 90.4% with <code>priority-v3@advise</code></td></tr>
+<tr><td>Change in mean time from arrival to screening (min)</td><td class="right">-0.71 [-0.79, -0.63]</td></tr>
+<tr><td>Change in mean time standing in a queue (min)</td><td class="right">-0.12 [-0.13, -0.11]</td></tr>
+</tbody></table></div>
+<div class="table"><table><thead><tr><th><code>priority-v3@advise</code> compared with <code>priority-v3@predict</code></th><th class="right">Mean per day [95% CI]</th></tr></thead><tbody>
+<tr><td>Flights saved: missed with <code>priority-v3@predict</code>, caught with <code>priority-v3@advise</code></td><td class="right">1.3 [0.9, 1.6]</td></tr>
+<tr><td>Flights lost: caught with <code>priority-v3@predict</code>, missed with <code>priority-v3@advise</code></td><td class="right">3.0 [2.4, 3.6]</td></tr>
+<tr><td><strong>Net flights saved</strong></td><td class="right"><strong>-1.7 [-2.4, -1.1]</strong></td></tr>
+<tr><td>Days with a net gain / with a net loss</td><td class="right">19.0% / 43.0%</td></tr>
+<tr><td>At-risk passengers reaching the gate in time (258.8 per day classified URGENT on arrival under <code>priority-v3@predict</code>)</td><td class="right">89.1% with <code>priority-v3@predict</code>, 88.8% with <code>priority-v3@advise</code></td></tr>
+<tr><td>Change in mean time from arrival to screening (min)</td><td class="right">0.15 [0.11, 0.18]</td></tr>
+<tr><td>Change in mean time standing in a queue (min)</td><td class="right">0.00 [-0.01, 0.01]</td></tr>
+</tbody></table></div>
+<div class="table"><table><thead><tr><th><code>priority-v3@advise</code> compared with <code>fifo-manual@advise</code></th><th class="right">Mean per day [95% CI]</th></tr></thead><tbody>
+<tr><td>Flights saved: missed with <code>fifo-manual@advise</code>, caught with <code>priority-v3@advise</code></td><td class="right">7.8 [7.0, 8.8]</td></tr>
+<tr><td>Flights lost: caught with <code>fifo-manual@advise</code>, missed with <code>priority-v3@advise</code></td><td class="right">7.6 [6.9, 8.4]</td></tr>
+<tr><td><strong>Net flights saved</strong></td><td class="right"><strong>0.3 [-0.8, 1.3]</strong></td></tr>
+<tr><td>Days with a net gain / with a net loss</td><td class="right">44.5% / 47.5%</td></tr>
+<tr><td>At-risk passengers reaching the gate in time (169.2 per day classified URGENT on arrival under <code>fifo-manual@advise</code>)</td><td class="right">81.0% with <code>fifo-manual@advise</code>, 84.0% with <code>priority-v3@advise</code></td></tr>
+<tr><td>Change in mean time from arrival to screening (min)</td><td class="right">0.21 [0.17, 0.24]</td></tr>
+<tr><td>Change in mean time standing in a queue (min)</td><td class="right">-0.33 [-0.36, -0.30]</td></tr>
+</tbody></table></div>
+<div class="table"><table><thead><tr><th><code>priority-v3@advise</code> compared with <code>fifo-manual@reactive</code></th><th class="right">Mean per day [95% CI]</th></tr></thead><tbody>
+<tr><td>Flights saved: missed with <code>fifo-manual@reactive</code>, caught with <code>priority-v3@advise</code></td><td class="right">24.2 [22.3, 26.0]</td></tr>
+<tr><td>Flights lost: caught with <code>fifo-manual@reactive</code>, missed with <code>priority-v3@advise</code></td><td class="right">6.2 [5.6, 6.8]</td></tr>
+<tr><td><strong>Net flights saved</strong></td><td class="right"><strong>18.0 [16.1, 19.9]</strong></td></tr>
+<tr><td>Days with a net gain / with a net loss</td><td class="right">96.0% / 3.0%</td></tr>
+<tr><td>At-risk passengers reaching the gate in time (217.3 per day classified URGENT on arrival under <code>fifo-manual@reactive</code>)</td><td class="right">77.9% with <code>fifo-manual@reactive</code>, 87.1% with <code>priority-v3@advise</code></td></tr>
+<tr><td>Change in mean time from arrival to screening (min)</td><td class="right">-0.36 [-0.41, -0.31]</td></tr>
+<tr><td>Change in mean time standing in a queue (min)</td><td class="right">-0.90 [-0.93, -0.86]</td></tr>
+</tbody></table></div>
+<h2 id="2-waiting-times">2. Waiting times</h2>
+<p>*Time to screening*: minutes from arrival at the checkpoint (when the ticket is issued) to the start of screening. *Standing*: minutes spent standing in a queue: the whole wait in a physical queue; in a virtual queue only the wait at the lanes after validating the ticket. Each column is the mean over days of the daily statistic; &quot;longest&quot; is the longest single value over all simulated days.</p>
+<div class="table"><table><thead><tr><th>Policy</th><th class="right">Time to screening: mean</th><th class="right">P50</th><th class="right">P90</th><th class="right">P99</th><th class="right">Longest</th><th class="right">Standing: mean</th><th class="right">P90</th><th class="right">Longest</th></tr></thead><tbody>
+<tr><td><code>fifo</code></td><td class="right">2.0</td><td class="right">0.6</td><td class="right">7.0</td><td class="right">12.5</td><td class="right">38.7</td><td class="right">2.0</td><td class="right">7.0</td><td class="right">38.7</td></tr>
+<tr><td><code>fifo-manual</code></td><td class="right">2.0</td><td class="right">0.6</td><td class="right">6.8</td><td class="right">14.1</td><td class="right">72.3</td><td class="right">2.0</td><td class="right">6.8</td><td class="right">72.3</td></tr>
+<tr><td><code>fifo-manual@reactive</code></td><td class="right">1.7</td><td class="right">0.5</td><td class="right">5.4</td><td class="right">11.4</td><td class="right">28.0</td><td class="right">1.7</td><td class="right">5.4</td><td class="right">28.0</td></tr>
+<tr><td><code>fifo-manual@predict</code></td><td class="right">1.2</td><td class="right">0.4</td><td class="right">3.7</td><td class="right">8.0</td><td class="right">20.9</td><td class="right">1.2</td><td class="right">3.7</td><td class="right">20.9</td></tr>
+<tr><td><code>fifo-manual@advise</code></td><td class="right">1.1</td><td class="right">0.3</td><td class="right">3.5</td><td class="right">7.7</td><td class="right">20.9</td><td class="right">1.1</td><td class="right">3.5</td><td class="right">20.9</td></tr>
+<tr><td><code>priority-v3</code></td><td class="right">2.0</td><td class="right">0.6</td><td class="right">6.6</td><td class="right">15.2</td><td class="right">109.2</td><td class="right">0.9</td><td class="right">2.5</td><td class="right">19.6</td></tr>
+<tr><td><code>priority-v3@predict</code></td><td class="right">1.2</td><td class="right">0.4</td><td class="right">3.6</td><td class="right">8.5</td><td class="right">78.2</td><td class="right">0.8</td><td class="right">2.4</td><td class="right">11.8</td></tr>
+<tr><td><code>priority-v3@advise</code></td><td class="right">1.3</td><td class="right">0.4</td><td class="right">4.1</td><td class="right">10.0</td><td class="right">78.9</td><td class="right">0.8</td><td class="right">2.4</td><td class="right">10.8</td></tr>
+</tbody></table></div>
+<h2 id="3-cost-for-passengers-not-prioritised-by-fifo-manual-compared-with-fifo">3. Cost for passengers not prioritised by <code>fifo-manual</code> (compared with <code>fifo</code>)</h2>
+<p>Extra wait = time to screening with the candidate minus time to screening with the reference, for the same passenger.</p>
+<div class="table"><table><thead><tr><th>Metric</th><th class="right">Value [95% CI]</th></tr></thead><tbody>
+<tr><td>Passengers prioritised per day</td><td class="right">269.6 (P5-P95 182.7-392.3) (6.11% of tickets called)</td></tr>
+<tr><td>Mean extra wait of non-prioritised passengers (min)</td><td class="right">0.17 [0.16, 0.18]</td></tr>
+<tr><td>P90 extra wait of non-prioritised passengers (min)</td><td class="right">0.46 [0.43, 0.49]</td></tr>
+<tr><td>Largest extra wait of any non-prioritised passenger, worst day (min)</td><td class="right">45.5</td></tr>
+<tr><td>Share of non-prioritised passengers delayed by more than 5 min</td><td class="right">0.44%</td></tr>
+<tr><td>Most people who overtook one ticket, worst day (no bound for staff flight calls)</td><td class="right">216</td></tr>
+</tbody></table></div>
+<h2 id="4-cost-for-passengers-not-prioritised-by-fifo-manual-reactive-compared-with-fifo">4. Cost for passengers not prioritised by <code>fifo-manual@reactive</code> (compared with <code>fifo</code>)</h2>
+<p>Extra wait = time to screening with the candidate minus time to screening with the reference, for the same passenger.</p>
+<div class="table"><table><thead><tr><th>Metric</th><th class="right">Value [95% CI]</th></tr></thead><tbody>
+<tr><td>Passengers prioritised per day</td><td class="right">236.0 (P5-P95 165.0-301.1) (5.34% of tickets called)</td></tr>
+<tr><td>Mean extra wait of non-prioritised passengers (min)</td><td class="right">-0.20 [-0.25, -0.15]</td></tr>
+<tr><td>P90 extra wait of non-prioritised passengers (min)</td><td class="right">0.30 [0.27, 0.32]</td></tr>
+<tr><td>Largest extra wait of any non-prioritised passenger, worst day (min)</td><td class="right">22.8</td></tr>
+<tr><td>Share of non-prioritised passengers delayed by more than 5 min</td><td class="right">0.16%</td></tr>
+<tr><td>Most people who overtook one ticket, worst day (no bound for staff flight calls)</td><td class="right">68</td></tr>
+</tbody></table></div>
+<h2 id="5-cost-for-passengers-not-prioritised-by-fifo-manual-predict-compared-with-fifo">5. Cost for passengers not prioritised by <code>fifo-manual@predict</code> (compared with <code>fifo</code>)</h2>
+<p>Extra wait = time to screening with the candidate minus time to screening with the reference, for the same passenger.</p>
+<div class="table"><table><thead><tr><th>Metric</th><th class="right">Value [95% CI]</th></tr></thead><tbody>
+<tr><td>Passengers prioritised per day</td><td class="right">183.8 (P5-P95 124.0-251.1) (4.16% of tickets called)</td></tr>
+<tr><td>Mean extra wait of non-prioritised passengers (min)</td><td class="right">-0.75 [-0.82, -0.68]</td></tr>
+<tr><td>P90 extra wait of non-prioritised passengers (min)</td><td class="right">0.12 [0.10, 0.14]</td></tr>
+<tr><td>Largest extra wait of any non-prioritised passenger, worst day (min)</td><td class="right">11.5</td></tr>
+<tr><td>Share of non-prioritised passengers delayed by more than 5 min</td><td class="right">0.02%</td></tr>
+<tr><td>Most people who overtook one ticket, worst day (no bound for staff flight calls)</td><td class="right">44</td></tr>
+</tbody></table></div>
+<h2 id="6-cost-for-passengers-not-prioritised-by-fifo-manual-advise-compared-with-fifo">6. Cost for passengers not prioritised by <code>fifo-manual@advise</code> (compared with <code>fifo</code>)</h2>
+<p>Extra wait = time to screening with the candidate minus time to screening with the reference, for the same passenger.</p>
+<div class="table"><table><thead><tr><th>Metric</th><th class="right">Value [95% CI]</th></tr></thead><tbody>
+<tr><td>Passengers prioritised per day</td><td class="right">175.3 (P5-P95 115.0-253.1) (3.96% of tickets called)</td></tr>
+<tr><td>Mean extra wait of non-prioritised passengers (min)</td><td class="right">-0.82 [-0.89, -0.74]</td></tr>
+<tr><td>P90 extra wait of non-prioritised passengers (min)</td><td class="right">0.11 [0.09, 0.12]</td></tr>
+<tr><td>Largest extra wait of any non-prioritised passenger, worst day (min)</td><td class="right">14.5</td></tr>
+<tr><td>Share of non-prioritised passengers delayed by more than 5 min</td><td class="right">0.03%</td></tr>
+<tr><td>Most people who overtook one ticket, worst day (no bound for staff flight calls)</td><td class="right">48</td></tr>
+</tbody></table></div>
+<h2 id="7-cost-for-passengers-not-prioritised-by-priority-v3-compared-with-fifo">7. Cost for passengers not prioritised by <code>priority-v3</code> (compared with <code>fifo</code>)</h2>
+<p>Extra wait = time to screening with the candidate minus time to screening with the reference, for the same passenger.</p>
+<div class="table"><table><thead><tr><th>Metric</th><th class="right">Value [95% CI]</th></tr></thead><tbody>
+<tr><td>Passengers prioritised per day</td><td class="right">305.9 (P5-P95 217.9-391.1) (6.71% of tickets called)</td></tr>
+<tr><td>Mean extra wait of non-prioritised passengers (min)</td><td class="right">0.24 [0.23, 0.26]</td></tr>
+<tr><td>P90 extra wait of non-prioritised passengers (min)</td><td class="right">0.74 [0.68, 0.81]</td></tr>
+<tr><td>Largest extra wait of any non-prioritised passenger, worst day (min)</td><td class="right">100.5</td></tr>
+<tr><td>Share of non-prioritised passengers delayed by more than 5 min</td><td class="right">1.01%</td></tr>
+<tr><td>Most people who overtook one ticket, worst day (bound K = 30, passes in the window and at the lanes included)</td><td class="right">30</td></tr>
+<tr><td>Calls where the cap blocked a priority call, per day</td><td class="right">44.0</td></tr>
+<tr><td>Calls where the overtake guard took precedence (a ticket had reached K overtakes), per day</td><td class="right">0.6</td></tr>
+<tr><td>People through the fast track per day</td><td class="right">305.2</td></tr>
+<tr><td>People passed at the lanes by fast-tracked parties per day</td><td class="right">1489.4</td></tr>
+</tbody></table></div>
+<h2 id="8-cost-for-passengers-not-prioritised-by-priority-v3-predict-compared-with-fifo">8. Cost for passengers not prioritised by <code>priority-v3@predict</code> (compared with <code>fifo</code>)</h2>
+<p>Extra wait = time to screening with the candidate minus time to screening with the reference, for the same passenger.</p>
+<div class="table"><table><thead><tr><th>Metric</th><th class="right">Value [95% CI]</th></tr></thead><tbody>
+<tr><td>Passengers prioritised per day</td><td class="right">252.0 (P5-P95 193.9-312.1) (5.54% of tickets called)</td></tr>
+<tr><td>Mean extra wait of non-prioritised passengers (min)</td><td class="right">-0.72 [-0.79, -0.66]</td></tr>
+<tr><td>P90 extra wait of non-prioritised passengers (min)</td><td class="right">0.15 [0.13, 0.18]</td></tr>
+<tr><td>Largest extra wait of any non-prioritised passenger, worst day (min)</td><td class="right">69.1</td></tr>
+<tr><td>Share of non-prioritised passengers delayed by more than 5 min</td><td class="right">0.14%</td></tr>
+<tr><td>Most people who overtook one ticket, worst day (bound K = 30, passes in the window and at the lanes included)</td><td class="right">30</td></tr>
+<tr><td>Calls where the cap blocked a priority call, per day</td><td class="right">14.1</td></tr>
+<tr><td>Calls where the overtake guard took precedence (a ticket had reached K overtakes), per day</td><td class="right">0.0</td></tr>
+<tr><td>People through the fast track per day</td><td class="right">251.9</td></tr>
+<tr><td>People passed at the lanes by fast-tracked parties per day</td><td class="right">1145.7</td></tr>
+</tbody></table></div>
+<h2 id="9-cost-for-passengers-not-prioritised-by-priority-v3-advise-compared-with-fifo">9. Cost for passengers not prioritised by <code>priority-v3@advise</code> (compared with <code>fifo</code>)</h2>
+<p>Extra wait = time to screening with the candidate minus time to screening with the reference, for the same passenger.</p>
+<div class="table"><table><thead><tr><th>Metric</th><th class="right">Value [95% CI]</th></tr></thead><tbody>
+<tr><td>Passengers prioritised per day</td><td class="right">264.2 (P5-P95 200.8-334.1) (5.81% of tickets called)</td></tr>
+<tr><td>Mean extra wait of non-prioritised passengers (min)</td><td class="right">-0.55 [-0.63, -0.47]</td></tr>
+<tr><td>P90 extra wait of non-prioritised passengers (min)</td><td class="right">0.25 [0.22, 0.28]</td></tr>
+<tr><td>Largest extra wait of any non-prioritised passenger, worst day (min)</td><td class="right">69.7</td></tr>
+<tr><td>Share of non-prioritised passengers delayed by more than 5 min</td><td class="right">0.24%</td></tr>
+<tr><td>Most people who overtook one ticket, worst day (bound K = 30, passes in the window and at the lanes included)</td><td class="right">30</td></tr>
+<tr><td>Calls where the cap blocked a priority call, per day</td><td class="right">19.5</td></tr>
+<tr><td>Calls where the overtake guard took precedence (a ticket had reached K overtakes), per day</td><td class="right">0.1</td></tr>
+<tr><td>People through the fast track per day</td><td class="right">264.1</td></tr>
+<tr><td>People passed at the lanes by fast-tracked parties per day</td><td class="right">1215.6</td></tr>
+</tbody></table></div>
+<h2 id="10-cost-for-passengers-not-prioritised-by-priority-v3-compared-with-fifo-manual">10. Cost for passengers not prioritised by <code>priority-v3</code> (compared with <code>fifo-manual</code>)</h2>
+<p>Extra wait = time to screening with the candidate minus time to screening with the reference, for the same passenger.</p>
+<div class="table"><table><thead><tr><th>Metric</th><th class="right">Value [95% CI]</th></tr></thead><tbody>
+<tr><td>Passengers prioritised per day</td><td class="right">305.9 (P5-P95 217.9-391.1) (6.71% of tickets called)</td></tr>
+<tr><td>Mean extra wait of non-prioritised passengers (min)</td><td class="right">0.13 [0.12, 0.14]</td></tr>
+<tr><td>P90 extra wait of non-prioritised passengers (min)</td><td class="right">0.39 [0.36, 0.42]</td></tr>
+<tr><td>Largest extra wait of any non-prioritised passenger, worst day (min)</td><td class="right">100.0</td></tr>
+<tr><td>Share of non-prioritised passengers delayed by more than 5 min</td><td class="right">0.88%</td></tr>
+<tr><td>Most people who overtook one ticket, worst day (bound K = 30, passes in the window and at the lanes included)</td><td class="right">30</td></tr>
+<tr><td>Calls where the cap blocked a priority call, per day</td><td class="right">44.0</td></tr>
+<tr><td>Calls where the overtake guard took precedence (a ticket had reached K overtakes), per day</td><td class="right">0.6</td></tr>
+<tr><td>People through the fast track per day</td><td class="right">305.2</td></tr>
+<tr><td>People passed at the lanes by fast-tracked parties per day</td><td class="right">1489.4</td></tr>
+</tbody></table></div>
+<h2 id="11-cost-for-passengers-not-prioritised-by-priority-v3-predict-compared-with-fifo-manual-predict">11. Cost for passengers not prioritised by <code>priority-v3@predict</code> (compared with <code>fifo-manual@predict</code>)</h2>
+<p>Extra wait = time to screening with the candidate minus time to screening with the reference, for the same passenger.</p>
+<div class="table"><table><thead><tr><th>Metric</th><th class="right">Value [95% CI]</th></tr></thead><tbody>
+<tr><td>Passengers prioritised per day</td><td class="right">252.0 (P5-P95 193.9-312.1) (5.54% of tickets called)</td></tr>
+<tr><td>Mean extra wait of non-prioritised passengers (min)</td><td class="right">0.04 [0.04, 0.05]</td></tr>
+<tr><td>P90 extra wait of non-prioritised passengers (min)</td><td class="right">0.15 [0.14, 0.17]</td></tr>
+<tr><td>Largest extra wait of any non-prioritised passenger, worst day (min)</td><td class="right">69.1</td></tr>
+<tr><td>Share of non-prioritised passengers delayed by more than 5 min</td><td class="right">0.25%</td></tr>
+<tr><td>Most people who overtook one ticket, worst day (bound K = 30, passes in the window and at the lanes included)</td><td class="right">30</td></tr>
+<tr><td>Calls where the cap blocked a priority call, per day</td><td class="right">14.1</td></tr>
+<tr><td>Calls where the overtake guard took precedence (a ticket had reached K overtakes), per day</td><td class="right">0.0</td></tr>
+<tr><td>People through the fast track per day</td><td class="right">251.9</td></tr>
+<tr><td>People passed at the lanes by fast-tracked parties per day</td><td class="right">1145.7</td></tr>
+</tbody></table></div>
+<h2 id="12-cost-for-passengers-not-prioritised-by-priority-v3-predict-compared-with-fifo-manual-reactive">12. Cost for passengers not prioritised by <code>priority-v3@predict</code> (compared with <code>fifo-manual@reactive</code>)</h2>
+<p>Extra wait = time to screening with the candidate minus time to screening with the reference, for the same passenger.</p>
+<div class="table"><table><thead><tr><th>Metric</th><th class="right">Value [95% CI]</th></tr></thead><tbody>
+<tr><td>Passengers prioritised per day</td><td class="right">252.0 (P5-P95 193.9-312.1) (5.54% of tickets called)</td></tr>
+<tr><td>Mean extra wait of non-prioritised passengers (min)</td><td class="right">-0.47 [-0.50, -0.43]</td></tr>
+<tr><td>P90 extra wait of non-prioritised passengers (min)</td><td class="right">0.09 [0.07, 0.11]</td></tr>
+<tr><td>Largest extra wait of any non-prioritised passenger, worst day (min)</td><td class="right">68.2</td></tr>
+<tr><td>Share of non-prioritised passengers delayed by more than 5 min</td><td class="right">0.25%</td></tr>
+<tr><td>Most people who overtook one ticket, worst day (bound K = 30, passes in the window and at the lanes included)</td><td class="right">30</td></tr>
+<tr><td>Calls where the cap blocked a priority call, per day</td><td class="right">14.1</td></tr>
+<tr><td>Calls where the overtake guard took precedence (a ticket had reached K overtakes), per day</td><td class="right">0.0</td></tr>
+<tr><td>People through the fast track per day</td><td class="right">251.9</td></tr>
+<tr><td>People passed at the lanes by fast-tracked parties per day</td><td class="right">1145.7</td></tr>
+</tbody></table></div>
+<h2 id="13-cost-for-passengers-not-prioritised-by-priority-v3-advise-compared-with-fifo-manual-advise">13. Cost for passengers not prioritised by <code>priority-v3@advise</code> (compared with <code>fifo-manual@advise</code>)</h2>
+<p>Extra wait = time to screening with the candidate minus time to screening with the reference, for the same passenger.</p>
+<div class="table"><table><thead><tr><th>Metric</th><th class="right">Value [95% CI]</th></tr></thead><tbody>
+<tr><td>Passengers prioritised per day</td><td class="right">264.2 (P5-P95 200.8-334.1) (5.81% of tickets called)</td></tr>
+<tr><td>Mean extra wait of non-prioritised passengers (min)</td><td class="right">0.26 [0.22, 0.29]</td></tr>
+<tr><td>P90 extra wait of non-prioritised passengers (min)</td><td class="right">0.83 [0.71, 0.96]</td></tr>
+<tr><td>Largest extra wait of any non-prioritised passenger, worst day (min)</td><td class="right">75.1</td></tr>
+<tr><td>Share of non-prioritised passengers delayed by more than 5 min</td><td class="right">2.03%</td></tr>
+<tr><td>Most people who overtook one ticket, worst day (bound K = 30, passes in the window and at the lanes included)</td><td class="right">30</td></tr>
+<tr><td>Calls where the cap blocked a priority call, per day</td><td class="right">19.5</td></tr>
+<tr><td>Calls where the overtake guard took precedence (a ticket had reached K overtakes), per day</td><td class="right">0.1</td></tr>
+<tr><td>People through the fast track per day</td><td class="right">264.1</td></tr>
+<tr><td>People passed at the lanes by fast-tracked parties per day</td><td class="right">1215.6</td></tr>
+</tbody></table></div>
+<h2 id="14-cost-for-passengers-not-prioritised-by-priority-v3-advise-compared-with-fifo-manual-reactive">14. Cost for passengers not prioritised by <code>priority-v3@advise</code> (compared with <code>fifo-manual@reactive</code>)</h2>
+<p>Extra wait = time to screening with the candidate minus time to screening with the reference, for the same passenger.</p>
+<div class="table"><table><thead><tr><th>Metric</th><th class="right">Value [95% CI]</th></tr></thead><tbody>
+<tr><td>Passengers prioritised per day</td><td class="right">264.2 (P5-P95 200.8-334.1) (5.81% of tickets called)</td></tr>
+<tr><td>Mean extra wait of non-prioritised passengers (min)</td><td class="right">-0.30 [-0.36, -0.25]</td></tr>
+<tr><td>P90 extra wait of non-prioritised passengers (min)</td><td class="right">0.19 [0.16, 0.22]</td></tr>
+<tr><td>Largest extra wait of any non-prioritised passenger, worst day (min)</td><td class="right">68.8</td></tr>
+<tr><td>Share of non-prioritised passengers delayed by more than 5 min</td><td class="right">0.62%</td></tr>
+<tr><td>Most people who overtook one ticket, worst day (bound K = 30, passes in the window and at the lanes included)</td><td class="right">30</td></tr>
+<tr><td>Calls where the cap blocked a priority call, per day</td><td class="right">19.5</td></tr>
+<tr><td>Calls where the overtake guard took precedence (a ticket had reached K overtakes), per day</td><td class="right">0.1</td></tr>
+<tr><td>People through the fast track per day</td><td class="right">264.1</td></tr>
+<tr><td>People passed at the lanes by fast-tracked parties per day</td><td class="right">1215.6</td></tr>
+</tbody></table></div>
+<h2 id="15-call-mechanics">15. Call mechanics</h2>
+<p>Virtual queues only. A *second call* is made when the passenger has not presented within the call timeout; a *no-show* (missed call) is a ticket not validated after the second timeout. A no-show who rescans within the reactivation window is *reactivated*; later, the passenger needs a *new ticket*. *Idle lane time* counts open lanes with nobody to screen while passengers were waiting for or answering a call, as a share of the staffed lane time. Means per day.</p>
+<div class="table"><table><thead><tr><th>Policy</th><th class="right">Calls</th><th class="right">Second calls (share of calls)</th><th class="right">No-shows (missed-call rate)</th><th class="right">Reactivations</th><th class="right">New tickets</th><th class="right">Idle lane time (min, share)</th></tr></thead><tbody>
+<tr><td><code>priority-v3</code></td><td class="right">3377</td><td class="right">28.8 (0.85%)</td><td class="right">10.9 (0.32%)</td><td class="right">10.4</td><td class="right">0.5</td><td class="right">0.8 (0.03%)</td></tr>
+<tr><td><code>priority-v3@predict</code></td><td class="right">3371</td><td class="right">11.2 (0.33%)</td><td class="right">4.6 (0.14%)</td><td class="right">4.4</td><td class="right">0.2</td><td class="right">0.5 (0.02%)</td></tr>
+<tr><td><code>priority-v3@advise</code></td><td class="right">3373</td><td class="right">15.4 (0.46%)</td><td class="right">6.1 (0.18%)</td><td class="right">5.9</td><td class="right">0.3</td><td class="right">0.5 (0.02%)</td></tr>
+</tbody></table></div>
+<h2 id="16-disruptions-data-quality-and-stability">16. Disruptions, data quality and stability</h2>
+<p>Disruptions of the simulated days (ground truth, the same for every policy), means per day. The system learns of a delay or a gate change only when the flight feed announces it; messages sent while the feed is down arrive when it recovers.</p>
+<div class="table"><table><thead><tr><th>Disruption</th><th class="right">Per day</th></tr></thead><tbody>
+<tr><td>Delayed flights (mean delay of a delayed flight, min)</td><td class="right">14.6 (27.5)</td></tr>
+<tr><td>Gate changes</td><td class="right">8.8</td></tr>
+<tr><td>Lane outages (lane-minutes out of service)</td><td class="right">1.1 (22.5)</td></tr>
+<tr><td>Feed outages (minutes without the feed)</td><td class="right">1.1 (35.9)</td></tr>
+<tr><td>Feed messages (sent while the feed was down)</td><td class="right">23.3 (0.6)</td></tr>
+</tbody></table></div>
+<p>*Class changes* count the changes of risk class of waiting tickets under each policy's own classification. A *reversal* is a change in the direction opposite to the previous one, e.g. ATTENTION to URGENT and back: the flapping that hysteresis prevents. *Boosts on wrong information*: people prioritised while the system's knowledge of their flight differed from the truth (a delay or a gate change not yet known). Means per day.</p>
+<div class="table"><table><thead><tr><th>Policy</th><th class="right">Missed among passengers of delayed or re-gated flights</th><th class="right">Boosts on wrong information (people)</th><th class="right">Class changes per 100 parties</th><th class="right">Reversals</th><th class="right">People whose class flapped</th></tr></thead><tbody>
+<tr><td><code>fifo</code></td><td class="right">22.7 of 1624</td><td class="right">0.0</td><td class="right">not classified</td><td class="right">-</td><td class="right">-</td></tr>
+<tr><td><code>fifo-manual</code></td><td class="right">17.9 of 1624</td><td class="right">23.6</td><td class="right">not classified</td><td class="right">-</td><td class="right">-</td></tr>
+<tr><td><code>fifo-manual@reactive</code></td><td class="right">15.6 of 1624</td><td class="right">20.8</td><td class="right">not classified</td><td class="right">-</td><td class="right">-</td></tr>
+<tr><td><code>fifo-manual@predict</code></td><td class="right">13.0 of 1624</td><td class="right">16.6</td><td class="right">not classified</td><td class="right">-</td><td class="right">-</td></tr>
+<tr><td><code>fifo-manual@advise</code></td><td class="right">12.9 of 1624</td><td class="right">16.0</td><td class="right">not classified</td><td class="right">-</td><td class="right">-</td></tr>
+<tr><td><code>priority-v3</code></td><td class="right">16.6 of 1624</td><td class="right">27.9</td><td class="right">1.13</td><td class="right">1.5</td><td class="right">1.5</td></tr>
+<tr><td><code>priority-v3@predict</code></td><td class="right">12.6 of 1624</td><td class="right">22.4</td><td class="right">0.19</td><td class="right">0.1</td><td class="right">0.1</td></tr>
+<tr><td><code>priority-v3@advise</code></td><td class="right">12.8 of 1624</td><td class="right">23.8</td><td class="right">0.35</td><td class="right">0.2</td><td class="right">0.2</td></tr>
+</tbody></table></div>
+<h2 id="17-groups-assisted-passengers-and-late-arrivals">17. Groups, assisted passengers and late arrivals</h2>
+<p>Means per day. A group (two people or more) holds one ticket and counts as its people in every other table, in the priority cap and in the overtake bound. Assisted passengers are taken to the next free lane under every policy.</p>
+<div class="table"><table><thead><tr><th>Policy</th><th class="right">Groups (people in groups)</th><th class="right">Groups prioritised</th><th class="right">Assisted passengers: people, mean time to screening (min), missed</th><th class="right">Late on purpose: people, prioritised, missed</th></tr></thead><tbody>
+<tr><td><code>fifo</code></td><td class="right">738.4 (1821.4)</td><td class="right">0.0</td><td class="right">30.8, 0.14, 0.3</td><td class="right">none in this scenario</td></tr>
+<tr><td><code>fifo-manual</code></td><td class="right">738.4 (1821.4)</td><td class="right">43.6</td><td class="right">30.8, 0.14, 0.3</td><td class="right">none in this scenario</td></tr>
+<tr><td><code>fifo-manual@reactive</code></td><td class="right">738.4 (1821.4)</td><td class="right">38.2</td><td class="right">30.8, 0.13, 0.3</td><td class="right">none in this scenario</td></tr>
+<tr><td><code>fifo-manual@predict</code></td><td class="right">738.4 (1821.4)</td><td class="right">29.8</td><td class="right">30.8, 0.12, 0.3</td><td class="right">none in this scenario</td></tr>
+<tr><td><code>fifo-manual@advise</code></td><td class="right">738.4 (1821.4)</td><td class="right">28.6</td><td class="right">30.8, 0.12, 0.3</td><td class="right">none in this scenario</td></tr>
+<tr><td><code>priority-v3</code></td><td class="right">738.4 (1821.4)</td><td class="right">52.7</td><td class="right">30.8, 0.14, 0.3</td><td class="right">none in this scenario</td></tr>
+<tr><td><code>priority-v3@predict</code></td><td class="right">738.4 (1821.4)</td><td class="right">43.0</td><td class="right">30.8, 0.12, 0.3</td><td class="right">none in this scenario</td></tr>
+<tr><td><code>priority-v3@advise</code></td><td class="right">738.4 (1821.4)</td><td class="right">45.0</td><td class="right">30.8, 0.12, 0.3</td><td class="right">none in this scenario</td></tr>
+</tbody></table></div>
+<h2 id="18-checkpoint-operations">18. Checkpoint operations</h2>
+<p>Means per day; &quot;longest&quot; is the largest value over all simulated days.</p>
+<div class="table"><table><thead><tr><th>Policy</th><th class="right">Staffed lane-hours</th><th class="right">Lane utilisation</th><th class="right">Tickets waiting for a call: mean (longest)</th><th class="right">People standing in a queue: mean (longest)</th><th class="right">URGENT on arrival</th><th class="right">CRITICAL on arrival</th></tr></thead><tbody>
+<tr><td><code>fifo</code></td><td class="right">49.0</td><td class="right">76.1%</td><td class="right">8.3 (181)</td><td class="right">8.3 (181)</td><td class="right">244.1</td><td class="right">35.6</td></tr>
+<tr><td><code>fifo-manual</code></td><td class="right">49.0</td><td class="right">76.1%</td><td class="right">8.3 (185)</td><td class="right">8.3 (185)</td><td class="right">243.7</td><td class="right">35.6</td></tr>
+<tr><td><code>fifo-manual@reactive</code></td><td class="right">49.5</td><td class="right">75.4%</td><td class="right">6.9 (151)</td><td class="right">6.9 (151)</td><td class="right">217.3</td><td class="right">35.6</td></tr>
+<tr><td><code>fifo-manual@predict</code></td><td class="right">50.7</td><td class="right">73.7%</td><td class="right">4.9 (112)</td><td class="right">4.9 (112)</td><td class="right">173.2</td><td class="right">35.6</td></tr>
+<tr><td><code>fifo-manual@advise</code></td><td class="right">51.2</td><td class="right">72.9%</td><td class="right">4.6 (112)</td><td class="right">4.6 (112)</td><td class="right">169.2</td><td class="right">35.6</td></tr>
+<tr><td><code>priority-v3</code></td><td class="right">49.0</td><td class="right">76.1%</td><td class="right">3.5 (173)</td><td class="right">3.8 (29)</td><td class="right">313.0</td><td class="right">35.6</td></tr>
+<tr><td><code>priority-v3@predict</code></td><td class="right">50.7</td><td class="right">73.6%</td><td class="right">1.1 (87)</td><td class="right">3.3 (34)</td><td class="right">258.8</td><td class="right">35.6</td></tr>
+<tr><td><code>priority-v3@advise</code></td><td class="right">50.9</td><td class="right">73.4%</td><td class="right">1.6 (102)</td><td class="right">3.3 (33)</td><td class="right">268.3</td><td class="right">35.6</td></tr>
+</tbody></table></div>
+<h2 id="19-lane-management">19. Lane management</h2>
+<p>Extra lanes open beyond the plan, never more than the 5 lanes the checkpoint has, and at most 1 at the same time (the staff on call). A decision takes a median of 10 min to put a lane into service (varying from day to day), and an extra lane stays open at least 30 min. The supervisor of today's practice (<code>@reactive</code>) decides on the wait the queue shows; GateFlow (<code>@predict</code>) projects the queue from the forecast of arrivals and recommends lanes, as the console does (<code>@advise</code>, S22: its rule on the forecast of the next hour, from what the live system knows), and the duty manager follows 80% of its recommendations. Means per day; &quot;most&quot; is the largest value over all simulated days.</p>
+<div class="table"><table><thead><tr><th>Policy</th><th>Rule</th><th class="right">Staffed lane-hours</th><th class="right">of which extra</th><th class="right">Extra lanes opened (closed)</th><th class="right">Decisions (followed)</th><th class="right">Most lanes open</th></tr></thead><tbody>
+<tr><td><code>fifo</code></td><td>plan only</td><td class="right">49.0</td><td class="right">0.0</td><td class="right">-</td><td class="right">-</td><td class="right">4</td></tr>
+<tr><td><code>fifo-manual</code></td><td>plan only</td><td class="right">49.0</td><td class="right">0.0</td><td class="right">-</td><td class="right">-</td><td class="right">4</td></tr>
+<tr><td><code>fifo-manual@reactive</code></td><td>supervisor: opens when the queue shows more than 10 min, closes below 2 min</td><td class="right">49.5</td><td class="right">0.6</td><td class="right">1.6 (0.9)</td><td class="right">2.5 (2.5)</td><td class="right">5</td></tr>
+<tr><td><code>fifo-manual@predict</code></td><td>GateFlow: keeps the projected wait below 10 min over the next 45 min, closes below 3 min</td><td class="right">50.7</td><td class="right">1.8</td><td class="right">2.8 (2.6)</td><td class="right">6.6 (5.4)</td><td class="right">5</td></tr>
+<tr><td><code>fifo-manual@advise</code></td><td>GateFlow's console: keeps the median wait forecast below 10 min over the next 60 min, closes a lane beyond the plan below 2 min, 15 min between recommendations</td><td class="right">51.2</td><td class="right">2.3</td><td class="right">2.4 (1.5)</td><td class="right">5.2 (4.2)</td><td class="right">5</td></tr>
+<tr><td><code>priority-v3</code></td><td>plan only</td><td class="right">49.0</td><td class="right">0.0</td><td class="right">-</td><td class="right">-</td><td class="right">4</td></tr>
+<tr><td><code>priority-v3@predict</code></td><td>GateFlow: keeps the projected wait below 10 min over the next 45 min, closes below 3 min</td><td class="right">50.7</td><td class="right">1.8</td><td class="right">2.8 (2.6)</td><td class="right">6.7 (5.4)</td><td class="right">5</td></tr>
+<tr><td><code>priority-v3@advise</code></td><td>GateFlow's console: keeps the median wait forecast below 10 min over the next 60 min, closes a lane beyond the plan below 2 min, 15 min between recommendations</td><td class="right">50.9</td><td class="right">2.0</td><td class="right">2.1 (1.2)</td><td class="right">4.5 (3.6)</td><td class="right">5</td></tr>
+</tbody></table></div>
+<p>What the extra lanes buy: each policy compared with the same calls under another lane rule, passenger by passenger. Means per day [95% CI]; the last two columns divide totals over all days by the extra lane-hours (shown when the candidate only adds lane-hours).</p>
+<div class="table"><table><thead><tr><th>Comparison</th><th class="right">Extra lane-hours</th><th class="right">Net flights saved</th><th class="right">Change in mean time to screening (min)</th><th class="right">Waiting saved per extra lane-hour (person-hours)</th><th class="right">Net flights saved per extra lane-hour</th></tr></thead><tbody>
+<tr><td><code>fifo-manual@reactive</code> vs <code>fifo-manual</code></td><td class="right">0.6 [0.5, 0.6]</td><td class="right">15.2 [12.3, 18.4]</td><td class="right">-0.34 [-0.40, -0.29]</td><td class="right">44.9 [38.8, 50.8]</td><td class="right">26.70 [22.24, 32.34]</td></tr>
+<tr><td><code>fifo-manual@predict</code> vs <code>fifo-manual</code></td><td class="right">1.8 [1.7, 1.9]</td><td class="right">32.2 [28.5, 36.4]</td><td class="right">-0.85 [-0.93, -0.78]</td><td class="right">34.9 [32.3, 37.5]</td><td class="right">17.72 [15.81, 19.87]</td></tr>
+<tr><td><code>fifo-manual@predict</code> vs <code>fifo-manual@reactive</code></td><td class="right">1.2 [1.2, 1.3]</td><td class="right">17.0 [15.3, 18.7]</td><td class="right">-0.51 [-0.55, -0.47]</td><td class="right">-</td><td class="right">-</td></tr>
+<tr><td><code>fifo-manual@advise</code> vs <code>fifo-manual</code></td><td class="right">2.3 [2.2, 2.5]</td><td class="right">32.9 [29.1, 37.2]</td><td class="right">-0.91 [-0.99, -0.83]</td><td class="right">29.0 [27.2, 31.1]</td><td class="right">14.09 [12.63, 15.80]</td></tr>
+<tr><td><code>fifo-manual@advise</code> vs <code>fifo-manual@reactive</code></td><td class="right">1.8 [1.6, 1.9]</td><td class="right">17.7 [16.0, 19.4]</td><td class="right">-0.57 [-0.61, -0.52]</td><td class="right">24.0 [22.4, 25.5]</td><td class="right">10.03 [9.10, 11.11]</td></tr>
+<tr><td><code>fifo-manual@advise</code> vs <code>fifo-manual@predict</code></td><td class="right">0.5 [0.4, 0.6]</td><td class="right">0.7 [0.0, 1.4]</td><td class="right">-0.06 [-0.09, -0.03]</td><td class="right">-</td><td class="right">-</td></tr>
+<tr><td><code>priority-v3@predict</code> vs <code>priority-v3</code></td><td class="right">1.8 [1.7, 1.9]</td><td class="right">26.2 [22.6, 30.4]</td><td class="right">-0.86 [-0.93, -0.79]</td><td class="right">35.0 [32.5, 37.6]</td><td class="right">14.38 [12.56, 16.50]</td></tr>
+<tr><td><code>priority-v3@advise</code> vs <code>priority-v3</code></td><td class="right">2.0 [1.9, 2.2]</td><td class="right">24.4 [20.8, 28.5]</td><td class="right">-0.71 [-0.79, -0.63]</td><td class="right">25.9 [23.7, 28.2]</td><td class="right">12.00 [10.29, 13.93]</td></tr>
+<tr><td><code>priority-v3@advise</code> vs <code>priority-v3@predict</code></td><td class="right">0.2 [0.1, 0.3]</td><td class="right">-1.7 [-2.4, -1.1]</td><td class="right">0.15 [0.11, 0.18]</td><td class="right">-</td><td class="right">-</td></tr>
+</tbody></table></div>
+<h2 id="20-method">20. Method</h2>
+<ul>
+<li>Each seed is one simulated day of the same design day (same flights), with different passengers.</li>
+<li>All policies are run on exactly the same passengers (common random numbers), so each comparison is paired passenger by passenger: a flight is *saved* when the passenger misses it with the reference and catches it with the candidate, and *lost* in the opposite case.</li>
+<li><code>fifo-manual</code> (A') adds today's manual handling to the physical queue: staff periodically call the flights closing soon and their passengers are taken first. Comparing GateFlow with A' estimates the benefit over today's real practice.</li>
+<li>Passengers are counted as people: a party of three that misses its flight counts as three, in every table and comparison.</li>
+<li>The status quo is a physical FIFO queue. GateFlow policies run a virtual queue: tickets are called so as to keep the free lanes plus a call-ahead buffer supplied; each passenger presents after their own response time (later when they miss the call), validates the ticket at the access point and queues briefly at the lanes. Comparing <code>virtual-fifo</code> with the status quo isolates the cost or benefit of the call mechanics; comparing a priority policy with <code>virtual-fifo</code> isolates the prioritisation.</li>
+<li>A passenger misses the flight when they reach the gate after boarding closes (ground truth).</li>
+<li>Confidence intervals: percentile bootstrap of the mean over days (2000 resamples, seed 20261121). Quantiles: linear interpolation between order statistics (Hyndman-Fan type 7).</li>
+<li>Risk classes are computed on arrival with the same parameters for every policy. URGENT means &quot;would miss the flight if served in FIFO order, but can still make it if selected now&quot;; CRITICAL means &quot;cannot make it even if selected now&quot;: such passengers are escalated to staff and never boosted automatically.</li>
+</ul>
+<h2 id="21-policies">21. Policies</h2>
+<h3 id="physical-fifo-queue-status-quo-policy-a-fifo-1-1-0">Physical FIFO queue (status quo, policy A): <code>fifo</code> 1.1.0</h3>
+<p>Selection: <code>fifo</code>. Queue: <code>physical</code> (physical queue: passengers stand in line and step forward when a lane is free).</p>
+<h3 id="physical-fifo-queue-with-staff-calling-closing-flights-status-quo-with-manual-handling-policy-a-fifo-manual-0-1-0">Physical FIFO queue with staff calling closing flights (status quo with manual handling, policy A'): <code>fifo-manual</code> 0.1.0</h3>
+<p>Selection: <code>flight-call</code>. Queue: <code>physical</code> (physical queue: passengers stand in line and step forward when a lane is free).</p>
+<div class="table"><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>
+<tr><td>selection.callWindowMs</td><td>20.0 min</td></tr>
+<tr><td>selection.announcementIntervalMs</td><td>5.0 min</td></tr>
+</tbody></table></div>
+<p>All parameter values are initial hypotheses to be calibrated and approved, not measured optima.</p>
+<h3 id="physical-fifo-queue-with-staff-calling-closing-flights-status-quo-with-manual-handling-policy-a-with-extra-lanes-opened-by-a-supervisor-when-the-queue-is-long-today-fifo-manual-reactive-0-1-0">Physical FIFO queue with staff calling closing flights (status quo with manual handling, policy A'), with extra lanes opened by a supervisor when the queue is long (today): <code>fifo-manual@reactive</code> 0.1.0</h3>
+<p>Selection: <code>flight-call</code>. Queue: <code>physical</code> (physical queue: passengers stand in line and step forward when a lane is free). Lanes: <code>reactive</code> (supervisor: opens when the queue shows more than 10 min, closes below 2 min).</p>
+<div class="table"><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>
+<tr><td>selection.callWindowMs</td><td>20.0 min</td></tr>
+<tr><td>selection.announcementIntervalMs</td><td>5.0 min</td></tr>
+<tr><td>lanes.reviewIntervalMs</td><td>5.0 min</td></tr>
+<tr><td>lanes.openWhenWaitMs</td><td>10.0 min</td></tr>
+<tr><td>lanes.closeWhenWaitMs</td><td>2.0 min</td></tr>
+<tr><td>lanes.cooldownMs</td><td>10.0 min</td></tr>
+</tbody></table></div>
+<p>All parameter values are initial hypotheses to be calibrated and approved, not measured optima.</p>
+<h3 id="physical-fifo-queue-with-staff-calling-closing-flights-status-quo-with-manual-handling-policy-a-with-extra-lanes-recommended-by-gateflow-s-forecast-fifo-manual-predict-0-1-0">Physical FIFO queue with staff calling closing flights (status quo with manual handling, policy A'), with extra lanes recommended by GateFlow's forecast: <code>fifo-manual@predict</code> 0.1.0</h3>
+<p>Selection: <code>flight-call</code>. Queue: <code>physical</code> (physical queue: passengers stand in line and step forward when a lane is free). Lanes: <code>predict</code> (GateFlow: keeps the projected wait below 10 min over the next 45 min, closes below 3 min).</p>
+<div class="table"><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>
+<tr><td>selection.callWindowMs</td><td>20.0 min</td></tr>
+<tr><td>selection.announcementIntervalMs</td><td>5.0 min</td></tr>
+<tr><td>lanes.reviewIntervalMs</td><td>5.0 min</td></tr>
+<tr><td>lanes.horizonMs</td><td>45.0 min</td></tr>
+<tr><td>lanes.targetWaitMs</td><td>10.0 min</td></tr>
+<tr><td>lanes.closeWhenWaitMs</td><td>3.0 min</td></tr>
+<tr><td>lanes.cooldownMs</td><td>10.0 min</td></tr>
+</tbody></table></div>
+<p>All parameter values are initial hypotheses to be calibrated and approved, not measured optima.</p>
+<h3 id="physical-fifo-queue-with-staff-calling-closing-flights-status-quo-with-manual-handling-policy-a-with-extra-lanes-recommended-by-gateflow-s-console-fifo-manual-advise-0-1-0">Physical FIFO queue with staff calling closing flights (status quo with manual handling, policy A'), with extra lanes recommended by GateFlow's console: <code>fifo-manual@advise</code> 0.1.0</h3>
+<p>Selection: <code>flight-call</code>. Queue: <code>physical</code> (physical queue: passengers stand in line and step forward when a lane is free). Lanes: <code>advise</code> (GateFlow's console: keeps the median wait forecast below 10 min over the next 60 min, closes a lane beyond the plan below 2 min, 15 min between recommendations).</p>
+<div class="table"><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>
+<tr><td>selection.callWindowMs</td><td>20.0 min</td></tr>
+<tr><td>selection.announcementIntervalMs</td><td>5.0 min</td></tr>
+<tr><td>lanes.reviewIntervalMs</td><td>5.0 min</td></tr>
+<tr><td>lanes.horizonMs</td><td>60.0 min</td></tr>
+<tr><td>lanes.targetWaitMs</td><td>10.0 min</td></tr>
+<tr><td>lanes.closeWhenWaitMs</td><td>2.0 min</td></tr>
+<tr><td>lanes.cooldownMs</td><td>15.0 min</td></tr>
+</tbody></table></div>
+<p>All parameter values are initial hypotheses to be calibrated and approved, not measured optima.</p>
+<h3 id="gateflow-virtual-queue-with-constrained-edf-priority-v3-fast-track-stale-data-rule-and-hysteresis-policy-b-priority-v3-0-2-0">GateFlow virtual queue with constrained EDF priority v3: fast track, stale-data rule and hysteresis (policy B): <code>priority-v3</code> 0.2.0</h3>
+<p>Selection: <code>constrained-edf</code>. Queue: <code>virtual</code> (GateFlow virtual queue: passengers wait anywhere, are called on displays and validate their ticket at the access point).</p>
+<div class="table"><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>
+<tr><td>selection.capWindowCalls</td><td>20</td></tr>
+<tr><td>selection.capMaxPriorityCalls</td><td>10</td></tr>
+<tr><td>selection.maxOvertakes</td><td>30</td></tr>
+<tr><td>selection.attentionThresholdMs</td><td>15.0 min</td></tr>
+<tr><td>selection.safetyBufferMs</td><td>5.0 min</td></tr>
+<tr><td>selection.feasibilityMarginMs</td><td>0.0 min</td></tr>
+<tr><td>selection.allowRuleBasedDeadline</td><td>true</td></tr>
+<tr><td>selection.eligibleSegments</td><td>DEPARTING; TRANSFER</td></tr>
+<tr><td>selection.latePresentationCutoffMs</td><td>none</td></tr>
+<tr><td>selection.fastTrack</td><td>true</td></tr>
+<tr><td>selection.maxDeadlineAgeMs</td><td>60.0 min</td></tr>
+<tr><td>selection.hysteresisMs</td><td>3.0 min</td></tr>
+<tr><td>queue.callAheadSeconds</td><td>180 s</td></tr>
+<tr><td>queue.responseEstimateSeconds</td><td>90 s</td></tr>
+<tr><td>queue.prepareWindowSize</td><td>10</td></tr>
+<tr><td>queue.callTimeoutMs</td><td>3.0 min</td></tr>
+<tr><td>queue.recallTimeoutMs</td><td>2.0 min</td></tr>
+<tr><td>queue.reactivationWindowMs</td><td>15.0 min</td></tr>
+<tr><td>queue.maxReactivations</td><td>1</td></tr>
+<tr><td>queue.reactivationPosition</td><td>ORIGINAL</td></tr>
+</tbody></table></div>
+<p>All parameter values are initial hypotheses to be calibrated and approved, not measured optima.</p>
+<h3 id="gateflow-virtual-queue-with-constrained-edf-priority-v3-fast-track-stale-data-rule-and-hysteresis-policy-b-with-extra-lanes-recommended-by-gateflow-s-forecast-priority-v3-predict-0-2-0">GateFlow virtual queue with constrained EDF priority v3: fast track, stale-data rule and hysteresis (policy B), with extra lanes recommended by GateFlow's forecast: <code>priority-v3@predict</code> 0.2.0</h3>
+<p>Selection: <code>constrained-edf</code>. Queue: <code>virtual</code> (GateFlow virtual queue: passengers wait anywhere, are called on displays and validate their ticket at the access point). Lanes: <code>predict</code> (GateFlow: keeps the projected wait below 10 min over the next 45 min, closes below 3 min).</p>
+<div class="table"><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>
+<tr><td>selection.capWindowCalls</td><td>20</td></tr>
+<tr><td>selection.capMaxPriorityCalls</td><td>10</td></tr>
+<tr><td>selection.maxOvertakes</td><td>30</td></tr>
+<tr><td>selection.attentionThresholdMs</td><td>15.0 min</td></tr>
+<tr><td>selection.safetyBufferMs</td><td>5.0 min</td></tr>
+<tr><td>selection.feasibilityMarginMs</td><td>0.0 min</td></tr>
+<tr><td>selection.allowRuleBasedDeadline</td><td>true</td></tr>
+<tr><td>selection.eligibleSegments</td><td>DEPARTING; TRANSFER</td></tr>
+<tr><td>selection.latePresentationCutoffMs</td><td>none</td></tr>
+<tr><td>selection.fastTrack</td><td>true</td></tr>
+<tr><td>selection.maxDeadlineAgeMs</td><td>60.0 min</td></tr>
+<tr><td>selection.hysteresisMs</td><td>3.0 min</td></tr>
+<tr><td>queue.callAheadSeconds</td><td>180 s</td></tr>
+<tr><td>queue.responseEstimateSeconds</td><td>90 s</td></tr>
+<tr><td>queue.prepareWindowSize</td><td>10</td></tr>
+<tr><td>queue.callTimeoutMs</td><td>3.0 min</td></tr>
+<tr><td>queue.recallTimeoutMs</td><td>2.0 min</td></tr>
+<tr><td>queue.reactivationWindowMs</td><td>15.0 min</td></tr>
+<tr><td>queue.maxReactivations</td><td>1</td></tr>
+<tr><td>queue.reactivationPosition</td><td>ORIGINAL</td></tr>
+<tr><td>lanes.reviewIntervalMs</td><td>5.0 min</td></tr>
+<tr><td>lanes.horizonMs</td><td>45.0 min</td></tr>
+<tr><td>lanes.targetWaitMs</td><td>10.0 min</td></tr>
+<tr><td>lanes.closeWhenWaitMs</td><td>3.0 min</td></tr>
+<tr><td>lanes.cooldownMs</td><td>10.0 min</td></tr>
+</tbody></table></div>
+<p>All parameter values are initial hypotheses to be calibrated and approved, not measured optima.</p>
+<h3 id="gateflow-virtual-queue-with-constrained-edf-priority-v3-fast-track-stale-data-rule-and-hysteresis-policy-b-with-extra-lanes-recommended-by-gateflow-s-console-priority-v3-advise-0-2-0">GateFlow virtual queue with constrained EDF priority v3: fast track, stale-data rule and hysteresis (policy B), with extra lanes recommended by GateFlow's console: <code>priority-v3@advise</code> 0.2.0</h3>
+<p>Selection: <code>constrained-edf</code>. Queue: <code>virtual</code> (GateFlow virtual queue: passengers wait anywhere, are called on displays and validate their ticket at the access point). Lanes: <code>advise</code> (GateFlow's console: keeps the median wait forecast below 10 min over the next 60 min, closes a lane beyond the plan below 2 min, 15 min between recommendations).</p>
+<div class="table"><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>
+<tr><td>selection.capWindowCalls</td><td>20</td></tr>
+<tr><td>selection.capMaxPriorityCalls</td><td>10</td></tr>
+<tr><td>selection.maxOvertakes</td><td>30</td></tr>
+<tr><td>selection.attentionThresholdMs</td><td>15.0 min</td></tr>
+<tr><td>selection.safetyBufferMs</td><td>5.0 min</td></tr>
+<tr><td>selection.feasibilityMarginMs</td><td>0.0 min</td></tr>
+<tr><td>selection.allowRuleBasedDeadline</td><td>true</td></tr>
+<tr><td>selection.eligibleSegments</td><td>DEPARTING; TRANSFER</td></tr>
+<tr><td>selection.latePresentationCutoffMs</td><td>none</td></tr>
+<tr><td>selection.fastTrack</td><td>true</td></tr>
+<tr><td>selection.maxDeadlineAgeMs</td><td>60.0 min</td></tr>
+<tr><td>selection.hysteresisMs</td><td>3.0 min</td></tr>
+<tr><td>queue.callAheadSeconds</td><td>180 s</td></tr>
+<tr><td>queue.responseEstimateSeconds</td><td>90 s</td></tr>
+<tr><td>queue.prepareWindowSize</td><td>10</td></tr>
+<tr><td>queue.callTimeoutMs</td><td>3.0 min</td></tr>
+<tr><td>queue.recallTimeoutMs</td><td>2.0 min</td></tr>
+<tr><td>queue.reactivationWindowMs</td><td>15.0 min</td></tr>
+<tr><td>queue.maxReactivations</td><td>1</td></tr>
+<tr><td>queue.reactivationPosition</td><td>ORIGINAL</td></tr>
+<tr><td>lanes.reviewIntervalMs</td><td>5.0 min</td></tr>
+<tr><td>lanes.horizonMs</td><td>60.0 min</td></tr>
+<tr><td>lanes.targetWaitMs</td><td>10.0 min</td></tr>
+<tr><td>lanes.closeWhenWaitMs</td><td>2.0 min</td></tr>
+<tr><td>lanes.cooldownMs</td><td>15.0 min</td></tr>
+</tbody></table></div>
+<p>All parameter values are initial hypotheses to be calibrated and approved, not measured optima.</p>
+<h2 id="22-data-sources-and-licences">22. Data sources and licences</h2>
+<p>Where the data of this scenario comes from, and the terms under which it may be used.</p>
+<div class="table"><table><thead><tr><th>Source</th><th>Kind</th><th>Provider</th><th>Licence or terms of use</th><th>Retrieved</th><th>Used for</th></tr></thead><tbody>
+<tr><td>Synthetic assumptions of this airport configuration (<code>gateflow-synthetic</code>)</td><td>SYNTHETIC</td><td>GateFlow</td><td>Created for GateFlow; contains no third-party data.</td><td>-</td><td>-</td></tr>
+<tr><td>Synthetic flight list of the scenario library (<code>library-flights</code>)</td><td>SYNTHETIC</td><td>GateFlow (scenarios/flights/make-library-flights.mjs)</td><td>Created for GateFlow; contains no third-party schedule data.</td><td>-</td><td>flight list</td></tr>
+</tbody></table></div>
+<p>Airport configuration: <code>mx-like-hub</code> (MX-like hub (synthetic)), checkpoint <code>transfer</code>, file <code>../airports/mx-like-hub.yaml</code> (SHA-256 <code>8bd5741a547062ec78336670982c0578097a642715c9ebe6b2af3f82c3c6ec46</code>). The scenario gives only its day; every other parameter comes from this configuration.</p>
+<p>Design day: 58 departures from the flight list <code>flights/mx-like-transfer-hub.csv</code> (SHA-256 <code>04e56676d49984dd3b6941c187b1b7d27532823d697116a2343139927b6d2043</code>), source <code>library-flights</code>.</p>
+<h2 id="23-assumptions">23. Assumptions</h2>
+<p>Every model parameter, with its source. SYNTHETIC values are illustrative assumptions.</p>
+<div class="table"><table><thead><tr><th>Parameter</th><th>Value</th><th>Source</th><th>Note</th></tr></thead><tbody>
+<tr><td>checkpoint.lanesAvailable</td><td>5</td><td>SYNTHETIC</td><td>Lanes the checkpoint has (assumed): the roster plans at most 4, the others open only as extra lanes.</td></tr>
+<tr><td>checkpoint.laneSchedule</td><td>from 00:00, lanes 1; from 05:00, lanes 2; from 06:00, lanes 4; from 07:00, lanes 3; from 08:00, lanes 2; from 09:00, lanes 4; from 10:00, lanes 3; from 11:00, lanes 2; from 12:00, lanes 4; from 13:00, lanes 2; from 14:00, lanes 1; from 15:00, lanes 4; from 16:00, lanes 2; from 18:00, lanes 4; from 19:00, lanes 3; from 20:00, lanes 2; from 21:00, lanes 4; from 22:00, lanes 1</td><td>SYNTHETIC</td><td>Planned for this day with the lane plan rule of the checkpoint (airports/mx-like-hub.yaml): 55.0 lane-hours. gateflow-sim lanes --scenario &lt;this file&gt; prints the plan again.</td></tr>
+<tr><td>checkpoint.lanePlanRule</td><td>utilisation 0.9, intervalMinutes 60, minLanes 1, maxLanes 4, planningDays 100</td><td>SYNTHETIC</td><td>Assumed planning rule, not the airport's: every hour, enough lanes to screen the expected arrivals at 90% utilisation, at least 1 and at most 4 lanes.</td></tr>
+<tr><td>checkpoint.laneStaffing</td><td>maxExtraLanes 1, openDelayMinutes median 10, sigma 0.4, minOpenMinutes 30, followShare 0.8</td><td>SYNTHETIC</td><td>Assumed: staff on call can open 1 extra lane beyond the plan, about 10 minutes after the decision (5 to 20 on most days); an extra lane stays open at least 30 minutes; the duty manager follows 4 recommendations of GateFlow out of 5.</td></tr>
+<tr><td>checkpoint.serviceTimeMeanSeconds</td><td>30</td><td>SYNTHETIC</td><td>About 120 passengers per hour per lane (connecting passengers carry cabin bags and purchases).</td></tr>
+<tr><td>checkpoint.serviceTimeCv</td><td>0.6</td><td>SYNTHETIC</td><td></td></tr>
+<tr><td>schedule.seats</td><td>aircraft B738, seats 160; aircraft B38M, seats 166; aircraft B39M, seats 180; aircraft E190, seats 99</td><td>SYNTHETIC</td><td>Assumed two-class configurations of a network carrier, not airline data. The flight list gives the connecting passengers of each flight; seats only bound them.</td></tr>
+<tr><td>schedule.gateZones</td><td>id A, walkMinutes 6, share 0.4; id B, walkMinutes 11, share 0.4; id C, walkMinutes 17, share 0.2</td><td>SYNTHETIC</td><td>Nominal walk from the checkpoint exit to the domestic gates of a large terminal.</td></tr>
+<tr><td>passengers.loadFactor</td><td>min 0.6, mode 0.82, max 0.97</td><td>SYNTHETIC</td><td>Not used, the flight list gives the connecting passengers of every flight.</td></tr>
+<tr><td>passengers.transferShare</td><td>1</td><td>SYNTHETIC</td><td>Every passenger of this checkpoint is connecting.</td></tr>
+<tr><td>passengers.showUp.departing</td><td>minMinutesBeforeStd 25, medianExtraMinutes 35, sigma 0.6, maxMinutesBeforeStd 180</td><td>SYNTHETIC</td><td>Not used (no departing passengers); the same curve as for connecting passengers.</td></tr>
+<tr><td>passengers.showUp.transfer</td><td>minMinutesBeforeStd 25, medianExtraMinutes 35, sigma 0.6, maxMinutesBeforeStd 180</td><td>SYNTHETIC</td><td>Arrival at the transfer checkpoint = STD minus (25 min + log-normal with median 35 min): after the inbound flight, immigration, customs and the bag drop. A long tail of tight connections (late inbound flights, border queues).</td></tr>
+<tr><td>passengers.walkSpeedSigma</td><td>0.2</td><td>SYNTHETIC</td><td>Individual walking time = nominal zone time x log-normal(median 1, sigma).</td></tr>
+<tr><td>passengers.callResponse</td><td>medianSeconds 75, sigma 0.5, absentProbability 0.04, absentExtraMedianMinutes 4, absentExtraSigma 0.8</td><td>SYNTHETIC</td><td>Virtual queue only. As in the demo scenario; to be measured in a pilot.</td></tr>
+<tr><td>passengers.groups</td><td>partySizes size 1, share 0.78; size 2, share 0.15; size 3, share 0.04; size 4, share 0.025; size 5, share 0.005</td><td>SYNTHETIC</td><td>As in the demo scenario; about 40% of passengers travel with others.</td></tr>
+<tr><td>passengers.assistedShare</td><td>0.007</td><td>SYNTHETIC</td><td>Parties taking the assisted path (PRM and similar), as in the demo scenario.</td></tr>
+<tr><td>passengers.strategicLateArrival</td><td>share 0, minMinutesBeforeStd 25, maxMinutesBeforeStd 35</td><td>SYNTHETIC</td><td>Nobody arrives late on purpose in this scenario.</td></tr>
+<tr><td>operations.boardingCloseMinutesBeforeStd</td><td>20</td><td>SYNTHETIC</td><td>Boarding closes 20 minutes before the scheduled departure, for every flight.</td></tr>
+<tr><td>operations.deadlineKnowledge</td><td>RULE</td><td>SYNTHETIC</td><td>The system applies the closing rule to the schedule; without disruptions it matches the ground truth exactly.</td></tr>
+<tr><td>disruptions.flightDelays</td><td>share 0.25, medianMinutes 20, sigma 0.8, maxMinutes 180, noticeMinMinutesBeforeStd 10, noticeMaxMinutesBeforeStd 120</td><td>SYNTHETIC</td><td>A quarter of the departures are delayed (log-normal, median 20 minutes), announced between 120 and 10 minutes before the scheduled departure. Inbound delays are part of the arrival curve above.</td></tr>
+<tr><td>disruptions.gateChanges</td><td>share 0.15, minMinutesBeforeStd 30, maxMinutesBeforeStd 70, noticeDelayMaxMinutes 5</td><td>SYNTHETIC</td><td>More gate changes than at an origin-and-destination airport (assumed).</td></tr>
+<tr><td>disruptions.laneOutages</td><td>perDay 1, medianMinutes 20, sigma 0.5, maxMinutes 60</td><td>SYNTHETIC</td><td>About one unplanned outage of one lane per day (median 20 minutes).</td></tr>
+<tr><td>disruptions.feedOutages</td><td>perDay 1, medianMinutes 30, sigma 0.6, maxMinutes 120</td><td>SYNTHETIC</td><td>The flight feed goes down about once a day (median 30 minutes).</td></tr>
+<tr><td>gateflow</td><td>maxOvertakes 30, capMaxPriorityCalls 10, capWindowCalls 20, hysteresisMinutes 3, maxDeadlineAgeMinutes 60, prepareWindowSize 10, callAheadSeconds 180, responseEstimateSeconds 90, laneTargetWaitMinutes 10, laneHorizonMinutes 45</td><td>SYNTHETIC</td><td>GateFlow defaults (priority v3 0.2.0, the virtual queue of ADR-017 and the lane recommendations of ADR-039), to be approved by the airport for this checkpoint.</td></tr>
+<tr><td>todayPractice</td><td>callWindowMinutes 20, announcementIntervalMinutes 5, laneOpenWaitMinutes 10, laneCloseWaitMinutes 2</td><td>SYNTHETIC</td><td>Baseline A' as in ADR-022: every 5 minutes staff call the flights closing within 20 minutes. With a supervisor (@reactive, ADR-039), an extra lane opens when the queue shows more than 10 minutes and closes below 2. To replace with how this airport handles urgent passengers and long queues.</td></tr>
+<tr><td>fairnessTarget</td><td>maxShareDelayedOver5Min 0.001</td><td>SYNTHETIC</td><td>The criterion of ADR-025, to be approved by the airport.</td></tr>
+</tbody></table></div>
+<h2 id="24-limitations-of-this-model-version">24. Limitations of this model version</h2>
+<ul>
+<li>Single checkpoint. Lanes follow a planned schedule, minus unplanned outages when the scenario has them: a lane going out of service finishes its passenger first, at least one lane always stays open, and the system knows at once.</li>
+<li>Extra lanes (policies with lane management, S8) open beyond the plan only up to the lanes the checkpoint has and the staff on call. A decision to open takes the day's delay to put a lane into service, an extra lane stays open for a minimum time, and staff go back when the plan itself needs the lane. Staff on call have no other duties in the model, and their cost is counted as extra lane-hours only. The supervisor of today's practice decides on the wait the queue shows; GateFlow recommends on a forecast of arrivals (the average of 50 other simulated days with the same flights, scaled by the arrivals of the last hour), and the duty manager follows each recommendation with the scenario's probability.</li>
+<li>Every passenger uses the virtual queue when one is simulated: no opt-outs, no passengers without a phone or a view of the displays.</li>
+<li>Response times and absences are drawn per party from assumed distributions. A second call does not make an absent passenger come sooner, the prepare window does not shorten response times, and a passenger who has been at the access point once answers later calls at once.</li>
+<li>The access point never becomes a bottleneck, and the walk from the access point to the lanes is part of the response time.</li>
+<li>Fast track (priority v2): a fast-tracked party is called next and, once its ticket is validated, goes ahead of the people waiting at the lanes who still have room under K. The fast-track entry never becomes a bottleneck of its own and needs no staff in the model.</li>
+<li>CRITICAL passengers are flagged for staff, but staff escorts are not modelled: such passengers wait in the queue order.</li>
+<li>Before any disruption the system's deadline equals the ground truth (boarding close from a fixed rule). Delays and gate changes, when the scenario has them, are known only once the flight feed announces them, and messages sent while the feed is down arrive when it recovers. Delays only move boarding later; passengers still arrive for the scheduled departure. A gate change affects only passengers who finish screening after it.</li>
+<li>Staff of baseline A' learn of delays when the system does and keep using the last known times while the feed is down (no stale-data rule).</li>
+<li>Passengers never abandon the queue, even after their flight has closed.</li>
+<li>A group stays together: one ticket, one call, one lane, screened one person after the other. Assisted passengers always get the next free lane and are not assessed by the engine.</li>
+<li>Baseline A' (<code>fifo-manual</code>) is an idealised staff practice: every five minutes staff call the flights closing within 20 minutes, and every passenger of those flights comes forward at once. Real practice is less systematic, so A' may overstate today's handling where it is informal, or understate it where staff watch individual passengers.</li>
+<li>Strategic late arrivals are a fixed share in a stress-test scenario, not a behavioural response to the policy.</li>
+<li>Tickets are issued on arrival with no kiosk or scanning delay.</li>
+<li>The engine estimates screening time as the mean screening time per person, walking time as the nominal time of the gate zone, and the time from call to screening as the larger of the response estimate and the call-ahead time (through the fast track: the response estimate, or the time since the passenger was last at the access point when shorter).</li>
+</ul>
+<h2 id="25-reproducibility">25. Reproducibility</h2>
+<div class="table"><table><thead><tr><th>Item</th><th>Value</th></tr></thead><tbody>
+<tr><td>Scenario hash</td><td><code>sha256:28845aefd9f2e1d7a74645b3700edf968f5ceb5142ef639e3e86bf2feb4c9c60</code></td></tr>
+<tr><td>Seeds</td><td>1-200 (200)</td></tr>
+<tr><td>Source revision</td><td><code>529b2323a5489dd0be5f8adeb13d2d64f946fad5</code></td></tr>
+<tr><td>Versions</td><td>engine 0.5.0, queue core 0.12.0, model 0.7.0, kernel 0.1.0, population generator 0.6.0, scenario schema 5</td></tr>
+<tr><td>Generated by</td><td>gateflow-sim 0.14.0</td></tr>
+</tbody></table></div>
+<p>Command:</p>
+<pre><code class="language-bash">gateflow-sim run --scenario scenarios/mx-like-transfer-hub.yaml --seeds 1-200 --policies fifo,fifo-manual,fifo-manual@reactive,fifo-manual@predict,fifo-manual@advise,priority-v3,priority-v3@predict,priority-v3@advise --baseline fifo --compare fifo-manual:fifo,fifo-manual@reactive:fifo,fifo-manual@predict:fifo,fifo-manual@advise:fifo,priority-v3:fifo,priority-v3@predict:fifo,priority-v3@advise:fifo,fifo-manual@reactive:fifo-manual,fifo-manual@predict:fifo-manual,fifo-manual@predict:fifo-manual@reactive,fifo-manual@advise:fifo-manual,fifo-manual@advise:fifo-manual@reactive,fifo-manual@advise:fifo-manual@predict,priority-v3:fifo-manual,priority-v3@predict:priority-v3,priority-v3@predict:fifo-manual@predict,priority-v3@predict:fifo-manual@reactive,priority-v3@advise:priority-v3,priority-v3@advise:priority-v3@predict,priority-v3@advise:fifo-manual@advise,priority-v3@advise:fifo-manual@reactive --bootstrap-resamples 2000</code></pre>
+</main>
+</body>
+</html>

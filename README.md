@@ -16,7 +16,7 @@ border procedures: it organises the flow before they start.
 > simulations through the API (S19); M4, the operations console and a preview of Predict: the
 > day's overview, checked against the log (S20), forecasts of the next 90 minutes measured
 > against the simulator (S21), and lane recommendations with the supervisor's decision and their
-> outcome (S22).**
+> outcome (S22), measured in the simulator (S22.3).**
 > This repository contains the simulation foundations:
 > - the priority engine;
 > - the queue state machine that the operational product will share;

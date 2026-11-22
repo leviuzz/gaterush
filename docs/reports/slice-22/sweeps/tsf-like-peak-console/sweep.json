@@ -1,0 +1,2682 @@
+{
+  "schema": "gateflow.sim.sweep/3",
+  "disclaimer": "SIMULATED RESULTS ON SYNTHETIC OR HYPOTHETICAL DATA. These numbers are model outputs, not measurements, and must not be presented as evidence of operational performance.",
+  "manifest": {
+    "generator": {
+      "name": "gateflow-sim",
+      "version": "0.14.0"
+    },
+    "commit": "529b2323a5489dd0be5f8adeb13d2d64f946fad5",
+    "versions": {
+      "engine": "0.5.0",
+      "queueCore": "0.12.0",
+      "model": "0.7.0",
+      "kernel": "0.1.0",
+      "populationGenerator": "0.6.0",
+      "scenarioSchema": 5
+    },
+    "sweep": {
+      "id": "tsf-like-peak-console",
+      "title": "The console's lane recommendations on the TSF-like peak day, followed or not",
+      "description": "What do the console's recommendations of lanes buy (S22.3), and how much of it depends on the duty manager following them? Today's practice with staff calls (fifo-manual) runs with the plan only, with a supervisor who opens a lane when the queue is long (@reactive), and with the recommendations of GateFlow's console (@advise), as the share of recommendations followed varies (base 4 out of 5; none followed is the plan only).",
+      "hash": "sha256:f9b60a7462f7795790580b99cb57bb4c6fb53debcea9a7bdae2fccac1acc90d5"
+    },
+    "scenario": {
+      "id": "tsf-like-peak-day",
+      "title": "TSF-like low-cost base, summer peak day (synthetic)",
+      "hash": "sha256:d305399bbbdf94f7f8d6f51ac2bdc95e28ae264f990090c55c6706ddd79aed8e",
+      "dataClassification": "SYNTHETIC",
+      "timeZone": "Europe/Rome",
+      "airport": {
+        "id": "tsf-like",
+        "name": "TSF-like airport (synthetic)",
+        "checkpoint": "departures",
+        "file": "../airports/tsf-like.yaml",
+        "sha256": "9be8f777574c7e2f62ebf33d44507485e4ced2dee49bdbe07893f4a97fe040a3"
+      },
+      "dataSources": [
+        {
+          "id": "gateflow-synthetic",
+          "title": "Synthetic assumptions of this airport configuration",
+          "kind": "SYNTHETIC",
+          "provider": "GateFlow",
+          "licence": "Created for GateFlow; contains no third-party data."
+        },
+        {
+          "id": "save-traffic-2025",
+          "title": "Treviso Canova traffic in 2025 (3.2 million passengers)",
+          "kind": "LITERATURE",
+          "provider": "SAVE S.p.A., annual figure as reported in the business plan and in the press",
+          "licence": "Published aggregate figure, cited with attribution. Used only to size the synthetic day.",
+          "retrieved": "2026-11-21",
+          "note": "3,200,130 passengers in 2025 according to the business plan (marked verified there); press coverage of SAVE's results gives over 3.2 million. Not re-verified against SAVE's own publication, whose website refused automated access."
+        },
+        {
+          "id": "library-flights",
+          "title": "Synthetic flight list of the scenario library",
+          "kind": "SYNTHETIC",
+          "provider": "GateFlow (scenarios/flights/make-library-flights.mjs)",
+          "licence": "Created for GateFlow; contains no third-party schedule data."
+        }
+      ],
+      "schedule": {
+        "kind": "flight-list",
+        "flights": 34,
+        "file": "flights/tsf-like-peak-day.csv",
+        "sha256": "cb6cd9c8a623daec1e15158a0f3ac583c4ee2fd75ca0f775955fb82c1a5513a9",
+        "source": "library-flights"
+      }
+    },
+    "seeds": {
+      "count": 200,
+      "ranges": "1-200"
+    },
+    "baselinePolicyId": "fifo-manual",
+    "candidateId": "fifo-manual@advise",
+    "policies": [
+      {
+        "id": "fifo-manual",
+        "version": "0.1.0",
+        "title": "Physical FIFO queue with staff calling closing flights (status quo with manual handling, policy A')",
+        "selection": {
+          "kind": "flight-call",
+          "callWindowMs": 1200000,
+          "announcementIntervalMs": 300000
+        },
+        "queue": {
+          "kind": "physical"
+        }
+      },
+      {
+        "id": "fifo-manual@reactive",
+        "version": "0.1.0",
+        "title": "Physical FIFO queue with staff calling closing flights (status quo with manual handling, policy A'), with extra lanes opened by a supervisor when the queue is long (today)",
+        "selection": {
+          "kind": "flight-call",
+          "callWindowMs": 1200000,
+          "announcementIntervalMs": 300000
+        },
+        "queue": {
+          "kind": "physical"
+        },
+        "lanes": {
+          "kind": "reactive",
+          "reviewIntervalMs": 300000,
+          "openWhenWaitMs": 600000,
+          "closeWhenWaitMs": 120000,
+          "cooldownMs": 600000
+        }
+      },
+      {
+        "id": "fifo-manual@advise",
+        "version": "0.1.0",
+        "title": "Physical FIFO queue with staff calling closing flights (status quo with manual handling, policy A'), with extra lanes recommended by GateFlow's console",
+        "selection": {
+          "kind": "flight-call",
+          "callWindowMs": 1200000,
+          "announcementIntervalMs": 300000
+        },
+        "queue": {
+          "kind": "physical"
+        },
+        "lanes": {
+          "kind": "advise",
+          "reviewIntervalMs": 300000,
+          "horizonMs": 3600000,
+          "targetWaitMs": 600000,
+          "closeWhenWaitMs": 120000,
+          "cooldownMs": 900000
+        }
+      }
+    ],
+    "comparisons": [
+      {
+        "candidateId": "fifo-manual@advise",
+        "referenceId": "fifo-manual@reactive"
+      },
+      {
+        "candidateId": "fifo-manual@advise",
+        "referenceId": "fifo-manual"
+      },
+      {
+        "candidateId": "fifo-manual@reactive",
+        "referenceId": "fifo-manual"
+      }
+    ],
+    "classification": {
+      "attentionThresholdMs": 900000,
+      "safetyBufferMs": 300000,
+      "feasibilityMarginMs": 0,
+      "allowRuleBasedDeadline": true,
+      "eligibleSegments": [
+        "DEPARTING",
+        "TRANSFER"
+      ],
+      "latePresentationCutoffMs": null,
+      "fastTrack": true,
+      "maxDeadlineAgeMs": 3600000,
+      "hysteresisMs": 180000
+    },
+    "statistics": {
+      "bootstrapResamples": 2000,
+      "confidenceLevel": 0.95,
+      "bootstrapSeed": 20261121,
+      "quantileMethod": "linear interpolation between order statistics (Hyndman-Fan type 7)"
+    },
+    "simulatedDays": 800,
+    "reproduce": "gateflow-sim sweep --spec sweeps/tsf-like-peak-console.yaml --seeds 1-200 --bootstrap-resamples 2000"
+  },
+  "assumptions": [
+    {
+      "path": "checkpoint.lanesAvailable",
+      "value": 6,
+      "source": "SYNTHETIC",
+      "ref": null,
+      "note": "Lanes the checkpoint has (assumed): the roster plans at most 5, the others open only as extra lanes."
+    },
+    {
+      "path": "checkpoint.laneSchedule",
+      "value": [
+        {
+          "from": "00:00",
+          "lanes": 1
+        },
+        {
+          "from": "03:00",
+          "lanes": 2
+        },
+        {
+          "from": "04:00",
+          "lanes": 5
+        },
+        {
+          "from": "06:00",
+          "lanes": 3
+        },
+        {
+          "from": "07:00",
+          "lanes": 4
+        },
+        {
+          "from": "08:00",
+          "lanes": 5
+        },
+        {
+          "from": "09:00",
+          "lanes": 4
+        },
+        {
+          "from": "13:00",
+          "lanes": 5
+        },
+        {
+          "from": "15:00",
+          "lanes": 4
+        },
+        {
+          "from": "16:00",
+          "lanes": 3
+        },
+        {
+          "from": "17:00",
+          "lanes": 2
+        },
+        {
+          "from": "19:00",
+          "lanes": 1
+        }
+      ],
+      "source": "SYNTHETIC",
+      "ref": null,
+      "note": "Planned for this day with the lane plan rule of the checkpoint (airports/tsf-like.yaml): 69.0 lane-hours. gateflow-sim lanes --scenario <this file> prints the plan again."
+    },
+    {
+      "path": "checkpoint.lanePlanRule",
+      "value": {
+        "utilisation": 0.9,
+        "intervalMinutes": 60,
+        "minLanes": 1,
+        "maxLanes": 5,
+        "planningDays": 100
+      },
+      "source": "SYNTHETIC",
+      "ref": null,
+      "note": "Assumed planning rule, not the airport's: every hour, enough lanes to screen the expected arrivals at 90% utilisation, at least 1 and at most 5 lanes."
+    },
+    {
+      "path": "checkpoint.laneStaffing",
+      "value": {
+        "maxExtraLanes": 1,
+        "openDelayMinutes": {
+          "median": 10,
+          "sigma": 0.4
+        },
+        "minOpenMinutes": 30,
+        "followShare": 0.8
+      },
+      "source": "SYNTHETIC",
+      "ref": null,
+      "note": "Assumed: staff on call can open 1 extra lane beyond the plan, about 10 minutes after the decision (5 to 20 on most days); an extra lane stays open at least 30 minutes; the duty manager follows 4 recommendations of GateFlow out of 5."
+    },
+    {
+      "path": "checkpoint.serviceTimeMeanSeconds",
+      "value": 30,
+      "source": "SYNTHETIC",
+      "ref": null,
+      "note": "About 120 passengers per hour per lane (assumed conventional lanes of a smaller airport)."
+    },
+    {
+      "path": "checkpoint.serviceTimeCv",
+      "value": 0.6,
+      "source": "SYNTHETIC",
+      "ref": null,
+      "note": null
+    },
+    {
+      "path": "schedule.seats",
+      "value": [
+        {
+          "aircraft": "A320",
+          "seats": 180
+        },
+        {
+          "aircraft": "A21N",
+          "seats": 239
+        },
+        {
+          "aircraft": "B738",
+          "seats": 189
+        },
+        {
+          "aircraft": "B38M",
+          "seats": 197
+        }
+      ],
+      "source": "SYNTHETIC",
+      "ref": null,
+      "note": "Assumed single-class high-density configurations by ICAO type designator, not airline data. Replace with the airport's seat data."
+    },
+    {
+      "path": "schedule.gateZones",
+      "value": [
+        {
+          "id": "A",
+          "walkMinutes": 4,
+          "share": 0.85
+        },
+        {
+          "id": "B",
+          "walkMinutes": 8,
+          "share": 0.15
+        }
+      ],
+      "source": "SYNTHETIC",
+      "ref": null,
+      "note": "Nominal walk from the checkpoint exit; B are non-Schengen gates after passport control (its queue is not modelled)."
+    },
+    {
+      "path": "passengers.loadFactor",
+      "value": {
+        "min": 0.8,
+        "mode": 0.94,
+        "max": 1
+      },
+      "source": "SYNTHETIC",
+      "ref": "save-traffic-2025",
+      "note": "Summer load factors of a low-cost base, drawn per flight and day. With the flight list the day has about 6,000 departing passengers, about 1.35 times the average day of 2025 (3.2 million passengers, half of them departing, over 365 days): assumed peak-day factor."
+    },
+    {
+      "path": "passengers.transferShare",
+      "value": 0,
+      "source": "SYNTHETIC",
+      "ref": null,
+      "note": "A point-to-point low-cost airport; no connecting passengers."
+    },
+    {
+      "path": "passengers.showUp.departing",
+      "value": {
+        "minMinutesBeforeStd": 25,
+        "medianExtraMinutes": 70,
+        "sigma": 0.55,
+        "maxMinutesBeforeStd": 240
+      },
+      "source": "SYNTHETIC",
+      "ref": null,
+      "note": "Arrival at the checkpoint = STD minus (25 min + log-normal with median 70 min), as in the demo scenario."
+    },
+    {
+      "path": "passengers.showUp.transfer",
+      "value": {
+        "minMinutesBeforeStd": 24,
+        "medianExtraMinutes": 25,
+        "sigma": 0.5,
+        "maxMinutesBeforeStd": 180
+      },
+      "source": "SYNTHETIC",
+      "ref": null,
+      "note": "Connecting passengers arrive later, after their inbound flight."
+    },
+    {
+      "path": "passengers.walkSpeedSigma",
+      "value": 0.2,
+      "source": "SYNTHETIC",
+      "ref": null,
+      "note": "Individual walking time = nominal zone time x log-normal(median 1, sigma)."
+    },
+    {
+      "path": "passengers.callResponse",
+      "value": {
+        "medianSeconds": 75,
+        "sigma": 0.5,
+        "absentProbability": 0.04,
+        "absentExtraMedianMinutes": 4,
+        "absentExtraSigma": 0.8
+      },
+      "source": "SYNTHETIC",
+      "ref": null,
+      "note": "Virtual queue only. As in the demo scenario; to be measured in a pilot."
+    },
+    {
+      "path": "passengers.groups",
+      "value": {
+        "partySizes": [
+          {
+            "size": 1,
+            "share": 0.7
+          },
+          {
+            "size": 2,
+            "share": 0.2
+          },
+          {
+            "size": 3,
+            "share": 0.05
+          },
+          {
+            "size": 4,
+            "share": 0.04
+          },
+          {
+            "size": 5,
+            "share": 0.01
+          }
+        ]
+      },
+      "source": "SYNTHETIC",
+      "ref": null,
+      "note": "More couples and families than on a normal day (leisure season)."
+    },
+    {
+      "path": "passengers.assistedShare",
+      "value": 0.007,
+      "source": "SYNTHETIC",
+      "ref": null,
+      "note": "Parties taking the assisted path (PRM and similar), as in the demo scenario."
+    },
+    {
+      "path": "passengers.strategicLateArrival",
+      "value": {
+        "share": 0,
+        "minMinutesBeforeStd": 25,
+        "maxMinutesBeforeStd": 35
+      },
+      "source": "SYNTHETIC",
+      "ref": null,
+      "note": "Nobody arrives late on purpose in this scenario."
+    },
+    {
+      "path": "operations.boardingCloseMinutesBeforeStd",
+      "value": 20,
+      "source": "SYNTHETIC",
+      "ref": null,
+      "note": "Boarding closes 20 minutes before the scheduled departure, for every flight."
+    },
+    {
+      "path": "operations.deadlineKnowledge",
+      "value": "RULE",
+      "source": "SYNTHETIC",
+      "ref": null,
+      "note": "The system applies the closing rule to the schedule; without disruptions it matches the ground truth exactly."
+    },
+    {
+      "path": "disruptions.flightDelays",
+      "value": {
+        "share": 0,
+        "medianMinutes": 20,
+        "sigma": 0.8,
+        "maxMinutes": 180,
+        "noticeMinMinutesBeforeStd": 10,
+        "noticeMaxMinutesBeforeStd": 120
+      },
+      "source": "SYNTHETIC",
+      "ref": null,
+      "note": "No delays in this scenario."
+    },
+    {
+      "path": "disruptions.gateChanges",
+      "value": {
+        "share": 0,
+        "minMinutesBeforeStd": 30,
+        "maxMinutesBeforeStd": 70,
+        "noticeDelayMaxMinutes": 5
+      },
+      "source": "SYNTHETIC",
+      "ref": null,
+      "note": "No gate changes in this scenario."
+    },
+    {
+      "path": "disruptions.laneOutages",
+      "value": {
+        "perDay": 0,
+        "medianMinutes": 20,
+        "sigma": 0.5,
+        "maxMinutes": 60
+      },
+      "source": "SYNTHETIC",
+      "ref": null,
+      "note": "No unplanned lane outages in this scenario."
+    },
+    {
+      "path": "disruptions.feedOutages",
+      "value": {
+        "perDay": 0,
+        "medianMinutes": 30,
+        "sigma": 0.6,
+        "maxMinutes": 120
+      },
+      "source": "SYNTHETIC",
+      "ref": null,
+      "note": "The flight feed never goes down in this scenario."
+    },
+    {
+      "path": "gateflow",
+      "value": {
+        "maxOvertakes": 30,
+        "capMaxPriorityCalls": 10,
+        "capWindowCalls": 20,
+        "hysteresisMinutes": 3,
+        "maxDeadlineAgeMinutes": 60,
+        "prepareWindowSize": 10,
+        "callAheadSeconds": 180,
+        "responseEstimateSeconds": 90,
+        "laneTargetWaitMinutes": 10,
+        "laneHorizonMinutes": 45
+      },
+      "source": "SYNTHETIC",
+      "ref": null,
+      "note": "GateFlow defaults (priority v3 0.2.0, the virtual queue of ADR-017 and the lane recommendations of ADR-039), to be approved by the airport for this checkpoint."
+    },
+    {
+      "path": "todayPractice",
+      "value": {
+        "callWindowMinutes": 20,
+        "announcementIntervalMinutes": 5,
+        "laneOpenWaitMinutes": 10,
+        "laneCloseWaitMinutes": 2
+      },
+      "source": "SYNTHETIC",
+      "ref": null,
+      "note": "Baseline A' as in ADR-022: every 5 minutes staff call the flights closing within 20 minutes. With a supervisor (@reactive, ADR-039), an extra lane opens when the queue shows more than 10 minutes and closes below 2. To replace with how this airport handles urgent passengers and long queues."
+    },
+    {
+      "path": "fairnessTarget",
+      "value": {
+        "maxShareDelayedOver5Min": 0.001
+      },
+      "source": "SYNTHETIC",
+      "ref": null,
+      "note": "The criterion of ADR-025, to be approved by the airport."
+    }
+  ],
+  "modelLimitations": [
+    "Single checkpoint. Lanes follow a planned schedule, minus unplanned outages when the scenario has them: a lane going out of service finishes its passenger first, at least one lane always stays open, and the system knows at once.",
+    "Extra lanes (policies with lane management, S8) open beyond the plan only up to the lanes the checkpoint has and the staff on call. A decision to open takes the day's delay to put a lane into service, an extra lane stays open for a minimum time, and staff go back when the plan itself needs the lane. Staff on call have no other duties in the model, and their cost is counted as extra lane-hours only. The supervisor of today's practice decides on the wait the queue shows; GateFlow recommends on a forecast of arrivals (the average of 50 other simulated days with the same flights, scaled by the arrivals of the last hour), and the duty manager follows each recommendation with the scenario's probability.",
+    "Every passenger uses the virtual queue when one is simulated: no opt-outs, no passengers without a phone or a view of the displays.",
+    "Response times and absences are drawn per party from assumed distributions. A second call does not make an absent passenger come sooner, the prepare window does not shorten response times, and a passenger who has been at the access point once answers later calls at once.",
+    "The access point never becomes a bottleneck, and the walk from the access point to the lanes is part of the response time.",
+    "Fast track (priority v2): a fast-tracked party is called next and, once its ticket is validated, goes ahead of the people waiting at the lanes who still have room under K. The fast-track entry never becomes a bottleneck of its own and needs no staff in the model.",
+    "CRITICAL passengers are flagged for staff, but staff escorts are not modelled: such passengers wait in the queue order.",
+    "Before any disruption the system's deadline equals the ground truth (boarding close from a fixed rule). Delays and gate changes, when the scenario has them, are known only once the flight feed announces them, and messages sent while the feed is down arrive when it recovers. Delays only move boarding later; passengers still arrive for the scheduled departure. A gate change affects only passengers who finish screening after it.",
+    "Staff of baseline A' learn of delays when the system does and keep using the last known times while the feed is down (no stale-data rule).",
+    "Passengers never abandon the queue, even after their flight has closed.",
+    "A group stays together: one ticket, one call, one lane, screened one person after the other. Assisted passengers always get the next free lane and are not assessed by the engine.",
+    "Baseline A' (`fifo-manual`) is an idealised staff practice: every five minutes staff call the flights closing within 20 minutes, and every passenger of those flights comes forward at once. Real practice is less systematic, so A' may overstate today's handling where it is informal, or understate it where staff watch individual passengers.",
+    "Strategic late arrivals are a fixed share in a stress-test scenario, not a behavioural response to the policy.",
+    "Tickets are issued on arrival with no kiosk or scanning delay.",
+    "The engine estimates screening time as the mean screening time per person, walking time as the nominal time of the gate zone, and the time from call to screening as the larger of the response estimate and the call-ahead time (through the fast track: the response estimate, or the time since the passenger was last at the access point when shorter)."
+  ],
+  "dimensions": [
+    {
+      "id": "follow",
+      "title": "Recommendations followed",
+      "parameter": "laneFollowShare",
+      "base": [],
+      "points": [
+        {
+          "value": 0,
+          "label": "0",
+          "isBase": false,
+          "policies": {
+            "fifo-manual": {
+              "missed": {
+                "mean": 0.03,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 5
+              },
+              "missedPer1000": {
+                "mean": 0.005,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0.8358
+              },
+              "prioritized": {
+                "mean": 131.98,
+                "p05": 50.95,
+                "p50": 126,
+                "p95": 232,
+                "min": 19,
+                "max": 300
+              },
+              "waitMeanMin": {
+                "mean": 3.4742,
+                "p05": 2.3294,
+                "p50": 3.3626,
+                "p95": 5.0619,
+                "min": 1.2585,
+                "max": 6.2618
+              },
+              "waitP90Min": {
+                "mean": 14.8973,
+                "p05": 10.2733,
+                "p50": 14.4499,
+                "p95": 19.6974,
+                "min": 4.2735,
+                "max": 23.2994
+              },
+              "standingMeanMin": {
+                "mean": 3.4742,
+                "p05": 2.3294,
+                "p50": 3.3626,
+                "p95": 5.0619,
+                "min": 1.2585,
+                "max": 6.2618
+              },
+              "maxOvertakes": {
+                "mean": 43.445,
+                "p05": 14,
+                "p50": 39,
+                "p95": 91.05,
+                "min": 4,
+                "max": 122
+              },
+              "classReversals": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              },
+              "misinformedPriorityPeople": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              },
+              "staffedLaneHours": {
+                "mean": 62.7807,
+                "p05": 62.6535,
+                "p50": 62.7773,
+                "p95": 62.9049,
+                "min": 62.5297,
+                "max": 62.985
+              },
+              "extraLaneHours": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              }
+            },
+            "fifo-manual@reactive": {
+              "missed": {
+                "mean": 0.005,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 1
+              },
+              "missedPer1000": {
+                "mean": 0.0008,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0.1667
+              },
+              "prioritized": {
+                "mean": 39.395,
+                "p05": 16,
+                "p50": 36,
+                "p95": 78.15,
+                "min": 8,
+                "max": 103
+              },
+              "waitMeanMin": {
+                "mean": 1.8682,
+                "p05": 1.3728,
+                "p50": 1.8675,
+                "p95": 2.4463,
+                "min": 0.9955,
+                "max": 2.9008
+              },
+              "waitP90Min": {
+                "mean": 8.3041,
+                "p05": 5.104,
+                "p50": 8.1903,
+                "p95": 11.873,
+                "min": 2.4168,
+                "max": 14.5832
+              },
+              "standingMeanMin": {
+                "mean": 1.8682,
+                "p05": 1.3728,
+                "p50": 1.8675,
+                "p95": 2.4463,
+                "min": 0.9955,
+                "max": 2.9008
+              },
+              "maxOvertakes": {
+                "mean": 11.165,
+                "p05": 4,
+                "p50": 10,
+                "p95": 23,
+                "min": 3,
+                "max": 41
+              },
+              "classReversals": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              },
+              "misinformedPriorityPeople": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              },
+              "staffedLaneHours": {
+                "mean": 63.8384,
+                "p05": 63.3949,
+                "p50": 63.8309,
+                "p95": 64.3176,
+                "min": 62.7497,
+                "max": 64.53
+              },
+              "extraLaneHours": {
+                "mean": 1.0539,
+                "p05": 0.6526,
+                "p50": 1.0461,
+                "p95": 1.4873,
+                "min": 0,
+                "max": 1.7829
+              }
+            },
+            "fifo-manual@advise": {
+              "missed": {
+                "mean": 0.03,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 5
+              },
+              "missedPer1000": {
+                "mean": 0.005,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0.8358
+              },
+              "prioritized": {
+                "mean": 131.98,
+                "p05": 50.95,
+                "p50": 126,
+                "p95": 232,
+                "min": 19,
+                "max": 300
+              },
+              "waitMeanMin": {
+                "mean": 3.4742,
+                "p05": 2.3294,
+                "p50": 3.3626,
+                "p95": 5.0619,
+                "min": 1.2585,
+                "max": 6.2618
+              },
+              "waitP90Min": {
+                "mean": 14.8973,
+                "p05": 10.2733,
+                "p50": 14.4499,
+                "p95": 19.6974,
+                "min": 4.2735,
+                "max": 23.2994
+              },
+              "standingMeanMin": {
+                "mean": 3.4742,
+                "p05": 2.3294,
+                "p50": 3.3626,
+                "p95": 5.0619,
+                "min": 1.2585,
+                "max": 6.2618
+              },
+              "maxOvertakes": {
+                "mean": 43.445,
+                "p05": 14,
+                "p50": 39,
+                "p95": 91.05,
+                "min": 4,
+                "max": 122
+              },
+              "classReversals": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              },
+              "misinformedPriorityPeople": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              },
+              "staffedLaneHours": {
+                "mean": 62.7807,
+                "p05": 62.6535,
+                "p50": 62.7773,
+                "p95": 62.9049,
+                "min": 62.5297,
+                "max": 62.985
+              },
+              "extraLaneHours": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              }
+            }
+          },
+          "comparisons": {
+            "fifo-manual@advise vs fifo-manual@reactive": {
+              "metrics": {
+                "net": {
+                  "mean": -0.025,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": -5,
+                  "max": 0,
+                  "ciLower": -0.075,
+                  "ciUpper": 0
+                },
+                "saved": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "harmed": {
+                  "mean": 0.025,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 5,
+                  "ciLower": 0,
+                  "ciUpper": 0.075
+                },
+                "nonPriorityExtraWaitMeanMin": {
+                  "mean": 1.4805,
+                  "p05": 0.8511,
+                  "p50": 1.4234,
+                  "p95": 2.4687,
+                  "min": 0,
+                  "max": 3.1125,
+                  "ciLower": 1.4156,
+                  "ciUpper": 1.5459
+                },
+                "nonPriorityDelayedOver5MinShare": {
+                  "mean": 0.0954,
+                  "p05": 0.0652,
+                  "p50": 0.0934,
+                  "p95": 0.1356,
+                  "min": 0,
+                  "max": 0.1625,
+                  "ciLower": 0.0922,
+                  "ciUpper": 0.0988
+                },
+                "waitMeanDeltaMin": {
+                  "mean": 1.6061,
+                  "p05": 0.8947,
+                  "p50": 1.5279,
+                  "p95": 2.7,
+                  "min": 0,
+                  "max": 3.544,
+                  "ciLower": 1.5274,
+                  "ciUpper": 1.6824
+                },
+                "extraLaneHoursDelta": {
+                  "mean": -1.0539,
+                  "p05": -1.4873,
+                  "p50": -1.0461,
+                  "p95": -0.6526,
+                  "min": -1.7829,
+                  "max": 0,
+                  "ciLower": -1.0888,
+                  "ciUpper": -1.0186
+                }
+              },
+              "nonPriorityExtraWaitMaxMin": {
+                "mean": 22.6242,
+                "p05": 14.6877,
+                "p50": 22.6788,
+                "p95": 30.1249,
+                "min": 0,
+                "max": 38.1886
+              },
+              "shareDaysNetPositive": 0,
+              "shareDaysNetNegative": 0.005
+            },
+            "fifo-manual@advise vs fifo-manual": {
+              "metrics": {
+                "net": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "saved": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "harmed": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "nonPriorityExtraWaitMeanMin": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "nonPriorityDelayedOver5MinShare": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "waitMeanDeltaMin": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "extraLaneHoursDelta": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                }
+              },
+              "nonPriorityExtraWaitMaxMin": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              },
+              "shareDaysNetPositive": 0,
+              "shareDaysNetNegative": 0
+            },
+            "fifo-manual@reactive vs fifo-manual": {
+              "metrics": {
+                "net": {
+                  "mean": 0.025,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 5,
+                  "ciLower": 0,
+                  "ciUpper": 0.075
+                },
+                "saved": {
+                  "mean": 0.025,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 5,
+                  "ciLower": 0,
+                  "ciUpper": 0.075
+                },
+                "harmed": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "nonPriorityExtraWaitMeanMin": {
+                  "mean": -1.6098,
+                  "p05": -2.7105,
+                  "p50": -1.5281,
+                  "p95": -0.8971,
+                  "min": -3.5473,
+                  "max": 0,
+                  "ciLower": -1.6855,
+                  "ciUpper": -1.5296
+                },
+                "nonPriorityDelayedOver5MinShare": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "waitMeanDeltaMin": {
+                  "mean": -1.6061,
+                  "p05": -2.7,
+                  "p50": -1.5279,
+                  "p95": -0.8947,
+                  "min": -3.544,
+                  "max": 0,
+                  "ciLower": -1.6838,
+                  "ciUpper": -1.529
+                },
+                "extraLaneHoursDelta": {
+                  "mean": 1.0539,
+                  "p05": 0.6526,
+                  "p50": 1.0461,
+                  "p95": 1.4873,
+                  "min": 0,
+                  "max": 1.7829,
+                  "ciLower": 1.0179,
+                  "ciUpper": 1.0892
+                }
+              },
+              "nonPriorityExtraWaitMaxMin": {
+                "mean": 0.1688,
+                "p05": 0,
+                "p50": 0.1262,
+                "p95": 0.4814,
+                "min": 0,
+                "max": 0.9549
+              },
+              "shareDaysNetPositive": 0.005,
+              "shareDaysNetNegative": 0
+            }
+          }
+        },
+        {
+          "value": 0.5,
+          "label": "0.5",
+          "isBase": false,
+          "policies": {
+            "fifo-manual": {
+              "missed": {
+                "mean": 0.03,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 5
+              },
+              "missedPer1000": {
+                "mean": 0.005,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0.8358
+              },
+              "prioritized": {
+                "mean": 131.98,
+                "p05": 50.95,
+                "p50": 126,
+                "p95": 232,
+                "min": 19,
+                "max": 300
+              },
+              "waitMeanMin": {
+                "mean": 3.4742,
+                "p05": 2.3294,
+                "p50": 3.3626,
+                "p95": 5.0619,
+                "min": 1.2585,
+                "max": 6.2618
+              },
+              "waitP90Min": {
+                "mean": 14.8973,
+                "p05": 10.2733,
+                "p50": 14.4499,
+                "p95": 19.6974,
+                "min": 4.2735,
+                "max": 23.2994
+              },
+              "standingMeanMin": {
+                "mean": 3.4742,
+                "p05": 2.3294,
+                "p50": 3.3626,
+                "p95": 5.0619,
+                "min": 1.2585,
+                "max": 6.2618
+              },
+              "maxOvertakes": {
+                "mean": 43.445,
+                "p05": 14,
+                "p50": 39,
+                "p95": 91.05,
+                "min": 4,
+                "max": 122
+              },
+              "classReversals": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              },
+              "misinformedPriorityPeople": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              },
+              "staffedLaneHours": {
+                "mean": 62.7807,
+                "p05": 62.6535,
+                "p50": 62.7773,
+                "p95": 62.9049,
+                "min": 62.5297,
+                "max": 62.985
+              },
+              "extraLaneHours": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              }
+            },
+            "fifo-manual@reactive": {
+              "missed": {
+                "mean": 0.005,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 1
+              },
+              "missedPer1000": {
+                "mean": 0.0008,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0.1667
+              },
+              "prioritized": {
+                "mean": 39.395,
+                "p05": 16,
+                "p50": 36,
+                "p95": 78.15,
+                "min": 8,
+                "max": 103
+              },
+              "waitMeanMin": {
+                "mean": 1.8682,
+                "p05": 1.3728,
+                "p50": 1.8675,
+                "p95": 2.4463,
+                "min": 0.9955,
+                "max": 2.9008
+              },
+              "waitP90Min": {
+                "mean": 8.3041,
+                "p05": 5.104,
+                "p50": 8.1903,
+                "p95": 11.873,
+                "min": 2.4168,
+                "max": 14.5832
+              },
+              "standingMeanMin": {
+                "mean": 1.8682,
+                "p05": 1.3728,
+                "p50": 1.8675,
+                "p95": 2.4463,
+                "min": 0.9955,
+                "max": 2.9008
+              },
+              "maxOvertakes": {
+                "mean": 11.165,
+                "p05": 4,
+                "p50": 10,
+                "p95": 23,
+                "min": 3,
+                "max": 41
+              },
+              "classReversals": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              },
+              "misinformedPriorityPeople": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              },
+              "staffedLaneHours": {
+                "mean": 63.8384,
+                "p05": 63.3949,
+                "p50": 63.8309,
+                "p95": 64.3176,
+                "min": 62.7497,
+                "max": 64.53
+              },
+              "extraLaneHours": {
+                "mean": 1.0539,
+                "p05": 0.6526,
+                "p50": 1.0461,
+                "p95": 1.4873,
+                "min": 0,
+                "max": 1.7829
+              }
+            },
+            "fifo-manual@advise": {
+              "missed": {
+                "mean": 0.005,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 1
+              },
+              "missedPer1000": {
+                "mean": 0.0008,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0.1667
+              },
+              "prioritized": {
+                "mean": 17.62,
+                "p05": 4,
+                "p50": 13,
+                "p95": 46.45,
+                "min": 0,
+                "max": 141
+              },
+              "waitMeanMin": {
+                "mean": 1.079,
+                "p05": 0.6257,
+                "p50": 0.9404,
+                "p95": 2.0309,
+                "min": 0.514,
+                "max": 3.1847
+              },
+              "waitP90Min": {
+                "mean": 4.0964,
+                "p05": 1.9217,
+                "p50": 3.2463,
+                "p95": 9.0298,
+                "min": 1.5137,
+                "max": 14.8868
+              },
+              "standingMeanMin": {
+                "mean": 1.079,
+                "p05": 0.6257,
+                "p50": 0.9404,
+                "p95": 2.0309,
+                "min": 0.514,
+                "max": 3.1847
+              },
+              "maxOvertakes": {
+                "mean": 5.34,
+                "p05": 1,
+                "p50": 4,
+                "p95": 13,
+                "min": 0,
+                "max": 46
+              },
+              "classReversals": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              },
+              "misinformedPriorityPeople": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              },
+              "staffedLaneHours": {
+                "mean": 64.6874,
+                "p05": 63.7989,
+                "p50": 64.5712,
+                "p95": 66.1272,
+                "min": 63.5749,
+                "max": 67.9611
+              },
+              "extraLaneHours": {
+                "mean": 1.9073,
+                "p05": 1.0567,
+                "p50": 1.7725,
+                "p95": 3.3684,
+                "min": 0.8635,
+                "max": 5.1119
+              }
+            }
+          },
+          "comparisons": {
+            "fifo-manual@advise vs fifo-manual@reactive": {
+              "metrics": {
+                "net": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "saved": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "harmed": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "nonPriorityExtraWaitMeanMin": {
+                  "mean": -0.7912,
+                  "p05": -1.213,
+                  "p50": -0.865,
+                  "p95": -0.0042,
+                  "min": -1.5842,
+                  "max": 0.7924,
+                  "ciLower": -0.842,
+                  "ciUpper": -0.7363
+                },
+                "nonPriorityDelayedOver5MinShare": {
+                  "mean": 0.0018,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0.001,
+                  "min": 0,
+                  "max": 0.0769,
+                  "ciLower": 0.0004,
+                  "ciUpper": 0.0033
+                },
+                "waitMeanDeltaMin": {
+                  "mean": -0.7892,
+                  "p05": -1.212,
+                  "p50": -0.8636,
+                  "p95": -0.0041,
+                  "min": -1.5798,
+                  "max": 0.8319,
+                  "ciLower": -0.8352,
+                  "ciUpper": -0.7346
+                },
+                "extraLaneHoursDelta": {
+                  "mean": 0.8534,
+                  "p05": 0,
+                  "p50": 0.6667,
+                  "p95": 2.4208,
+                  "min": -0.25,
+                  "max": 4,
+                  "ciLower": 0.7571,
+                  "ciUpper": 0.9605
+                }
+              },
+              "nonPriorityExtraWaitMaxMin": {
+                "mean": 0.963,
+                "p05": 0,
+                "p50": 0.1833,
+                "p95": 5.9173,
+                "min": 0,
+                "max": 13.6881
+              },
+              "shareDaysNetPositive": 0,
+              "shareDaysNetNegative": 0
+            },
+            "fifo-manual@advise vs fifo-manual": {
+              "metrics": {
+                "net": {
+                  "mean": 0.025,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 5,
+                  "ciLower": 0,
+                  "ciUpper": 0.075
+                },
+                "saved": {
+                  "mean": 0.025,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 5,
+                  "ciLower": 0,
+                  "ciUpper": 0.075
+                },
+                "harmed": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "nonPriorityExtraWaitMeanMin": {
+                  "mean": -2.3994,
+                  "p05": -3.7134,
+                  "p50": -2.3258,
+                  "p95": -1.2444,
+                  "min": -4.7707,
+                  "max": -0.6898,
+                  "ciLower": -2.504,
+                  "ciUpper": -2.2956
+                },
+                "nonPriorityDelayedOver5MinShare": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "waitMeanDeltaMin": {
+                  "mean": -2.3952,
+                  "p05": -3.7091,
+                  "p50": -2.3212,
+                  "p95": -1.2402,
+                  "min": -4.7607,
+                  "max": -0.689,
+                  "ciLower": -2.4965,
+                  "ciUpper": -2.3024
+                },
+                "extraLaneHoursDelta": {
+                  "mean": 1.9073,
+                  "p05": 1.0567,
+                  "p50": 1.7725,
+                  "p95": 3.3684,
+                  "min": 0.8635,
+                  "max": 5.1119,
+                  "ciLower": 1.809,
+                  "ciUpper": 2.0076
+                }
+              },
+              "nonPriorityExtraWaitMaxMin": {
+                "mean": 0.1812,
+                "p05": 0,
+                "p50": 0.1412,
+                "p95": 0.452,
+                "min": 0,
+                "max": 0.8168
+              },
+              "shareDaysNetPositive": 0.005,
+              "shareDaysNetNegative": 0
+            },
+            "fifo-manual@reactive vs fifo-manual": {
+              "metrics": {
+                "net": {
+                  "mean": 0.025,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 5,
+                  "ciLower": 0,
+                  "ciUpper": 0.075
+                },
+                "saved": {
+                  "mean": 0.025,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 5,
+                  "ciLower": 0,
+                  "ciUpper": 0.075
+                },
+                "harmed": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "nonPriorityExtraWaitMeanMin": {
+                  "mean": -1.6098,
+                  "p05": -2.7105,
+                  "p50": -1.5281,
+                  "p95": -0.8971,
+                  "min": -3.5473,
+                  "max": 0,
+                  "ciLower": -1.6907,
+                  "ciUpper": -1.5349
+                },
+                "nonPriorityDelayedOver5MinShare": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "waitMeanDeltaMin": {
+                  "mean": -1.6061,
+                  "p05": -2.7,
+                  "p50": -1.5279,
+                  "p95": -0.8947,
+                  "min": -3.544,
+                  "max": 0,
+                  "ciLower": -1.687,
+                  "ciUpper": -1.5298
+                },
+                "extraLaneHoursDelta": {
+                  "mean": 1.0539,
+                  "p05": 0.6526,
+                  "p50": 1.0461,
+                  "p95": 1.4873,
+                  "min": 0,
+                  "max": 1.7829,
+                  "ciLower": 1.02,
+                  "ciUpper": 1.0889
+                }
+              },
+              "nonPriorityExtraWaitMaxMin": {
+                "mean": 0.1688,
+                "p05": 0,
+                "p50": 0.1262,
+                "p95": 0.4814,
+                "min": 0,
+                "max": 0.9549
+              },
+              "shareDaysNetPositive": 0.005,
+              "shareDaysNetNegative": 0
+            }
+          }
+        },
+        {
+          "value": 0.8,
+          "label": "0.8",
+          "isBase": true,
+          "policies": {
+            "fifo-manual": {
+              "missed": {
+                "mean": 0.03,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 5
+              },
+              "missedPer1000": {
+                "mean": 0.005,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0.8358
+              },
+              "prioritized": {
+                "mean": 131.98,
+                "p05": 50.95,
+                "p50": 126,
+                "p95": 232,
+                "min": 19,
+                "max": 300
+              },
+              "waitMeanMin": {
+                "mean": 3.4742,
+                "p05": 2.3294,
+                "p50": 3.3626,
+                "p95": 5.0619,
+                "min": 1.2585,
+                "max": 6.2618
+              },
+              "waitP90Min": {
+                "mean": 14.8973,
+                "p05": 10.2733,
+                "p50": 14.4499,
+                "p95": 19.6974,
+                "min": 4.2735,
+                "max": 23.2994
+              },
+              "standingMeanMin": {
+                "mean": 3.4742,
+                "p05": 2.3294,
+                "p50": 3.3626,
+                "p95": 5.0619,
+                "min": 1.2585,
+                "max": 6.2618
+              },
+              "maxOvertakes": {
+                "mean": 43.445,
+                "p05": 14,
+                "p50": 39,
+                "p95": 91.05,
+                "min": 4,
+                "max": 122
+              },
+              "classReversals": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              },
+              "misinformedPriorityPeople": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              },
+              "staffedLaneHours": {
+                "mean": 62.7807,
+                "p05": 62.6535,
+                "p50": 62.7773,
+                "p95": 62.9049,
+                "min": 62.5297,
+                "max": 62.985
+              },
+              "extraLaneHours": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              }
+            },
+            "fifo-manual@reactive": {
+              "missed": {
+                "mean": 0.005,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 1
+              },
+              "missedPer1000": {
+                "mean": 0.0008,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0.1667
+              },
+              "prioritized": {
+                "mean": 39.395,
+                "p05": 16,
+                "p50": 36,
+                "p95": 78.15,
+                "min": 8,
+                "max": 103
+              },
+              "waitMeanMin": {
+                "mean": 1.8682,
+                "p05": 1.3728,
+                "p50": 1.8675,
+                "p95": 2.4463,
+                "min": 0.9955,
+                "max": 2.9008
+              },
+              "waitP90Min": {
+                "mean": 8.3041,
+                "p05": 5.104,
+                "p50": 8.1903,
+                "p95": 11.873,
+                "min": 2.4168,
+                "max": 14.5832
+              },
+              "standingMeanMin": {
+                "mean": 1.8682,
+                "p05": 1.3728,
+                "p50": 1.8675,
+                "p95": 2.4463,
+                "min": 0.9955,
+                "max": 2.9008
+              },
+              "maxOvertakes": {
+                "mean": 11.165,
+                "p05": 4,
+                "p50": 10,
+                "p95": 23,
+                "min": 3,
+                "max": 41
+              },
+              "classReversals": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              },
+              "misinformedPriorityPeople": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              },
+              "staffedLaneHours": {
+                "mean": 63.8384,
+                "p05": 63.3949,
+                "p50": 63.8309,
+                "p95": 64.3176,
+                "min": 62.7497,
+                "max": 64.53
+              },
+              "extraLaneHours": {
+                "mean": 1.0539,
+                "p05": 0.6526,
+                "p50": 1.0461,
+                "p95": 1.4873,
+                "min": 0,
+                "max": 1.7829
+              }
+            },
+            "fifo-manual@advise": {
+              "missed": {
+                "mean": 0.005,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 1
+              },
+              "missedPer1000": {
+                "mean": 0.0008,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0.1667
+              },
+              "prioritized": {
+                "mean": 13.42,
+                "p05": 4,
+                "p50": 12,
+                "p95": 26,
+                "min": 0,
+                "max": 55
+              },
+              "waitMeanMin": {
+                "mean": 0.9387,
+                "p05": 0.6204,
+                "p50": 0.9049,
+                "p95": 1.4074,
+                "min": 0.4841,
+                "max": 2.2493
+              },
+              "waitP90Min": {
+                "mean": 3.3392,
+                "p05": 1.9329,
+                "p50": 3.0533,
+                "p95": 5.8068,
+                "min": 1.4434,
+                "max": 11.6428
+              },
+              "standingMeanMin": {
+                "mean": 0.9387,
+                "p05": 0.6204,
+                "p50": 0.9049,
+                "p95": 1.4074,
+                "min": 0.4841,
+                "max": 2.2493
+              },
+              "maxOvertakes": {
+                "mean": 4.015,
+                "p05": 1,
+                "p50": 4,
+                "p95": 8,
+                "min": 0,
+                "max": 13
+              },
+              "classReversals": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              },
+              "misinformedPriorityPeople": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              },
+              "staffedLaneHours": {
+                "mean": 64.5248,
+                "p05": 63.9063,
+                "p50": 64.5188,
+                "p95": 65.1837,
+                "min": 63.6485,
+                "max": 65.7709
+              },
+              "extraLaneHours": {
+                "mean": 1.7449,
+                "p05": 1.1649,
+                "p50": 1.779,
+                "p95": 2.3583,
+                "min": 0.8815,
+                "max": 2.9748
+              }
+            }
+          },
+          "comparisons": {
+            "fifo-manual@advise vs fifo-manual@reactive": {
+              "metrics": {
+                "net": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "saved": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "harmed": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "nonPriorityExtraWaitMeanMin": {
+                  "mean": -0.9312,
+                  "p05": -1.279,
+                  "p50": -0.9174,
+                  "p95": -0.6257,
+                  "min": -1.5842,
+                  "max": -0.2591,
+                  "ciLower": -0.9595,
+                  "ciUpper": -0.9038
+                },
+                "nonPriorityDelayedOver5MinShare": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0.0058,
+                  "ciLower": 0,
+                  "ciUpper": 0.0001
+                },
+                "waitMeanDeltaMin": {
+                  "mean": -0.9295,
+                  "p05": -1.2773,
+                  "p50": -0.9161,
+                  "p95": -0.6244,
+                  "min": -1.5798,
+                  "max": -0.2586,
+                  "ciLower": -0.9571,
+                  "ciUpper": -0.9029
+                },
+                "extraLaneHoursDelta": {
+                  "mean": 0.691,
+                  "p05": 0.1667,
+                  "p50": 0.6667,
+                  "p95": 1.2572,
+                  "min": 0,
+                  "max": 1.75,
+                  "ciLower": 0.641,
+                  "ciUpper": 0.7396
+                }
+              },
+              "nonPriorityExtraWaitMaxMin": {
+                "mean": 0.4651,
+                "p05": 0,
+                "p50": 0.1906,
+                "p95": 1.8483,
+                "min": 0,
+                "max": 10.8491
+              },
+              "shareDaysNetPositive": 0,
+              "shareDaysNetNegative": 0
+            },
+            "fifo-manual@advise vs fifo-manual": {
+              "metrics": {
+                "net": {
+                  "mean": 0.025,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 5,
+                  "ciLower": 0,
+                  "ciUpper": 0.075
+                },
+                "saved": {
+                  "mean": 0.025,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 5,
+                  "ciLower": 0,
+                  "ciUpper": 0.075
+                },
+                "harmed": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "nonPriorityExtraWaitMeanMin": {
+                  "mean": -2.5398,
+                  "p05": -3.7875,
+                  "p50": -2.4487,
+                  "p95": -1.6303,
+                  "min": -4.7902,
+                  "max": -0.7019,
+                  "ciLower": -2.6333,
+                  "ciUpper": -2.4451
+                },
+                "nonPriorityDelayedOver5MinShare": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "waitMeanDeltaMin": {
+                  "mean": -2.5356,
+                  "p05": -3.7847,
+                  "p50": -2.4471,
+                  "p95": -1.6298,
+                  "min": -4.78,
+                  "max": -0.701,
+                  "ciLower": -2.6287,
+                  "ciUpper": -2.4446
+                },
+                "extraLaneHoursDelta": {
+                  "mean": 1.7449,
+                  "p05": 1.1649,
+                  "p50": 1.779,
+                  "p95": 2.3583,
+                  "min": 0.8815,
+                  "max": 2.9748,
+                  "ciLower": 1.689,
+                  "ciUpper": 1.8026
+                }
+              },
+              "nonPriorityExtraWaitMaxMin": {
+                "mean": 0.1967,
+                "p05": 0,
+                "p50": 0.1632,
+                "p95": 0.5325,
+                "min": 0,
+                "max": 0.8601
+              },
+              "shareDaysNetPositive": 0.005,
+              "shareDaysNetNegative": 0
+            },
+            "fifo-manual@reactive vs fifo-manual": {
+              "metrics": {
+                "net": {
+                  "mean": 0.025,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 5,
+                  "ciLower": 0,
+                  "ciUpper": 0.075
+                },
+                "saved": {
+                  "mean": 0.025,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 5,
+                  "ciLower": 0,
+                  "ciUpper": 0.075
+                },
+                "harmed": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "nonPriorityExtraWaitMeanMin": {
+                  "mean": -1.6098,
+                  "p05": -2.7105,
+                  "p50": -1.5281,
+                  "p95": -0.8971,
+                  "min": -3.5473,
+                  "max": 0,
+                  "ciLower": -1.6858,
+                  "ciUpper": -1.531
+                },
+                "nonPriorityDelayedOver5MinShare": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "waitMeanDeltaMin": {
+                  "mean": -1.6061,
+                  "p05": -2.7,
+                  "p50": -1.5279,
+                  "p95": -0.8947,
+                  "min": -3.544,
+                  "max": 0,
+                  "ciLower": -1.6801,
+                  "ciUpper": -1.5274
+                },
+                "extraLaneHoursDelta": {
+                  "mean": 1.0539,
+                  "p05": 0.6526,
+                  "p50": 1.0461,
+                  "p95": 1.4873,
+                  "min": 0,
+                  "max": 1.7829,
+                  "ciLower": 1.0189,
+                  "ciUpper": 1.0875
+                }
+              },
+              "nonPriorityExtraWaitMaxMin": {
+                "mean": 0.1688,
+                "p05": 0,
+                "p50": 0.1262,
+                "p95": 0.4814,
+                "min": 0,
+                "max": 0.9549
+              },
+              "shareDaysNetPositive": 0.005,
+              "shareDaysNetNegative": 0
+            }
+          }
+        },
+        {
+          "value": 1,
+          "label": "1",
+          "isBase": false,
+          "policies": {
+            "fifo-manual": {
+              "missed": {
+                "mean": 0.03,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 5
+              },
+              "missedPer1000": {
+                "mean": 0.005,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0.8358
+              },
+              "prioritized": {
+                "mean": 131.98,
+                "p05": 50.95,
+                "p50": 126,
+                "p95": 232,
+                "min": 19,
+                "max": 300
+              },
+              "waitMeanMin": {
+                "mean": 3.4742,
+                "p05": 2.3294,
+                "p50": 3.3626,
+                "p95": 5.0619,
+                "min": 1.2585,
+                "max": 6.2618
+              },
+              "waitP90Min": {
+                "mean": 14.8973,
+                "p05": 10.2733,
+                "p50": 14.4499,
+                "p95": 19.6974,
+                "min": 4.2735,
+                "max": 23.2994
+              },
+              "standingMeanMin": {
+                "mean": 3.4742,
+                "p05": 2.3294,
+                "p50": 3.3626,
+                "p95": 5.0619,
+                "min": 1.2585,
+                "max": 6.2618
+              },
+              "maxOvertakes": {
+                "mean": 43.445,
+                "p05": 14,
+                "p50": 39,
+                "p95": 91.05,
+                "min": 4,
+                "max": 122
+              },
+              "classReversals": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              },
+              "misinformedPriorityPeople": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              },
+              "staffedLaneHours": {
+                "mean": 62.7807,
+                "p05": 62.6535,
+                "p50": 62.7773,
+                "p95": 62.9049,
+                "min": 62.5297,
+                "max": 62.985
+              },
+              "extraLaneHours": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              }
+            },
+            "fifo-manual@reactive": {
+              "missed": {
+                "mean": 0.005,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 1
+              },
+              "missedPer1000": {
+                "mean": 0.0008,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0.1667
+              },
+              "prioritized": {
+                "mean": 39.395,
+                "p05": 16,
+                "p50": 36,
+                "p95": 78.15,
+                "min": 8,
+                "max": 103
+              },
+              "waitMeanMin": {
+                "mean": 1.8682,
+                "p05": 1.3728,
+                "p50": 1.8675,
+                "p95": 2.4463,
+                "min": 0.9955,
+                "max": 2.9008
+              },
+              "waitP90Min": {
+                "mean": 8.3041,
+                "p05": 5.104,
+                "p50": 8.1903,
+                "p95": 11.873,
+                "min": 2.4168,
+                "max": 14.5832
+              },
+              "standingMeanMin": {
+                "mean": 1.8682,
+                "p05": 1.3728,
+                "p50": 1.8675,
+                "p95": 2.4463,
+                "min": 0.9955,
+                "max": 2.9008
+              },
+              "maxOvertakes": {
+                "mean": 11.165,
+                "p05": 4,
+                "p50": 10,
+                "p95": 23,
+                "min": 3,
+                "max": 41
+              },
+              "classReversals": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              },
+              "misinformedPriorityPeople": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              },
+              "staffedLaneHours": {
+                "mean": 63.8384,
+                "p05": 63.3949,
+                "p50": 63.8309,
+                "p95": 64.3176,
+                "min": 62.7497,
+                "max": 64.53
+              },
+              "extraLaneHours": {
+                "mean": 1.0539,
+                "p05": 0.6526,
+                "p50": 1.0461,
+                "p95": 1.4873,
+                "min": 0,
+                "max": 1.7829
+              }
+            },
+            "fifo-manual@advise": {
+              "missed": {
+                "mean": 0.005,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 1
+              },
+              "missedPer1000": {
+                "mean": 0.0008,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0.1667
+              },
+              "prioritized": {
+                "mean": 13.27,
+                "p05": 4,
+                "p50": 12,
+                "p95": 26,
+                "min": 0,
+                "max": 39
+              },
+              "waitMeanMin": {
+                "mean": 0.9234,
+                "p05": 0.6263,
+                "p50": 0.8993,
+                "p95": 1.3827,
+                "min": 0.5075,
+                "max": 1.7366
+              },
+              "waitP90Min": {
+                "mean": 3.2558,
+                "p05": 1.9209,
+                "p50": 3.0285,
+                "p95": 5.4136,
+                "min": 1.4767,
+                "max": 8.4921
+              },
+              "standingMeanMin": {
+                "mean": 0.9234,
+                "p05": 0.6263,
+                "p50": 0.8993,
+                "p95": 1.3827,
+                "min": 0.5075,
+                "max": 1.7366
+              },
+              "maxOvertakes": {
+                "mean": 3.955,
+                "p05": 1,
+                "p50": 4,
+                "p95": 8,
+                "min": 0,
+                "max": 13
+              },
+              "classReversals": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              },
+              "misinformedPriorityPeople": {
+                "mean": 0,
+                "p05": 0,
+                "p50": 0,
+                "p95": 0,
+                "min": 0,
+                "max": 0
+              },
+              "staffedLaneHours": {
+                "mean": 64.4448,
+                "p05": 63.9422,
+                "p50": 64.3181,
+                "p95": 65.0118,
+                "min": 63.823,
+                "max": 65.2567
+              },
+              "extraLaneHours": {
+                "mean": 1.6636,
+                "p05": 1.2251,
+                "p50": 1.5172,
+                "p95": 2.1933,
+                "min": 1.0968,
+                "max": 2.4779
+              }
+            }
+          },
+          "comparisons": {
+            "fifo-manual@advise vs fifo-manual@reactive": {
+              "metrics": {
+                "net": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "saved": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "harmed": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "nonPriorityExtraWaitMeanMin": {
+                  "mean": -0.9465,
+                  "p05": -1.3136,
+                  "p50": -0.9306,
+                  "p95": -0.6328,
+                  "min": -1.5842,
+                  "max": -0.4352,
+                  "ciLower": -0.9751,
+                  "ciUpper": -0.9174
+                },
+                "nonPriorityDelayedOver5MinShare": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "waitMeanDeltaMin": {
+                  "mean": -0.9448,
+                  "p05": -1.3122,
+                  "p50": -0.929,
+                  "p95": -0.6317,
+                  "min": -1.5798,
+                  "max": -0.4348,
+                  "ciLower": -0.9725,
+                  "ciUpper": -0.9163
+                },
+                "extraLaneHoursDelta": {
+                  "mean": 0.6097,
+                  "p05": 0.25,
+                  "p50": 0.5833,
+                  "p95": 1.0833,
+                  "min": 0.0833,
+                  "max": 1.4167,
+                  "ciLower": 0.575,
+                  "ciUpper": 0.6455
+                }
+              },
+              "nonPriorityExtraWaitMaxMin": {
+                "mean": 0.454,
+                "p05": 0,
+                "p50": 0.227,
+                "p95": 1.8483,
+                "min": 0,
+                "max": 4.8328
+              },
+              "shareDaysNetPositive": 0,
+              "shareDaysNetNegative": 0
+            },
+            "fifo-manual@advise vs fifo-manual": {
+              "metrics": {
+                "net": {
+                  "mean": 0.025,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 5,
+                  "ciLower": 0,
+                  "ciUpper": 0.075
+                },
+                "saved": {
+                  "mean": 0.025,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 5,
+                  "ciLower": 0,
+                  "ciUpper": 0.075
+                },
+                "harmed": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "nonPriorityExtraWaitMeanMin": {
+                  "mean": -2.5551,
+                  "p05": -3.8295,
+                  "p50": -2.4632,
+                  "p95": -1.6289,
+                  "min": -4.7902,
+                  "max": -0.6329,
+                  "ciLower": -2.6499,
+                  "ciUpper": -2.4617
+                },
+                "nonPriorityDelayedOver5MinShare": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "waitMeanDeltaMin": {
+                  "mean": -2.5509,
+                  "p05": -3.821,
+                  "p50": -2.4572,
+                  "p95": -1.6284,
+                  "min": -4.78,
+                  "max": -0.6318,
+                  "ciLower": -2.6486,
+                  "ciUpper": -2.4536
+                },
+                "extraLaneHoursDelta": {
+                  "mean": 1.6636,
+                  "p05": 1.2251,
+                  "p50": 1.5172,
+                  "p95": 2.1933,
+                  "min": 1.0968,
+                  "max": 2.4779,
+                  "ciLower": 1.6139,
+                  "ciUpper": 1.7111
+                }
+              },
+              "nonPriorityExtraWaitMaxMin": {
+                "mean": 0.2029,
+                "p05": 0,
+                "p50": 0.1652,
+                "p95": 0.5325,
+                "min": 0,
+                "max": 1.2337
+              },
+              "shareDaysNetPositive": 0.005,
+              "shareDaysNetNegative": 0
+            },
+            "fifo-manual@reactive vs fifo-manual": {
+              "metrics": {
+                "net": {
+                  "mean": 0.025,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 5,
+                  "ciLower": 0,
+                  "ciUpper": 0.075
+                },
+                "saved": {
+                  "mean": 0.025,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 5,
+                  "ciLower": 0,
+                  "ciUpper": 0.075
+                },
+                "harmed": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "nonPriorityExtraWaitMeanMin": {
+                  "mean": -1.6098,
+                  "p05": -2.7105,
+                  "p50": -1.5281,
+                  "p95": -0.8971,
+                  "min": -3.5473,
+                  "max": 0,
+                  "ciLower": -1.6908,
+                  "ciUpper": -1.5339
+                },
+                "nonPriorityDelayedOver5MinShare": {
+                  "mean": 0,
+                  "p05": 0,
+                  "p50": 0,
+                  "p95": 0,
+                  "min": 0,
+                  "max": 0,
+                  "ciLower": 0,
+                  "ciUpper": 0
+                },
+                "waitMeanDeltaMin": {
+                  "mean": -1.6061,
+                  "p05": -2.7,
+                  "p50": -1.5279,
+                  "p95": -0.8947,
+                  "min": -3.544,
+                  "max": 0,
+                  "ciLower": -1.6889,
+                  "ciUpper": -1.5335
+                },
+                "extraLaneHoursDelta": {
+                  "mean": 1.0539,
+                  "p05": 0.6526,
+                  "p50": 1.0461,
+                  "p95": 1.4873,
+                  "min": 0,
+                  "max": 1.7829,
+                  "ciLower": 1.0166,
+                  "ciUpper": 1.0886
+                }
+              },
+              "nonPriorityExtraWaitMaxMin": {
+                "mean": 0.1688,
+                "p05": 0,
+                "p50": 0.1262,
+                "p95": 0.4814,
+                "min": 0,
+                "max": 0.9549
+              },
+              "shareDaysNetPositive": 0.005,
+              "shareDaysNetNegative": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

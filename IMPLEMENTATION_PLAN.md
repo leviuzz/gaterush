@@ -1565,7 +1565,7 @@ interval and the expected benefit. Evidence:
   in the audit after GateFlow's; in Italian; no sideways scroll;
 - the forecasts' calibration unchanged (`pnpm calibrate:check`): the forecasts are the same.
 
-### S22.3: GateFlow's recommendations measured in the simulator (in progress)
+### S22.3: GateFlow's recommendations measured in the simulator (done)
 
 On "Confermo vai avanti" (2026-11-22), the next step proposed with S22: what following the
 console's recommendations buys, on the simulated days of the scenario library, for the pitch's
@@ -1597,6 +1597,36 @@ the rule the console runs. ADR-057.
   0.8, 1) for `@advise` on the days where it acts, 200 days per point.
 - **Records:** results name the forecast and its calibration when a policy uses `@advise`
   (schema unchanged); CI runs the library with `@advise` and the new sweep with 20 days per point.
+
+Evidence:
+- the simulator: the console asked at each review and never within 15 minutes of a
+  recommendation, the duty manager following or not, the staff's and the lanes' limits whatever
+  the console asks, a console required; in the lane properties, `@advise` serves everybody and
+  accounts for every decision and lane (3 tests and the property);
+- the metrics: on a TSF-like day, what the console read at each of its reviews equals what the
+  backtest reads of the same day after it, with other code (but for a lane the console's own
+  decision closed at that instant), when the lanes last changed too; each recommendation is the
+  console's rule on that state; experiments with `@advise` are deterministic and name the
+  forecast (2 tests);
+- the command line: the comparisons of `@advise`; the same results on 1 and 3 threads; the
+  report describes the rule; the API: the mode has the console's numbers;
+- the reports (`docs/reports/slice-22`, 200 days, from a clean checkout of `529b232`): the six
+  policies of S8 give S8's outcomes day by day (no difference on 30,000 values);
+
+  | Followed 4 in 5 | Console vs supervisor (A') | Console vs S8's rule | GateFlow as a whole vs today |
+  |---|---:|---:|---:|
+  | MX-like hub: net flights saved per day | +17.7 [16.0, 19.4] | +0.7 [0.0, 1.4] | +18.0 [16.1, 19.9] |
+  | extra lane-hours per day | +1.8 | +0.5 | +1.5 |
+  | TSF-like peak: mean wait (min) | -0.93 [-0.96, -0.90] | -0.14 [-0.16, -0.12] | -0.86 [-0.89, -0.83] |
+  | VCE-like disrupted: net flights saved per day | +0.1 [0.0, 0.2] | 0.0 [-0.1, 0.0] | +0.2 [-0.1, 0.6] |
+
+  On the VCE-like days the console recommends rarely (none on the normal day, 0.3 a day on the
+  peak, 1.0 on the disrupted day), as S8's rule; at the TSF-like base nobody misses a flight with
+  A' and the mean wait goes from 1.9 minutes with the supervisor to 0.9 (P90 8.3 to 3.3);
+- followed or not (sweeps, 200 days per point): at the hub, following half the recommendations
+  saves 12.9 [10.9, 15.0] flights a day more than the supervisor, 4 in 5 17.7, all of them 19.3;
+  at the TSF-like base half gives 2.40 minutes less wait per person than the plan only, all of
+  them 2.55.
 
 ## Later milestones (summary)
 

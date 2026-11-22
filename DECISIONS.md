@@ -2658,9 +2658,20 @@ founder on 2026-11-21 together with all of its recommendations.
     its own days; the function in the options keeps the simulator pure.
   - **The live system's own commands (the twin with an advisor):** S22 does it for one morning;
     200 days of five scenarios through the database would take hours, for the same rule.
-- **Evidence:** the S22.3 section of IMPLEMENTATION_PLAN.md and `docs/reports/slice-22`.
+- **Evidence:** the S22.3 section of IMPLEMENTATION_PLAN.md; `docs/reports/slice-22` (200 days
+  of the five library scenarios with staff on call, from a clean checkout of `529b232`), where
+  the six policies of S8 give S8's outcomes day by day. Followed 4 times in 5, the console's
+  recommendations save 17.7 [16.0, 19.4] flights a day more than today's supervisor at the MX-like
+  hub (1.8 extra lane-hours), 18.0 [16.1, 19.9] for GateFlow as a whole against today; at the
+  TSF-like base they halve the mean wait against the supervisor (1.9 to 0.9 minutes); on the
+  VCE-like days they change little, as S8's rule. Against S8's rule: +0.7 [0.0, 1.4] flights at
+  the hub for +0.5 lane-hours, -0.14 minutes at the TSF-like base for +0.4. Following half of
+  them already saves 12.9 flights a day more than the supervisor at the hub.
 - **Consequences:**
   - The pitch can quote the console's own recommendations, SIMULATED, scenario by scenario, with
     what one extra lane-hour buys and how much depends on the duty manager following them.
+  - The console's lanes stay open longer than S8's (about an hour each at the hub, against 40
+    minutes): a lane-hour of them buys less, all of them more. Tuning the rule (when to close,
+    the target) is a sweep away, on the airport's days (M5).
   - A review costs a forecast of 200 paths (about 5 ms): a simulated day `@advise` takes about a
     second more than the plan only.

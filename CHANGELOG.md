@@ -30,6 +30,10 @@ duty manager of S8 follows it 4 times in 5 (ADR-057).
   (`sweeps/tsf-like-peak-console.yaml`, `sweeps/mx-like-hub-console.yaml`).
 - API 0.22.1: its simulations run `@advise`; a test checks the mode has the console's numbers.
 - CI: the library with `@advise` (200 days), the same results on 1 and 4 worker threads.
+- `docs/reports/slice-22`: the five library scenarios with staff on call and the two sweeps of the
+  share followed, 200 days each, from a clean checkout of `529b232`. The console's
+  recommendations save 17.7 flights a day more than today's supervisor at the MX-like hub and
+  halve the mean wait at the TSF-like base; the six policies of S8 give S8's outcomes.
 
 ## [0.22.0] - 2026-11-22: Slice S22, lane recommendations with the decision and its outcome
 

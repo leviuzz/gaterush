@@ -16,7 +16,9 @@ import type {
   WaitingTicket,
 } from '@gateflow/priority-engine';
 import { QueueError, prepareWindowSizeOf, validatePolicy } from './policy';
+import { CHECKPOINT_MODES } from './types';
 import type {
+  CheckpointMode,
   FlightKnowledge,
   Policy,
   PresentOutcome,
@@ -69,6 +71,8 @@ interface TicketRecord {
    * timeout counts from it. Null until the ticket is called a second time.
    */
   recalledAtMs: Millis | null;
+  /** How long the running timer (call, second call, no-show) stood still in emergencies (S17). */
+  timerShiftMs: Millis;
   noShows: number;
   noShowAtMs: Millis | null;
   reactivations: number;
@@ -182,6 +186,10 @@ export class CheckpointQueue {
   private readonly historyLimit: number;
   private nextFifoKey = 0;
   private lastNowMs = Number.MIN_SAFE_INTEGER;
+  /** How the checkpoint runs (S17). */
+  private modeNow: CheckpointMode = 'NORMAL';
+  /** Since when the call timers stand still (an emergency), or null. */
+  private frozenSinceMs: Millis | null = null;
   private readonly counters = {
     issued: 0,
     commitments: 0,
@@ -258,6 +266,11 @@ export class CheckpointQueue {
     return { ...this.counters };
   }
 
+  /** How the checkpoint runs (S17). */
+  get mode(): CheckpointMode {
+    return this.modeNow;
+  }
+
   ticket(id: string): TicketView | undefined {
     const record = this.byId.get(id);
     return record === undefined ? undefined : view(record);
@@ -320,6 +333,7 @@ export class CheckpointQueue {
       firstCalledAtMs: null,
       lastCalledAtMs: null,
       recalledAtMs: null,
+      timerShiftMs: 0,
       noShows: 0,
       noShowAtMs: null,
       reactivations: 0,
@@ -389,6 +403,8 @@ export class CheckpointQueue {
    */
   callNext(nowMs: Millis, estimates: CheckpointEstimates): TicketView | null {
     this.begin(nowMs, estimates);
+    // Paused, or in an emergency: nobody is called (S17).
+    if (this.modeNow === 'PAUSED' || this.modeNow === 'EMERGENCY') return null;
     let record: TicketRecord | undefined;
     if (this.windowSize > 0) {
       this.refillWindow(nowMs, estimates);
@@ -402,6 +418,7 @@ export class CheckpointQueue {
     record.firstCalledAtMs ??= nowMs;
     record.lastCalledAtMs = nowMs;
     record.recalledAtMs = null;
+    record.timerShiftMs = 0;
     this.outstanding.push(record);
     this.counters.calls++;
     this.emit({ type: 'CALLED', ticketId: record.id, atMs: nowMs });
@@ -454,16 +471,19 @@ export class CheckpointQueue {
 
   /**
    * Staff call a called passenger again, now. The no-show timeout then counts from this second
-   * call. Allowed for CALLED and RECALLED tickets.
+   * call. Allowed for CALLED and RECALLED tickets, unless calls are paused or stopped by an
+   * emergency (S17).
    */
   recall(ticketId: string, nowMs: Millis, estimates: CheckpointEstimates): StaffActionOutcome {
     this.begin(nowMs, estimates);
     const record = this.byId.get(ticketId);
     if (record === undefined) return 'UNKNOWN_TICKET';
     if (record.state !== 'CALLED' && record.state !== 'RECALLED') return 'NOT_ALLOWED';
+    if (this.modeNow === 'PAUSED' || this.modeNow === 'EMERGENCY') return 'NOT_ALLOWED';
     if (record.state === 'CALLED') this.counters.recalls++;
     record.state = 'RECALLED';
     record.recalledAtMs = nowMs;
+    record.timerShiftMs = 0;
     this.emit({ type: 'RECALLED', ticketId: record.id, atMs: nowMs });
     return 'DONE';
   }
@@ -598,6 +618,47 @@ export class CheckpointQueue {
     return 'DONE';
   }
 
+  /**
+   * The supervisor sets the checkpoint's mode (S17). Leaving an emergency, the call timers start
+   * again where they stopped. With `reset`, allowed only on leaving a pause or an emergency for a
+   * mode that calls again, the tickets of the prepare window go back to waiting at their place and
+   * the window is announced again in order of arrival. The same mode again, without a reset,
+   * changes nothing (`NOT_ALLOWED`).
+   */
+  setMode(
+    mode: CheckpointMode,
+    nowMs: Millis,
+    estimates: CheckpointEstimates,
+    reset = false,
+  ): StaffActionOutcome {
+    // A command read back from a log is not trusted to carry a known mode.
+    const given: string = mode;
+    if (!(CHECKPOINT_MODES as readonly string[]).includes(given)) {
+      throw new QueueError(`unknown mode ${given}`);
+    }
+    this.begin(nowMs, estimates);
+    const previous = this.modeNow;
+    const stopped = (m: CheckpointMode) => m === 'PAUSED' || m === 'EMERGENCY';
+    if (reset ? !stopped(previous) || stopped(mode) : mode === previous) return 'NOT_ALLOWED';
+    if (previous === 'EMERGENCY' && mode !== 'EMERGENCY') this.thaw(nowMs);
+    if (mode === 'EMERGENCY') this.frozenSinceMs = nowMs;
+    this.modeNow = mode;
+    this.emit({ type: 'MODE_CHANGED', atMs: nowMs, mode, previous, reset });
+    if (reset) {
+      for (const record of this.window) {
+        record.state = 'QUEUED';
+        record.priorityCommitment = false;
+        record.fastTracked = false;
+        this.waiting.splice(insertionIndex(this.waiting, record.fifoKey), 0, record);
+        this.emit({ type: 'UNCOMMITTED', ticketId: record.id, atMs: nowMs });
+      }
+      this.window.length = 0;
+    }
+    this.refillWindow(nowMs, estimates, reset);
+    this.reclassify(nowMs, estimates);
+    return 'DONE';
+  }
+
   /** Applies every timeout due at or before `nowMs` (second calls, no-shows, expiries). */
   advance(nowMs: Millis): void {
     this.tick(nowMs);
@@ -638,8 +699,16 @@ export class CheckpointQueue {
     list.splice(index, 1);
   }
 
-  /** Lets the engine choose among waiting tickets and removes the chosen one from the list. */
-  private commit(nowMs: Millis, estimates: CheckpointEstimates): TicketRecord | undefined {
+  /**
+   * Lets the engine choose among waiting tickets and removes the chosen one from the list. In
+   * FIFO_ONLY, or with `fifo`, the oldest waiting ticket is committed, whatever the policy (S17).
+   */
+  private commit(
+    nowMs: Millis,
+    estimates: CheckpointEstimates,
+    fifo = false,
+  ): TicketRecord | undefined {
+    if (fifo || this.modeNow === 'FIFO_ONLY') return this.commitOldest(nowMs);
     const selection = selectNext({
       nowMs,
       checkpoint: estimates,
@@ -693,9 +762,37 @@ export class CheckpointQueue {
     return record;
   }
 
-  private refillWindow(nowMs: Millis, estimates: CheckpointEstimates): void {
+  /** Commits the oldest waiting ticket: the order of arrival (S17). */
+  private commitOldest(nowMs: Millis): TicketRecord | undefined {
+    const record = this.waiting.shift();
+    if (record === undefined) return undefined;
+    for (let p = 0; p < record.partySize; p++) this.recentPriority.push(false);
+    if (this.recentPriority.length > 2 * this.historyLimit + 64) {
+      this.recentPriority.splice(0, this.recentPriority.length - this.historyLimit);
+    }
+    record.priorityCommitment = false;
+    record.fastTracked = false;
+    record.selectionReasons = ['FIFO'];
+    this.counters.commitments++;
+    this.emit({
+      type: 'COMMITTED',
+      ticketId: record.id,
+      atMs: nowMs,
+      priority: false,
+      reasons: ['FIFO'],
+      passedTickets: 0,
+      passedPeople: 0,
+      fastTrack: false,
+      urgentCandidates: 0,
+      assessment: null,
+    });
+    return record;
+  }
+
+  /** Fills the prepare window; with `fifo`, in order of arrival (S17). */
+  private refillWindow(nowMs: Millis, estimates: CheckpointEstimates, fifo = false): void {
     while (this.window.length < this.windowSize) {
-      const record = this.commit(nowMs, estimates);
+      const record = this.commit(nowMs, estimates, fifo);
       if (record === undefined) return;
       record.state = 'PREPARE';
       if (!record.fastTracked) {
@@ -784,6 +881,7 @@ export class CheckpointQueue {
     record.state = 'NO_SHOW';
     record.noShows++;
     record.noShowAtMs = atMs;
+    record.timerShiftMs = 0;
     this.counters.noShows++;
     this.emit({ type: 'NO_SHOW', ticketId: record.id, atMs });
     if (record.reactivations >= v.maxReactivations) this.expire(record, atMs);
@@ -796,29 +894,54 @@ export class CheckpointQueue {
    */
   private nextTimeout(): { readonly record: TicketRecord; readonly atMs: Millis } | null {
     const v = this.virtual;
-    if (v === null) return null;
+    // In an emergency the timers stand still (S17).
+    if (v === null || this.frozenSinceMs !== null) return null;
     let best: TicketRecord | undefined;
     let bestAt = Infinity;
     for (const record of this.outstanding) {
-      const calledAt = record.lastCalledAtMs ?? record.issuedAtMs;
-      // The no-show timeout counts from the second call: the first timeout's, or staff's.
-      const at =
-        record.state === 'CALLED'
-          ? calledAt + v.callTimeoutMs
-          : (record.recalledAtMs ?? calledAt + v.callTimeoutMs) + v.recallTimeoutMs;
+      const at = this.timerStartOf(record, v) + this.timerLengthOf(record, v) + record.timerShiftMs;
       if (at < bestAt) {
         bestAt = at;
         best = record;
       }
     }
     for (const record of this.noShows) {
-      const at = (record.noShowAtMs ?? record.issuedAtMs) + v.reactivationWindowMs;
+      const at = this.timerStartOf(record, v) + v.reactivationWindowMs + record.timerShiftMs;
       if (at < bestAt) {
         bestAt = at;
         best = record;
       }
     }
     return best === undefined ? null : { record: best, atMs: bestAt };
+  }
+
+  /**
+   * When the running timer of a called ticket or a no-show started: the call, the second call
+   * (the no-show timeout counts from it: the first timeout's, or staff's), or the no-show.
+   */
+  private timerStartOf(record: TicketRecord, v: VirtualQueue): Millis {
+    const calledAt = record.lastCalledAtMs ?? record.issuedAtMs;
+    if (record.state === 'CALLED') return calledAt;
+    if (record.state === 'NO_SHOW') return record.noShowAtMs ?? record.issuedAtMs;
+    return record.recalledAtMs ?? calledAt + v.callTimeoutMs;
+  }
+
+  private timerLengthOf(record: TicketRecord, v: VirtualQueue): Millis {
+    return record.state === 'CALLED' ? v.callTimeoutMs : v.recallTimeoutMs;
+  }
+
+  /**
+   * The end of an emergency (S17): every running timer starts again where it stopped. A timer
+   * started during the emergency (a no-show marked by staff) starts now.
+   */
+  private thaw(nowMs: Millis): void {
+    const since = this.frozenSinceMs;
+    const v = this.virtual;
+    this.frozenSinceMs = null;
+    if (since === null || v === null) return;
+    for (const record of [...this.outstanding, ...this.noShows]) {
+      record.timerShiftMs += nowMs - Math.max(since, this.timerStartOf(record, v));
+    }
   }
 
   /**
@@ -836,6 +959,7 @@ export class CheckpointQueue {
         case 'CALLED':
           record.state = 'RECALLED';
           record.recalledAtMs = atMs;
+          record.timerShiftMs = 0;
           this.counters.recalls++;
           this.emit({ type: 'RECALLED', ticketId: record.id, atMs });
           break;

@@ -2,12 +2,13 @@ import { SEGMENTS } from '@gateflow/domain';
 import type { KnownDeadline } from '@gateflow/domain';
 import type { CheckpointEstimates } from '@gateflow/priority-engine';
 import {
+  CHECKPOINT_MODES,
   CheckpointQueue,
   QueueError,
   fastTrackResponseEstimateMs,
   responseEstimateMs,
 } from '@gateflow/queue-core';
-import type { TicketView } from '@gateflow/queue-core';
+import type { CheckpointMode, TicketView } from '@gateflow/queue-core';
 import { MANUAL_REASONS, PASS_INFANTS, PRESENT_METHODS, TICKET_SOURCES } from './commands';
 import type {
   Applied,
@@ -20,6 +21,7 @@ import type {
   DayLogEvent,
   IssueTicket,
   PassInfant,
+  SetMode,
   StaffAction,
   TicketSource,
   TicketSummary,
@@ -33,6 +35,8 @@ export const OPERATION_ERRORS = [
   'OUT_OF_ORDER',
   /** The ticket named by the command does not exist on this day. */
   'UNKNOWN_TICKET',
+  /** The checkpoint is in an emergency: no ticket is issued, no party grows (S17). */
+  'EMERGENCY',
 ] as const;
 export type OperationErrorCode = (typeof OPERATION_ERRORS)[number];
 
@@ -87,8 +91,15 @@ function validateInfant(infant: PassInfant | undefined, people: number): void {
   }
 }
 
+/** Checks a mode: a command read back from a log is not trusted to carry a known one. */
+function validateMode(mode: CheckpointMode): void {
+  const value: string = mode;
+  if (!(CHECKPOINT_MODES as readonly string[]).includes(value)) invalid(`unknown mode ${value}`);
+}
+
 function validateConfig(config: DayConfig): void {
   if (config.checkpointId.length === 0) invalid('the checkpoint id is empty');
+  if (config.mode !== undefined) validateMode(config.mode);
   if (!SERVICE_DAY.test(config.serviceDay)) invalid('the service day must be written YYYY-MM-DD');
   if (!PREFIX.test(config.ticketPrefix))
     invalid('the ticket prefix must be 1 to 3 capital letters');
@@ -180,15 +191,17 @@ export class CheckpointDay {
     }
     requireInteger(record.seq, 'the sequence number', 1);
     requireInteger(record.atMs, 'the time of the command', 0);
-    const day = new CheckpointDay(record.command.config, record.seq, record.atMs);
-    const serviceDay = record.command.config.serviceDay;
-    return {
-      day,
-      applied: {
-        result: { type: 'DAY_OPENED', serviceDay },
-        events: [{ type: 'DAY_OPENED', atMs: record.atMs, serviceDay }],
-      },
-    };
+    const config = record.command.config;
+    const day = new CheckpointDay(config, record.seq, record.atMs);
+    const serviceDay = config.serviceDay;
+    const events: DayLogEvent[] = [{ type: 'DAY_OPENED', atMs: record.atMs, serviceDay }];
+    // The mode the previous day ended in goes on (S17): its change is the day's first event.
+    if (config.mode !== undefined && config.mode !== 'NORMAL') {
+      day.queue.setMode(config.mode, record.atMs, day.estimates);
+      events.push(...day.pending);
+      day.pending = [];
+    }
+    return { day, applied: { result: { type: 'DAY_OPENED', serviceDay }, events } };
   }
 
   /** Rebuilds a day from its log: the same commands give the same day and the same events. */
@@ -209,6 +222,11 @@ export class CheckpointDay {
   /** Time of the last command applied. */
   get lastAtMs(): number {
     return this.atMs;
+  }
+
+  /** The mode of the checkpoint (S17). */
+  get mode(): CheckpointMode {
+    return this.queue.mode;
   }
 
   /** Applies the next command of the log. */
@@ -237,6 +255,7 @@ export class CheckpointDay {
         case 'OPEN_DAY':
           return invalid('the day is already open');
         case 'ISSUE_TICKET':
+          this.refuseInEmergency('no ticket is issued');
           return this.issue(command, nowMs);
         case 'CALL_NEXT': {
           const view = this.queue.callNext(nowMs, this.estimates);
@@ -262,6 +281,7 @@ export class CheckpointDay {
         case 'CANCEL':
           return this.act(command.type, command.ticketId, nowMs);
         case 'ADD_TO_PARTY': {
+          this.refuseInEmergency('no party grows');
           this.requireTicket(command.ticketId);
           requireInteger(command.people, 'the people joining', 1, MAX_PARTY_SIZE);
           validateInfant(command.infant, command.people);
@@ -303,11 +323,35 @@ export class CheckpointDay {
             ticket: this.summaryOf(this.view(command.ticketId)),
           };
         }
+        case 'SET_MODE':
+          return this.setMode(command, nowMs);
       }
     } catch (error) {
       if (error instanceof QueueError) invalid(error.message);
       throw error;
     }
+  }
+
+  private refuseInEmergency(what: string): void {
+    if (this.queue.mode === 'EMERGENCY') {
+      throw new OperationError('EMERGENCY', `the checkpoint is in an emergency: ${what}`);
+    }
+  }
+
+  private setMode(command: SetMode, nowMs: number): CommandResult {
+    validateMode(command.mode);
+    // A command read back from a log is not trusted to carry a boolean.
+    const reset: unknown = command.reset;
+    if (typeof reset !== 'boolean') invalid('a change of mode says whether it resets the window');
+    const previous = this.queue.mode;
+    const outcome = this.queue.setMode(command.mode, nowMs, this.estimates, command.reset);
+    return {
+      type: 'MODE_SET',
+      outcome: outcome === 'DONE' ? 'DONE' : 'NOT_ALLOWED',
+      mode: this.queue.mode,
+      previous,
+      reset: command.reset,
+    };
   }
 
   private requireTicket(ticketId: string): void {
@@ -480,6 +524,7 @@ export class CheckpointDay {
     return {
       called,
       prepare: this.queue.prepareWindow().map((view) => this.info.get(view.id)?.number ?? ''),
+      mode: this.queue.mode,
     };
   }
 

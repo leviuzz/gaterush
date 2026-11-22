@@ -70,6 +70,10 @@ const EN = {
   'kiosk.notSetUp': 'This kiosk is not set up yet. Please ask a member of staff.',
   'kiosk.error': 'Something went wrong. Please ask a member of staff.',
   'kiosk.demo': 'Demo with synthetic data',
+  'kiosk.emergency.title': 'Service suspended',
+  'kiosk.emergency.body':
+    'This kiosk is not giving numbers right now. Please follow the instructions of the staff. If you already have a number, it stays valid.',
+  'kiosk.paused': 'Calls are paused for a moment. Your number stays valid.',
   'ticket.title': 'Your number',
   'ticket.state.QUEUED': 'You are in the queue. You can wait anywhere.',
   'ticket.state.PREPARE': 'Get ready: you will be called soon.',
@@ -85,6 +89,9 @@ const EN = {
   'ticket.updated': 'Updated at {time}',
   'ticket.ticketFor': 'Ticket for {checkpoint}',
   'ticket.people': 'For {count} people',
+  'ticket.paused': 'Calls are paused for a moment. Your number stays valid.',
+  'ticket.emergency':
+    'Service suspended. Please follow the instructions of the staff. Your number stays valid.',
   'display.called': 'Called',
   'display.go': 'If your number is here, go to the security entrance now.',
   'display.secondCall': 'Second call',
@@ -95,6 +102,8 @@ const EN = {
   'display.stale': 'Not up to date',
   'display.down': 'Please follow the instructions of the staff.',
   'display.notSetUp': 'This display is not set up yet.',
+  'display.paused': 'Calls are paused for a moment. Your number stays valid: please stay close.',
+  'display.emergency': 'Service suspended. Please follow the instructions of the staff.',
   'lane.title': 'Lane station',
   'lane.signIn.title': 'Sign in',
   'lane.signIn.login': 'Login',
@@ -150,6 +159,11 @@ const EN = {
   'lane.manual.issued': 'Ticket {number}',
   'lane.error': 'Something went wrong. Try again.',
   'lane.stale': 'Not up to date: last update at {time}',
+  'lane.mode.FIFO_ONLY': 'Order of arrival only, set by the supervisor',
+  'lane.mode.PAUSED': 'Calls paused by the supervisor',
+  'lane.mode.EMERGENCY': 'Emergency: no calls, no new tickets',
+  'lane.callsPaused': 'Calls are stopped by the supervisor.',
+  'lane.emergency': 'Emergency: no tickets can be issued.',
 } as const;
 
 export type MessageKey = keyof typeof EN;
@@ -211,6 +225,10 @@ const IT: Readonly<Record<MessageKey, string>> = {
   'kiosk.notSetUp': 'Questo totem non è ancora configurato. Chiedi al personale.',
   'kiosk.error': 'Qualcosa non ha funzionato. Chiedi al personale.',
   'kiosk.demo': 'Demo con dati sintetici',
+  'kiosk.emergency.title': 'Servizio sospeso',
+  'kiosk.emergency.body':
+    'Il totem non sta dando numeri in questo momento. Segui le indicazioni del personale. Se hai già un numero, resta valido.',
+  'kiosk.paused': 'Le chiamate sono sospese per qualche momento. Il tuo numero resta valido.',
   'ticket.title': 'Il tuo numero',
   'ticket.state.QUEUED': 'Sei in coda. Puoi aspettare dove vuoi.',
   'ticket.state.PREPARE': 'Preparati: sarai chiamato a breve.',
@@ -227,6 +245,9 @@ const IT: Readonly<Record<MessageKey, string>> = {
   'ticket.updated': 'Aggiornato alle {time}',
   'ticket.ticketFor': 'Ticket per {checkpoint}',
   'ticket.people': 'Per {count} persone',
+  'ticket.paused': 'Le chiamate sono sospese per qualche momento. Il tuo numero resta valido.',
+  'ticket.emergency':
+    'Servizio sospeso. Segui le indicazioni del personale. Il tuo numero resta valido.',
   'display.called': 'Chiamati',
   'display.go': "Se il tuo numero è qui, vai subito all'ingresso dei controlli.",
   'display.secondCall': 'Seconda chiamata',
@@ -237,6 +258,9 @@ const IT: Readonly<Record<MessageKey, string>> = {
   'display.stale': 'Dati non aggiornati',
   'display.down': 'Segui le indicazioni del personale.',
   'display.notSetUp': 'Questo schermo non è ancora configurato.',
+  'display.paused':
+    'Le chiamate sono sospese per qualche momento. Il tuo numero resta valido: resta nei paraggi.',
+  'display.emergency': 'Servizio sospeso. Segui le indicazioni del personale.',
   'lane.title': 'Postazione varco',
   'lane.signIn.title': 'Accedi',
   'lane.signIn.login': 'Utente',
@@ -292,6 +316,11 @@ const IT: Readonly<Record<MessageKey, string>> = {
   'lane.manual.issued': 'Ticket {number}',
   'lane.error': 'Qualcosa non ha funzionato. Riprova.',
   'lane.stale': 'Non aggiornato: ultimo aggiornamento alle {time}',
+  'lane.mode.FIFO_ONLY': 'Solo ordine di arrivo, impostato dal supervisore',
+  'lane.mode.PAUSED': 'Chiamate sospese dal supervisore',
+  'lane.mode.EMERGENCY': 'Emergenza: nessuna chiamata, nessun nuovo ticket',
+  'lane.callsPaused': 'Le chiamate sono ferme per decisione del supervisore.',
+  'lane.emergency': 'Emergenza: non si possono emettere ticket.',
 };
 
 const ES: Readonly<Record<MessageKey, string>> = {
@@ -349,6 +378,10 @@ const ES: Readonly<Record<MessageKey, string>> = {
   'kiosk.notSetUp': 'Este quiosco todavía no está configurado. Pida ayuda al personal.',
   'kiosk.error': 'Algo salió mal. Pida ayuda al personal.',
   'kiosk.demo': 'Demo con datos sintéticos',
+  'kiosk.emergency.title': 'Servicio suspendido',
+  'kiosk.emergency.body':
+    'Este quiosco no está dando números en este momento. Siga las indicaciones del personal. Si ya tiene un número, sigue siendo válido.',
+  'kiosk.paused': 'Las llamadas están en pausa por un momento. Su número sigue siendo válido.',
   'ticket.title': 'Su número',
   'ticket.state.QUEUED': 'Está en la fila. Puede esperar donde quiera.',
   'ticket.state.PREPARE': 'Prepárese: pronto lo llamaremos.',
@@ -365,6 +398,9 @@ const ES: Readonly<Record<MessageKey, string>> = {
   'ticket.updated': 'Actualizado a las {time}',
   'ticket.ticketFor': 'Boleto para {checkpoint}',
   'ticket.people': 'Para {count} personas',
+  'ticket.paused': 'Las llamadas están en pausa por un momento. Su número sigue siendo válido.',
+  'ticket.emergency':
+    'Servicio suspendido. Siga las indicaciones del personal. Su número sigue siendo válido.',
   'display.called': 'Llamados',
   'display.go': 'Si su número está aquí, vaya ahora a la entrada del control de seguridad.',
   'display.secondCall': 'Segundo llamado',
@@ -375,6 +411,9 @@ const ES: Readonly<Record<MessageKey, string>> = {
   'display.stale': 'Datos sin actualizar',
   'display.down': 'Siga las indicaciones del personal.',
   'display.notSetUp': 'Esta pantalla todavía no está configurada.',
+  'display.paused':
+    'Las llamadas están en pausa por un momento. Su número sigue siendo válido: manténgase cerca.',
+  'display.emergency': 'Servicio suspendido. Siga las indicaciones del personal.',
   'lane.title': 'Estación de control',
   'lane.signIn.title': 'Iniciar sesión',
   'lane.signIn.login': 'Usuario',
@@ -430,6 +469,11 @@ const ES: Readonly<Record<MessageKey, string>> = {
   'lane.manual.issued': 'Boleto {number}',
   'lane.error': 'Algo salió mal. Inténtelo de nuevo.',
   'lane.stale': 'Sin actualizar: última actualización a las {time}',
+  'lane.mode.FIFO_ONLY': 'Solo orden de llegada, fijado por el supervisor',
+  'lane.mode.PAUSED': 'Llamadas en pausa por el supervisor',
+  'lane.mode.EMERGENCY': 'Emergencia: sin llamadas ni boletos nuevos',
+  'lane.callsPaused': 'El supervisor detuvo las llamadas.',
+  'lane.emergency': 'Emergencia: no se pueden emitir boletos.',
 };
 
 export const MESSAGES: Readonly<Record<Locale, Readonly<Record<MessageKey, string>>>> = {

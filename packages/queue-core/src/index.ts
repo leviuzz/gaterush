@@ -1,5 +1,5 @@
 /** Version of the queue state machine. Bump on any change that can alter behaviour. */
-export const QUEUE_CORE_VERSION = '0.8.0';
+export const QUEUE_CORE_VERSION = '0.9.0';
 
 export { CheckpointQueue } from './queue';
 export {
@@ -32,8 +32,9 @@ export {
   validateQueueOperation,
   withLaneMode,
 } from './policy';
-export { TICKET_STATES } from './types';
+export { CHECKPOINT_MODES, TICKET_STATES } from './types';
 export type {
+  CheckpointMode,
   FlightKnowledge,
   LaneManagement,
   PhysicalQueue,

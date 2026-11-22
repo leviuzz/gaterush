@@ -443,11 +443,14 @@ export function simulateCheckpoint(
       case 'ADMITTED':
       case 'EXPIRED':
         break;
-      // Staff's actions and a party growing at the kiosk happen in the live product only (S15).
+      // Staff's actions, a party growing at the kiosk and the supervisor's modes happen in the
+      // live product only (S15, S17).
       case 'REVIEW':
       case 'RELEASED':
       case 'CANCELLED':
       case 'PARTY_GROWN':
+      case 'MODE_CHANGED':
+      case 'UNCOMMITTED':
         throw new Error(`${event.type} in a simulated day: only the live product has it`);
     }
   };
@@ -462,6 +465,8 @@ export function simulateCheckpoint(
             onQueueEvent(event);
             observe?.(event);
             if (observer !== undefined) {
+              // A simulated day has only events of tickets: the checkpoint's own are live (S17).
+              if (!('ticketId' in event)) throw new Error(`${event.type} in a simulated day`);
               const party = ticketOwner.get(event.ticketId);
               if (party === undefined) throw new Error(`unknown ticket ${event.ticketId}`);
               observer({ type: 'QUEUE', atMs: event.atMs, party, event });

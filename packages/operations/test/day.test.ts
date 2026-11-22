@@ -1,6 +1,7 @@
 import fc from 'fast-check';
 import type { KnownDeadline } from '@gateflow/domain';
 import {
+  CHECKPOINT_MODES,
   CheckpointQueue,
   FIFO_POLICY,
   PRIORITY_V3_POLICY,
@@ -8,7 +9,7 @@ import {
   classificationOf,
   withLaneMode,
 } from '@gateflow/queue-core';
-import type { Policy, QueueEvent } from '@gateflow/queue-core';
+import type { CheckpointMode, Policy, QueueEvent } from '@gateflow/queue-core';
 import { describe, expect, it } from 'vitest';
 import { CheckpointDay, OperationError, estimatesOf } from '../src';
 import type { AddToParty, Command, CommandRecord, DayConfig, IssueTicket } from '../src';
@@ -193,6 +194,124 @@ describe('a checkpoint day', () => {
   });
 });
 
+describe('the modes of the checkpoint (S17)', () => {
+  const code = (f: () => unknown) => {
+    try {
+      f();
+    } catch (error) {
+      return error instanceof OperationError ? error.code : 'other';
+    }
+    return 'none';
+  };
+
+  it('pauses the calls, and stops the kiosks too in an emergency', () => {
+    const { day, applied } = run(
+      log([
+        { type: 'OPEN_DAY', config: config() },
+        issue(1),
+        issue(2),
+        { type: 'SET_MODE', mode: 'PAUSED', reset: false },
+        { type: 'CALL_NEXT' },
+        // Paused, the kiosks go on issuing.
+        issue(3),
+        { type: 'SET_MODE', mode: 'PAUSED', reset: false },
+        { type: 'SET_MODE', mode: 'EMERGENCY', reset: false },
+      ]),
+    );
+    expect(applied[3]!.result).toEqual({
+      type: 'MODE_SET',
+      outcome: 'DONE',
+      mode: 'PAUSED',
+      previous: 'NORMAL',
+      reset: false,
+    });
+    expect(applied[3]!.events).toEqual([
+      {
+        type: 'MODE_CHANGED',
+        atMs: DAY_START + 30_000,
+        mode: 'PAUSED',
+        previous: 'NORMAL',
+        reset: false,
+      },
+    ]);
+    // Nobody is called while paused.
+    expect(applied[4]!.result).toEqual({ type: 'CALLED', ticket: null });
+    expect(applied[5]!.result.type).toBe('TICKET_ISSUED');
+    // The same mode again changes nothing.
+    expect(applied[6]!.result).toMatchObject({ outcome: 'NOT_ALLOWED', mode: 'PAUSED' });
+    expect(applied[6]!.events).toEqual([]);
+    expect(day.mode).toBe('EMERGENCY');
+    expect(day.board().mode).toBe('EMERGENCY');
+    // In an emergency, no ticket is issued and no party grows: the log never has them.
+    const at = DAY_START + 10 * MIN;
+    expect(code(() => day.apply({ seq: 9, atMs: at, command: issue(4) }))).toBe('EMERGENCY');
+    expect(
+      code(() =>
+        day.apply({
+          seq: 9,
+          atMs: at,
+          command: { type: 'ADD_TO_PARTY', ticketId: 't-1', people: 1, dedupKey: null },
+        }),
+      ),
+    ).toBe('EMERGENCY');
+    // The emergency ends with the window announced again in order of arrival.
+    const resumed = day.apply({
+      seq: 9,
+      atMs: at,
+      command: { type: 'SET_MODE', mode: 'NORMAL', reset: true },
+    });
+    expect(resumed.result).toMatchObject({ outcome: 'DONE', mode: 'NORMAL', reset: true });
+    expect(resumed.events.map((e) => e.type)).toEqual([
+      'MODE_CHANGED',
+      'UNCOMMITTED',
+      'UNCOMMITTED',
+      'UNCOMMITTED',
+      'COMMITTED',
+      'COMMITTED',
+      'COMMITTED',
+    ]);
+    expect(day.prepareWindow().map((t) => t.number)).toEqual(['A001', 'A002', 'A003']);
+  });
+
+  it('opens a day in the mode the previous day ended in', () => {
+    const { day, applied } = run(
+      log([{ type: 'OPEN_DAY', config: config(PRIORITY_V3_POLICY, { mode: 'EMERGENCY' }) }]),
+    );
+    expect(applied[0]!.events).toEqual([
+      { type: 'DAY_OPENED', atMs: DAY_START, serviceDay: '2026-11-23' },
+      {
+        type: 'MODE_CHANGED',
+        atMs: DAY_START,
+        mode: 'EMERGENCY',
+        previous: 'NORMAL',
+        reset: false,
+      },
+    ]);
+    expect(day.mode).toBe('EMERGENCY');
+    expect(code(() => day.apply({ seq: 2, atMs: DAY_START, command: issue(1) }))).toBe('EMERGENCY');
+    // A day that opens NORMAL has no change of mode.
+    const normal = run(
+      log([{ type: 'OPEN_DAY', config: config(PRIORITY_V3_POLICY, { mode: 'NORMAL' }) }]),
+    );
+    expect(normal.applied[0]!.events.map((e) => e.type)).toEqual(['DAY_OPENED']);
+    expect(normal.day.mode).toBe('NORMAL');
+  });
+
+  it('refuses an unknown mode, and a change that does not say whether it resets', () => {
+    const { day } = run(log([{ type: 'OPEN_DAY', config: config() }]));
+    const bad = [
+      { type: 'SET_MODE', mode: 'CLOSED', reset: false },
+      { type: 'SET_MODE', mode: 'PAUSED' },
+      { type: 'SET_MODE', mode: 'PAUSED', reset: 'yes' },
+    ] as unknown as Command[];
+    for (const command of bad) {
+      expect(code(() => day.apply({ seq: 2, atMs: DAY_START, command }))).toBe('INVALID_COMMAND');
+    }
+    const unknown = config(PRIORITY_V3_POLICY, { mode: 'CLOSED' as CheckpointMode });
+    expect(code(() => run(log([{ type: 'OPEN_DAY', config: unknown }])))).toBe('INVALID_COMMAND');
+  });
+});
+
 /** Random days: tickets with deadlines close enough for priority calls, calls and presentations. */
 const dayArb = fc
   .tuple(
@@ -216,6 +335,15 @@ const dayArb = fc
         },
         // The scheduler's timeouts and the staff's actions (S15).
         { weight: 2, arbitrary: fc.record({ kind: fc.constant('advance' as const) }) },
+        // The supervisor's modes (S17).
+        {
+          weight: 1,
+          arbitrary: fc.record({
+            kind: fc.constant('mode' as const),
+            mode: fc.constantFrom(...CHECKPOINT_MODES),
+            reset: fc.boolean(),
+          }),
+        },
         {
           weight: 3,
           arbitrary: fc.record({
@@ -243,9 +371,17 @@ const dayArb = fc
     const times = [DAY_START];
     let issued = 0;
     let t = DAY_START;
+    // The mode, as the queue changes it: in an emergency, no ticket is issued, no party grows.
+    let mode: CheckpointMode = 'NORMAL';
+    const stopped = (m: CheckpointMode) => m === 'PAUSED' || m === 'EMERGENCY';
     steps.forEach((step, i) => {
       t += gaps[i] ?? 0;
-      if (step.kind === 'issue') {
+      if (step.kind === 'mode') {
+        const allowed = step.reset ? stopped(mode) && !stopped(step.mode) : step.mode !== mode;
+        if (allowed) mode = step.mode;
+        commands.push({ type: 'SET_MODE', mode: step.mode, reset: step.reset });
+      } else if (step.kind === 'issue') {
+        if (mode === 'EMERGENCY') return;
         issued++;
         const atMs = t + step.deadlineMin * MIN;
         commands.push(
@@ -267,6 +403,7 @@ const dayArb = fc
         if (issued === 0) return;
         const ticketId = `t-${(step.pick % issued) + 1}`;
         if (step.action === 'GROW') {
+          if (mode === 'EMERGENCY') return;
           commands.push({ type: 'ADD_TO_PARTY', ticketId, people: 1, dedupKey: null });
         } else if (step.action === 'QUEUE' || step.action === 'REJECT') {
           commands.push({
@@ -413,6 +550,8 @@ describe('the log of a day', () => {
         expect(board.prepare).toEqual(first.day.prepareWindow().map((t) => t.number));
         expect(again.lastSeq).toBe(records.length);
         expect(again.nextDueMs()).toBe(first.day.nextDueMs());
+        expect(again.mode).toBe(first.day.mode);
+        expect(board.mode).toBe(first.day.mode);
         // Replaying one more time from scratch gives the same events, command by command.
         const third = run(records);
         expect(third.applied).toEqual(first.applied);
@@ -468,6 +607,8 @@ describe('the log of a day', () => {
             queue.resolve(command.ticketId, command.decision, atMs, estimates);
           } else if (command.type === 'ADD_TO_PARTY') {
             queue.grow(command.ticketId, command.people, atMs, estimates);
+          } else if (command.type === 'SET_MODE') {
+            queue.setMode(command.mode, atMs, estimates, command.reset);
           }
         }
         expect(applied.slice(1).flatMap((a) => a.events)).toEqual(events);

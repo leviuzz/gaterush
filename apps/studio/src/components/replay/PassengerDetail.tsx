@@ -82,11 +82,14 @@ function stepsOf(view: RunView, party: number): Step[] {
           case 'EXPIRED':
             steps.push({ atMs: q.atMs, text: 'The ticket expired' });
             break;
-          // Staff actions of the live product (S15): a simulated day has none.
+          // Staff actions and the supervisor's modes of the live product (S15, S17): a simulated
+          // day has none.
           case 'REVIEW':
           case 'RELEASED':
           case 'CANCELLED':
           case 'PARTY_GROWN':
+          case 'MODE_CHANGED':
+          case 'UNCOMMITTED':
             break;
           case 'ADMITTED':
             if (!view.physical) {

@@ -1,5 +1,5 @@
 /** Version of the operational checkpoint. Bump on any change to commands, results or events. */
-export const OPERATIONS_VERSION = '0.5.0';
+export const OPERATIONS_VERSION = '0.6.0';
 
 export {
   MANUAL_REASONS,

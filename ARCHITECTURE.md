@@ -675,6 +675,16 @@ flowchart LR
   its previous message, with the command's sequence number as its id: a display that reconnects
   with `Last-Event-ID` gets every call it missed. A heartbeat every 10 seconds checks the client
   again (a revoked display, a member signed out, stop there).
+- **Modes (ADR-048).** A supervisor sets the mode of a checkpoint with `SET_MODE`, a command of the
+  log like any other:
+  - `NORMAL`, the policy of the day; `FIFO_ONLY`, the oldest waiting ticket enters the prepare
+    window whatever the policy;
+  - `PAUSED`, nobody is called (`CALL_NEXT` answers 409 `CALLS_PAUSED`) while kiosks issue;
+  - `EMERGENCY`, nobody is called, the day refuses tickets and parties (409 `EMERGENCY`) and the
+    call timers stop (`checkpoint_timer` has no due time), to start again where they stopped;
+  - on resuming, a reset takes the prepare window back and announces it in order of arrival.
+  The board carries the mode, so displays learn it with their next message; kiosks follow their
+  own stream. A new service day opens in the mode the previous one ended in.
 - **Staff (ADR-045).** Every staff route checks, in this order: the request comes from this site,
   a session (401), the checkpoint (404), the role and the checkpoints of the member (403). The
   log records the member as the actor (`staff:<id>`).
@@ -685,13 +695,16 @@ flowchart LR
   - `GET /v1/devices/me` and `GET /v1/checkpoints/{id}/demo-flights`, for kiosks;
   - `GET /v1/checkpoints/{id}/display`, a display's stream, and `GET /v1/checkpoints/{id}/stream`,
     the lane stations' (ADR-047);
+  - `POST /v1/checkpoints/{id}/mode`, for supervisors, and `GET /v1/checkpoints/{id}/kiosk`, a
+    kiosk's stream of the mode (ADR-048);
   - `POST /v1/auth/sign-in`, `GET /v1/auth/me`, `POST /v1/auth/sign-out` (ADR-045);
   - `POST /v1/checkpoints/{id}/tickets/{ticket}/recall`, `no-show`, `reactivate`, `review`,
     `resolve` and `cancel` (ADR-045);
   - `GET /v1/checkpoints/{id}` and `/flights`, for the lane station;
   - `POST /v1/checkpoints/{id}/tickets`, `/calls` and `/admissions`;
   - `GET /v1/checkpoints/{id}/queue` and `/audit/verify`;
-  - `GET /v1/tickets/{ref}` (number, state, checkpoint and day only);
+  - `GET /v1/tickets/{ref}` (number, party size, state, checkpoint, day and the checkpoint's
+    mode only);
   - `GET /v1/health`.
 - **Privacy.** No field holds personal data; the request log keeps no client address and no
   ticket reference.
@@ -699,7 +712,7 @@ flowchart LR
   the library), `device add` and `device revoke`, `user add`, `user password` and `user disable`,
   and `serve`, which also serves the web application and runs the timers.
 
-## 14. The screens (`apps/web`, `@gateflow/i18n`, ADR-044, ADR-045, ADR-047)
+## 14. The screens (`apps/web`, `@gateflow/i18n`, ADR-044, ADR-045, ADR-047, ADR-048)
 
 One React application, built by esbuild into static files and served by the API: one process,
 one origin, one Content Security Policy.
@@ -718,6 +731,7 @@ flowchart LR
   page -->|"every 15 s"| ticket["GET /v1/tickets/{ref}"]
   display["/display/&lt;checkpoint&gt;<br/>called, get ready"] -->|"server-sent events<br/>Last-Event-ID"| stream["GET /v1/checkpoints/{id}/display"]
   lane["/lane/&lt;checkpoint&gt;"] -->|"server-sent events"| changes["GET /v1/checkpoints/{id}/stream"]
+  kiosk -->|"server-sent events<br/>the mode (S17)"| status["GET /v1/checkpoints/{id}/kiosk"]
 ```
 
 - **The kiosk** knows its checkpoint from its device token. The token arrives once in the
@@ -734,15 +748,20 @@ flowchart LR
   - **Infants** (ADR-046): an adult's pass whose passenger description says "with infant" counts
     two people; an infant's own pass is counted once with it, in either order (the operations
     day's `partyGrowth`). The parser returns nothing else of the description.
+  - **The mode** (ADR-048): the kiosk follows its own stream. In an emergency it shows the
+    emergency message, in its language and in English, without a scan field; paused, a new
+    number says that calls are paused and that it stays valid.
 - **The passenger's page** shows the number and what to do now, in the phone's language or the
   one chosen. It asks the API again every 15 seconds while the ticket is open: a few requests per
-  phone do not justify a stream each.
+  phone do not justify a stream each. It says when calls are paused, and in an emergency that the
+  staff's instructions come first (ADR-048).
 - **The display** (`/display/<checkpoint>`, ADR-047) shows the numbers called (the latest first, a
   second call marked) and the numbers to get ready, in its language and in English, with the time
   of the latest news. It reads its stream over `fetch`, so that its token stays in a header, and
   reconnects with `Last-Event-ID`; the calls it missed flash. Without news for 30 seconds it says
   it is not up to date; after 2 minutes it shows "Please follow the instructions of the staff"
-  instead of numbers. Light numbers on a dark screen; landscape screens in two columns.
+  instead of numbers. Light numbers on a dark screen; landscape screens in two columns. Paused, a
+  banner above the numbers; in an emergency, only the emergency message (ADR-048).
 - **Texts** are in `@gateflow/i18n`, pure and checked by tests: the same keys and placeholders in
   every language, and nothing that promises priority.
 - **Headers.** `nosniff` and `no-referrer` on every answer. Pages also get a policy allowing only
@@ -753,7 +772,8 @@ flowchart LR
   or its number, call again, mark an absence, bring it back, hold a ticket for a review and, as
   supervisors, end reviews and cancel. Manual tickets carry a reason and the size of the party.
   The station follows the checkpoint's stream (ADR-047): it asks for the queue whenever it
-  changes, and every 20 seconds in case the stream is down.
+  changes, and every 20 seconds in case the stream is down. It shows the mode the supervisor set,
+  and its call button is off while calls are paused or stopped (ADR-048).
 - **Build** (`node build.mjs`): `index.html`, `assets/app.js` and `app.css` with Brotli and gzip
   copies, an icon, and `THIRD-PARTY-NOTICES.txt` with the licences of the bundled libraries.
 

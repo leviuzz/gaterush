@@ -7,7 +7,7 @@ import type {
   CommandResult,
   DayConfig,
 } from '@gateflow/operations';
-import type { Policy } from '@gateflow/queue-core';
+import type { CheckpointMode, Policy } from '@gateflow/queue-core';
 import { arrivalClassification } from '@gateflow/sim-metrics';
 import { GENESIS_HASH, chainHash, sha256 } from './chain';
 import type { ChainEvent } from './chain';
@@ -95,8 +95,15 @@ function toRecord(row: { seq: number; atMs: number; command: unknown }): Command
   return { seq: row.seq, atMs: row.atMs, command: row.command as Command };
 }
 
-/** The configuration of a day from the checkpoint's settings: recorded in the day's log. */
-export function dayConfigOf(cp: CheckpointRow, serviceDay: string): DayConfig {
+/**
+ * The configuration of a day from the checkpoint's settings: recorded in the day's log. The day
+ * opens in the mode the previous day ended in (S17): an emergency goes on across midnight.
+ */
+export function dayConfigOf(
+  cp: CheckpointRow,
+  serviceDay: string,
+  mode: CheckpointMode = 'NORMAL',
+): DayConfig {
   const policy = cp.settings.policy as Policy;
   return {
     checkpointId: cp.id,
@@ -107,6 +114,7 @@ export function dayConfigOf(cp: CheckpointRow, serviceDay: string): DayConfig {
     lanesOpen: cp.settings.lanesOpen,
     ratePerLanePerHour: cp.settings.ratePerLanePerHour,
     processEstimateMs: cp.settings.processEstimateMs,
+    ...(mode === 'NORMAL' ? {} : { mode }),
   };
 }
 
@@ -207,7 +215,7 @@ export class Runtime {
       const record: CommandRecord = {
         seq: memory.seq + 1,
         atMs,
-        command: { type: 'OPEN_DAY', config: dayConfigOf(cp, serviceDay) },
+        command: { type: 'OPEN_DAY', config: dayConfigOf(cp, serviceDay, day?.mode) },
       };
       const opened = CheckpointDay.open(record);
       day = opened.day;

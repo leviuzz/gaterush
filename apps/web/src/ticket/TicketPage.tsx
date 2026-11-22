@@ -9,7 +9,8 @@ import { LanguageSwitch } from '../common/LanguageSwitch';
 /*
  * The passenger's page of a ticket, opened from the QR code: the number, what to do now, and
  * nothing else. It holds no personal data, and it asks again every 15 seconds while the ticket is
- * open (and at once when the phone shows the page again).
+ * open (and at once when the phone shows the page again). It says when the supervisor paused the
+ * calls, and in an emergency that the staff's instructions come first (S17).
  */
 
 const POLL_MS = 15_000;
@@ -124,6 +125,13 @@ export function TicketPage({
             <p className="state" id="ticket-state" role="status">
               {t(locale, `ticket.state.${ticket.state}`)}
             </p>
+            {FINAL.has(ticket.state) ||
+            ticket.mode === 'NORMAL' ||
+            ticket.mode === 'FIFO_ONLY' ? null : (
+              <p className="mode-note" id="ticket-mode" data-mode={ticket.mode} role="alert">
+                {t(locale, ticket.mode === 'EMERGENCY' ? 'ticket.emergency' : 'ticket.paused')}
+              </p>
+            )}
             {updatedAt === null ? null : (
               <p className="updated" id="ticket-updated">
                 {t(locale, 'ticket.updated', { time: timeOfDay(updatedAt, locale) })}

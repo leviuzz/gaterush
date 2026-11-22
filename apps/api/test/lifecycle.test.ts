@@ -379,14 +379,12 @@ describe('the life cycle of a ticket (S15)', () => {
     // A pass with no ticket here is not found.
     expect((await post('admissions', { bcbp: passFor(f, 'NOBODY') })).statusCode).toBe(404);
     // Nothing of the pass in any table: neither its text, nor its booking reference, nor the name.
-    const dump = JSON.stringify(
-      await Promise.all(
-        ['queue_command', 'queue_event', 'queue_token', 'scan', 'admission'].map(
-          async (table) =>
-            (await database.admin.query<Record<string, unknown>>(`SELECT * FROM ${table}`)).rows,
-        ),
-      ),
-    );
+    // One query at a time: the admin connection is a single client.
+    const tables: unknown[] = [];
+    for (const table of ['queue_command', 'queue_event', 'queue_token', 'scan', 'admission']) {
+      tables.push((await database.admin.query(`SELECT * FROM ${table}`)).rows);
+    }
+    const dump = JSON.stringify(tables);
     for (const secret of [pass, 'PASSIN', 'SAMPLE/YOKO', 'YOKO'])
       expect(dump).not.toContain(secret);
     expect((await database.db.select().from(scan)).length).toBeGreaterThan(0);

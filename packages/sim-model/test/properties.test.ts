@@ -880,7 +880,9 @@ function checkDayEvents(population: Population, run: RunResult, events: readonly
         break;
       case 'QUEUE': {
         const id = population.passengers[e.party]!.id;
-        expect(e.event.ticketId === id || e.event.ticketId.startsWith(`${id}#`)).toBe(true);
+        // Every event of a simulated day is of a ticket: the checkpoint's modes are live (S17).
+        const ticketId = 'ticketId' in e.event ? e.event.ticketId : '';
+        expect(ticketId === id || ticketId.startsWith(`${id}#`)).toBe(true);
         expect(e.event.atMs).toBe(e.atMs);
         if (e.event.type === 'COMMITTED') {
           commitments++;

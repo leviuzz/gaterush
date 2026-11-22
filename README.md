@@ -44,8 +44,13 @@ border procedures: it organises the flow before they start.
 > - **The displays of the hall**: the numbers called and the numbers to get ready, live by
 >   server-sent events; a display that loses the server says so, and catches up when it is back.
 >
-> The supervisor's console (S17) comes next; staff sign in with local passwords until the pilot
-> brings the airport's identity provider. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+> - **The modes of a checkpoint** (S17, part 1): a supervisor pauses the calls, or declares an
+>   emergency that stops calls, kiosks and the call timers, and on resuming may announce the
+>   prepare window again in order of arrival; displays, kiosks, stations and phones say so at once.
+>
+> The rest of the supervisor's console (S17: overrides, lanes, policies, the audit view and its
+> page) comes next; staff sign in with local passwords until the pilot brings the airport's
+> identity provider. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 > **All results in this repository are SIMULATED on synthetic assumptions.** They are not
 > measurements and must not be presented as evidence of operational performance.
@@ -159,6 +164,11 @@ The endpoints:
   resumes it without losing a call.
 - `GET /v1/checkpoints/{id}/stream`: the lane stations' stream, with a staff session: a message
   whenever the queue changes.
+- `POST /v1/checkpoints/{id}/mode`: a supervisor sets the mode of the checkpoint (S17): `NORMAL`,
+  `FIFO_ONLY`, `PAUSED` or `EMERGENCY`, and on resuming `reset` to announce the prepare window
+  again in order of arrival. While paused or in an emergency, `calls` answers 409
+  `CALLS_PAUSED`; in an emergency, scans and manual tickets answer 409 `EMERGENCY`.
+- `GET /v1/checkpoints/{id}/kiosk`: a kiosk's stream of the mode, with its token.
 
 Send an `Idempotency-Key` header with each command. The OpenAPI document is at
 `/v1/openapi.json`. The API's tests (`pnpm test`) start a throwaway PostgreSQL from the binaries

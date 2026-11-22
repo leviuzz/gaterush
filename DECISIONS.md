@@ -1906,3 +1906,90 @@ founder on 2026-11-21 together with all of its recommendations.
   - Messages for passengers (a pause, an emergency) come with the supervisor's modes (S17).
   - The passenger's page still asks every 15 seconds: its few requests do not justify a stream
     per phone.
+
+## ADR-048: The supervisor's modes of a checkpoint
+
+- **Status:** Accepted (2026-11-22). Slice S17, part 1. The founder confirmed the proposals of
+  the S17 plan ("ok a tutto"). queue-core 0.9.0, operations 0.6.0, contracts 0.7.0. No simulated
+  number changes: the golden files change only in the version of the queue.
+- **Context:**
+  - The kickoff asks for a console with four modes of a checkpoint (FR-12, 2.4.6, 2.6 F7 to F12):
+    normal, FIFO only, paused and emergency; every change in the audit (FR-14); in FIFO only, the
+    order is pure FIFO (acceptance criterion of S17).
+  - An evacuation or a security incident must never turn passengers into no-shows: they were told
+    to leave, or to wait.
+  - Until S17 a supervisor could stop calling only by not pressing the button, and kiosks went on
+    giving numbers whatever happened in the hall.
+- **Decision:**
+  - **Four modes**, set by a supervisor (or an administrator) with the command `SET_MODE`, in the
+    log like any command, with who set it:
+    - `NORMAL`: the policy of the day orders the queue;
+    - `FIFO_ONLY`: the next tickets to enter the prepare window are the oldest waiting ones,
+      whatever the policy (`COMMITTED` with the reason `FIFO`, no priority, nobody overtaken). The
+      numbers already announced stay: no churn. It is the fallback at hand when a policy behaves
+      badly; another policy comes from the next service day (S17, part 3);
+    - `PAUSED`: nobody is called (`CALL_NEXT` answers 409 `CALLS_PAUSED`, and a second call is
+      refused); kiosks go on giving numbers, and the timers of those already called run;
+    - `EMERGENCY`: nobody is called, and the day refuses to issue a ticket or to grow a party
+      (`EMERGENCY`): kiosks read nothing, staff issue nothing, so the log never has one. The call
+      timers stop: a passenger called, recalled or absent keeps the time they had left, which
+      starts again when the emergency ends. Admissions at the access point remain possible:
+      staff decide there.
+  - **Resuming.** From `PAUSED` or `EMERGENCY` the supervisor chooses: carry on in the same order
+    (the window stays as announced), or `reset`: the window is taken back (`UNCOMMITTED`, each
+    ticket at its place in the order of arrival) and announced again in the order of arrival.
+    A change to the same mode, or a reset that resumes nothing, is `NOT_ALLOWED` and changes
+    nothing; it is still in the log.
+  - **Across days.** A service day opens in the mode the previous one ended in (`DayConfig.mode`,
+    its change the day's first event): an emergency goes on past the start of a service day.
+  - **Who learns it:**
+    - the displays, with the board (`mode`): paused, a banner above the numbers; in an emergency,
+      only "Service suspended. Please follow the instructions of the staff.", in the display's
+      language and in English;
+    - the kiosks, by their own stream (`GET /v1/checkpoints/{id}/kiosk`, a `status` message at
+      once and at each change): in an emergency the emergency message in the kiosk's language and
+      in English, and no scan field; a scan refused with `EMERGENCY` shows it at once too.
+      Paused, a number says that calls are paused and that it stays valid;
+    - the lane station, with the queue (`mode`): a banner, and no call while paused or in an
+      emergency, nor a manual ticket in an emergency;
+    - the passenger's page (`mode`): paused, the number stays valid; in an emergency, the staff's
+      instructions come first.
+- **Alternatives considered:**
+  - **Frozen timers in `PAUSED` too.** A pause is short and staff stay at their posts: those
+    already called keep coming, and the timeouts keep the queue moving. Only an emergency stops
+    the passengers, so only an emergency stops the clocks.
+  - **Kiosks giving numbers in an emergency.** Numbers given while the hall is being cleared
+    would be called into an empty hall, or crowd it when the emergency ends.
+  - **A reset that keeps the priorities.** A reset is asked for after a disruption, when the
+    announced order no longer means anything to the people in the hall: the order of arrival is
+    the one everybody can check. The next commitments follow the mode again.
+  - **The kiosk polling the mode.** An emergency message must appear at once; the kiosk follows a
+    stream like the displays, and a scan refused for the emergency shows it even before.
+- **Evidence:**
+  - **queue-core:** FIFO_ONLY puts the oldest ticket in the window though a later one would miss
+    its flight, and back to NORMAL the policy prioritises it again; paused, nobody is called and
+    the timers run; in an emergency nothing is due (`nextDueMs` null), and on resuming a recalled
+    passenger keeps the minute they had left, a no-show marked during the emergency its whole
+    window from the end of it; a reset takes the window back and announces it in the order of
+    arrival. In random days with modes among the operations, nobody is called while stopped, every
+    commitment in FIFO_ONLY or after a reset is FIFO, and the window after a reset is in arrival
+    order.
+  - **operations:** results, events and the board's mode; an issue or a party growing in an
+    emergency is refused; a day opens in the mode the previous one ended in; random days with modes
+    replay to the same day and the same events as the simulator's queue.
+  - **API on PostgreSQL:** only a supervisor sets the mode, and the log records who; paused, a
+    call is refused and kiosks issue; in an emergency a kiosk's scan is refused before the pass is
+    read (no scan recorded), a manual ticket too, and a passenger called keeps the time left: after
+    30 minutes of emergency still called, recalled a minute after its end; a reset takes the
+    window back (`UNCOMMITTED`) and announces it in order of arrival; an emergency goes on into
+    the next service day; the chain of hashes holds.
+  - **In Chromium, on the product:** a display, a kiosk, a lane station and a passenger's page
+    follow a pause, an emergency and the end of it, in Italian and English; the paused display
+    fits 1920x1080, 1280x720 and 1080x1920 screens.
+- **Consequences:**
+  - The console's buttons for the modes come with the supervisor's console (S17, part 3); until
+    then the modes are set through the API.
+  - Overrides (`BOOST`, `CALL_NOW`) come with part 2, and follow the modes: no call while calls
+    are stopped, no jump of the order in `FIFO_ONLY`.
+  - The messages are predefined texts in the three languages; an airport's own texts come with
+    its configuration.

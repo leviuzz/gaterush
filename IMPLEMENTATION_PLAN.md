@@ -670,7 +670,7 @@ here once, for the product. The slices follow the kickoff (section 3, M3), renum
 | **S14** | Web application, kiosk and ticket: scan (paste, sample, HID scanner), outcomes, digital and printable ticket, ticket page, Italian, English and Spanish, privacy notice, kiosk credentials | A rescan returns the same ticket; another airport's boarding pass is refused with a reason (both already true of the API since S13); no personal data on screen | **Done** |
 | **S15** | Queue life cycle and lane station: timers on a scheduler, recall, no-show, reactivation, admission, manual ticket, review; staff users and roles. From S14: a party's number (at the lane; at the kiosk since 0.15.1), and the rule for a pass whose boarding has closed | The state machine is covered by tests; every transition is idempotent | **Done** |
 | **S16** | Display over SSE: called and prepare numbers, data freshness, reconnection with `Last-Event-ID` | No event lost after a disconnection; "data not up to date" within the timeout | **Done** |
-| S17 | Supervisor: modes (FIFO only, paused, emergency), overrides with a reason, lanes, audit view; versioned policies and their activation | Overrides and mode changes are always in the audit; in FIFO only the order is pure FIFO | Planned |
+| S17 | Supervisor: modes (FIFO only, paused, emergency), overrides with a reason, lanes, audit view; versioned policies and their activation | Overrides and mode changes are always in the audit; in FIFO only the order is pure FIFO | In progress (part 1: modes, done) |
 | S18 | Digital twin: the simulator drives the live system at accelerated time; demo page | Same scenario and seed: the live system calls passengers in the same order as the offline simulator | Planned |
 | S19 | Simulations through the API (from S10): saved scenarios and runs, history, export; the Studio saves its runs | `POST /v1/simulations` gives a run reproducible from its manifest | Planned |
 
@@ -936,10 +936,12 @@ Verification beyond the criteria:
   most); two lane stations show at once what the other, or a kiosk, does; no request to another
   server.
 
-## S17: the supervisor's console (proposed)
+## S17: the supervisor's console (in progress)
 
 Proposed on 2026-11-22, from the kickoff (FR-11, FR-14, FR-17, L-02, 2.4.6, 2.6 F7 to F12, 2.11).
-The decisions marked **[to confirm]** are the founder's.
+The founder confirmed every proposal the same day ("ok a tutto"): the marks **[to confirm]**
+below are kept to show what was decided. Three parts: the modes (S17.1), overrides and lanes
+(S17.2), then versioned policies, the audit view and the console's page (S17.3).
 
 - **Modes of a checkpoint** (supervisor, in the log with who and when):
   - `NORMAL`;
@@ -971,6 +973,23 @@ The decisions marked **[to confirm]** are the founder's.
 
 Acceptance (kickoff, renumbered): overrides and mode changes are always in the audit; in
 FIFO_ONLY the order is pure FIFO.
+
+### S17.1: the modes (done, ADR-048)
+
+- **Built:** `SET_MODE` in the log (supervisors and administrators), with the four modes and the
+  reset on resuming; in an emergency the day refuses tickets and parties and the call timers
+  stop; a day opens in the mode the previous one ended in; the kiosks' stream; the mode on the
+  displays' board, in the queue and on the passenger's page; the screens' banners and messages.
+- **Evidence:**
+  - queue-core: 5 tests of the modes (FIFO_ONLY against an urgent ticket, the pause, the frozen
+    timers, the reset), and the modes among the property tests' random operations;
+  - operations: 3 tests, and the modes in the 200 random days that replay to the same day and
+    the same events as the simulator's queue;
+  - API on PostgreSQL: 6 tests (roles and the log, the pause, the emergency with its timers, the
+    reset, the next service day, the kiosks' stream);
+  - Chromium: a display, a kiosk, a lane station and a passenger's page through a pause, an
+    emergency and its end; the paused display fits three screens;
+  - no simulated number changes (the golden files differ only in the queue's version).
 
 ## Later milestones (summary)
 

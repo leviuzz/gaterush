@@ -150,9 +150,12 @@ describe('the API (S12)', () => {
       ['A002', 'PREPARE'],
     ]);
     const page = await app.inject({ url: `/v1/tickets/${b.ref}` });
-    // The passenger's view: the number, for how many people (S15), its state, where and when.
-    expect(Object.keys(PublicTicketResponse.parse(page.json())).sort()).toEqual([
+    // The passenger's view: the number, for how many people (S15), its state, where and when,
+    // and whether calls are paused (S17). Nothing more.
+    PublicTicketResponse.parse(page.json());
+    expect(Object.keys(page.json<Record<string, unknown>>()).sort()).toEqual([
       'checkpoint',
+      'mode',
       'number',
       'partySize',
       'serviceDay',

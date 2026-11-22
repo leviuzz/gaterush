@@ -7,8 +7,15 @@ import type {
   SelectionParams,
 } from '@gateflow/priority-engine';
 import { describe, expect, it } from 'vitest';
-import { CheckpointQueue, PRIORITY_V0_POLICY, classificationOf } from '../src';
-import type { Policy, QueueEvent, QueueStats, TicketState, VirtualQueue } from '../src';
+import { CHECKPOINT_MODES, CheckpointQueue, PRIORITY_V0_POLICY, classificationOf } from '../src';
+import type {
+  CheckpointMode,
+  Policy,
+  QueueEvent,
+  QueueStats,
+  TicketState,
+  VirtualQueue,
+} from '../src';
 import { ACTIONS, TRANSITIONS, act, statesAfter } from './staff-actions';
 import type { Action } from './staff-actions';
 
@@ -104,7 +111,17 @@ type Op =
       readonly pick: number;
       readonly targeted: boolean;
       readonly dt: number;
+    }
+  /** The supervisor sets the checkpoint's mode (S17), resetting the window on resuming. */
+  | {
+      readonly kind: 'mode';
+      readonly mode: CheckpointMode;
+      readonly reset: boolean;
+      readonly dt: number;
     };
+
+/** Calls stop in these modes (S17). */
+const stopped = (mode: CheckpointMode) => mode === 'PAUSED' || mode === 'EMERGENCY';
 
 // Weighted so that queues grow, deadlines become tight and called passengers respond: otherwise
 // priority commitments, the cap and the overtake guard would almost never be exercised.
@@ -165,6 +182,20 @@ const opArb: fc.Arbitrary<Op> = fc.oneof(
   {
     weight: 1,
     arbitrary: fc.record({
+      kind: fc.constant('mode' as const),
+      // Mostly back to NORMAL: the other modes stop calls or priority, which the other
+      // properties need exercised.
+      mode: fc.oneof(
+        { weight: 3, arbitrary: fc.constant('NORMAL' as const) },
+        { weight: 1, arbitrary: fc.constantFrom(...CHECKPOINT_MODES) },
+      ),
+      reset: fc.boolean(),
+      dt: fc.integer({ min: 0, max: 4 * MIN }),
+    }),
+  },
+  {
+    weight: 1,
+    arbitrary: fc.record({
       kind: fc.constant('update' as const),
       flight: fc.integer({ min: 0, max: 2 }),
       deadlineMin: fc.integer({ min: 0, max: 30 }),
@@ -183,6 +214,13 @@ interface Trace {
   readonly stats: QueueStats;
   /** Staff actions that changed a ticket, by action. */
   readonly done: Readonly<Record<Action, number>>;
+  /** What the modes did (S17). */
+  readonly modes: {
+    readonly fifoOnlyCommitments: number;
+    readonly resets: number;
+    readonly emergencies: number;
+    readonly refusedCalls: number;
+  };
 }
 
 /** Runs `ops` and checks the invariants after every operation. */
@@ -206,12 +244,18 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
   /** One flag per person committed: whether by priority. */
   const personFlags: boolean[] = [];
   const done = Object.fromEntries(ACTIONS.map((a) => [a, 0])) as Record<Action, number>;
+  const modes = { fifoOnlyCommitments: 0, resets: 0, emergencies: 0, refusedCalls: 0 };
+  /** The mode as the events tell it. */
+  let modelMode: CheckpointMode = 'NORMAL';
   let seen = 0;
   let now = 0;
   for (const op of ops) {
     now += op.dt;
     const before = q.prepareWindow().map((t) => t.id);
     let calledId: string | null = null;
+    let reset = false;
+    /** Whether the events now come from a reset's refill of the window. */
+    let refillInArrivalOrder = false;
     switch (op.kind) {
       case 'issue': {
         const id = `t${ids.length}`;
@@ -253,9 +297,33 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
           EST,
         );
         break;
-      case 'call':
+      case 'call': {
+        const paused = stopped(q.mode);
         calledId = q.callNext(now, EST)?.id ?? null;
+        // Paused, or in an emergency: nobody is called (S17).
+        if (paused) {
+          expect(calledId).toBeNull();
+          modes.refusedCalls++;
+        }
         break;
+      }
+      case 'mode': {
+        const previous = q.mode;
+        const reported = events.length;
+        const outcome = q.setMode(op.mode, now, EST, op.reset);
+        const allowed = op.reset ? stopped(previous) && !stopped(op.mode) : op.mode !== previous;
+        expect(outcome).toBe(allowed ? 'DONE' : 'NOT_ALLOWED');
+        expect(q.mode).toBe(allowed ? op.mode : previous);
+        if (!allowed) {
+          // Only the timeouts due before now may have been applied.
+          expect(events.slice(reported).every((e) => e.type !== 'MODE_CHANGED')).toBe(true);
+        } else {
+          reset = op.reset;
+          if (op.reset) modes.resets++;
+          if (op.mode === 'EMERGENCY') modes.emergencies++;
+        }
+        break;
+      }
       case 'present':
         if (ids.length > 0) {
           const outcome = q.present(ids[op.pick % ids.length]!, now, EST);
@@ -289,7 +357,9 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
         const reported = events.length;
         const snapshot = JSON.stringify([ids.map((t) => q.ticket(t)), q.stats()]);
         const outcome = act(q, op.action, id, now, EST);
-        const target = TRANSITIONS[state][op.action];
+        // A second call is a call: none while calls are stopped (S17).
+        const target =
+          op.action === 'recall' && stopped(q.mode) ? undefined : TRANSITIONS[state][op.action];
         if (target === undefined) {
           // Refused: nothing changed and nothing was reported.
           expect(outcome).toBe('NOT_ALLOWED');
@@ -314,13 +384,43 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
     const remaining = (
       calledId !== null && before[0] === calledId ? before.slice(1) : before
     ).filter((id) => !byStaff(id));
-    expect(after.filter((id) => remaining.includes(id))).toEqual(remaining);
+    if (reset) {
+      // A reset announces the window again, in order of arrival (S17).
+      const keys = after.map((id) => q.ticket(id)!.fifoKey);
+      expect(keys).toEqual([...keys].sort((a, b) => a - b));
+    } else {
+      expect(after.filter((id) => remaining.includes(id))).toEqual(remaining);
+    }
     const fastInWindow = after.filter((id) => q.ticket(id)!.fastTracked);
     expect(after.slice(0, fastInWindow.length)).toEqual(fastInWindow);
-    if (!fastTrack) expect(after.slice(0, remaining.length)).toEqual(remaining);
+    if (!fastTrack && !reset) expect(after.slice(0, remaining.length)).toEqual(remaining);
+    // In an emergency the timers stand still (S17).
+    if (q.mode === 'EMERGENCY') expect(q.nextDueMs()).toBeNull();
 
     for (; seen < events.length; seen++) {
       const e = events[seen]!;
+      if (e.type === 'MODE_CHANGED') {
+        expect(e.previous).toBe(modelMode);
+        modelMode = e.mode;
+        refillInArrivalOrder = e.reset;
+        continue;
+      }
+      if (e.type === 'UNCOMMITTED') {
+        // Back to waiting at its place, with the overtakes it had.
+        queuedKeys.set(e.ticketId, q.ticket(e.ticketId)!.fifoKey);
+        const at = modelWindow.indexOf(e.ticketId);
+        expect(at).toBeGreaterThanOrEqual(0);
+        modelWindow.splice(at, 1);
+        modelFast.delete(e.ticketId);
+        continue;
+      }
+      if (e.type === 'COMMITTED' && (modelMode === 'FIFO_ONLY' || refillInArrivalOrder)) {
+        // In FIFO_ONLY, and when a reset refills the window, the order is pure FIFO.
+        expect(e.priority).toBe(false);
+        expect(e.passedTickets).toBe(0);
+        if (modelMode === 'FIFO_ONLY') modes.fifoOnlyCommitments++;
+      }
+      if (e.type === 'CALLED') expect(stopped(modelMode)).toBe(false);
       if (e.type === 'ISSUED' || e.type === 'REACTIVATED' || e.type === 'RELEASED') {
         // Back from a review, a ticket waits at its place again and keeps its overtakes.
         queuedKeys.set(e.ticketId, q.ticket(e.ticketId)!.fifoKey);
@@ -435,7 +535,7 @@ function run(policy: Policy, ops: readonly Op[]): Trace {
       expect(window.filter(Boolean).length).toBeLessThanOrEqual(selection.capMaxPriorityCalls);
     }
   }
-  return { events, snapshots, stats: q.stats(), done };
+  return { events, snapshots, stats: q.stats(), done, modes };
 }
 
 describe('queue state machine properties', () => {
@@ -463,12 +563,13 @@ describe('queue state machine properties', () => {
         const { events } = run(policy, ops);
         const lastState = new Map<string, QueueEvent['type']>();
         for (const e of events) {
+          if (e.type === 'MODE_CHANGED') continue;
           const previous = lastState.get(e.ticketId);
           if (e.type === 'ADMITTED') expect(['CALLED', 'RECALLED']).toContain(previous);
           if (previous === 'ADMITTED' || previous === 'EXPIRED' || previous === 'CANCELLED') {
             throw new Error(`event ${e.type} after terminal ${previous} for ${e.ticketId}`);
           }
-          if (e.type !== 'COMMITTED') lastState.set(e.ticketId, e.type);
+          if (e.type !== 'COMMITTED' && e.type !== 'UNCOMMITTED') lastState.set(e.ticketId, e.type);
         }
       }),
       RUNS,
@@ -491,9 +592,14 @@ describe('queue state machine properties', () => {
     };
     /** Runs in which each staff action changed a ticket at least once (S15). */
     const staffHits = Object.fromEntries(ACTIONS.map((a) => [a, 0])) as Record<Action, number>;
+    /** Runs in which the modes did something (S17). */
+    const modeHits = { fifoOnlyCommitments: 0, resets: 0, emergencies: 0, refusedCalls: 0 };
     for (const [policy, ops] of samples) {
-      const { stats, events, done } = run(policy, ops);
+      const { stats, events, done, modes } = run(policy, ops);
       for (const action of ACTIONS) if (done[action] > 0) staffHits[action]++;
+      for (const key of Object.keys(modeHits) as (keyof typeof modeHits)[]) {
+        if (modes[key] > 0) modeHits[key]++;
+      }
       const windowSize = policy.queue.kind === 'virtual' ? policy.queue.prepareWindowSize : 0;
       const fastTrack = policy.selection.kind === 'constrained-edf' && policy.selection.fastTrack;
       // A fast-track commitment while the window was not empty passed somebody.
@@ -528,8 +634,8 @@ describe('queue state machine properties', () => {
     expect(hits.fastTrackPasses).toBeGreaterThanOrEqual(15);
     expect(hits.classChanges).toBeGreaterThanOrEqual(50);
     expect(hits.classReversals).toBeGreaterThanOrEqual(10);
-    // Each staff action changes tickets in many runs (observed: recall 57, no-show 73,
-    // reactivate 20, hold 158, release 31, reject 25, cancel 177, a party growing 165).
+    // Each staff action changes tickets in many runs (observed: recall 51, no-show 71,
+    // reactivate 22, hold 165, release 23, reject 30, cancel 180, a party growing 134).
     const thresholds: Record<Action, number> = {
       recall: 35,
       noShow: 35,
@@ -543,5 +649,11 @@ describe('queue state machine properties', () => {
     for (const action of ACTIONS) {
       expect(staffHits[action], action).toBeGreaterThanOrEqual(thresholds[action]);
     }
+    // The modes act in many runs (S17; observed: commitments in FIFO_ONLY 25, resets 13,
+    // emergencies 26, calls refused while stopped 41).
+    expect(modeHits.fifoOnlyCommitments).toBeGreaterThanOrEqual(12);
+    expect(modeHits.resets).toBeGreaterThanOrEqual(6);
+    expect(modeHits.emergencies).toBeGreaterThanOrEqual(13);
+    expect(modeHits.refusedCalls).toBeGreaterThanOrEqual(20);
   });
 });

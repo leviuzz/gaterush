@@ -2,6 +2,7 @@ import { and, desc, eq, gt, inArray, lte, sql } from 'drizzle-orm';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { DisplayCall, DisplayMessage } from '@gateflow/contracts';
 import type { Board } from '@gateflow/operations';
+import type { CheckpointMode } from '@gateflow/queue-core';
 import type { Db } from './db/client';
 import { displayBoard, queueEvent, queueToken } from './db/schema';
 
@@ -157,7 +158,18 @@ export async function boardOf(db: Db, checkpointId: string) {
     .from(displayBoard)
     .where(eq(displayBoard.checkpointId, checkpointId));
   const row = rows[0];
-  return row === undefined ? undefined : { ...row, board: row.board as Board };
+  if (row === undefined) return undefined;
+  // A board written before S17 has no mode: the checkpoint was NORMAL.
+  const board = row.board as Omit<Board, 'mode'> & { readonly mode?: CheckpointMode };
+  return { ...row, board: { ...board, mode: board.mode ?? 'NORMAL' } satisfies Board };
+}
+
+/**
+ * The mode of a checkpoint (S17), as of its latest command: NORMAL before its first. A new service
+ * day opens in the mode the previous one ended in, so the latest board's mode holds across days.
+ */
+export async function modeOf(db: Db, checkpointId: string): Promise<CheckpointMode> {
+  return (await boardOf(db, checkpointId))?.board.mode ?? 'NORMAL';
 }
 
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -207,7 +219,14 @@ export function displayMessageOf(
   if (row?.serviceDay !== today) {
     return {
       seq: row?.seq ?? 0,
-      board: { serviceDay: today, called: [], prepare: [], updatedAt: iso(row?.atMs ?? nowMs) },
+      board: {
+        serviceDay: today,
+        called: [],
+        prepare: [],
+        // The day opens in the mode the previous one ended in (S17).
+        mode: row?.board.mode ?? 'NORMAL',
+        updatedAt: iso(row?.atMs ?? nowMs),
+      },
       calls: [],
     };
   }
@@ -221,6 +240,7 @@ export function displayMessageOf(
         at: iso(c.calledAtMs),
       })),
       prepare: [...row.board.prepare],
+      mode: row.board.mode,
       updatedAt: iso(row.atMs),
     },
     calls,

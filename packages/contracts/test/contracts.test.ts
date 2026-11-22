@@ -1,13 +1,15 @@
 import { RISK_CLASSES, SEGMENTS } from '@gateflow/domain';
-import { TICKET_STATES } from '@gateflow/queue-core';
+import { CHECKPOINT_MODES, TICKET_STATES } from '@gateflow/queue-core';
 import { describe, expect, it } from 'vitest';
 import {
   AdmissionRequest,
+  CheckpointMode,
   DeviceResponse,
   DisplayMessage,
   IssueTicketRequest,
   RiskClass,
   Segment,
+  SetModeRequest,
   TicketState,
   ROUTES,
   openApiDocument,
@@ -19,6 +21,8 @@ describe('the API contracts', () => {
     expect(RiskClass.options).toEqual([...RISK_CLASSES]);
     // The states of a ticket are the queue's own (S15 added REVIEW and CANCELLED).
     expect(TicketState.options).toEqual([...TICKET_STATES]);
+    // The modes of a checkpoint are the queue's own (S17).
+    expect(CheckpointMode.options).toEqual([...CHECKPOINT_MODES]);
   });
 
   it('validate requests strictly', () => {
@@ -35,6 +39,11 @@ describe('the API contracts', () => {
     expect(AdmissionRequest.safeParse({ number: 'A001' }).success).toBe(true);
     expect(AdmissionRequest.safeParse({ ref: 'x'.repeat(22) }).success).toBe(true);
     expect(AdmissionRequest.safeParse({ number: 'A001', ref: 'x'.repeat(22) }).success).toBe(false);
+    // A change of mode (S17): a known mode, a reset only when said.
+    expect(SetModeRequest.parse({ mode: 'PAUSED' })).toEqual({ mode: 'PAUSED', reset: false });
+    expect(SetModeRequest.safeParse({ mode: 'CLOSED' }).success).toBe(false);
+    expect(SetModeRequest.safeParse({ mode: 'NORMAL', reset: 'yes' }).success).toBe(false);
+    expect(SetModeRequest.safeParse({ mode: 'NORMAL', why: 'lunch' }).success).toBe(false);
   });
 
   it('give an OpenAPI document with every route', () => {
@@ -90,6 +99,7 @@ describe('the API contracts', () => {
       'post /v1/checkpoints/{checkpointId}/scans',
       'get /v1/devices/me',
       'get /v1/checkpoints/{checkpointId}/display',
+      'get /v1/checkpoints/{checkpointId}/kiosk',
       'get /v1/checkpoints/{checkpointId}/demo-flights',
     ]);
     for (const route of ROUTES) {
@@ -134,6 +144,7 @@ describe('the API contracts', () => {
     expect(streams).toEqual([
       '/v1/checkpoints/{checkpointId}/display',
       '/v1/checkpoints/{checkpointId}/stream',
+      '/v1/checkpoints/{checkpointId}/kiosk',
     ]);
     for (const path of streams) {
       const operation = doc.paths[path]?.get;
@@ -152,6 +163,7 @@ describe('the API contracts', () => {
         serviceDay: '2026-11-23',
         called: [{ number: 'A012', second: false, at: '2026-11-23T06:10:00.000Z' }],
         prepare: ['A013', 'A014'],
+        mode: 'NORMAL',
         updatedAt: '2026-11-23T06:10:00.000Z',
       },
       calls: [{ number: 'A012', second: false, at: '2026-11-23T06:10:00.000Z' }],
@@ -172,6 +184,7 @@ describe('the API contracts', () => {
     expect(roles).toEqual({
       [`post ${cp}/tickets`]: 'OPERATOR',
       [`post ${cp}/calls`]: 'OPERATOR',
+      [`post ${cp}/mode`]: 'SUPERVISOR',
       [`post ${cp}/admissions`]: 'OPERATOR',
       [`post ${cp}/tickets/{ticketId}/recall`]: 'OPERATOR',
       [`post ${cp}/tickets/{ticketId}/no-show`]: 'OPERATOR',

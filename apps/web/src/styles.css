@@ -265,6 +265,16 @@ input {
   color: var(--accent-strong);
 }
 
+/* A button that cannot act now (calls paused, S17) looks it: grey, flat, no pointer. */
+.button:disabled,
+.button.primary:disabled,
+.button.primary:disabled:hover {
+  border-color: var(--line);
+  background: var(--bg);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
 .link-button,
 .link {
   padding: 0.3em 0.2em;
@@ -554,6 +564,44 @@ input {
 
 .refused {
   border-top: 8px solid var(--warn);
+}
+
+/* The kiosk in an emergency (S17): the message alone, in its language and in English. */
+.emergency {
+  border-top: 8px solid var(--stop);
+}
+
+.emergency h1 {
+  color: var(--stop);
+}
+
+.emergency .notice-icon {
+  fill: var(--stop-soft);
+  stroke: var(--stop);
+}
+
+.emergency .in-english {
+  display: grid;
+  justify-items: center;
+  gap: 0.4em;
+  padding-top: 0.8em;
+  border-top: 1px solid var(--line);
+  color: var(--ink-2);
+}
+
+/* Calls paused by the supervisor (S17), on the kiosk's ticket and on the passenger's page. */
+.paused-note,
+.mode-note {
+  padding: 0.5em 0.8em;
+  border-radius: 10px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-weight: 650;
+}
+
+.mode-note[data-mode='EMERGENCY'] {
+  background: var(--stop-soft);
+  color: var(--stop);
 }
 
 .notice-icon {
@@ -1002,6 +1050,26 @@ input {
   font-weight: 650;
 }
 
+/* The mode the supervisor set (S17), above the lane station's work. */
+.mode-banner {
+  margin: 0.5em clamp(0.75rem, 2vw, 1.5rem) 0;
+  padding: 0.6em 0.9em;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
+.mode-banner[data-mode='PAUSED'] {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.mode-banner[data-mode='EMERGENCY'] {
+  background: var(--stop);
+  color: var(--surface);
+}
+
 /*
  * The display (S16): read from across a hall, so everything is large; light numbers on a dark
  * screen. Landscape screens show the called numbers and the numbers to get ready side by side;
@@ -1216,6 +1284,46 @@ input {
   font-size: 2.4em;
   font-weight: 700;
   line-height: 1.2;
+}
+
+/* Calls paused by the supervisor (S17): a row above both columns, as tall as its text. */
+.display-main.paused {
+  grid-template-rows: auto 1fr 1fr;
+}
+
+@media (orientation: landscape) {
+  .display-main.paused {
+    grid-template-rows: auto 1fr;
+  }
+}
+
+.display-paused {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 0.15em;
+  padding: 0.5em 1em;
+  border-radius: var(--radius);
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 1.25em;
+  font-weight: 750;
+}
+
+.display-paused .in-english {
+  color: inherit;
+}
+
+/* The emergency (S17): one message, nothing else. */
+.display-emergency {
+  background: var(--stop-soft);
+}
+
+.display-emergency p {
+  color: var(--stop);
+}
+
+.display-emergency .in-english {
+  color: var(--ink-2);
 }
 
 /* Printing a ticket: the number, the QR code, where and when; nothing else. */

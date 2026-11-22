@@ -4,6 +4,52 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Any change that alters simulated numbers
 must be listed, together with the component versions it bumps.
 
+## [Unreleased]
+
+Slice S17 in progress, the supervisor's console. Part 1: the modes of a checkpoint (ADR-048).
+
+### Simulated numbers change
+
+- None. The golden files change only in the version of the queue (0.9.0); the simulator never
+  changes mode, and fails at once if it is ever asked to.
+
+### Added
+
+- queue-core 0.9.0: the modes of a checkpoint, `setMode`, with the events `MODE_CHANGED` and
+  `UNCOMMITTED`:
+  - `FIFO_ONLY`: the oldest waiting ticket enters the prepare window, whatever the policy;
+  - `PAUSED`: nobody is called, the timers of those called run;
+  - `EMERGENCY`: nobody is called and the call timers stop; they start again where they stopped
+    when it ends;
+  - on resuming from a pause or an emergency, optionally a reset: the window is taken back and
+    announced again in the order of arrival.
+- operations 0.6.0: the command `SET_MODE`; in an emergency the day refuses to issue a ticket or
+  grow a party (`EMERGENCY`); the board carries the mode; a day opens in the mode the previous
+  one ended in.
+- API:
+  - `POST /v1/checkpoints/{id}/mode`, for supervisors: the mode, and on resuming the reset;
+  - `CALL_NEXT` answers 409 `CALLS_PAUSED` while paused or in an emergency; a kiosk's scan and a
+    manual ticket answer 409 `EMERGENCY` in an emergency, before the pass is even read;
+  - `GET /v1/checkpoints/{id}/kiosk`, a kiosk's stream: the mode at once and at each change;
+  - the mode in the queue, on the displays' board and on the passenger's page.
+- Contracts 0.7.0: `CheckpointMode`, `SetModeRequest`, `SetModeResponse`, `KioskStatus`; `mode`
+  in `QueueResponse`, `DisplayBoard` and `PublicTicketResponse`.
+- Web:
+  - the display says when calls are paused, and in an emergency shows only the emergency
+    message, in its language and in English;
+  - the kiosk follows its stream: in an emergency the emergency message, in its language and in
+    English, and no scan; paused, a new number says that calls are paused and that it stays
+    valid;
+  - the lane station shows the mode, and calls nobody while paused or in an emergency, nor issues
+    a manual ticket in an emergency; a button that cannot act looks it;
+  - the passenger's page says when calls are paused, and in an emergency that the staff's
+    instructions come first;
+  - i18n: the texts of the modes, in the three languages.
+
+### Fixed
+
+- A test of the API read five tables at once on one connection (a deprecation warning of `pg`).
+
 ## [0.16.0] - 2026-11-22: Slice S16, displays over server-sent events
 
 Displays in the hall show each call at once, and say when their data is not up to date; lane

@@ -1,6 +1,7 @@
 import type { KnownDeadline, Millis, Segment } from '@gateflow/domain';
 import type { ClassificationParams } from '@gateflow/priority-engine';
 import type {
+  CheckpointMode,
   Policy,
   PresentOutcome,
   QueueEvent,
@@ -28,6 +29,11 @@ export interface DayConfig {
   readonly ratePerLanePerHour: number;
   /** The engine's estimate of the screening time of one person. */
   readonly processEstimateMs: Millis;
+  /**
+   * The mode the day opens in (S17): the mode the previous day ended in, so that an emergency
+   * goes on across the start of a service day. Absent for NORMAL, and in logs before S17.
+   */
+  readonly mode?: CheckpointMode;
 }
 
 /** Opens the service day: the first command of a day's log. */
@@ -172,8 +178,32 @@ export interface AddToParty {
   readonly dedupKey: string | null;
 }
 
+/**
+ * The supervisor sets the mode of the checkpoint (S17, ADR-048):
+ * - NORMAL: the policy of the day orders the queue;
+ * - FIFO_ONLY: the order of arrival, whatever the policy: the fallback at hand;
+ * - PAUSED: nobody is called; kiosks go on issuing, and the timers of those called run;
+ * - EMERGENCY: nobody is called and no ticket is issued; the call timers stop, so that nobody
+ *   becomes a no-show, and start again where they stopped when the emergency ends.
+ * On resuming from PAUSED or EMERGENCY, `reset` announces the prepare window again in order of
+ * arrival; without it, the window stays as announced.
+ */
+export interface SetMode {
+  readonly type: 'SET_MODE';
+  readonly mode: CheckpointMode;
+  readonly reset: boolean;
+}
+
 export type Command =
-  OpenDay | IssueTicket | CallNext | Present | Advance | ActOnTicket | ResolveReview | AddToParty;
+  | OpenDay
+  | IssueTicket
+  | CallNext
+  | Present
+  | Advance
+  | ActOnTicket
+  | ResolveReview
+  | AddToParty
+  | SetMode;
 export type CommandType = Command['type'];
 
 /** A command as recorded in a checkpoint's log: its place in the log and its time. */
@@ -222,6 +252,8 @@ export interface BoardCall {
 export interface Board {
   readonly called: readonly BoardCall[];
   readonly prepare: readonly string[];
+  /** The mode of the checkpoint (S17): the displays say when calls are paused, or stopped. */
+  readonly mode: CheckpointMode;
 }
 
 /** What a command did, besides the events it caused. */
@@ -247,6 +279,18 @@ export type CommandResult =
       readonly action: StaffAction | 'RESOLVE_REVIEW' | 'ADD_TO_PARTY';
       readonly outcome: StaffActionOutcome;
       readonly ticket: TicketSummary;
+    }
+  /**
+   * The mode was set (S17); NOT_ALLOWED, nothing changed: the mode was already that one, or a
+   * reset resumed nothing.
+   */
+  | {
+      readonly type: 'MODE_SET';
+      readonly outcome: 'DONE' | 'NOT_ALLOWED';
+      /** The mode now: the one set or, when NOT_ALLOWED, the one still in force. */
+      readonly mode: CheckpointMode;
+      readonly previous: CheckpointMode;
+      readonly reset: boolean;
     };
 
 /** An event of the day: the queue's own events, and the opening of the day. */

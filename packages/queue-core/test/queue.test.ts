@@ -157,7 +157,7 @@ describe('virtual queue: calls, timeouts, no-shows', () => {
     q.advance(60 * MIN);
     expect(
       events
-        .filter((e) => e.type !== 'ISSUED')
+        .filter((e) => e.type !== 'ISSUED' && e.type !== 'MODE_CHANGED')
         .map((e) => `${e.type} ${e.ticketId} ${e.atMs / MIN}`),
     ).toEqual([
       'COMMITTED a 0',

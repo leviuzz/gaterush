@@ -12,13 +12,18 @@ import {
   IssueTicketRequest,
   ResolveReviewRequest,
   ScanRequest,
+  SetModeRequest,
   SignInRequest,
   openApiDocument,
 } from '@gateflow/contracts';
 import type {
   CheckpointResponse,
   FlightsResponse,
+  KioskStatus,
   MeResponse,
+  PublicTicketResponse,
+  QueueResponse,
+  SetModeResponse,
   StaffActionResponse,
   StaffMemberResponse,
   Ticket,
@@ -37,6 +42,7 @@ import {
   callsBetween,
   displayMessageOf,
   lastEventIdOf,
+  modeOf,
   seqOf,
 } from './streams';
 import {
@@ -546,6 +552,54 @@ export function buildApp(options: AppOptions): FastifyInstance {
     },
   );
 
+  /**
+   * A kiosk's stream (S17): the mode of the checkpoint at once, and again whenever it changes. In
+   * an emergency the kiosk shows the emergency message instead of asking for a boarding pass.
+   */
+  app.get<{ Params: { checkpointId: string } }>(
+    '/v1/checkpoints/:checkpointId/kiosk',
+    async (request, reply) => {
+      const checkpointId = request.params.checkpointId;
+      await requireDevice(options.db, request, checkpointId, 'KIOSK');
+      const cp = await loadCheckpoint(options.db, checkpointId);
+      const stream = new EventStream(reply);
+      stream.onClose(hub.keep(stream));
+      let sent: KioskStatus['mode'] | null = null;
+      let chain: Promise<void> = Promise.resolve();
+      /** Sends the mode, when the kiosk does not have it; one read at a time, in order. */
+      const tell = (): Promise<void> => {
+        chain = chain
+          .then(async () => {
+            if (stream.closed) return;
+            const row = await boardOf(options.db, cp.id);
+            const mode = row?.board.mode ?? 'NORMAL';
+            if (mode === sent) return;
+            const status: KioskStatus = { seq: row?.seq ?? 0, mode };
+            stream.send('status', status, status.seq);
+            sent = mode;
+          })
+          .catch((error: unknown) => {
+            app.log.error(error);
+            stream.close();
+          });
+        return chain;
+      };
+      stream.onClose(
+        hub.follow(cp.id, () => {
+          void tell();
+        }),
+      );
+      keepAlive(
+        stream,
+        async () => {
+          await requireDevice(options.db, request, cp.id, 'KIOSK');
+        },
+        tell,
+      );
+      await tell();
+    },
+  );
+
   /** The lane station's stream (S16): a message whenever the checkpoint's queue changes. */
   app.get<{ Params: { checkpointId: string } }>(
     '/v1/checkpoints/:checkpointId/stream',
@@ -649,6 +703,10 @@ export function buildApp(options: AppOptions): FastifyInstance {
       admittedAtMs: r.admittedAtMs,
     });
 
+  /** A kiosk's scan in an emergency (S17): the kiosk shows the emergency message. */
+  const emergency = () =>
+    new ApiError(409, 'EMERGENCY', 'the checkpoint is in an emergency: kiosks scan nothing');
+
   /**
    * A boarding pass joins the party of a waiting ticket (S15): a family scans its other passes onto
    * the number it just took. The pass must be for the same flight and have no number of its own;
@@ -671,6 +729,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
       }),
       actor: `kiosk:${kioskId}`,
       build: async ({ tx, day, atMs }) => {
+        if (day.mode === 'EMERGENCY') throw emergency();
         const party = day.ticketByRef(partyRef);
         if (party === undefined) {
           throw new ApiError(404, 'UNKNOWN_TICKET', 'no such ticket today at this checkpoint');
@@ -756,6 +815,8 @@ export function buildApp(options: AppOptions): FastifyInstance {
       const kiosk = await requireDevice(options.db, request, request.params.checkpointId, 'KIOSK');
       const body = parse(ScanRequest, request.body);
       const cp = await loadCheckpoint(options.db, request.params.checkpointId);
+      // In an emergency a kiosk scans nothing (S17): the pass is not even read.
+      if ((await modeOf(options.db, cp.id)) === 'EMERGENCY') throw emergency();
       const intake = await readPass(options.db, cp, body.bcbp, clock.now());
       if (!intake.ok) {
         await recordScan(options.db, {
@@ -793,6 +854,8 @@ export function buildApp(options: AppOptions): FastifyInstance {
           }),
           actor: `kiosk:${kiosk.id}`,
           build: async ({ tx, day, atMs }) => {
+            // An emergency set since the check above, under the checkpoint's lock this time.
+            if (day.mode === 'EMERGENCY') throw emergency();
             const scanned = (
               outcome: ScanOutcome,
               reason: ScanReason | null,
@@ -923,7 +986,17 @@ export function buildApp(options: AppOptions): FastifyInstance {
         reply,
         await staffFor(request, 'OPERATOR'),
         null,
-        () => ({ type: 'CALL_NEXT' }),
+        ({ day }) => {
+          // Paused or in an emergency, nobody is called (S17): the lane station says why.
+          if (day.mode === 'PAUSED' || day.mode === 'EMERGENCY') {
+            throw new ApiError(
+              409,
+              'CALLS_PAUSED',
+              `calls are stopped: the checkpoint is ${day.mode}`,
+            );
+          }
+          return { type: 'CALL_NEXT' };
+        },
         (result) => {
           if (result.type !== 'CALLED') throw new Error(`unexpected result ${result.type}`);
           return {
@@ -932,6 +1005,34 @@ export function buildApp(options: AppOptions): FastifyInstance {
           };
         },
       ),
+  );
+
+  /** The supervisor sets the mode of the checkpoint (S17, ADR-048). */
+  app.post<{ Params: { checkpointId: string } }>(
+    '/v1/checkpoints/:checkpointId/mode',
+    async (request, reply) => {
+      const member = await staffFor(request, 'SUPERVISOR');
+      const body = parse(SetModeRequest, request.body);
+      return command(
+        request,
+        reply,
+        member,
+        body,
+        () => ({ type: 'SET_MODE', mode: body.mode, reset: body.reset }),
+        (result): { status: number; body: SetModeResponse } => {
+          if (result.type !== 'MODE_SET') throw new Error(`unexpected result ${result.type}`);
+          return {
+            status: 200,
+            body: {
+              outcome: result.outcome,
+              mode: result.mode,
+              previous: result.previous,
+              reset: result.reset,
+            },
+          };
+        },
+      );
+    },
   );
 
   app.post<{ Params: { checkpointId: string } }>(
@@ -1122,7 +1223,12 @@ export function buildApp(options: AppOptions): FastifyInstance {
         .from(queueToken)
         .where(and(eq(queueToken.checkpointId, cp.id), eq(queueToken.serviceDay, serviceDay)))
         .orderBy(asc(queueToken.issuedAtMs), asc(queueToken.number));
-      return { checkpointId: cp.id, serviceDay, tickets: rows.map(ticketOfRow) };
+      return {
+        checkpointId: cp.id,
+        serviceDay,
+        mode: await modeOf(options.db, cp.id),
+        tickets: rows.map(ticketOfRow),
+      } satisfies QueueResponse;
     },
   );
 
@@ -1148,13 +1254,21 @@ export function buildApp(options: AppOptions): FastifyInstance {
         state: queueToken.state,
         serviceDay: queueToken.serviceDay,
         checkpoint: checkpoint.name,
+        checkpointId: queueToken.checkpointId,
       })
       .from(queueToken)
       .innerJoin(checkpoint, eq(checkpoint.id, queueToken.checkpointId))
       .where(eq(queueToken.opaqueRef, request.params.ref));
     const row = rows[0];
     if (row === undefined) throw new ApiError(404, 'UNKNOWN_TICKET', 'no such ticket');
-    return row;
+    return {
+      number: row.number,
+      partySize: row.partySize,
+      state: row.state as PublicTicketResponse['state'],
+      checkpoint: row.checkpoint,
+      serviceDay: row.serviceDay,
+      mode: await modeOf(options.db, row.checkpointId),
+    } satisfies PublicTicketResponse;
   });
 
   return app;

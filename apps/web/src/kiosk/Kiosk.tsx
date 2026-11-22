@@ -1,8 +1,10 @@
 import { t } from '@gateflow/i18n';
 import type { Locale } from '@gateflow/i18n';
 import type {
+  CheckpointMode,
   DemoFlightsResponse,
   DeviceResponse,
+  KioskStatus,
   ScanReason,
   ScanResponse,
 } from '@gateflow/contracts';
@@ -12,6 +14,7 @@ import { api, randomKey } from '../api';
 import { dateAndTime, useDocumentLanguage } from '../common/format';
 import { LanguageSwitch } from '../common/LanguageSwitch';
 import { QrCode } from '../common/QrCode';
+import { follow } from '../common/stream';
 import { deviceToken, forgetDeviceToken } from '../device';
 import { samplePass } from './sample';
 
@@ -20,7 +23,8 @@ import { samplePass } from './sample';
  * QR code to follow it on a phone, and on paper. A keyboard-wedge scanner types the pass into the
  * field and ends it with Enter; staff can type or paste a code. The pass goes to the server and is
  * forgotten: the kiosk keeps nothing of it. People travelling together scan their other passes
- * onto the same number (S15): the queue then counts the people it will call.
+ * onto the same number (S15): the queue then counts the people it will call. The kiosk follows the
+ * mode of its checkpoint (S17): in an emergency it shows the emergency message and reads nothing.
  */
 
 /** A number on the screen. */
@@ -141,6 +145,8 @@ export function Kiosk({
   const [attempt, setAttempt] = useState(0);
   /** How many scans have had an answer: a new answer is a new number here. */
   const [answers, setAnswers] = useState(0);
+  /** The mode of the checkpoint, from the kiosk's stream (S17). */
+  const [mode, setMode] = useState<CheckpointMode>('NORMAL');
   const field = useRef<HTMLInputElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const busy = useRef(false);
@@ -218,6 +224,27 @@ export function Kiosk({
     setCode('');
   }, [defaultLocale]);
 
+  // The mode of the checkpoint, at once and at each change (S17).
+  useEffect(() => {
+    if (me === null || token === null) return;
+    return follow(`/v1/checkpoints/${checkpointId}/kiosk`, {
+      token,
+      onMessage: (message) => {
+        if (message.event !== 'status') return;
+        setMode((JSON.parse(message.data) as KioskStatus).mode);
+      },
+      onRefused: (status) => {
+        if (status === 401) forgetDeviceToken();
+        setScreen({ kind: 'not-set-up' });
+      },
+    });
+  }, [me, token, checkpointId]);
+
+  // An emergency clears the screen: after it, the kiosk welcomes the next passenger.
+  useEffect(() => {
+    if (mode === 'EMERGENCY') reset();
+  }, [mode, reset]);
+
   const submit = useCallback(
     /** Reads a pass: for a number of its own, or, with `party`, to join the number on screen. */
     async (text: string, party: ShownTicket | null) => {
@@ -245,6 +272,11 @@ export function Kiosk({
       }
       busy.current = false;
       setAnswers((n) => n + 1);
+      if (!answer.ok && answer.code === 'EMERGENCY') {
+        // Set while the pass was read: the stream says so too, a moment later.
+        setMode('EMERGENCY');
+        return;
+      }
       if (party !== null && (answer.ok || (answer.status !== 401 && answer.status !== 403))) {
         let status: PartyStatus = 'error';
         let ticket = party;
@@ -358,7 +390,8 @@ export function Kiosk({
     if (!privacy && d.open) d.close();
   }, [privacy]);
 
-  const ready = me !== null && token !== null;
+  const emergency = mode === 'EMERGENCY' && me !== null;
+  const ready = me !== null && token !== null && !emergency;
   const party = screen.kind === 'party' ? screen.ticket : null;
   const onSubmit = (event: SyntheticEvent) => {
     event.preventDefault();
@@ -452,6 +485,11 @@ export function Kiosk({
               </p>
             ) : null}
             <p className="wait">{t(locale, 'kiosk.wait')}</p>
+            {mode === 'PAUSED' ? (
+              <p className="paused-note" id="kiosk-paused" role="status">
+                {t(locale, 'kiosk.paused')}
+              </p>
+            ) : null}
             <p className="print-only issued-at">
               {me === null ? '' : dateAndTime(shown.atMs, locale, me.airport.timeZone)}
             </p>
@@ -556,8 +594,33 @@ export function Kiosk({
       break;
   }
 
+  if (emergency) {
+    // The emergency message, in the kiosk's language and in English (S17).
+    content = (
+      <section className="card message-card emergency" id="kiosk-emergency" role="alert">
+        <svg className="notice-icon" viewBox="0 0 48 48" aria-hidden="true">
+          <circle cx="24" cy="24" r="21" />
+          <path d="M24 13v14M24 33v2" />
+        </svg>
+        <h1>{t(locale, 'kiosk.emergency.title')}</h1>
+        <p className="message">{t(locale, 'kiosk.emergency.body')}</p>
+        {locale === 'en' ? null : (
+          <div className="in-english" lang="en">
+            <h2>{t('en', 'kiosk.emergency.title')}</h2>
+            <p>{t('en', 'kiosk.emergency.body')}</p>
+          </div>
+        )}
+      </section>
+    );
+  }
+
   return (
-    <div className="kiosk" data-screen={screen.kind} data-answers={answers}>
+    <div
+      className="kiosk"
+      data-screen={emergency ? 'emergency' : screen.kind}
+      data-mode={mode}
+      data-answers={answers}
+    >
       <header className="bar">
         <div className="place">
           <span className="brand">GateFlow</span>

@@ -6,7 +6,7 @@ import { z } from 'zod';
  * ticket is a number, a state and a flight, never a name.
  */
 
-export const CONTRACTS_VERSION = '0.6.0';
+export const CONTRACTS_VERSION = '0.7.0';
 
 export const Segment = z.enum(['DEPARTING', 'TRANSFER']);
 
@@ -23,6 +23,13 @@ export const TicketState = z.enum([
 ]);
 
 export const RiskClass = z.enum(['UNVERIFIED', 'NORMAL', 'ATTENTION', 'URGENT', 'CRITICAL']);
+
+/**
+ * The mode of a checkpoint, set by its supervisor (S17, ADR-048): NORMAL, the policy of the day;
+ * FIFO_ONLY, the order of arrival; PAUSED, nobody is called while kiosks go on issuing;
+ * EMERGENCY, nobody is called, kiosks issue nothing and the call timers stop.
+ */
+export const CheckpointMode = z.enum(['NORMAL', 'FIFO_ONLY', 'PAUSED', 'EMERGENCY']);
 
 const Instant = z.iso.datetime();
 
@@ -182,7 +189,29 @@ export const AdmissionResponse = z.object({
 export const QueueResponse = z.object({
   checkpointId: z.uuid(),
   serviceDay: z.iso.date(),
+  /** The mode of the checkpoint (S17): no calls while PAUSED or in an EMERGENCY. */
+  mode: CheckpointMode,
   tickets: z.array(Ticket),
+});
+
+/**
+ * The supervisor sets the mode of the checkpoint (S17). On resuming from PAUSED or EMERGENCY,
+ * `reset` announces the prepare window again in order of arrival; without it, the window stays.
+ */
+export const SetModeRequest = z.strictObject({
+  mode: CheckpointMode,
+  reset: z.boolean().default(false),
+});
+
+/**
+ * `DONE` when the mode changed; `NOT_ALLOWED` leaves it as it was: the same mode again, or a reset
+ * that resumes nothing. `mode` is the mode now.
+ */
+export const SetModeResponse = z.object({
+  outcome: z.enum(['DONE', 'NOT_ALLOWED']),
+  mode: CheckpointMode,
+  previous: CheckpointMode,
+  reset: z.boolean(),
 });
 
 /** What a passenger sees on the page of their ticket: no personal data. */
@@ -193,6 +222,11 @@ export const PublicTicketResponse = z.object({
   state: TicketState,
   checkpoint: z.string(),
   serviceDay: z.iso.date(),
+  /**
+   * The mode of the checkpoint (S17): the page says when calls are paused, and in an emergency
+   * that the staff's instructions come first.
+   */
+  mode: CheckpointMode,
 });
 
 export const AuditVerifyResponse = z.object({
@@ -315,6 +349,11 @@ export const DisplayBoard = z.object({
   called: z.array(DisplayCall),
   /** The numbers to get ready, in the order they will be called. */
   prepare: z.array(z.string()),
+  /**
+   * The mode of the checkpoint (S17): PAUSED, the display says calls are paused; EMERGENCY, it
+   * shows the emergency message instead of numbers.
+   */
+  mode: CheckpointMode,
   /** When the board last changed: the time of the latest command of the checkpoint. */
   updatedAt: Instant,
 });
@@ -336,6 +375,13 @@ export const Heartbeat = z.object({ at: Instant });
 /** A message of a staff stream (S16), `event: changed` with `id:` its `seq`: the queue changed. */
 export const QueueChanged = z.object({ seq: z.int().min(0) });
 
+/**
+ * A message of a kiosk's stream (S17), `event: status` with `id:` its `seq`: the mode of the
+ * checkpoint, at once and at each change. In an EMERGENCY the kiosk shows the emergency message
+ * and scans nothing.
+ */
+export const KioskStatus = z.object({ seq: z.int().min(0), mode: CheckpointMode });
+
 /** The types of the answers, for clients that do not validate them (the web application). */
 export type TicketState = z.infer<typeof TicketState>;
 export type ScanOutcome = z.infer<typeof ScanOutcome>;
@@ -349,6 +395,9 @@ export type DisplayBoard = z.infer<typeof DisplayBoard>;
 export type DisplayMessage = z.infer<typeof DisplayMessage>;
 export type Heartbeat = z.infer<typeof Heartbeat>;
 export type QueueChanged = z.infer<typeof QueueChanged>;
+export type CheckpointMode = z.infer<typeof CheckpointMode>;
+export type KioskStatus = z.infer<typeof KioskStatus>;
+export type SetModeResponse = z.infer<typeof SetModeResponse>;
 export type DemoFlightsResponse = z.infer<typeof DemoFlightsResponse>;
 export type ManualReason = z.infer<typeof ManualReason>;
 export type StaffActionResponse = z.infer<typeof StaffActionResponse>;
@@ -422,7 +471,11 @@ export const ROUTES: readonly Route[] = [
       '201': { description: 'Issued', schema: IssueTicketResponse },
       ...errors,
       ...staffErrors,
-      '409': { description: 'Idempotency key reused for another request', schema: ErrorResponse },
+      '409': {
+        description:
+          'The checkpoint is in an emergency (`EMERGENCY`), or the idempotency key was reused',
+        schema: ErrorResponse,
+      },
     },
   },
   {
@@ -441,6 +494,10 @@ export const ROUTES: readonly Route[] = [
       },
       ...errors,
       ...deviceErrors,
+      '409': {
+        description: 'The checkpoint is in an emergency (`EMERGENCY`): kiosks scan nothing',
+        schema: ErrorResponse,
+      },
     },
   },
   {
@@ -492,6 +549,24 @@ export const ROUTES: readonly Route[] = [
   },
   {
     method: 'get',
+    path: '/v1/checkpoints/{checkpointId}/kiosk',
+    summary:
+      "A kiosk's stream (S17): the mode of the checkpoint, at once and at each change, and a heartbeat every 10 seconds",
+    command: false,
+    device: true,
+    stream: true,
+    responses: {
+      '200': {
+        description:
+          'Server-sent events: `status` messages (id: the sequence number of the log) and `heartbeat` messages',
+        schema: KioskStatus,
+      },
+      ...deviceErrors,
+      '404': errors['404'],
+    },
+  },
+  {
+    method: 'get',
     path: '/v1/checkpoints/{checkpointId}/demo-flights',
     summary: "The next 24 hours' demo flights, for a kiosk's sample boarding passes",
     command: false,
@@ -510,6 +585,25 @@ export const ROUTES: readonly Route[] = [
     staff: 'OPERATOR',
     responses: {
       '200': { description: 'Called, or nobody waiting', schema: CallNextResponse },
+      ...errors,
+      ...staffErrors,
+      '409': {
+        description:
+          'Calls are paused or stopped by the supervisor (`CALLS_PAUSED`), or the idempotency key was reused',
+        schema: ErrorResponse,
+      },
+    },
+  },
+  {
+    method: 'post',
+    path: '/v1/checkpoints/{checkpointId}/mode',
+    summary:
+      'Set the mode of the checkpoint (S17): NORMAL, FIFO_ONLY, PAUSED or EMERGENCY; on resuming, optionally the window again in order of arrival',
+    command: true,
+    staff: 'SUPERVISOR',
+    body: SetModeRequest,
+    responses: {
+      '200': { description: 'Set, or not allowed: nothing changed', schema: SetModeResponse },
       ...errors,
       ...staffErrors,
       '409': { description: 'Idempotency key reused for another request', schema: ErrorResponse },

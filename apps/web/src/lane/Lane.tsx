@@ -3,6 +3,7 @@ import type { Locale, MessageKey } from '@gateflow/i18n';
 import type {
   AdmissionResponse,
   CallNextResponse,
+  CheckpointMode,
   CheckpointResponse,
   FlightsResponse,
   IssueTicketResponse,
@@ -26,7 +27,8 @@ import { presented } from './scan';
  * The lane station (S15): staff sign in, call the next passenger, validate tickets at the access
  * point (QR code, boarding pass or number), act on called passengers, absences and reviews, and
  * issue manual tickets with a reason. It follows the checkpoint's stream (S16): it asks for the
- * queue whenever it changes, and every 20 seconds in case the stream is down.
+ * queue whenever it changes, and every 20 seconds in case the stream is down. It shows the mode the
+ * supervisor set (S17): while calls are paused or stopped, the station calls nobody.
  */
 
 const REFRESH_MS = 20_000;
@@ -196,6 +198,8 @@ export function Lane({
     reason: ManualReason;
   }>({ flightId: '', segment: 'DEPARTING', partySize: 1, reason: 'NO_BOARDING_PASS' });
   const [issued, setIssued] = useState<IssueTicketResponse | null>(null);
+  /** The mode of the checkpoint (S17), with the queue. */
+  const [mode, setMode] = useState<CheckpointMode>('NORMAL');
   const field = useRef<HTMLInputElement>(null);
   useDocumentLanguage(locale);
 
@@ -232,6 +236,7 @@ export function Lane({
     const answer = await api<QueueResponse>(`${base}/queue`, { session: true });
     if (answer.ok) {
       setTickets(answer.body.tickets);
+      setMode(answer.body.mode);
       setUpdatedAt(Date.now());
     } else if (answer.status === 401) {
       setPhase('sign-in');
@@ -294,8 +299,10 @@ export function Lane({
     // No answer stays on screen while the next one is awaited.
     setLast(null);
     const answer = await command<CallNextResponse>('calls');
-    if (!answer.ok) setLast(t(locale, 'lane.error'));
-    else
+    if (!answer.ok) {
+      // The supervisor paused the calls since the station last heard.
+      setLast(t(locale, answer.code === 'CALLS_PAUSED' ? 'lane.callsPaused' : 'lane.error'));
+    } else
       setLast(
         answer.body.called === null
           ? t(locale, 'lane.nobody')
@@ -341,7 +348,12 @@ export function Lane({
     event.preventDefault();
     const answer = await command<IssueTicketResponse>('tickets', manual);
     if (answer.ok) setIssued(answer.body);
-    else setOutcome({ kind: 'stop', text: t(locale, 'lane.error') });
+    else {
+      setOutcome({
+        kind: 'stop',
+        text: t(locale, answer.code === 'EMERGENCY' ? 'lane.emergency' : 'lane.error'),
+      });
+    }
   };
 
   const signOut = async () => {
@@ -363,6 +375,7 @@ export function Lane({
   const review = by(['REVIEW']);
   const stale = updatedAt !== null && now - updatedAt > STALE_MS;
   const boss = member !== null && supervises(member);
+  const callsStopped = mode === 'PAUSED' || mode === 'EMERGENCY';
 
   const header = (
     <header className="bar">
@@ -420,12 +433,18 @@ export function Lane({
           {t(locale, 'lane.stale', { time: timeOfDay(updatedAt, locale) })}
         </p>
       ) : null}
+      {mode === 'NORMAL' ? null : (
+        <p className="mode-banner" role="status" id="lane-mode" data-mode={mode}>
+          {t(locale, `lane.mode.${mode}`)}
+        </p>
+      )}
       <main className="lane-main">
         <section className="card lane-actions">
           <button
             type="button"
             className="button primary call-next"
             id="lane-call"
+            disabled={callsStopped}
             onClick={() => void callNext()}
           >
             {t(locale, 'lane.callNext')}
@@ -627,7 +646,12 @@ export function Lane({
                 </option>
               ))}
             </select>
-            <button type="submit" className="button primary" id="manual-issue">
+            <button
+              type="submit"
+              className="button primary"
+              id="manual-issue"
+              disabled={mode === 'EMERGENCY'}
+            >
               {t(locale, 'lane.manual.issue')}
             </button>
           </form>

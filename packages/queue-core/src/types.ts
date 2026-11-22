@@ -202,6 +202,17 @@ export type StaffActionOutcome = 'DONE' | 'NOT_ALLOWED' | 'UNKNOWN_TICKET';
 /** What staff decide at the end of a review: back to the queue at its place, or cancelled. */
 export type ReviewDecision = 'QUEUE' | 'CANCEL';
 
+/**
+ * How a checkpoint runs (S17), as its supervisor sets it:
+ * - `NORMAL`: the policy decides who enters the prepare window;
+ * - `FIFO_ONLY`: the oldest waiting ticket enters it, whatever the policy;
+ * - `PAUSED`: nobody is called;
+ * - `EMERGENCY`: nobody is called and the call timers stop, so that nobody becomes a no-show or
+ *   expires meanwhile; they start again where they stopped.
+ */
+export const CHECKPOINT_MODES = ['NORMAL', 'FIFO_ONLY', 'PAUSED', 'EMERGENCY'] as const;
+export type CheckpointMode = (typeof CHECKPOINT_MODES)[number];
+
 /** Transitions, reported to an optional listener (audit log in production, metrics in simulation). */
 export type QueueEvent =
   | { readonly type: 'ISSUED'; readonly ticketId: string; readonly atMs: Millis }
@@ -250,7 +261,20 @@ export type QueueEvent =
       readonly ticketId: string;
       readonly atMs: Millis;
       readonly partySize: number;
-    };
+    }
+  /**
+   * The supervisor set the checkpoint's mode (S17). With `reset`, on leaving a pause or an
+   * emergency, the prepare window is announced again in order of arrival.
+   */
+  | {
+      readonly type: 'MODE_CHANGED';
+      readonly atMs: Millis;
+      readonly mode: CheckpointMode;
+      readonly previous: CheckpointMode;
+      readonly reset: boolean;
+    }
+  /** A ticket of the prepare window goes back to waiting at its place (a reset, S17). */
+  | { readonly type: 'UNCOMMITTED'; readonly ticketId: string; readonly atMs: Millis };
 
 export type QueueListener = (event: QueueEvent) => void;
 

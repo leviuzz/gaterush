@@ -78,6 +78,11 @@ function stageAfterQueueEvent(event: QueueEvent): Stage | null {
     case 'CANCELLED':
     case 'PARTY_GROWN':
       return null;
+    // The supervisor's modes (S17): of the live product too. A ticket taken back from the window
+    // waits again, as it did.
+    case 'MODE_CHANGED':
+    case 'UNCOMMITTED':
+      return null;
   }
 }
 

@@ -12,7 +12,8 @@ import { deviceToken, forgetDeviceToken } from '../device';
  * the server sends them over server-sent events, in the display's language and in English.
  * Numbers only: nothing personal, no position, no waiting time. Without news from the server for
  * 30 seconds it says it is not up to date; after 2 minutes it asks passengers to follow the staff,
- * as the checkpoint then goes back to its usual queue.
+ * as the checkpoint then goes back to its usual queue. When the supervisor pauses the calls it
+ * says so above the numbers; in an emergency it shows only the emergency message (S17).
  */
 
 /** Without a message or a heartbeat for this long, the display says it is not up to date. */
@@ -175,9 +176,22 @@ export function Display({
         <div className="spinner" role="progressbar" aria-label="GateFlow" />
       </main>
     );
+  } else if (board.mode === 'EMERGENCY') {
+    content = (
+      <main className="display-message display-emergency" id="display-emergency" role="alert">
+        <p>
+          <Both locale={locale} k="display.emergency" />
+        </p>
+      </main>
+    );
   } else {
     content = (
-      <main className="display-main">
+      <main className={board.mode === 'PAUSED' ? 'display-main paused' : 'display-main'}>
+        {board.mode === 'PAUSED' ? (
+          <p className="display-paused" id="display-paused" role="status">
+            <Both locale={locale} k="display.paused" />
+          </p>
+        ) : null}
         <section className="display-column display-called" aria-labelledby="display-called-title">
           <h1 id="display-called-title">
             <Both locale={locale} k="display.called" />
@@ -235,7 +249,7 @@ export function Display({
   }
 
   return (
-    <div className="display" data-state={state}>
+    <div className="display" data-state={state} data-mode={board?.mode ?? 'NORMAL'}>
       <header className="display-bar">
         <div className="place">
           <span className="brand">GateFlow</span>

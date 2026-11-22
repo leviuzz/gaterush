@@ -98,4 +98,26 @@ describe('parallel days in worker threads', () => {
   it('writes a byte-identical sweep whatever the number of workers', () => {
     expect(sweep(3)).toBe(sweep(1));
   }, 300_000);
+
+  it('writes a byte-identical backtest whatever the number of workers', () => {
+    const backtest = (workers: number) => {
+      const out = join(workDir, `backtest-w${workers}`);
+      node([
+        'backtest',
+        '--scenario',
+        DISRUPTED,
+        '--seeds',
+        '1-3',
+        '--out',
+        out,
+        '--workers',
+        String(workers),
+        '--commit',
+        'test-commit',
+        '--quiet',
+      ]);
+      return readFileSync(join(out, 'backtest.json'), 'utf8');
+    };
+    expect(backtest(3)).toBe(backtest(1));
+  }, 300_000);
 });

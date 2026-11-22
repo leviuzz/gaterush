@@ -1,5 +1,12 @@
-import { runDay, runSweepDay } from '@gateflow/sim-metrics';
-import type { DayJob, SeedResult, SweepDayJob, SweepDayResult } from '@gateflow/sim-metrics';
+import { backtestDay, runDay, runSweepDay } from '@gateflow/sim-metrics';
+import type {
+  BacktestJob,
+  BacktestObservation,
+  DayJob,
+  SeedResult,
+  SweepDayJob,
+  SweepDayResult,
+} from '@gateflow/sim-metrics';
 
 /**
  * Work that can run in a worker thread: a pure computation on structured-clonable data, whose
@@ -18,10 +25,18 @@ export interface SweepDayTask {
   readonly seed: number;
 }
 
-export type Task = ExperimentDayTask | SweepDayTask;
+/** One simulated day of a backtest of the forecasts (S21). */
+export interface BacktestDayTask {
+  readonly kind: 'backtest-day';
+  readonly job: BacktestJob;
+  readonly seed: number;
+}
+
+export type Task = ExperimentDayTask | SweepDayTask | BacktestDayTask;
 export type TaskResult =
   | { readonly kind: 'experiment-day'; readonly day: SeedResult }
-  | { readonly kind: 'sweep-day'; readonly day: SweepDayResult };
+  | { readonly kind: 'sweep-day'; readonly day: SweepDayResult }
+  | { readonly kind: 'backtest-day'; readonly day: readonly BacktestObservation[] };
 
 export function runTask(task: Task): TaskResult {
   switch (task.kind) {
@@ -29,6 +44,8 @@ export function runTask(task: Task): TaskResult {
       return { kind: task.kind, day: runDay(task.job, task.seed) };
     case 'sweep-day':
       return { kind: task.kind, day: runSweepDay(task.job, task.seed) };
+    case 'backtest-day':
+      return { kind: task.kind, day: backtestDay(task.job, task.seed) };
   }
 }
 

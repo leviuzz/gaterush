@@ -7,7 +7,7 @@ import type { Db } from './db/client';
 import { airport, checkpoint, flight, organization, policyVersion } from './db/schema';
 import { policyHash } from './policies';
 import type { Ids } from './ids';
-import { saveScenario } from './simulations';
+import { saveScenario, scenarioHashOf } from './simulations';
 import { localDate, serviceDayOf, zonedEpoch } from './time';
 
 /**
@@ -41,8 +41,9 @@ export interface Seeded {
 /**
  * Demo data from a scenario of the library: its airport, its checkpoint run with GateFlow priority
  * v3 and the airport's settings, and the scenario's flights on the service day of `now`; the
- * scenario is saved for the airport's simulations (S19). Running it again adds what is missing and
- * changes nothing else. Every flight is marked DEMO.
+ * scenario is saved for the airport's simulations (S19) and the checkpoint's forecasts read it
+ * (S21). Running it again adds what is missing and changes nothing else. Every flight is marked
+ * DEMO.
  */
 export async function seedDemo(
   db: Db,
@@ -98,8 +99,18 @@ export async function seedDemo(
               lanesOpen: Math.max(...spec.laneSchedule.map((entry) => entry.lanes)),
               ratePerLanePerHour: spec.serviceRatePerLanePerHour,
               processEstimateMs: spec.processEstimateMs,
+              scenarioHash: scenarioHashOf(scenario),
             },
           })
+          .returning()
+      )[0];
+    } else if (checkpointRow.settings.scenarioHash === undefined) {
+      // A checkpoint seeded before S21 gets the scenario its forecasts read; nothing else changes.
+      checkpointRow = (
+        await tx
+          .update(checkpoint)
+          .set({ settings: { ...checkpointRow.settings, scenarioHash: scenarioHashOf(scenario) } })
+          .where(eq(checkpoint.id, checkpointRow.id))
           .returning()
       )[0];
     }

@@ -14,6 +14,7 @@ import { policyHash, summaryOf } from './policies';
 import { ApiError } from './runtime';
 import type { Runtime } from './runtime';
 import { designatorOf } from './seed';
+import { saveScenario } from './simulations';
 import { boardOf, displayMessageOf } from './streams';
 import { localDate, serviceDayOf, systemClock, zonedEpoch } from './time';
 import type { Clock } from './time';
@@ -216,6 +217,13 @@ export class TwinRunner {
     const walks = new Map(generateSchedule(options.scenario).map((f) => [f.id, f.walkEstimateMs]));
     const runId = this.ids.uuid();
     const checkpointId = this.ids.uuid();
+    // The scenario, saved at the airport: the twin checkpoint's forecasts read it (S21).
+    const { row: saved } = await saveScenario(this.db, this.ids, {
+      airportId: options.airportId,
+      scenario: options.scenario,
+      by: options.createdBy,
+      nowMs,
+    });
     // The virtual clock starts at the first command: the night before it is empty.
     const firstMs = script.steps.find((s) => s.command !== null)?.atMs ?? originMs;
     await this.db.transaction(async (tx) => {
@@ -242,7 +250,7 @@ export class TwinRunner {
         name: `Twin ${String(n)}: ${options.scenario.title}, seed ${String(options.seed)}`,
         ticketPrefix: TWIN_PREFIX,
         dayStartsAt: '00:00',
-        settings: { ...twinSettings(day), twin: { runId, serviceDay } },
+        settings: { ...twinSettings(day), twin: { runId, serviceDay }, scenarioHash: saved.hash },
       });
       try {
         await tx.insert(twinRun).values({

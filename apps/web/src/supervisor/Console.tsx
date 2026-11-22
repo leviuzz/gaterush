@@ -8,6 +8,7 @@ import type {
   CheckpointMode,
   CheckpointResponse,
   FlightsResponse,
+  ForecastResponse,
   MeResponse,
   OverrideReason,
   OverrideResponse,
@@ -36,10 +37,13 @@ import { follow } from '../common/stream';
  * resuming chooses between the same order and the order of arrival), the lanes open, the queue
  * with the overrides and their coded reason, today's and the next day's policy (administrators
  * activate a version from the next service day), and the audit view of the day with the check of
- * the log's chain. It follows the checkpoint's stream, as the lane station does.
+ * the log's chain. It follows the checkpoint's stream, as the lane station does. GateFlow Predict
+ * (S21, ADR-054), a preview, forecasts the next 90 minutes from simulated days, once a minute.
  */
 
 const REFRESH_MS = 20_000;
+/** The forecast changes slowly: once a minute is enough. */
+const FORECAST_MS = 60_000;
 const LIST_LIMIT = 30;
 const MODES: readonly CheckpointMode[] = ['NORMAL', 'FIFO_ONLY', 'PAUSED', 'EMERGENCY'];
 const REASONS: readonly OverrideReason[] = [
@@ -57,6 +61,17 @@ const stoppedMode = (mode: CheckpointMode) => mode === 'PAUSED' || mode === 'EME
 
 /** Minutes, rounded, of a duration in milliseconds. */
 const minutes = (ms: number) => Math.round(ms / 60_000);
+
+/** A band of a forecast, as the console shows it: the median, and 8 paths in 10 around it. */
+const bandText = (
+  locale: Locale,
+  band: { readonly p10: number; readonly p50: number; readonly p90: number },
+) =>
+  t(locale, 'supervisor.forecast.band', {
+    p50: Math.round(band.p50),
+    p10: Math.round(band.p10),
+    p90: Math.round(band.p90),
+  });
 
 /** A share in per cent, rounded; 0 of nothing. */
 const percent = (part: number, whole: number) =>
@@ -118,6 +133,8 @@ export function Console({
   const [chain, setChain] = useState<AuditVerifyResponse | null>(null);
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [check, setCheck] = useState<OverviewVerifyResponse | null>(null);
+  /** The forecast (S21); `none` when the checkpoint names no scenario, `failed` otherwise. */
+  const [forecast, setForecast] = useState<ForecastResponse | 'none' | 'failed' | null>(null);
   useDocumentLanguage(locale);
 
   const base = `/v1/checkpoints/${checkpointId}`;
@@ -214,6 +231,23 @@ export function Console({
       stop();
     };
   }, [phase, refresh, base]);
+
+  // The forecast: when the console opens, then once a minute.
+  useEffect(() => {
+    if (phase !== 'ready') return;
+    const load = async () => {
+      const answer = await api<ForecastResponse>(`${base}/forecast`, { session: true });
+      if (answer.ok) setForecast(answer.body);
+      else setForecast(answer.status === 409 ? 'none' : 'failed');
+    };
+    void load();
+    const timer = window.setInterval(() => {
+      void load();
+    }, FORECAST_MS);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [phase, base]);
 
   const flightOf = useMemo(() => {
     const labels = new Map(flights.map((f) => [f.id, f.label]));
@@ -617,6 +651,82 @@ export function Console({
                   )}
                 </div>
               )}
+            </>
+          )}
+        </section>
+
+        <section
+          className="card console-forecast"
+          id="console-forecast"
+          aria-labelledby="forecast-title"
+          data-state={
+            forecast === null || typeof forecast === 'string' ? (forecast ?? 'loading') : 'ready'
+          }
+        >
+          <h2 id="forecast-title">
+            {t(locale, 'supervisor.forecast.title')}{' '}
+            <span className="badge">{t(locale, 'supervisor.forecast.preview')}</span>
+          </h2>
+          {forecast === null ? (
+            <p className="muted">…</p>
+          ) : forecast === 'none' ? (
+            <p className="muted" id="console-forecast-none">
+              {t(locale, 'supervisor.forecast.none')}
+            </p>
+          ) : forecast === 'failed' ? (
+            <p className="muted">{t(locale, 'supervisor.forecast.unavailable')}</p>
+          ) : (
+            <>
+              <div className="table-scroll">
+                <table className="forecast-table">
+                  <thead>
+                    <tr>
+                      <th scope="col" />
+                      {forecast.horizons.map((h) => (
+                        <th scope="col" key={h.minutes}>
+                          {t(locale, 'supervisor.forecast.in', { minutes: h.minutes })}
+                          <small className="muted">
+                            {' '}
+                            {timeOfDay(Date.parse(h.at), locale, timeZone)}
+                          </small>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(
+                      [
+                        ['arrivals', (h: ForecastResponse['horizons'][number]) => h.arrivals],
+                        ['backlog', (h: ForecastResponse['horizons'][number]) => h.backlog],
+                        ['wait', (h: ForecastResponse['horizons'][number]) => h.waitMinutes],
+                      ] as const
+                    ).map(([key, pick]) => (
+                      <tr key={key} data-quantity={key}>
+                        <th scope="row">{t(locale, `supervisor.forecast.${key}`)}</th>
+                        {forecast.horizons.map((h) => (
+                          <td key={h.minutes} data-p50={pick(h).p50}>
+                            {bandText(locale, pick(h))}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                    <tr data-quantity="lanes">
+                      <th scope="row">{t(locale, 'supervisor.forecast.lanes')}</th>
+                      {forecast.horizons.map((h) => (
+                        <td key={h.minutes}>{h.lanes}</td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p className="muted forecast-note" id="console-forecast-note">
+                {t(locale, 'supervisor.forecast.note', {
+                  paths: forecast.model.paths,
+                  scenario: forecast.model.scenario.title,
+                  seen: forecast.state.arrivalsLastHour,
+                  expected: Math.round(forecast.state.expectedLastHour),
+                })}
+              </p>
             </>
           )}
         </section>

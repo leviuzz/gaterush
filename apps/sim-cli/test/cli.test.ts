@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { ResultsDocument } from '@gateflow/sim-metrics';
+import type { BacktestDocument, ResultsDocument } from '@gateflow/sim-metrics';
 import { pairParties, parseTraceFile, summariseDay, traceContent } from '@gateflow/sim-trace';
 import { EXIT_FAILURE, EXIT_OK, EXIT_USAGE, runCli } from '../src/cli';
 import { createNodeIo, detectCommit } from '../src/io';
@@ -566,6 +566,41 @@ describe('gateflow-sim trace', () => {
     for (const argv of bad) {
       const result = await cli([...argv, '--out', join(workDir, 'bad-trace')]);
       expect(result.code, argv.join(' ')).toBe(EXIT_USAGE);
+    }
+  });
+});
+
+describe('gateflow-sim backtest', () => {
+  it('writes the errors of the forecasts per horizon, and prints them', async () => {
+    const out = join(workDir, 'backtest');
+    const argv = ['backtest', '--scenario', DEMO, '--seeds', '1-2', '--out', out, '--quiet'];
+    const result = await cli(argv);
+    expect(result.code, result.stderr).toBe(EXIT_OK);
+    const json = readFileSync(join(out, 'backtest.json'), 'utf8');
+    const doc = JSON.parse(json) as BacktestDocument;
+    expect(doc.schema).toBe('gateflow.forecast.backtest/1');
+    expect(doc.manifest.generator).toEqual({ name: 'gateflow-sim', version: CLI_VERSION });
+    expect(doc.manifest.commit).toBe('test-commit');
+    expect(doc.manifest.policy.id).toBe('priority-v3');
+    expect(doc.manifest.seeds).toEqual({ count: 2, ranges: '1-2' });
+    expect(Object.keys(doc.summary.wait)).toEqual(['15', '30', '60', '90']);
+    expect(readFileSync(join(out, 'backtest.md'), 'utf8')).toContain('# Forecast backtest');
+    expect(result.stdout).toContain('SIMULATED RESULTS');
+    expect(result.stdout).toMatch(/^90 min {4}/m);
+    // The same days give the same file.
+    expect((await cli(argv)).code).toBe(EXIT_OK);
+    expect(readFileSync(join(out, 'backtest.json'), 'utf8')).toBe(json);
+  });
+
+  it('takes one policy, and rejects what it cannot backtest', async () => {
+    const out = join(workDir, 'bad-backtest');
+    for (const argv of [
+      ['backtest', '--seeds', '1'],
+      ['backtest', '--scenario', DEMO, '--policy', 'fifo,priority-v3'],
+      ['backtest', '--scenario', DEMO, '--policy', 'nope'],
+      ['backtest', '--scenario', DEMO, '--seeds', 'x'],
+    ]) {
+      expect((await cli([...argv, '--out', out, '--quiet'])).code, argv.join(' ')).toBe(EXIT_USAGE);
     }
   });
 });

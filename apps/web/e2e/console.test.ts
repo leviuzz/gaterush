@@ -1,7 +1,12 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { syntheticBoardingPass } from '@gateflow/bcbp';
-import type { DemoFlightsResponse, OverviewResponse, ScanResponse } from '@gateflow/contracts';
+import type {
+  DemoFlightsResponse,
+  ForecastResponse,
+  OverviewResponse,
+  ScanResponse,
+} from '@gateflow/contracts';
 import { MESSAGES, t } from '@gateflow/i18n';
 import { chromium } from 'playwright';
 import type { Browser, Page } from 'playwright';
@@ -288,6 +293,39 @@ describe("the supervisor's console (S17)", () => {
       /equals the log: \d+ commands/,
     );
     await shot(page, 'console-overview');
+    expect(errors).toEqual([]);
+    await page.context().close();
+  });
+
+  it('forecasts the next 90 minutes as a simulated preview, in the reader’s language (S21)', async () => {
+    const answer = await fetch(`${product.base}/v1/checkpoints/${product.checkpointId}/forecast`, {
+      headers: { cookie: product.staffCookie },
+    });
+    expect(answer.status).toBe(200);
+    const api = (await answer.json()) as ForecastResponse;
+    expect(api.model.scenario.id).toBe('vce-like-normal-day');
+    expect(api.horizons.map((h) => h.minutes)).toEqual([15, 30, 60, 90]);
+    const { page, errors } = await open();
+    await signIn(page, 'supervisor');
+    await page.waitForSelector('#console-forecast[data-state="ready"]', { timeout: 60_000 });
+    // A column per horizon, a row per figure, each a median and its band.
+    expect(await page.locator('#console-forecast thead th').count()).toBe(5);
+    for (const quantity of ['arrivals', 'backlog', 'wait']) {
+      const cells = page.locator(`#console-forecast tr[data-quantity="${quantity}"] td`);
+      expect(await cells.count()).toBe(4);
+      for (const text of await cells.allTextContents()) expect(text).toMatch(/^\d+ \(\d+–\d+\)$/);
+    }
+    expect(await page.textContent('#console-forecast-note')).toContain(
+      `SIMULATED: the median, and 8 paths in 10 between the brackets, of ${String(api.model.paths)} paths`,
+    );
+    expect(await page.textContent('#console-forecast-note')).toContain(api.model.scenario.title);
+    await shot(page, 'console-forecast');
+    // In Italian.
+    await page.click('button[lang="it"]');
+    expect(await page.textContent('#forecast-title')).toContain(
+      t('it', 'supervisor.forecast.title'),
+    );
+    expect(await page.textContent('#console-forecast-note')).toMatch(/^SIMULATO: /);
     expect(errors).toEqual([]);
     await page.context().close();
   });

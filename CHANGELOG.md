@@ -4,6 +4,39 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Any change that alters simulated numbers
 must be listed, together with the component versions it bumps.
 
+## [0.21.0] - 2026-11-22: Slice S21, GateFlow Predict preview
+
+The supervisor's console forecasts the next 90 minutes of a checkpoint from what the live system
+knows now: the arrivals, the people not yet admitted and the wait of a party arriving, at 15, 30,
+60 and 90 minutes, each a median with its band of simulated paths. A backtest measures the
+forecasts against the full simulator's days, horizon by horizon (ADR-054).
+
+### Simulated numbers change
+
+- None.
+
+### Added
+
+- forecast 0.1.0 (new, pure): `forecastFrom`, a Monte Carlo of a checkpoint's next 90 minutes
+  (200 paths; arrivals of the scenario's simulated days scaled by the last hour with a 15-minute
+  fade; the people not yet admitted served at the lanes' rate; the lanes follow the scenario's
+  plan with today's difference from it); `errorSummary` and `isBusy`, the errors of forecasts.
+- sim-metrics 0.11.0: the profile of a scenario for forecasts (`checkpointProfile`,
+  `arrivalsByBucket`, `profileOf`); `SimulatedDay`, what the live system would know of a
+  simulated day at any time; the backtest (`planBacktest`, `backtestDay`, `summariseBacktest`,
+  `buildBacktest`, `renderBacktestReport`), schema `gateflow.forecast.backtest/1`.
+- Command line 0.12.0: `gateflow-sim backtest --scenario <file> [--seeds] [--policy]`, on worker
+  threads, writes `backtest.json` and `backtest.md` and prints the errors per horizon.
+- API 0.21.0: `GET /v1/checkpoints/{id}/forecast` for supervisors (409 `NO_SCENARIO` without a
+  scenario); a checkpoint's settings name the scenario its forecasts read (`scenarioHash`): the
+  seed records it, and adds it to a checkpoint seeded before; a twin saves its scenario at the
+  airport and names it; scenarios' profiles computed once per process.
+- Contracts 0.13.0: `ForecastResponse`, `ForecastBand`.
+- Web 0.21.0: the forecast card in the supervisor's console, marked as a SIMULATED preview;
+  texts in the three languages.
+- CI: the forecast from the bundle; the backtest byte for byte the same on 1 and 4 worker
+  threads; the backtest of the demo and of the scenario library, 200 days each, in the reports.
+
 ## [0.20.0] - 2026-11-22: Slice S20, the operations overview
 
 M4 begins. The supervisor's console opens with the day's figures: waiting now, waits as the

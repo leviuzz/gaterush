@@ -114,3 +114,24 @@ export { renderDataSources, scenarioProvenance, sourceLabel } from './provenance
 export type { AirportSummary, ScenarioProvenance, ScheduleSummary } from './provenance';
 export { applyScenarioSettings, differencesFromPreset } from './policy-settings';
 export type { PresetDifference } from './policy-settings';
+export {
+  BACKTEST_SCHEMA,
+  ORIGIN_EVERY_MS,
+  SimulatedDay,
+  arrivalsByBucket,
+  backtestDay,
+  buildBacktest,
+  checkpointProfile,
+  planBacktest,
+  profileOf,
+  renderBacktestReport,
+  stringifyBacktest,
+  summariseBacktest,
+} from './backtest';
+export type {
+  BacktestDocument,
+  BacktestJob,
+  BacktestObservation,
+  BacktestSummary,
+  HorizonErrors,
+} from './backtest';

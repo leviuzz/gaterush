@@ -229,6 +229,7 @@ describe('the API contracts', () => {
       [`get ${cp}/audit/verify`]: 'SUPERVISOR',
       [`get ${cp}/overview`]: 'SUPERVISOR',
       [`get ${cp}/overview/verify`]: 'SUPERVISOR',
+      [`get ${cp}/forecast`]: 'SUPERVISOR',
       [`get ${cp}/stream`]: 'OPERATOR',
       // The digital twin (S18): administrators of a synthetic airport.
       'get /v1/twin/options': 'ADMIN',

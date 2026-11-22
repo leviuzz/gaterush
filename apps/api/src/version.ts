@@ -1,5 +1,5 @@
 /** Keep in sync with package.json (checked by a test). */
-export const API_VERSION = '0.20.0';
+export const API_VERSION = '0.21.0';
 
 /** The source revision of the bundle, written by `build.mjs`; absent when run from source. */
 declare const __GATEFLOW_COMMIT__: string | undefined;

@@ -26,7 +26,7 @@ import { serviceDayNow } from './runtime';
  * current state compared with the replay's.
  */
 
-type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
+export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
 /** At most this many differences are listed by a check. */
 const MAX_DIFFERENCES = 20;
@@ -177,7 +177,7 @@ function responseOf(
 }
 
 /** The current state's figures, in one snapshot of the database. */
-async function liveFigures(tx: Tx, cp: CheckpointRow, serviceDay: string, nowMs: number) {
+export async function liveFigures(tx: Tx, cp: CheckpointRow, serviceDay: string, nowMs: number) {
   const head = await headOf(tx, cp, serviceDay);
   const config = await dayConfigOf(tx, cp, serviceDay);
   const rows = await tx

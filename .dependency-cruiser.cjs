@@ -96,6 +96,7 @@ module.exports = {
     ),
     onlyAllowed('sim-metrics', [
       'domain',
+      'forecast',
       'priority-engine',
       'queue-core',
       'sim-kernel',
@@ -103,6 +104,7 @@ module.exports = {
       'sim-scenarios',
     ]),
     onlyAllowed('operations', ['domain', 'priority-engine', 'queue-core']),
+    onlyAllowed('forecast', ['domain', 'sim-kernel']),
     onlyAllowed('bcbp', ['sim-kernel']),
     onlyAllowed('i18n', []),
     onlyAllowed('contracts', ['domain'], ['zod']),

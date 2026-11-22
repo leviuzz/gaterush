@@ -1228,8 +1228,8 @@ synthetic data until the pilot: forecasts and recommendations are a preview, for
 | Slice | Content | Acceptance (kickoff, renumbered) | Status |
 |---|---|---|---|
 | **S20** | Operations overview: cards (waiting now, waits P50/P90, at risk, lanes, alerts), the live queue by number with class, age and exceptions, a fairness monitor, a data-quality panel | The live figures equal those recomputed from the log | **Done** |
-| S21 | Arrival forecast baseline (5-minute buckets, horizons 15/30/60/90) and Monte Carlo of the simulator from the live state; backtest on the simulated truth (MAE, WAPE, calibration of the intervals) | An error report per horizon; p10/p50/p90 bands | Planned |
-| S22 | Lane-opening recommendations in the console, with the decision and its outcome | Cooldown and deduplication tested; every alert has a reason, a lead time, an interval and the expected benefit | Planned |
+| **S21** | Arrival forecast baseline (5-minute buckets, horizons 15/30/60/90) and Monte Carlo of the simulator from the live state; backtest on the simulated truth (MAE, WAPE, calibration of the intervals) | An error report per horizon; p10/p50/p90 bands | **Done** |
+| S22 | Lane-opening recommendations in the console, with the decision and its outcome | Cooldown and deduplication tested; every alert has a reason, a lead time, an interval and the expected benefit | **Next** |
 | S23 (optional) | A passenger widget prototype (Connect) | Intervals with their freshness only; no promise of priority | Planned |
 
 **Gate R3** follows M4: discovery with the airport. M5 starts only when the checkpoint, the data
@@ -1238,8 +1238,9 @@ and the authorisations are confirmed.
 ## S20: the operations overview (done)
 
 Proposed on 2026-11-22 from the kickoff (2.7 `/ops`: overview, live queue, fairness monitor,
-data quality), on "ok a tutto, vai avanti". The choices marked **[to confirm]** are mine, for the
-founder. Two parts: the figures and their check against the log (S20.1), the console (S20.2).
+data quality), on "ok a tutto, vai avanti". The founder confirmed every proposal the same day ("ok a
+tutto, vai con S21"): the marks **[to confirm]** below are kept to show what was decided. Two
+parts: the figures and their check against the log (S20.1), the console (S20.2).
 
 - **Where [to confirm].** The overview opens the supervisor's console (`/supervisor/<checkpoint>`),
   above the modes, the queue and the audit: the duty manager's one page. Supervisors and
@@ -1295,6 +1296,112 @@ Acceptance (kickoff): the live figures equal those recomputed from the log. **Ev
 - Chromium: the console shows the API's figures (waiting, lanes, at risk, fairness, flights),
   each number's wait, and the check against the log says every figure equals it;
 - no simulated number changes.
+
+## S21: forecasts of arrivals and of the queue (done)
+
+Proposed on 2026-11-22 from the kickoff (2.5 Predict, 2.7 `/ops/forecast`, 2.12 "Riuso" point 3),
+on "ok a tutto, vai con S21". The choices marked **[to confirm]** are mine, for the founder; two
+of them changed with what the backtest showed (below). Two parts: the forecast and its backtest
+(S21.1), the forecast in the product (S21.2). ADR-054.
+
+- **What is forecast.** At a checkpoint, from now to 90 minutes ahead: the people arriving (taking
+  a number) in each 5-minute bucket; the people not yet admitted (waiting, announced, called); the
+  wait of a party arriving then. At 15, 30, 60 and 90 minutes, and for every bucket, a band:
+  p10, p50, p90. SIMULATED until the pilot: the model of arrivals is a scenario's.
+- **The model [to confirm]: a Monte Carlo of the queue's flow, from the live state**
+  (`@gateflow/forecast` 0.1.0, pure).
+  - Arrivals: the 50 simulated days the S8 forecast already learns from (seeds 1,000,001 on, never
+    a day of the reports), of the checkpoint's scenario, in 5-minute buckets, scaled by the
+    arrivals of the last hour as GateFlow's simulated lane recommendations do (S8): the people
+    seen against those expected, plus 5, clamped between 0.5 and 2; **the scaling fades** with a
+    time constant of 15 minutes (changed, see below).
+  - The queue: the people not yet admitted now, served by the lanes at the checkpoint's rate per
+    lane, with a random variation per minute (Poisson); a party's wait is the time the lanes take
+    to serve the people ahead of it.
+  - 200 paths (the 50 days, four times each), drawn from a stream of the simulator's kernel:
+    the same inputs give the same forecast.
+  - Not the full simulator restarted from the live state: that needs who is at the lanes and how
+    far their screening has gone, which the live system does not observe. The backtest measures
+    how far this model is from the full simulator.
+- **The lanes follow the scenario's plan, with today's difference from it [to confirm]** (changed
+  from "lanes as they are"): an extra lane open now stays extra, a lane out of service stays out.
+  S22's recommendations will vary them.
+- **Each checkpoint's model of arrivals [to confirm]:** the scenario it was seeded from, recorded
+  in its settings (`scenarioHash`, among the airport's saved scenarios; a twin's checkpoint, its
+  run's); without one, no forecast (409 `NO_SCENARIO`). Arrivals count the parties taking a number
+  (assisted passengers take none), each once (a ticket issued again is the same arrival).
+- **The backtest on the simulated truth.** The full simulator's days (seeds 1 to N, never among
+  the 50) are the truth. From an hour after the first arrival, every 15 minutes, the forecast is
+  made from what the live system would know then (the arrivals of the hour before, the people not
+  yet admitted, the lanes open), and compared at each horizon, up to the last arrival, with what
+  happened: the people who arrived in the 5 minutes before the horizon, the people not yet
+  admitted at it, and the median wait per person of those who arrived in those 5 minutes. Per
+  quantity and horizon: MAE, WAPE and bias of the p50, the share of truths inside the p10 to p90
+  band (80 % when calibrated), below p10 and above p90 (10 % each), and the band's width. Most of
+  the day nobody waits and none is forecast to: those forecasts are right but say nothing of the
+  bands, so the queue and the waits are also measured on the forecasts of a queue alone (median or
+  truth at least 1). `gateflow-sim backtest` writes it as JSON (`gateflow.forecast.backtest/1`) and
+  Markdown, on worker threads, byte for byte the same whatever their number.
+- **In the product [to confirm]:** `GET /v1/checkpoints/{id}/forecast` for supervisors and
+  administrators, from the same snapshot of the current state as the overview; a forecast card in
+  the supervisor's console under the overview, loaded when the console opens and once a minute:
+  at 15, 30, 60 and 90 minutes, the arrivals in 5 minutes, the people not yet admitted, the wait of
+  a party arriving then and the lanes assumed, each a median with its band, and a note that says
+  SIMULATED, from how many paths and which scenario, with the last hour's arrivals seen and
+  expected. Texts in the three languages.
+
+**What the backtest changed.** Two choices of the proposal did not hold against the simulator:
+- *Lanes as they are.* The library's lane plans change by the hour; holding the lanes open now
+  for 90 minutes overshot the queue at 90 minutes by 166 people on average, on the forecasts of a
+  queue of the VCE-like disrupted day (10 days), and by 42 on the TSF-like peak. Following the
+  plan, with today's difference from it: 12 and 3.
+- *S8's scaling held over the horizon.* On 20 tuning days of three scenarios (seeds 1001 to 1020,
+  apart from the reports' days), the queue's MAE at 90 minutes when there was one:
+
+  | Scaling by the last hour | VCE-like peak | TSF-like peak | Demo |
+  |---|---:|---:|---:|
+  | Held for 90 minutes (S8's rule) | 37.6 | 28.5 | 32.8 |
+  | Fading in 60 minutes | 29.2 | 19.7 | 21.6 |
+  | Fading in 30 minutes | 27.2 | 17.0 | 19.0 |
+  | **Fading in 15 minutes (chosen)** | **26.1** | **15.6** | **17.8** |
+  | None | 26.3 | 15.0 | 17.8 |
+
+  On these synthetic days the last hour says almost nothing about the next 90 minutes: the
+  generator has no effect that lasts the day (a busier day, a late wave). Fading in 15 minutes
+  keeps the scaling where a real day's surge would matter; at 15 minutes it costs at most 9 % of
+  the MAE against no scaling, and nothing beyond. **[to confirm]**: with the airport's data the
+  time constant is to be estimated again.
+- *Kept as proposed.* The service model: in the busy minutes of the VCE-like peak (5 days), the
+  people admitted a minute are 28.3 for a capacity of 28.5; absences leave the queue without a
+  lane (1.7 % of the drain) and assisted passengers take 0.7 % of the lanes: both left out.
+
+**Limits found** (the library's backtest gives the figures): the bands of the wait are too narrow
+when there is a queue, more of the truths fall below them than above; the queue tends to be
+forecast high at long horizons on the VCE-like days; the arrivals' bands hold about 75 % of the
+truths (whole people: a band between two whole numbers loses part of the truths at its ends).
+**[to confirm]** Next step: recalibrate the bands from a backtest on days apart from the
+reports', per quantity and horizon, before the console reads them as "8 in 10".
+
+Acceptance (kickoff): an error report per horizon; p10/p50/p90 bands. **Evidence:**
+- forecast: S8's scaling rule and its fading, the projection (a queue that grows, one that
+  drains), the lane plan with today's difference, the wait against the people ahead, ordered and
+  deterministic bands, refusals, and the errors on worked examples (7 tests);
+- sim-metrics: the profile counts the people taking a number on the 50 forecast days and keeps
+  the lane plan; the backtest forecasts every 15 minutes, its truths counted again from the
+  population, the same twice; summaries per quantity and horizon, apart for the forecasts of a
+  queue; the document and its report (5 tests);
+- the command line: `backtest` writes the document and the report and prints the errors, the
+  same file twice; one policy only; byte for byte the same on one and three worker threads;
+- the API on PostgreSQL: a twin plays the disrupted morning to 06:40; its checkpoint's forecast
+  reads, at the twin's virtual time, exactly the state the backtest gives the same simulated day
+  at that time (arrivals of the last hour, people not yet admitted, lanes, rate), equals the
+  overview's people not yet admitted, and its bands are the pure forecast's; the scenario's
+  profile is computed once, as the backtest's; a quiet checkpoint is forecast from its scenario;
+  no scenario, no forecast, and seeding again gives it back; supervisors and administrators only
+  (4 tests);
+- Chromium: the console's card, a column per horizon and a median with its band per figure, the
+  note SIMULATED with the scenario, in English and Italian;
+- the error report per horizon of the scenario library, 200 days each: `docs/reports/slice-21`.
 
 ## Later milestones (summary)
 

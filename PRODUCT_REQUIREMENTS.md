@@ -63,7 +63,7 @@ without disproportionate harm to passengers who are not prioritised (ADR-002).
 | FR-16 | Dedicated paths for assisted passengers, groups and families, without penalising existing rights. Since S15, staff give a party one number at the lane (ADR-045), and people travelling together take one number at the kiosk by scanning each of their boarding passes onto it; an infant on its parent's boarding pass counts too, once (0.15.1, ADR-046). |
 | FR-17 | Defined degraded modes for network or device failure; never disable security barriers. Since S16 a display that loses the server sends passengers to the staff (ADR-047); since S17 the supervisor's emergency stops calls, kiosks and the call timers, so nobody becomes a no-show (ADR-048). |
 | FR-18 | Simulator: scenarios (synthetic or from the airport's flight list, with the source and licence of every datum), policies (FIFO, rules, variants, lane opening by a supervisor or by recommendation, with the staff on call and a duty manager who may not follow), multi-seed batches, KPIs, reports, comparisons; in the command line and in the Simulator Studio, a page that runs offline in the browser (ADR-040); the replay of a day with each passenger's journey, the paired outcome and the reason for every call (ADR-041). Since S19 also through the API: an airport's analysts save its scenarios and ask the server for runs, which it simulates on worker threads and keeps with their history; the Studio served by GateFlow saves its runs (ADR-052). |
-| FR-19 | Forecasts at 15/30/60/90 min, saturation, lane-opening recommendations with logged decisions and outcomes (simulated in S8: ADR-039). |
+| FR-19 | Forecasts at 15/30/60/90 min, saturation, lane-opening recommendations with logged decisions and outcomes (simulated in S8: ADR-039). Since S21, a preview: the arrivals in 5 minutes, the people not yet admitted and the wait of a party arriving, at 15, 30, 60 and 90 minutes, each a median with the band of 8 simulated paths in 10, from the checkpoint's live state and the simulated days of its scenario, in the API and the supervisor's console, marked SIMULATED; a backtest against the full simulator's days gives the errors and the calibration of the bands per horizon (ADR-054). Recommendations with logged decisions come with S22. |
 | FR-20 | Passenger information: current waits, forecast at arrival time, flight-based estimate, indicative priority only. Since S14 the passenger's page shows the ticket's state and what to do now; waits and estimates are not shown yet. |
 | FR-21 | Coordination between checkpoints: informative first, operator-driven later, never automatic reassignment. |
 | FR-22 | Analytics and exports, with simulated and observed results clearly separated. Since S18 the digital twin's tickets (source TWIN) and flights (SIMULATED) live on checkpoints of their own, which staff and kiosks cannot write to, never mixed with an airport's (ADR-051). Since S19 a simulation's results, Markdown report and HTML report download from the API, every document marked SIMULATED (ADR-052). |
@@ -97,7 +97,8 @@ without disproportionate harm to passengers who are not prioritised (ADR-002).
   `/demo` plays a scenario's day through the live system's own commands at an accelerated time,
   and the live system calls the same numbers in the same order as the offline simulator
   (ADR-051);
-- a forecast preview.
+- a forecast preview: since S21 the supervisor's console forecasts the next 90 minutes from the
+  live state, as bands of simulated paths, measured against the full simulator (ADR-054).
 
 **Pilot-ready (after a signed order):**
 - real AODB/FIDS adapters, OIDC/MFA, full RBAC, four-eyes policies;

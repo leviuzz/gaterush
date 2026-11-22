@@ -9,21 +9,27 @@ import {
   arrivalClassification,
   assembleExperiment,
   assembleSweep,
+  buildBacktest,
   buildResults,
   buildSweepResults,
   comparisonKey,
+  planBacktest,
   planExperiment,
   planSweep,
+  renderBacktestReport,
   renderHtmlReport,
   renderReport,
   renderSweepHtml,
   renderSweepReport,
+  stringifyBacktest,
   stringifyResults,
   recommendedComparisons,
   stringifySweep,
   sweepDayJob,
 } from '@gateflow/sim-metrics';
 import type {
+  BacktestDocument,
+  BacktestObservation,
   ResultsDocument,
   SeedResult,
   SweepConfig,
@@ -73,6 +79,8 @@ const HELP = `${CLI_NAME} ${CLI_VERSION}: GateFlow simulation experiments
 Usage:
   ${CLI_NAME} run --scenario <file> [options]   Run an experiment: results.json, report.md, report.html
   ${CLI_NAME} sweep --spec <file> [options]     Run a sensitivity sweep: sweep.json, sweep.md, sweep.html
+  ${CLI_NAME} backtest --scenario <file> [options]
+                                                Measure the forecasts on simulated days: backtest.json, backtest.md
   ${CLI_NAME} trace --scenario <file> --seed <n> [options]
                                                 Trace one day of two policies: trace.json
   ${CLI_NAME} validate --scenario <file>        Validate a scenario file
@@ -103,6 +111,14 @@ Options for "trace" (every event of one simulated day, for the replay and audits
   --candidate <id>               One of --policies                       (default: the last)
   --out <dir>                    Output directory                (default out/<scenario id>/trace-<seed>)
   --commit <rev>                 Source revision recorded in the manifest (default: detected)
+
+Options for "backtest" (GateFlow's forecasts of arrivals, queue and wait, made every 15 minutes
+from what the live system knows and compared with the simulated day at 15, 30, 60 and 90 minutes):
+  --scenario <file>              Scenario file (YAML or JSON)            (required)
+  --seeds <spec>                 The simulated days                      (default 1-200)
+  --policy <id>                  The policy running the queue            (default priority-v3)
+  --out <dir>                    Output directory              (default out/<scenario id>/backtest)
+  --workers, --commit, --quiet: as for "run"
 
 Options for "sweep" (a sensitivity sweep is described in a file, see sweeps/):
   --spec <file>                  Sweep specification (YAML or JSON)      (required)
@@ -378,6 +394,103 @@ function commandTrace(argv: string[], io: CliIo): number {
   return EXIT_OK;
 }
 
+function backtestDays(results: readonly TaskResult[]): (readonly BacktestObservation[])[] {
+  return results.map((r) => {
+    if (r.kind !== 'backtest-day') throw new Error(`unexpected task result ${r.kind}`);
+    return r.day;
+  });
+}
+
+function backtestSummaryLines(doc: BacktestDocument): string[] {
+  const { manifest, summary } = doc;
+  const cell = (s: { mae: number; coverage: number } | null | undefined) =>
+    (s === null || s === undefined
+      ? 'n/a'
+      : `${s.mae.toFixed(1)} / ${(s.coverage * 100).toFixed(0)} %`
+    ).padEnd(18);
+  const lines = [
+    `scenario   ${manifest.scenario.id} (${manifest.scenario.hash.slice(0, 19)}...)`,
+    `seeds      ${manifest.seeds.ranges} (${manifest.seeds.count} simulated days), policy ${manifest.policy.id}`,
+    '',
+    'MAE of the median / share of the truths in the p10-p90 band (80 % when calibrated);',
+    'queue and wait: the forecasts of a queue (median or truth at least 1)',
+    `${'horizon'.padEnd(10)}${'arrivals'.padEnd(18)}${'queue (people)'.padEnd(18)}wait (min)`,
+  ];
+  for (const h of manifest.horizonsMinutes) {
+    const key = String(h);
+    lines.push(
+      `${`${key} min`.padEnd(10)}${cell(summary.arrivals[key]?.all)}` +
+        `${cell(summary.backlog[key]?.busy)}${cell(summary.wait[key]?.busy).trimEnd()}`,
+    );
+  }
+  return lines;
+}
+
+async function commandBacktest(argv: string[], io: CliIo): Promise<number> {
+  const { values } = parseArgs({
+    args: argv,
+    options: {
+      scenario: { type: 'string' },
+      seeds: { type: 'string', default: '1-200' },
+      policy: { type: 'string', default: 'priority-v3' },
+      out: { type: 'string' },
+      workers: { type: 'string' },
+      commit: { type: 'string' },
+      quiet: { type: 'boolean', default: false },
+    },
+    strict: true,
+    allowPositionals: false,
+  });
+  if (values.scenario === undefined) throw new UsageError('--scenario is required');
+  const seeds = parseSeeds(values.seeds);
+  const workers =
+    values.workers === undefined ? io.cpus() : parsePositiveInteger(values.workers, '--workers');
+  const scenario = loadScenario(io, values.scenario);
+  const policies = configuredPolicies(parsePolicies(values.policy), scenario);
+  if (policies.length !== 1) throw new UsageError('--policy takes one policy');
+  const policy = policies[0] as Policy;
+  const commit = values.commit ?? io.commit();
+  const outDir = values.out ?? join('out', scenario.id, 'backtest');
+
+  // The profile of the forecasts is computed once; the days are independent.
+  const job = planBacktest(scenario, policy, arrivalClassification([policy]));
+  const tasks: Task[] = seeds.map((seed) => ({ kind: 'backtest-day', job, seed }));
+  const progressEvery = Math.max(1, Math.ceil(seeds.length / 4));
+  const results = await io.runTasks(tasks, workers, (done, total) => {
+    if (!values.quiet && (done % progressEvery === 0 || done === total)) {
+      io.stderr(`backtested ${done}/${total} days\n`);
+    }
+  });
+  const doc = buildBacktest(
+    {
+      scenario,
+      scenarioHash: scenarioHash(io, scenario),
+      policy,
+      seeds,
+      generator: { name: CLI_NAME, version: CLI_VERSION },
+      commit,
+    },
+    backtestDays(results),
+  );
+
+  io.mkdir(outDir);
+  const jsonPath = join(outDir, 'backtest.json');
+  const reportPath = join(outDir, 'backtest.md');
+  io.writeFile(jsonPath, stringifyBacktest(doc));
+  io.writeFile(reportPath, renderBacktestReport(doc));
+  io.stdout(
+    [
+      'GateFlow forecast backtest: SIMULATED RESULTS, not operational evidence',
+      ...backtestSummaryLines(doc),
+      '',
+      `written    ${jsonPath}`,
+      `           ${reportPath}`,
+      '',
+    ].join('\n'),
+  );
+  return EXIT_OK;
+}
+
 function sweepSummaryLines(doc: SweepDocument): string[] {
   const { manifest } = doc;
   const first = manifest.comparisons.find((c) => c.candidateId === manifest.candidateId);
@@ -619,6 +732,8 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
         return await commandRun(rest, io);
       case 'sweep':
         return await commandSweep(rest, io);
+      case 'backtest':
+        return await commandBacktest(rest, io);
       case 'trace':
         return commandTrace(rest, io);
       case 'validate':

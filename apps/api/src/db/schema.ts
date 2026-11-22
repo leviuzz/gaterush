@@ -79,6 +79,11 @@ export interface CheckpointSettings {
    * and kiosks only watch it, and the timer scheduler leaves it alone.
    */
   readonly twin?: { readonly runId: string; readonly serviceDay: string };
+  /**
+   * The scenario the checkpoint's forecasts read (S21): its hash among the airport's saved
+   * scenarios (`sim_scenario`), for its simulated days and its lane plan. None: no forecast.
+   */
+  readonly scenarioHash?: string;
 }
 
 export const checkpoint = pgTable(

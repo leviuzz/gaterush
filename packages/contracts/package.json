@@ -1,6 +1,6 @@
 {
   "name": "@gateflow/contracts",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "private": true,
   "description": "Contracts of the GateFlow API: request, response and event schemas (Zod), from which the OpenAPI document is generated (pure).",
   "type": "module",

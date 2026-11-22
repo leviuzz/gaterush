@@ -14,7 +14,8 @@ border procedures: it organises the flow before they start.
 > and the passenger's page (S14), the queue's life cycle with staff who sign in and the lane
 > station (S15), the displays (S16), the supervisor's console (S17), the digital twin (S18) and
 > simulations through the API (S19); M4, the operations console and a preview of Predict: the
-> day's overview, checked against the log (S20).**
+> day's overview, checked against the log (S20), and forecasts of the next 90 minutes measured
+> against the simulator (S21).**
 > This repository contains the simulation foundations:
 > - the priority engine;
 > - the queue state machine that the operational product will share;
@@ -65,7 +66,11 @@ border procedures: it organises the flow before they start.
 >
 > - **The operations overview** (S20): the supervisor's console opens with the day's figures,
 >   waits counted as the simulator counts them, people at risk, lanes, a fairness monitor, flight
->   data and alerts, checked on demand against a replay of the day's log.
+>   data and alerts, checked on demand against a replay of the day's log.>
+> - **GateFlow Predict, a preview** (S21): from what the live system knows now, the arrivals, the
+>   people not yet admitted and the wait of a party arriving in 15, 30, 60 and 90 minutes, each a
+>   median with the band of 8 simulated paths in 10; the backtest measures them against the full
+>   simulator's days, horizon by horizon.
 >
 > Staff sign in with local passwords until the pilot brings the airport's identity provider. See
 > [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
@@ -166,9 +171,10 @@ This prints the member's password once. `user password --login <login>` gives a 
 
 Supervisors and administrators use the console, `/supervisor/<checkpoint id>`: the day's
 overview (waiting now, waits of the last hour and the day, people at risk, lanes, fairness, flight
-data, alerts, and the check of every figure against the log), the mode of the checkpoint, the
-lanes open, moving a passenger up or calling one now with a reason, the policies (an
-administrator activates a version from the next service day) and the day's audit.
+data, alerts, and the check of every figure against the log), the forecast of the next 90 minutes
+(a SIMULATED preview, from the scenario the checkpoint was seeded from), the mode of the
+checkpoint, the lanes open, moving a passenger up or calling one now with a reason, the policies
+(an administrator activates a version from the next service day) and the day's audit.
 
 **The digital twin** (S18) plays a scenario's simulated day through the live system, as fast as
 the server goes or at a chosen speed, to a new checkpoint of the scenario's airport, and checks
@@ -253,6 +259,9 @@ The endpoints:
 - `GET /v1/checkpoints/{id}/overview`: the day's figures for supervisors (S20);
   `GET /v1/checkpoints/{id}/overview/verify` replays the day's log and compares every figure and
   every ticket with the current state.
+- `GET /v1/checkpoints/{id}/forecast`: GateFlow Predict, a preview (S21): arrivals, people not yet
+  admitted and the wait at 15, 30, 60 and 90 minutes, with their bands, SIMULATED from the days of
+  the checkpoint's scenario; 409 `NO_SCENARIO` when the checkpoint names none.
 - `GET /v1/twin/options`, `GET /v1/twin`, `POST /v1/twin/runs`, and `/v1/twin/runs/{run}/speed`,
   `/stop`, `/display`: the digital twin, for the administrators of a synthetic airport, on a
   server started with `--twin` (S18).
@@ -316,6 +325,15 @@ pnpm sim run --scenario scenarios/mx-like-transfer-hub.yaml --seeds 1-50
 ```bash
 pnpm sim flights --scenario scenarios/single-checkpoint-demo.yaml --out out/demo-flights.csv
 ```
+
+```bash
+pnpm sim backtest --scenario scenarios/vce-like-peak-day.yaml --seeds 1-200
+```
+
+The backtest (S21) measures GateFlow's forecasts against the full simulator: every 15 minutes of
+each simulated day, a forecast from what the live system knows then, compared at 15, 30, 60 and 90
+minutes with what happened (MAE, WAPE, bias, and how often the truth falls in the band). It writes
+`backtest.json` and `backtest.md` in `out/<scenario id>/backtest/`.
 
 The last command writes the design day of a scenario as a flight list
 (`gateflow.flights/1`). An airport can send its own flights in that format: see
@@ -434,6 +452,7 @@ How to read these numbers:
 | Path | Content |
 |---|---|
 | `packages/domain` | Shared domain types and units |
+| `packages/forecast` | GateFlow Predict: a Monte Carlo of a checkpoint's next 90 minutes from its live state, and the errors of forecasts (pure) |
 | `packages/bcbp` | IATA boarding passes: parser (never the name), encoder, synthetic passes, flight date, leg for a checkpoint (pure) |
 | `packages/contracts` | The API's request and answer schemas (Zod) and its OpenAPI document (pure) |
 | `packages/i18n` | Every text of the passengers' screens in Italian, English and Mexican Spanish (pure) |
@@ -443,7 +462,7 @@ How to read these numbers:
 | `packages/sim-kernel` | Seeded RNG streams, deterministic math, distributions, event calendar (pure) |
 | `packages/sim-model` | Checkpoint simulation: physical or virtual queue, calls, lane schedules, extra lanes, disruptions (pure) |
 | `packages/sim-scenarios` | Scenario schema, airport configurations, assumptions registry, synthetic population, arrival forecast (pure) |
-| `packages/sim-metrics` | Experiments, paired metrics, statistics, results and report (pure) |
+| `packages/sim-metrics` | Experiments, paired metrics, statistics, results and report; the backtest of the forecasts (pure) |
 | `packages/sim-trace` | The trace of one day: every event, replay views, the explanation of every call (pure) |
 | `packages/studio-core` | What the Studio adds in the browser: SHA-256, files, library, what-if settings, comparison of runs, traces (pure) |
 | `packages/twin` | The digital twin: a simulated day as the live system's commands at virtual times, with the check of every answer (pure) |

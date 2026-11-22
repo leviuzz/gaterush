@@ -1,6 +1,6 @@
 {
   "name": "@gateflow/api",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "private": true,
   "description": "GateFlow API: the operational checkpoint behind HTTP, on PostgreSQL. One writer per checkpoint, idempotent commands, a hash-chained log.",
   "type": "module",
@@ -20,6 +20,7 @@
     "@gateflow/bcbp": "workspace:*",
     "@gateflow/contracts": "workspace:*",
     "@gateflow/domain": "workspace:*",
+    "@gateflow/forecast": "workspace:*",
     "@gateflow/operations": "workspace:*",
     "@gateflow/priority-engine": "workspace:*",
     "@gateflow/queue-core": "workspace:*",

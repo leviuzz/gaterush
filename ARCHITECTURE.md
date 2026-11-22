@@ -31,6 +31,7 @@ apps/
 packages/
   bcbp/             IATA boarding passes: a parser that never throws or returns the name, encoder, generator (pure)
   domain/           shared domain types and units (integer milliseconds, segments, risk classes)
+  forecast/         GateFlow Predict: the next 90 minutes of a checkpoint from its live state; forecast errors (pure)
   contracts/        the API's request, answer and OpenAPI schemas (Zod, pure)
   i18n/             every text of the passengers' screens in Italian, English and Mexican Spanish (pure)
   operations/       one service day of a live checkpoint on the simulator's queue, rebuilt from its log (pure)
@@ -39,7 +40,7 @@ packages/
   sim-kernel/       seeded RNG streams, deterministic math, distributions, event calendar (pure)
   sim-model/        checkpoint simulation: physical queue or GateFlow virtual queue, extra lanes (pure)
   sim-scenarios/    scenario schema, validation, assumptions, synthetic population, arrival forecast (pure)
-  sim-metrics/      experiments, sweeps, paired metrics, statistics, results, Markdown and HTML (pure)
+  sim-metrics/      experiments, sweeps, paired metrics, statistics, results, Markdown and HTML, backtests (pure)
   sim-trace/        the trace of one day: every event of two policies, replay views, explanations (pure)
   studio-core/      what the Studio adds in the browser: SHA-256, files, library, setup, what-if, comparison, traces (pure)
   twin/             the digital twin: a simulated day as the live system's commands at virtual times, checked (pure)
@@ -67,6 +68,7 @@ flowchart LR
   trace["sim-trace"]
   studiocore["studio-core"]
   operations["operations"]
+  forecast["forecast"]
   twin["twin"]
   contracts["contracts"]
   bcbp["bcbp"]
@@ -90,6 +92,9 @@ flowchart LR
   metrics --> queue
   metrics --> engine
   metrics --> kernel
+  metrics --> forecast
+  forecast --> kernel
+  forecast --> domain
   trace --> metrics
   trace --> scenarios
   trace --> model
@@ -122,6 +127,7 @@ flowchart LR
   api --> contracts
   api --> bcbp
   api --> metrics
+  api --> forecast
   api --> scenarios
   web --> i18n
   web --> bcbp
@@ -751,6 +757,33 @@ flowchart LR
   source; `GET .../overview` feeds it the current state in one snapshot (`REPEATABLE READ`), and
   `GET .../overview/verify` replays the service day's log in the same snapshot and compares every
   figure and every ticket.
+- **GateFlow Predict, a preview (ADR-054).** `forecastFrom` (forecast, pure) projects the next 90
+  minutes of a checkpoint from its live state: 200 paths (50 simulated days of its scenario, four
+  service draws each) of arrivals in 5-minute buckets, scaled by the last hour's arrivals as S8
+  does with the scaling fading in 15 minutes, and of the people not yet admitted, served per
+  minute by a Poisson number of people at the lanes' rate; the lanes follow the scenario's plan
+  with today's difference from it. Bands are the paths' 10th, 50th and 90th percentiles. The
+  checkpoint's settings name its scenario (`scenarioHash`, among the airport's saved scenarios);
+  the API computes the scenario's profile (`profileOf`, sim-metrics) once per process, a
+  simulated day at a time so that requests get in between, and keeps the 16 most recent. `GET
+  .../forecast` reads the live state from the same snapshot as the overview: the people on
+  tickets first presented in the hour before now, the people waiting, announced or called, the
+  lanes open. The backtest (`SimulatedDay`, `backtestDay` in sim-metrics) reads exactly that state
+  from the full simulator's days, so it measures the forecasts the console shows; a test checks a
+  twin's checkpoint reads the same state as the backtest of its day.
+
+```mermaid
+flowchart LR
+  scenario[("sim_scenario:<br/>the checkpoint's scenario")] --> profile["profile: 50 simulated days,<br/>the lane plan (cached)"]
+  live[("current state:<br/>tickets, lanes")] --> state["live state: arrivals of the<br/>last hour, not yet admitted, lanes"]
+  profile --> mc["forecastFrom:<br/>200 paths, 90 minutes"]
+  state --> mc
+  mc --> bands["p10 / p50 / p90 at<br/>15, 30, 60, 90 minutes"]
+  sim["full simulator's days<br/>(backtest)"] -- "the same state<br/>every 15 minutes" --> mc
+  sim -- "what happened" --> errors["MAE, WAPE, bias,<br/>coverage per horizon"]
+  bands --> errors
+```
+
 - **Simulations (ADR-052).** Analysts (and administrators) save an airport's scenarios and ask
   for runs, from settings as the CLI's command line or from the manifest of results. Each server
   with a runner takes the oldest run that waits (`FOR UPDATE SKIP LOCKED`), one at a time, and
@@ -792,6 +825,7 @@ flowchart LR
   - `GET /v1/checkpoints/{id}/audit` and `/policy` for supervisors, `POST .../policy/versions`
     and `.../policy/activations` for administrators (ADR-050);
   - `GET /v1/checkpoints/{id}/overview` and `/overview/verify`, for supervisors (ADR-053);
+  - `GET /v1/checkpoints/{id}/forecast`, for supervisors: SIMULATED bands (ADR-054);
   - with `serve --twin`, for the administrators of a synthetic airport: `GET /v1/twin/options`,
     `GET /v1/twin`, `POST /v1/twin/runs`, `POST /v1/twin/runs/{run}/speed`, `/stop` and
     `/display` (ADR-051);

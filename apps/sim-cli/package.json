@@ -1,6 +1,6 @@
 {
   "name": "@gateflow/sim-cli",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "private": true,
   "description": "Command-line interface for GateFlow simulation experiments (gateflow-sim).",
   "type": "module",

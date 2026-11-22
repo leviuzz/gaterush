@@ -6,7 +6,7 @@ import { z } from 'zod';
  * ticket is a number, a state and a flight, never a name.
  */
 
-export const CONTRACTS_VERSION = '0.12.0';
+export const CONTRACTS_VERSION = '0.13.0';
 
 export const Segment = z.enum(['DEPARTING', 'TRANSFER']);
 
@@ -789,6 +789,71 @@ export type OverviewVerifyResponse = z.infer<typeof OverviewVerifyResponse>;
 /** A scenario's name (S19): the SHA-256 of its canonical JSON, as results record it. */
 export const ScenarioHash = z.string().regex(/^sha256:[0-9a-f]{64}$/);
 
+/** A forecast's spread (S21): the 10th, 50th and 90th percentile of its simulated paths. */
+export const ForecastBand = z.object({
+  p10: z.number().min(0),
+  p50: z.number().min(0),
+  p90: z.number().min(0),
+});
+
+/**
+ * GateFlow Predict, a preview (S21, ADR-054): what the next 90 minutes may bring at a checkpoint,
+ * from what the live system knows now and the simulated days of the checkpoint's scenario. Every
+ * number is a band over simulated paths: SIMULATED, not a measurement. People and minutes are
+ * rounded to a tenth.
+ */
+export const ForecastResponse = z.object({
+  checkpointId: z.uuid(),
+  serviceDay: z.iso.date(),
+  /** The time of the forecast: now; for a twin's checkpoint, its virtual time. */
+  at: Instant,
+  /** What the forecast learnt from. */
+  model: z.object({
+    version: z.string(),
+    /** Simulated paths behind every band. */
+    paths: z.int().min(1),
+    /** The simulated days of the scenario the arrivals come from. */
+    days: z.int().min(1),
+    scenario: z.object({
+      id: z.string(),
+      title: z.string(),
+      hash: ScenarioHash,
+      dataClassification: z.string(),
+    }),
+  }),
+  /** What the forecast read of the checkpoint now. */
+  state: z.object({
+    /** People who took a number in the last hour, each party once. */
+    arrivalsLastHour: z.int().min(0),
+    /** The arrivals of the last hour the simulated days expect, on average. */
+    expectedLastHour: z.number().min(0),
+    /** Seen against expected: (seen + 5) / (expected + 5), within 0.5 and 2. */
+    scale: z.number().min(0.5).max(2),
+    /** People not yet admitted: waiting, announced, called. */
+    backlog: z.int().min(0),
+    lanesOpen: z.int().min(1),
+    ratePerLanePerHour: z.number().positive(),
+  }),
+  /** People arriving in each 5 minutes of the next 90. */
+  buckets: z.array(z.object({ fromMin: z.int().min(0), arrivals: ForecastBand })),
+  horizons: z.array(
+    z.object({
+      minutes: z.int().min(1),
+      at: Instant,
+      /** The lanes the paths assume: the scenario's plan, with today's difference from it. */
+      lanes: z.int().min(1),
+      /** People arriving in the 5 minutes before. */
+      arrivals: ForecastBand,
+      /** People not yet admitted. */
+      backlog: ForecastBand,
+      /** The wait of a party arriving then, from its arrival to its admission. */
+      waitMinutes: ForecastBand,
+    }),
+  ),
+});
+
+export type ForecastResponse = z.infer<typeof ForecastResponse>;
+
 /**
  * The fingerprint of results (S19): the SHA-256 of their canonical JSON without the generator and
  * the source revision. The same experiment has the same fingerprint, whichever tool computed it.
@@ -1377,6 +1442,19 @@ export const ROUTES: readonly Route[] = [
     staff: 'SUPERVISOR',
     responses: {
       '200': { description: 'The check', schema: OverviewVerifyResponse },
+      ...errors,
+      ...staffErrors,
+    },
+  },
+  {
+    method: 'get',
+    path: '/v1/checkpoints/{checkpointId}/forecast',
+    summary:
+      'GateFlow Predict, a preview (S21): arrivals, queue and wait over the next 90 minutes, as bands from simulated days (409 NO_SCENARIO when the checkpoint names none)',
+    command: false,
+    staff: 'SUPERVISOR',
+    responses: {
+      '200': { description: 'The forecast (SIMULATED)', schema: ForecastResponse },
       ...errors,
       ...staffErrors,
     },

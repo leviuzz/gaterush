@@ -24,6 +24,7 @@ import type {
   AuditResponse,
   CheckpointResponse,
   FlightsResponse,
+  ForecastResponse,
   KioskStatus,
   MeResponse,
   OverrideResponse,
@@ -82,6 +83,7 @@ import type { BuildContext, CheckpointRow } from './runtime';
 import { localDate, systemClock } from './time';
 import type { Clock } from './time';
 import { TwinRunner, twinFlightsOf } from './twin';
+import { ProfileCache, liveForecast } from './forecast';
 import { liveOverview, verifyOverview } from './overview';
 import { registerSimulationRoutes } from './simulation-routes';
 import { SimulationRunner } from './simulations';
@@ -297,6 +299,8 @@ export function buildApp(options: AppOptions): FastifyInstance {
   const clock = options.clock ?? systemClock;
   const ids = options.ids ?? randomIds(clock);
   const runtime = new Runtime(options.db, clock);
+  // The profiles of the scenarios forecasts read (S21), computed once per process.
+  const profiles = new ProfileCache();
   const logger = options.logger ?? false;
   const app = Fastify({
     logger:
@@ -1609,6 +1613,21 @@ export function buildApp(options: AppOptions): FastifyInstance {
         request.params.checkpointId,
       );
       return verifyOverview(options.db, cp, clock.now());
+    },
+  );
+
+  /** GateFlow Predict, a preview (S21, ADR-054): the next 90 minutes, as simulated bands. */
+  app.get<{ Params: { checkpointId: string } }>(
+    '/v1/checkpoints/:checkpointId/forecast',
+    async (request): Promise<ForecastResponse> => {
+      const { checkpoint: cp } = await requireStaff(
+        options.db,
+        clock,
+        request,
+        'SUPERVISOR',
+        request.params.checkpointId,
+      );
+      return liveForecast(options.db, profiles, cp, clock.now());
     },
   );
 

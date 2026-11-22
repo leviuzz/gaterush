@@ -59,6 +59,9 @@ importers:
       '@gateflow/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@gateflow/forecast':
+        specifier: workspace:*
+        version: link:../../packages/forecast
       '@gateflow/operations':
         specifier: workspace:*
         version: link:../../packages/operations
@@ -253,6 +256,15 @@ importers:
 
   packages/domain: {}
 
+  packages/forecast:
+    dependencies:
+      '@gateflow/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@gateflow/sim-kernel':
+        specifier: workspace:*
+        version: link:../sim-kernel
+
   packages/i18n: {}
 
   packages/operations:
@@ -289,6 +301,9 @@ importers:
       '@gateflow/domain':
         specifier: workspace:*
         version: link:../domain
+      '@gateflow/forecast':
+        specifier: workspace:*
+        version: link:../forecast
       '@gateflow/priority-engine':
         specifier: workspace:*
         version: link:../priority-engine

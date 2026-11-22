@@ -66,6 +66,10 @@ jobs:
           curl -sf -b jar.txt "http://127.0.0.1:18080/v1/checkpoints/$CP/overview" | grep -q '"lanesOpen"'
           curl -sf -b jar.txt "http://127.0.0.1:18080/v1/checkpoints/$CP/overview/verify" | tee overview.json
           grep -q '"intact":true' overview.json
+          # The forecast of the next 90 minutes (S21), from the scenario the seed recorded: SIMULATED bands.
+          curl -sf -b jar.txt "http://127.0.0.1:18080/v1/checkpoints/$CP/forecast" | tee forecast.json
+          grep -q '"paths":200' forecast.json
+          grep -q '"minutes":90' forecast.json
           # The same bundle serves the web application (S14), under its security policy.
           curl -sfD headers.txt "http://127.0.0.1:18080/kiosk/$CP" | grep -q '<div id="root">'
           grep -qi '^content-security-policy:' headers.txt
@@ -142,6 +146,11 @@ jobs:
             --policies fifo-manual,fifo-manual@reactive,fifo-manual@predict,priority-v3@predict
           cmp out/la/results.json out/lb/results.json
           cmp out/la/report.html out/lb/report.html
+          # The backtest of the forecasts (S21): the same file whatever the number of workers.
+          node apps/sim-cli/dist/gateflow-sim.mjs backtest --scenario scenarios/single-checkpoint-disrupted.yaml --seeds 1-10 --out out/ba --quiet --workers 1
+          node apps/sim-cli/dist/gateflow-sim.mjs backtest --scenario scenarios/single-checkpoint-disrupted.yaml --seeds 1-10 --out out/bb --quiet --workers 4
+          cmp out/ba/backtest.json out/bb/backtest.json
+          cmp out/ba/backtest.md out/bb/backtest.md
       - name: The library flight lists are up to date
         run: node scenarios/flights/make-library-flights.mjs --check
 
@@ -232,6 +241,12 @@ jobs:
             node apps/sim-cli/dist/gateflow-sim.mjs run --scenario "scenarios/$scenario.yaml" --seeds 1-200 \
               --policies fifo,fifo-manual,fifo-manual@reactive,fifo-manual@predict,priority-v3,priority-v3@predict \
               --out "out/lanes/$scenario"
+          done
+      - name: The error report of the forecasts per horizon (S21)
+        run: |
+          for scenario in single-checkpoint-demo vce-like-normal-day vce-like-peak-day vce-like-disrupted-day tsf-like-peak-day mx-like-transfer-hub; do
+            node apps/sim-cli/dist/gateflow-sim.mjs backtest --scenario "scenarios/$scenario.yaml" --seeds 1-200 \
+              --out "out/backtest/$scenario"
           done
       - name: Sensitivity sweeps (20 days per point; the published sweeps use 200)
         run: |

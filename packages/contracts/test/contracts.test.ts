@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AdmissionRequest,
   DeviceResponse,
+  DisplayMessage,
   IssueTicketRequest,
   RiskClass,
   Segment,
@@ -88,6 +89,7 @@ describe('the API contracts', () => {
     expect(guarded).toEqual([
       'post /v1/checkpoints/{checkpointId}/scans',
       'get /v1/devices/me',
+      'get /v1/checkpoints/{checkpointId}/display',
       'get /v1/checkpoints/{checkpointId}/demo-flights',
     ]);
     for (const route of ROUTES) {
@@ -115,6 +117,48 @@ describe('the API contracts', () => {
     ).toBe(true);
   });
 
+  it('describe the streams as server-sent events that Last-Event-ID resumes (S16)', () => {
+    const doc = openApiDocument('0.16.0') as {
+      paths: Record<
+        string,
+        Record<
+          string,
+          {
+            parameters: { name: string; in: string }[];
+            responses: Record<string, { content: Record<string, unknown> }>;
+          }
+        >
+      >;
+    };
+    const streams = ROUTES.filter((r) => r.stream === true).map((r) => r.path);
+    expect(streams).toEqual([
+      '/v1/checkpoints/{checkpointId}/display',
+      '/v1/checkpoints/{checkpointId}/stream',
+    ]);
+    for (const path of streams) {
+      const operation = doc.paths[path]?.get;
+      expect(Object.keys(operation?.responses['200']?.content ?? {})).toEqual([
+        'text/event-stream',
+      ]);
+      expect(Object.keys(operation?.responses['401']?.content ?? {})).toEqual(['application/json']);
+      expect(operation?.parameters).toContainEqual(
+        expect.objectContaining({ name: 'Last-Event-ID', in: 'header' }),
+      );
+    }
+    // A display's message: numbers only.
+    const message = {
+      seq: 42,
+      board: {
+        serviceDay: '2026-11-23',
+        called: [{ number: 'A012', second: false, at: '2026-11-23T06:10:00.000Z' }],
+        prepare: ['A013', 'A014'],
+        updatedAt: '2026-11-23T06:10:00.000Z',
+      },
+      calls: [{ number: 'A012', second: false, at: '2026-11-23T06:10:00.000Z' }],
+    };
+    expect(DisplayMessage.parse(message)).toEqual(message);
+  });
+
   it('mark the routes only staff may call, with the role each needs (S15)', () => {
     const doc = openApiDocument('0.15.0') as {
       paths: Record<string, Record<string, { 'x-gateflow-role'?: string }>>;
@@ -139,6 +183,7 @@ describe('the API contracts', () => {
       [`get ${cp}/flights`]: 'OPERATOR',
       [`get ${cp}/queue`]: 'OPERATOR',
       [`get ${cp}/audit/verify`]: 'SUPERVISOR',
+      [`get ${cp}/stream`]: 'OPERATOR',
     });
     for (const [key, role] of Object.entries(roles)) {
       const [method = '', path = ''] = key.split(' ');

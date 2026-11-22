@@ -18,17 +18,20 @@ import type { ReactNode, SyntheticEvent } from 'react';
 import { api, randomKey } from '../api';
 import { timeOfDay, useDocumentLanguage } from '../common/format';
 import { LanguageSwitch } from '../common/LanguageSwitch';
+import { follow } from '../common/stream';
 import { QrCode } from '../common/QrCode';
 import { presented } from './scan';
 
 /*
  * The lane station (S15): staff sign in, call the next passenger, validate tickets at the access
  * point (QR code, boarding pass or number), act on called passengers, absences and reviews, and
- * issue manual tickets with a reason. It asks the server for the queue every 5 seconds; displays
- * over server-sent events come with S16.
+ * issue manual tickets with a reason. It follows the checkpoint's stream (S16): it asks for the
+ * queue whenever it changes, and every 20 seconds in case the stream is down.
  */
 
-const REFRESH_MS = 5000;
+const REFRESH_MS = 20_000;
+/** Without news from the server for this long, the station says it is not up to date. */
+const STALE_MS = 30_000;
 const LIST_LIMIT = 30;
 const REASONS: readonly ManualReason[] = [
   'NO_BOARDING_PASS',
@@ -251,9 +254,21 @@ export function Lane({
     const timer = window.setInterval(() => {
       void refresh();
     }, REFRESH_MS);
+    // The queue changed: another station called, a kiosk issued, a timeout fell due.
+    const stop = follow(`${base}/stream`, {
+      session: true,
+      onMessage: (message) => {
+        if (message.event === 'changed') void refresh();
+        else setUpdatedAt(Date.now());
+      },
+      onRefused: (status) => {
+        setPhase(status === 401 ? 'sign-in' : 'not-allowed');
+      },
+    });
     field.current?.focus();
     return () => {
       window.clearInterval(timer);
+      stop();
     };
   }, [phase, refresh, base]);
 
@@ -346,7 +361,7 @@ export function Lane({
   const waiting = by(['QUEUED']);
   const absent = by(['NO_SHOW']);
   const review = by(['REVIEW']);
-  const stale = updatedAt !== null && now - updatedAt > 3 * REFRESH_MS;
+  const stale = updatedAt !== null && now - updatedAt > STALE_MS;
   const boss = member !== null && supervises(member);
 
   const header = (

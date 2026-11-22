@@ -257,6 +257,27 @@ describe('the lane station (S15)', () => {
     await page.context().close();
   });
 
+  it('shows at once what another station or a kiosk does (S16)', async () => {
+    const first = await open();
+    await signIn(first.page, 'operator');
+    const second = await open();
+    await signIn(second.page, 'operator');
+    // A kiosk issues a number: both stations show it without waiting for a poll (20 seconds).
+    const waiting = await passenger('LANE05');
+    for (const { page } of [first, second]) {
+      await page.waitForSelector(`[data-ticket="${waiting.number}"]`, { timeout: 5000 });
+    }
+    // The first station calls it: the second shows it called.
+    await callUntil(first.page, waiting.number);
+    await second.page.waitForSelector(`#lane-called [data-ticket="${waiting.number}"]`, {
+      timeout: 5000,
+    });
+    expect(first.errors).toEqual([]);
+    expect(second.errors).toEqual([]);
+    await first.page.context().close();
+    await second.page.context().close();
+  });
+
   it('loads nothing from anywhere else', () => {
     expect(elsewhere).toEqual([]);
   });

@@ -669,7 +669,7 @@ here once, for the product. The slices follow the kickoff (section 3, M3), renum
 | **S13** | BCBP package: multi-leg parser, synthetic generator, validations, HMAC deduplication key; the kiosk's scan endpoint (a ticket, the same ticket again, or a reason) | Round trip and fuzzing pass; no boarding pass in the logs; Julian date to the right year across year end (ADR-043) | **Done** |
 | **S14** | Web application, kiosk and ticket: scan (paste, sample, HID scanner), outcomes, digital and printable ticket, ticket page, Italian, English and Spanish, privacy notice, kiosk credentials | A rescan returns the same ticket; another airport's boarding pass is refused with a reason (both already true of the API since S13); no personal data on screen | **Done** |
 | **S15** | Queue life cycle and lane station: timers on a scheduler, recall, no-show, reactivation, admission, manual ticket, review; staff users and roles. From S14: a party's number (at the lane; at the kiosk since 0.15.1), and the rule for a pass whose boarding has closed | The state machine is covered by tests; every transition is idempotent | **Done** |
-| S16 | Display over SSE: called and prepare numbers, data freshness, reconnection with `Last-Event-ID` | No event lost after a disconnection; "data not up to date" within the timeout | Planned |
+| **S16** | Display over SSE: called and prepare numbers, data freshness, reconnection with `Last-Event-ID` | No event lost after a disconnection; "data not up to date" within the timeout | **Done** |
 | S17 | Supervisor: modes (FIFO only, paused, emergency), overrides with a reason, lanes, audit view; versioned policies and their activation | Overrides and mode changes are always in the audit; in FIFO only the order is pure FIFO | Planned |
 | S18 | Digital twin: the simulator drives the live system at accelerated time; demo page | Same scenario and seed: the live system calls passengers in the same order as the offline simulator | Planned |
 | S19 | Simulations through the API (from S10): saved scenarios and runs, history, export; the Studio saves its runs | `POST /v1/simulations` gives a run reproducible from its manifest | Planned |
@@ -869,6 +869,72 @@ passwords until the pilot. Then: infants count from their parent's boarding pass
       1280x800, 768x1024), in Italian and in Spanish, the languages with the longest texts. On a
       landscape kiosk the party's screen has two columns, as the ticket has.
   - No simulated number changes: the golden files change only in the version of the queue.
+
+## S16: displays over server-sent events
+
+Plan (approved with "vai con S16", 2026-11-22), from the kickoff (FR-10, RT-07, 2.4.6, 2.6):
+
+- **What a display shows.** The numbers called, most recent first, a second call marked; the
+  numbers to get ready, in the order they will be called; when the data was last updated.
+  Nothing else: no personal data, no position, no waiting time. Labels in the display's language
+  and in English. A number just called flashes. The access point of a call comes with the lanes
+  (S17): until then, the security entrance.
+- **The board** is computed by the operations day (pure) and written with every command, in its
+  transaction, as the timers are (`display_board`): every server sees the same board, at the
+  sequence number of the log.
+- **The stream**, `GET /v1/checkpoints/{id}/display` with a display's device token: server-sent
+  events.
+  - Each message carries the board and the calls since the previous message, with the command's
+    sequence number as its id.
+  - A display that reconnects sends `Last-Event-ID`: it gets the calls it missed, from the event
+    log, then the current board.
+  - A heartbeat every 10 seconds. A revoked display's stream ends at its next heartbeat.
+- **Fan-out.** The server that applies a command tells its streams at once; the streams of other
+  servers see the change within a second (a poll of one row per checkpoint).
+- **The display page**, `/display/<checkpoint>`:
+  - a stream client over `fetch`, so that the device token stays in a header, never in an
+    address; it reconnects with backoff and `Last-Event-ID`;
+  - with no message or heartbeat for 30 seconds: "Not up to date";
+  - after 2 minutes: "Please follow the instructions of the staff" (kickoff 2.4.6: the
+    checkpoint goes back to its usual queue).
+- **The lane station** is pushed by a staff stream, `GET /v1/checkpoints/{id}/stream`: it asks for
+  the queue when it changes, with a slow poll as a fallback.
+
+Acceptance (kickoff, renumbered): no event lost after a disconnection; "data not up to date"
+within the timeout. To be shown by:
+- operations: the board of random days (called: `CALLED` and `RECALLED`; prepare: the window in
+  call order), rebuilt from the log;
+- API on PostgreSQL:
+  - a display's stream gets each call;
+  - disconnected while calls happen, on reconnection it gets every call it missed, in order, and
+    the same board as a display that stayed connected;
+  - with two servers, a command on one reaches the streams of the other;
+  - only the displays of the checkpoint; no reference or personal data in the stream;
+- Chromium: the display follows calls live; with the stream cut, "not up to date" within 30
+  seconds and the fallback after 2 minutes (the page's clock); it catches up after reconnecting;
+  portrait and landscape screens.
+
+Delivered as planned (ADR-047): operations 0.5.0 (`board()`), contracts 0.6.0, API and web 0.16.0,
+migration `0008_display_board`. No simulated number changes.
+
+| # | Criterion (kickoff, as proposed) | Evidence |
+|---|---|---|
+| 1 | No event lost after a disconnection | API: a display away while three calls happen gets the three, in order, on reconnecting with `Last-Event-ID`, and the same board as a display that stayed. Chromium: the server stops; once it is back it calls two numbers; the display reconnects and both flash. |
+| 2 | "Data not up to date" within the timeout | Chromium, with the page's clock: "Not up to date" after 30 seconds without news, the staff's instructions instead of numbers after 2 minutes; live again when the stream is back. |
+
+Verification beyond the criteria:
+- operations: in 200 random days the board shows exactly the tickets called, the latest first, a
+  second call marked, and the prepare window in call order; a replay gives the same board.
+- API on PostgreSQL (8 tests, over real HTTP): only the displays of the checkpoint follow it
+  (none, a wrong token, a kiosk, another checkpoint's display are refused), and staff its lane
+  stream; a command on one server reaches the displays of another in under 1.5 seconds;
+  heartbeats; a revoked display and a member signed out stop at once; no reference in a display's
+  stream; a new service day shows an empty board.
+- The stream reader of the page: messages cut at every place, any line end, ids and delays.
+- Chromium (25 tests in all): a second call marked; screens full of numbers fit 1920x1080,
+  1366x768, 1280x720, 1080x1920 and 768x1024 (with the CI's wider font, 90% of the height at
+  most); two lane stations show at once what the other, or a kiosk, does; no request to another
+  server.
 
 ## Later milestones (summary)
 

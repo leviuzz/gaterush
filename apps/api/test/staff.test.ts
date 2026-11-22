@@ -81,9 +81,13 @@ afterAll(async () => {
 
 const TICKET = '0193a0b2-7c1d-7e5f-8a9b-0c1d2e3f4a5b';
 
-/** Every staff route of the contracts, with its role, on the test's checkpoint. */
-const staffRoutes = () =>
-  ROUTES.filter((r) => r.staff !== undefined).map((r) => ({
+/**
+ * Every staff route of the contracts, with its role, on the test's checkpoint. With `answered`,
+ * only the routes that answer and end: a stream stays open (its rights are checked over HTTP in
+ * display.test.ts).
+ */
+const staffRoutes = (answered = false) =>
+  ROUTES.filter((r) => r.staff !== undefined && !(answered && r.stream === true)).map((r) => ({
     method: r.method.toUpperCase() as 'GET' | 'POST',
     url: r.path.replace('{checkpointId}', checkpointId).replace('{ticketId}', TICKET),
     role: r.staff,
@@ -110,7 +114,7 @@ describe('staff sign in (S15)', () => {
   it('lets each role do what its role allows, at its checkpoints only', async () => {
     const operator = await staffCookie(app, database.db, clock, airportId, 'OPERATOR');
     const supervisor = await staffCookie(app, database.db, clock, airportId, 'SUPERVISOR');
-    for (const route of staffRoutes()) {
+    for (const route of staffRoutes(true)) {
       const r = await app.inject({
         method: route.method,
         url: route.url,

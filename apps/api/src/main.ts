@@ -119,7 +119,9 @@ async function main(argv: string[]): Promise<number> {
               `token ${added.token}`,
               ...(kind === 'KIOSK'
                 ? [`open the kiosk at /kiosk/${values.checkpoint}#device=${added.token}`]
-                : []),
+                : kind === 'DISPLAY'
+                  ? [`open the display at /display/${values.checkpoint}#device=${added.token}`]
+                  : []),
               'The token is shown once: keep it on the device only.',
               '',
             ].join('\n'),

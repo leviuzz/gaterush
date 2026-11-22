@@ -11,6 +11,8 @@ import type { TicketView } from '@gateflow/queue-core';
 import { MANUAL_REASONS, PASS_INFANTS, PRESENT_METHODS, TICKET_SOURCES } from './commands';
 import type {
   Applied,
+  Board,
+  BoardCall,
   Command,
   CommandRecord,
   CommandResult,
@@ -455,6 +457,30 @@ export class CheckpointDay {
   /** The prepare window, in the order in which its tickets will be called. */
   prepareWindow(): TicketSummary[] {
     return this.queue.prepareWindow().map((view) => this.summaryOf(view));
+  }
+
+  /**
+   * What the displays show now (S16): the tickets called (a second call marked), the latest call
+   * first, and the prepare window in call order.
+   */
+  board(): Board {
+    const called: BoardCall[] = [];
+    for (const id of this.issueOrder) {
+      const view = this.view(id);
+      if (view.state !== 'CALLED' && view.state !== 'RECALLED') continue;
+      called.push({
+        number: this.info.get(id)?.number ?? '',
+        second: view.state === 'RECALLED',
+        calledAtMs: view.lastCalledAtMs ?? view.firstCalledAtMs ?? view.issuedAtMs,
+      });
+    }
+    // The latest call first; a tie in the order of issue, the latest number first.
+    called.reverse();
+    called.sort((a, b) => b.calledAtMs - a.calledAtMs);
+    return {
+      called,
+      prepare: this.queue.prepareWindow().map((view) => this.info.get(view.id)?.number ?? ''),
+    };
   }
 
   /** When the next timeout of the queue is due (a second call, a no-show, an expiry). */

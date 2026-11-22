@@ -1826,3 +1826,83 @@ founder on 2026-11-21 together with all of its recommendations.
   - A party grows only while its number waits: once called, a late companion goes with the family
     and is not counted.
   - Nothing yet lets staff change a party's size after the fact; the lane station may get it.
+
+## ADR-047: Displays and lane stations follow the queue by server-sent events
+
+- **Status:** Accepted (2026-11-22). Slice S16. operations 0.5.0, contracts 0.6.0, API and web
+  0.16.0. No simulated number changes.
+- **Context:**
+  - A display in the hall must show each call at once, and must never show old data as if it
+    were current (kickoff RT-07). When the API or the database fail, the checkpoint goes back to
+    its usual queue and the display says to follow the staff (kickoff 2.4.6).
+  - The kickoff chose server-sent events with `Last-Event-ID` for screens, and REST for commands:
+    no WebSocket.
+  - Until S16 the lane station asked for the queue every 5 seconds.
+- **Decision:**
+  - **The board.** What a display shows is computed by the operations day, pure and replayable
+    (`CheckpointDay.board()`): the numbers called (a second call marked), the latest call first,
+    and the prepare window in call order. Numbers only: no personal data, no position, no waiting
+    time. The board is written with every command, in its transaction, as the timers are
+    (`display_board`): every server reads the same board, at the sequence number of the log.
+  - **The display's stream**, `GET /v1/checkpoints/{id}/display` with a display's token:
+    - each message (`board`) carries the board after a command and the calls since the previous
+      message, oldest first; its id is the command's sequence number;
+    - a display that reconnects sends `Last-Event-ID` and gets, in its first message, every call
+      it missed (from the event log, the latest 100 of the service day), then the current board;
+    - a heartbeat every 10 seconds; at each one the display's token is checked again, so a revoked
+      display stops at once;
+    - a board of another service day is shown empty: yesterday's numbers are not today's.
+  - **The lane station's stream**, `GET /v1/checkpoints/{id}/stream` with a staff session: a
+    `changed` message whenever the queue changes; the station then asks for the queue, and still
+    every 20 seconds in case the stream is down. A member signed out stops at the next heartbeat.
+  - **Fan-out.** The server that applies a command tells its streams after the commit. Every
+    second each server also reads the sequence number of the checkpoints its streams follow, so
+    the commands of another server reach its displays within a second.
+  - **The display page**, `/display/<checkpoint>`:
+    - its token comes once in the address's fragment and is kept apart from a kiosk's;
+    - it reads the stream over `fetch`, not with `EventSource`, so that the token goes in a header
+      and never in an address; it reconnects after 1, 2, 4... up to 15 seconds with
+      `Last-Event-ID`;
+    - texts in the display's language and in English; a number just called flashes for 10
+      seconds (it only stands out with reduced motion);
+    - without a message or heartbeat for 30 seconds: "Not up to date"; after 2 minutes: "Please
+      follow the instructions of the staff", in place of the numbers.
+- **Alternatives considered:**
+  - **`EventSource`.** It cannot send a header: the token would go in the address, where proxies
+    and logs keep it, or in a cookie the display would have to obtain first.
+  - **WebSocket.** Two-way, but displays only listen; server-sent events pass through proxies as
+    plain HTTP and resume by themselves.
+  - **PostgreSQL `LISTEN/NOTIFY` between servers.** Immediate, but it needs a connection held
+    open by each server and a way to catch up after that connection drops. Reading one row per
+    followed checkpoint every second costs nothing, survives anything, and keeps another server's
+    delay under a second.
+  - **A snapshot only on reconnection.** Simpler, but a display could not tell which numbers were
+    called while it was away: they would not flash.
+- **Evidence:**
+  - **operations:** in 200 random days, the board shows exactly the tickets called, the latest
+    first, a second call marked, and the prepare window in call order; a replay of the log gives
+    the same board.
+  - **API on PostgreSQL**, over real HTTP:
+    - only the displays of the checkpoint follow it, and staff the lane station's stream;
+    - a display gets the board, then each call as it happens;
+    - a display away while three calls happen gets the three, in order, when it reconnects with
+      `Last-Event-ID`, and the same board as a display that stayed; without an id, or with one
+      the log never gave, it gets the board alone;
+    - a command on one server reaches the displays of another in under 1.5 seconds;
+    - heartbeats; a revoked display's stream ends; a member signed out stops their stream;
+    - no reference and no ticket id in a display's stream;
+    - a new service day shows an empty board.
+  - **In Chromium, on the product:**
+    - a display shows each call at once, a second call marked, and the numbers to get ready;
+    - the server stops: "not up to date" after 30 seconds, the staff's instructions after 2
+      minutes (the page's clock); the server is back and calls two numbers; the display
+      reconnects and both flash;
+    - it fits 1920x1080, 1366x768, 1280x720, 1080x1920 and 768x1024 screens full of numbers;
+      with the wider font of the CI's Chromium the fullest takes 90% of the height;
+    - two lane stations show at once what the other, or a kiosk, does.
+- **Consequences:**
+  - The access point of a call ("go to lane 3") comes with the lanes in S17; until then the
+    display sends passengers to the security entrance.
+  - Messages for passengers (a pause, an emergency) come with the supervisor's modes (S17).
+  - The passenger's page still asks every 15 seconds: its few requests do not justify a stream
+    per phone.

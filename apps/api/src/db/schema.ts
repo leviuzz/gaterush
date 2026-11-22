@@ -259,6 +259,22 @@ export const admission = pgTable(
 );
 
 /**
+ * What the displays of each checkpoint show (S16): the numbers called and the numbers to get
+ * ready, after the latest command. Written with every command, in its transaction: every server
+ * reads the same board, at the sequence number of the log, which is the id of the stream's
+ * messages. Current state, not history: the log has the commands and their events.
+ */
+export const displayBoard = pgTable('display_board', {
+  checkpointId: uuid('checkpoint_id')
+    .primaryKey()
+    .references(() => checkpoint.id),
+  serviceDay: date('service_day').notNull(),
+  seq: bigint('seq', { mode: 'number' }).notNull(),
+  atMs: ms('at_ms').notNull(),
+  board: jsonb('board').notNull(),
+});
+
+/**
  * When each checkpoint's next timeout is due (S15): a second call, a no-show, an expiry. Written
  * with every command; the scheduler reads it and sends ADVANCE when it is due. Current state, not
  * history: the log has the commands.

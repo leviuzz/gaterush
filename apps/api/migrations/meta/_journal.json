@@ -57,6 +57,13 @@
       "when": 1795346650667,
       "tag": "0007_party",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795350936050,
+      "tag": "0008_display_board",
+      "breakpoints": true
     }
   ]
 }

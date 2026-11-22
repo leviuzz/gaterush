@@ -206,6 +206,24 @@ export interface TicketSummary {
   readonly admittedAtMs: Millis | null;
 }
 
+/** A number called, as the displays show it (S16). */
+export interface BoardCall {
+  readonly number: string;
+  /** The second call: the passenger did not come at the first. */
+  readonly second: boolean;
+  /** The latest call. */
+  readonly calledAtMs: Millis;
+}
+
+/**
+ * What the displays of a checkpoint show (S16): the numbers called, the latest call first, and
+ * the numbers to get ready, in the order they will be called. Numbers only: no personal data.
+ */
+export interface Board {
+  readonly called: readonly BoardCall[];
+  readonly prepare: readonly string[];
+}
+
 /** What a command did, besides the events it caused. */
 export type CommandResult =
   | { readonly type: 'DAY_OPENED'; readonly serviceDay: string }

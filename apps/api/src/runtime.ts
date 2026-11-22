@@ -17,6 +17,7 @@ import {
   airport,
   checkpoint,
   checkpointTimer,
+  displayBoard,
   partyPass,
   queueCommand,
   queueEvent,
@@ -140,6 +141,8 @@ export async function loadCheckpoint(db: Db | Tx, checkpointId: string): Promise
  */
 export class Runtime {
   private readonly memory = new Map<string, Memory>();
+  /** Told the sequence number of each command committed, after its transaction (S16). */
+  onCommitted: ((checkpointId: string, seq: number) => void) | undefined;
 
   constructor(
     private readonly db: Db,
@@ -147,12 +150,15 @@ export class Runtime {
   ) {}
 
   async execute(request: CommandRequest): Promise<Executed> {
+    let executed: Executed;
     try {
-      return await this.db.transaction((tx) => this.run(tx, request));
+      executed = await this.db.transaction((tx) => this.run(tx, request));
     } catch (error) {
       this.memory.delete(request.checkpointId);
       throw error;
     }
+    if (!executed.replayed) this.onCommitted?.(request.checkpointId, executed.seq);
+    return executed;
   }
 
   /** Forgets every day held in memory (as after a restart). */
@@ -425,6 +431,12 @@ export class Runtime {
       .insert(checkpointTimer)
       .values({ checkpointId: cp.id, ...timer })
       .onConflictDoUpdate({ target: checkpointTimer.checkpointId, set: timer });
+    // What the displays show, at this command (S16).
+    const board = { serviceDay, seq: record.seq, atMs: record.atMs, board: day.board() };
+    await tx
+      .insert(displayBoard)
+      .values({ checkpointId: cp.id, ...board })
+      .onConflictDoUpdate({ target: displayBoard.checkpointId, set: board });
     memory.seq = record.seq;
     memory.hash = hash;
     memory.eventSeq += events.length;

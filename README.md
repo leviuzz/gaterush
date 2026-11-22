@@ -12,7 +12,7 @@ border procedures: it organises the flow before they start.
 > **Status: M1 done (S1 to S8); M2: the Simulator Studio (S9) and the replay of a day (S11); M3,
 > the product an airport installs: its operational core (S12), boarding passes (S13), the kiosk
 > and the passenger's page (S14), the queue's life cycle with staff who sign in and the lane
-> station (S15).**
+> station (S15), the displays (S16).**
 > This repository contains the simulation foundations:
 > - the priority engine;
 > - the queue state machine that the operational product will share;
@@ -39,11 +39,13 @@ border procedures: it organises the flow before they start.
 >   Italian, English and Spanish; nothing of the pass is kept.
 >
 > - **The lane station**: staff sign in, call the next passenger, validate tickets by QR code,
->   boarding pass or number, act on absences and reviews, and issue manual tickets.
+>   boarding pass or number, act on absences and reviews, and issue manual tickets. People
+>   travelling together take one number at the kiosk, infants on a parent's pass included.
+> - **The displays of the hall**: the numbers called and the numbers to get ready, live by
+>   server-sent events; a display that loses the server says so, and catches up when it is back.
 >
-> Displays (S16) and the supervisor's console (S17) come next; staff sign in with local passwords
-> until the pilot brings the airport's identity provider. See
-> [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+> The supervisor's console (S17) comes next; staff sign in with local passwords until the pilot
+> brings the airport's identity provider. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 > **All results in this repository are SIMULATED on synthetic assumptions.** They are not
 > measurements and must not be presented as evidence of operational performance.
@@ -116,6 +118,12 @@ takes it off the address; `device revoke --id <device id>` stops it.
 - Add `&print=auto` to print every new ticket; for silent printing, start the kiosk's Chrome
   with `--kiosk-printing`.
 
+A display of the hall (S16) is set up the same way, with `--kind display`: open
+`http://<server>:8080/display/<checkpoint id>?lang=it#device=<token>` on the screen, in a browser
+in full-screen or kiosk mode. It shows the numbers called and the numbers to get ready, in its
+language and in English, as the server sends them; without news from the server for 30 seconds
+it says it is not up to date, and after 2 minutes it asks passengers to follow the staff.
+
 A barcode scanner that types like a keyboard reads boarding passes into the kiosk. Without one,
 paste a pass's code, or on a demo airport press "Use a sample boarding pass". The number comes
 with a QR code to the passenger's page, `/t/<reference>`, which follows the ticket on a phone.
@@ -146,6 +154,11 @@ The endpoints:
 - `POST /v1/checkpoints/{id}/tickets/{ticket}/recall`, `no-show`, `reactivate`, `review`,
   `resolve`, `cancel`: staff actions, as the ticket's state allows;
 - `GET /v1/devices/me` and `GET /v1/checkpoints/{id}/demo-flights`: for kiosks.
+- `GET /v1/checkpoints/{id}/display`: a display's stream of server-sent events (S16), with its
+  token: the board after each command and the calls since the previous message; `Last-Event-ID`
+  resumes it without losing a call.
+- `GET /v1/checkpoints/{id}/stream`: the lane stations' stream, with a staff session: a message
+  whenever the queue changes.
 
 Send an `Idempotency-Key` header with each command. The OpenAPI document is at
 `/v1/openapi.json`. The API's tests (`pnpm test`) start a throwaway PostgreSQL from the binaries
@@ -331,7 +344,7 @@ How to read these numbers:
 | `packages/sim-trace` | The trace of one day: every event, replay views, the explanation of every call (pure) |
 | `packages/studio-core` | What the Studio adds in the browser: SHA-256, files, library, what-if settings, comparison of runs, traces (pure) |
 | `apps/api` | `gateflow-api`: the operational core on PostgreSQL (Fastify, Drizzle); serves the screens |
-| `apps/web` | The product's screens: the kiosk and the passenger's ticket page (React) |
+| `apps/web` | The product's screens: the kiosk, the passenger's ticket page, the display and the lane station (React) |
 | `apps/sim-cli` | `gateflow-sim` command-line interface |
 | `apps/studio` | GateFlow Simulator Studio: the simulator in one offline HTML page |
 | `airports/` | Airport configurations: the parameters of each airport and checkpoint ([guide](airports/README.md)) |

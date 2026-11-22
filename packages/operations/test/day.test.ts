@@ -394,6 +394,23 @@ describe('the log of a day', () => {
         const again = CheckpointDay.replay(records);
         expect(again.tickets()).toEqual(first.day.tickets());
         expect(again.prepareWindow()).toEqual(first.day.prepareWindow());
+        expect(again.board()).toEqual(first.day.board());
+        // The board shows the tickets called, the latest first, and the window in call order.
+        const board = first.day.board();
+        const called = first.day
+          .tickets()
+          .filter((t) => t.state === 'CALLED' || t.state === 'RECALLED');
+        expect(board.called.map((c) => c.number).sort()).toEqual(
+          called.map((t) => t.number).sort(),
+        );
+        for (const c of board.called) {
+          const t = called.find((x) => x.number === c.number);
+          expect(c.second).toBe(t?.state === 'RECALLED');
+          expect(c.calledAtMs).toBe(t?.lastCalledAtMs);
+        }
+        const times = board.called.map((c) => c.calledAtMs);
+        expect(times).toEqual([...times].sort((a, b) => b - a));
+        expect(board.prepare).toEqual(first.day.prepareWindow().map((t) => t.number));
         expect(again.lastSeq).toBe(records.length);
         expect(again.nextDueMs()).toBe(first.day.nextDueMs());
         // Replaying one more time from scratch gives the same events, command by command.

@@ -6,7 +6,7 @@ import { z } from 'zod';
  * ticket is a number, a state and a flight, never a name.
  */
 
-export const CONTRACTS_VERSION = '0.5.0';
+export const CONTRACTS_VERSION = '0.6.0';
 
 export const Segment = z.enum(['DEPARTING', 'TRANSFER']);
 
@@ -300,6 +300,42 @@ export const StaffMemberResponse = z.object({ member: StaffMember });
 /** Who is signed in on this browser: a member of staff, or nobody (`null`). */
 export const MeResponse = z.object({ member: StaffMember.nullable() });
 
+/** A number called, as a display shows it (S16). */
+export const DisplayCall = z.object({
+  number: z.string(),
+  /** The second call: the passenger did not come at the first. */
+  second: z.boolean(),
+  at: Instant,
+});
+
+/** What a display shows (S16): numbers only, no personal data, no position, no waiting time. */
+export const DisplayBoard = z.object({
+  serviceDay: z.iso.date(),
+  /** The numbers called, the latest call first. */
+  called: z.array(DisplayCall),
+  /** The numbers to get ready, in the order they will be called. */
+  prepare: z.array(z.string()),
+  /** When the board last changed: the time of the latest command of the checkpoint. */
+  updatedAt: Instant,
+});
+
+/**
+ * A message of a display's stream (S16), `event: board` with `id:` its `seq`: the board after the
+ * command `seq` of the checkpoint's log, and the calls since the previous message, oldest first.
+ * A display that reconnects with `Last-Event-ID` gets the calls it missed in its first message.
+ */
+export const DisplayMessage = z.object({
+  seq: z.int().min(0),
+  board: DisplayBoard,
+  calls: z.array(DisplayCall),
+});
+
+/** The heartbeat of a stream (S16), `event: heartbeat`, every 10 seconds: the server's time. */
+export const Heartbeat = z.object({ at: Instant });
+
+/** A message of a staff stream (S16), `event: changed` with `id:` its `seq`: the queue changed. */
+export const QueueChanged = z.object({ seq: z.int().min(0) });
+
 /** The types of the answers, for clients that do not validate them (the web application). */
 export type TicketState = z.infer<typeof TicketState>;
 export type ScanOutcome = z.infer<typeof ScanOutcome>;
@@ -308,6 +344,11 @@ export type ScanResponse = z.infer<typeof ScanResponse>;
 export type PublicTicketResponse = z.infer<typeof PublicTicketResponse>;
 export type DeviceKind = z.infer<typeof DeviceKind>;
 export type DeviceResponse = z.infer<typeof DeviceResponse>;
+export type DisplayCall = z.infer<typeof DisplayCall>;
+export type DisplayBoard = z.infer<typeof DisplayBoard>;
+export type DisplayMessage = z.infer<typeof DisplayMessage>;
+export type Heartbeat = z.infer<typeof Heartbeat>;
+export type QueueChanged = z.infer<typeof QueueChanged>;
 export type DemoFlightsResponse = z.infer<typeof DemoFlightsResponse>;
 export type ManualReason = z.infer<typeof ManualReason>;
 export type StaffActionResponse = z.infer<typeof StaffActionResponse>;
@@ -334,6 +375,11 @@ export interface Route {
   /** Only staff signed in with at least this role, at the checkpoint, may call it (S15). */
   readonly staff?: z.infer<typeof StaffRole>;
   readonly body?: z.ZodType;
+  /**
+   * Server-sent events (S16): the answer is a `text/event-stream`, the schema of 200 that of its
+   * messages' data; `Last-Event-ID` resumes it.
+   */
+  readonly stream?: boolean;
   readonly responses: Readonly<
     Record<string, { readonly description: string; readonly schema: z.ZodType }>
   >;
@@ -406,6 +452,42 @@ export const ROUTES: readonly Route[] = [
     responses: {
       '200': { description: 'The device', schema: DeviceResponse },
       '401': deviceErrors['401'],
+    },
+  },
+  {
+    method: 'get',
+    path: '/v1/checkpoints/{checkpointId}/display',
+    summary:
+      "A display's stream (S16): the board after each command, the calls since the previous message, and a heartbeat every 10 seconds",
+    command: false,
+    device: true,
+    stream: true,
+    responses: {
+      '200': {
+        description:
+          'Server-sent events: `board` messages (id: the sequence number of the log) and `heartbeat` messages',
+        schema: DisplayMessage,
+      },
+      ...deviceErrors,
+      '404': errors['404'],
+    },
+  },
+  {
+    method: 'get',
+    path: '/v1/checkpoints/{checkpointId}/stream',
+    summary:
+      "The lane station's stream (S16): a message whenever the checkpoint's queue changes, and a heartbeat every 10 seconds",
+    command: false,
+    staff: 'OPERATOR',
+    stream: true,
+    responses: {
+      '200': {
+        description:
+          'Server-sent events: `changed` messages (id: the sequence number of the log) and `heartbeat` messages',
+        schema: QueueChanged,
+      },
+      ...staffErrors,
+      '404': errors['404'],
     },
   },
   {
@@ -587,6 +669,14 @@ export function openApiDocument(version: string): Record<string, unknown> {
         schema: { type: 'string' },
       });
     }
+    if (route.stream === true) {
+      parameters.push({
+        name: 'Last-Event-ID',
+        in: 'header',
+        required: false,
+        schema: { type: 'string' },
+      });
+    }
     const operation: Record<string, unknown> = {
       summary: route.summary,
       parameters,
@@ -595,7 +685,11 @@ export function openApiDocument(version: string): Record<string, unknown> {
           status,
           {
             description: r.description,
-            content: { 'application/json': { schema: z.toJSONSchema(r.schema, { io: 'output' }) } },
+            content: {
+              [route.stream === true && status === '200'
+                ? 'text/event-stream'
+                : 'application/json']: { schema: z.toJSONSchema(r.schema, { io: 'output' }) },
+            },
           },
         ]),
       ),

@@ -623,7 +623,7 @@ PostgreSQL.
 
 ```mermaid
 flowchart LR
-  client["Kiosk (S14), staff, display (S15 to S17)"] -->|"REST + Idempotency-Key"| routes["Fastify routes<br/>(contracts: Zod)"]
+  client["Kiosk (S14), staff (S15), display (S16)"] -->|"REST + Idempotency-Key"| routes["Fastify routes<br/>(contracts: Zod)"]
   routes --> runtime["Runtime: one writer per checkpoint"]
   runtime -->|"pg_advisory_xact_lock"| db[("PostgreSQL")]
   runtime --> day["CheckpointDay (operations)<br/>= CheckpointQueue of queue-core"]
@@ -662,10 +662,19 @@ flowchart LR
   - Parties (ADR-046): `party_pass` (append-only), the HMAC of each boarding pass added to a
     party, with its ticket and the command that added it. A rescan finds the latest ticket a pass
     was given or joined.
+  - Displays (ADR-047): `display_board`, what the displays show after each checkpoint's latest
+    command (the numbers called and the prepare window), written with it, at its sequence number.
 - **Timers (ADR-045).** `serve` runs a scheduler: every second it sends `ADVANCE` to each
   checkpoint whose next timeout is due. The command goes through the log like any other; its
   idempotency key names the timeout, so it applies once whichever servers see it due. A rescan at
   a kiosk applies the due timeouts first.
+- **Streams (ADR-047).** Displays and lane stations follow a checkpoint by server-sent events.
+  The server that applies a command tells its streams after the commit; every second each server
+  also reads the sequence number of the checkpoints its streams follow, so that another server's
+  commands reach them within a second. A display's message carries the board and the calls since
+  its previous message, with the command's sequence number as its id: a display that reconnects
+  with `Last-Event-ID` gets every call it missed. A heartbeat every 10 seconds checks the client
+  again (a revoked display, a member signed out, stop there).
 - **Staff (ADR-045).** Every staff route checks, in this order: the request comes from this site,
   a session (401), the checkpoint (404), the role and the checkpoints of the member (403). The
   log records the member as the actor (`staff:<id>`).
@@ -674,6 +683,8 @@ flowchart LR
     a reason (ADR-043). Only a kiosk of the checkpoint may send one (ADR-044). With `party`, the
     pass joins that waiting ticket instead (ADR-046);
   - `GET /v1/devices/me` and `GET /v1/checkpoints/{id}/demo-flights`, for kiosks;
+  - `GET /v1/checkpoints/{id}/display`, a display's stream, and `GET /v1/checkpoints/{id}/stream`,
+    the lane stations' (ADR-047);
   - `POST /v1/auth/sign-in`, `GET /v1/auth/me`, `POST /v1/auth/sign-out` (ADR-045);
   - `POST /v1/checkpoints/{id}/tickets/{ticket}/recall`, `no-show`, `reactivate`, `review`,
     `resolve` and `cancel` (ADR-045);
@@ -688,7 +699,7 @@ flowchart LR
   the library), `device add` and `device revoke`, `user add`, `user password` and `user disable`,
   and `serve`, which also serves the web application and runs the timers.
 
-## 14. The screens (`apps/web`, `@gateflow/i18n`, ADR-044, ADR-045)
+## 14. The screens (`apps/web`, `@gateflow/i18n`, ADR-044, ADR-045, ADR-047)
 
 One React application, built by esbuild into static files and served by the API: one process,
 one origin, one Content Security Policy.
@@ -705,6 +716,8 @@ flowchart LR
   kiosk -.->|"QR code"| phone["Passenger's phone"]
   phone --> page
   page -->|"every 15 s"| ticket["GET /v1/tickets/{ref}"]
+  display["/display/&lt;checkpoint&gt;<br/>called, get ready"] -->|"server-sent events<br/>Last-Event-ID"| stream["GET /v1/checkpoints/{id}/display"]
+  lane["/lane/&lt;checkpoint&gt;"] -->|"server-sent events"| changes["GET /v1/checkpoints/{id}/stream"]
 ```
 
 - **The kiosk** knows its checkpoint from its device token. The token arrives once in the
@@ -722,8 +735,14 @@ flowchart LR
     two people; an infant's own pass is counted once with it, in either order (the operations
     day's `partyGrowth`). The parser returns nothing else of the description.
 - **The passenger's page** shows the number and what to do now, in the phone's language or the
-  one chosen. It asks the API again every 15 seconds while the ticket is open; S16 replaces this
-  with server-sent events for displays.
+  one chosen. It asks the API again every 15 seconds while the ticket is open: a few requests per
+  phone do not justify a stream each.
+- **The display** (`/display/<checkpoint>`, ADR-047) shows the numbers called (the latest first, a
+  second call marked) and the numbers to get ready, in its language and in English, with the time
+  of the latest news. It reads its stream over `fetch`, so that its token stays in a header, and
+  reconnects with `Last-Event-ID`; the calls it missed flash. Without news for 30 seconds it says
+  it is not up to date; after 2 minutes it shows "Please follow the instructions of the staff"
+  instead of numbers. Light numbers on a dark screen; landscape screens in two columns.
 - **Texts** are in `@gateflow/i18n`, pure and checked by tests: the same keys and placeholders in
   every language, and nothing that promises priority.
 - **Headers.** `nosniff` and `no-referrer` on every answer. Pages also get a policy allowing only
@@ -733,7 +752,8 @@ flowchart LR
   page cannot read), call the next passenger, validate a ticket by its QR code, its boarding pass
   or its number, call again, mark an absence, bring it back, hold a ticket for a review and, as
   supervisors, end reviews and cancel. Manual tickets carry a reason and the size of the party.
-  The station asks for the queue every 5 seconds; S16 brings server-sent events.
+  The station follows the checkpoint's stream (ADR-047): it asks for the queue whenever it
+  changes, and every 20 seconds in case the stream is down.
 - **Build** (`node build.mjs`): `index.html`, `assets/app.js` and `app.css` with Brotli and gzip
   copies, an icon, and `THIRD-PARTY-NOTICES.txt` with the licences of the bundled libraries.
 

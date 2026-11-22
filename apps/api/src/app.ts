@@ -29,6 +29,17 @@ import { requestHash } from './chain';
 import { readPass, recordScan, ticketOfPass } from './intake';
 import { TimerScheduler } from './scheduler';
 import {
+  EventStream,
+  HEARTBEAT_MS,
+  POLL_MS,
+  StreamHub,
+  boardOf,
+  callsBetween,
+  displayMessageOf,
+  lastEventIdOf,
+  seqOf,
+} from './streams';
+import {
   SignInGuard,
   clearSessionCookie,
   requireSameOrigin,
@@ -65,6 +76,11 @@ export interface AppOptions {
    * `manual` (the default, for tests) leaves it to `app.timers.tick()`.
    */
   readonly timers?: 'auto' | 'manual';
+  /**
+   * The streams (S16): how often they say they are alive (10 seconds), and how often the server
+   * reads the commands of the other servers (1 second). Shorter in tests.
+   */
+  readonly streams?: { readonly heartbeatMs?: number; readonly pollMs?: number };
 }
 
 declare module 'fastify' {
@@ -251,6 +267,50 @@ export function buildApp(options: AppOptions): FastifyInstance {
     await timers.stop();
   });
 
+  /** The streams of the checkpoints: displays and lane stations follow the queue (S16). */
+  const hub = new StreamHub(options.db, options.streams?.pollMs ?? POLL_MS);
+  const heartbeatMs = options.streams?.heartbeatMs ?? HEARTBEAT_MS;
+  runtime.onCommitted = (checkpointId, seq) => {
+    hub.changed(checkpointId, seq);
+  };
+  app.addHook('onReady', () => {
+    hub.start((error) => {
+      app.log.error(error);
+    });
+  });
+  // Before the server stops: an open stream would keep it waiting.
+  app.addHook('preClose', () => {
+    hub.stop();
+  });
+  /**
+   * Keeps a stream alive: a heartbeat at every beat, once `stillAllowed` says its client may still
+   * follow the checkpoint (a revoked display, a member signed out, end there); `refresh` then runs.
+   */
+  const keepAlive = (
+    stream: EventStream,
+    stillAllowed: () => Promise<void>,
+    refresh: () => Promise<void>,
+  ) => {
+    const beat = setInterval(() => {
+      void (async () => {
+        try {
+          await stillAllowed();
+        } catch {
+          stream.close();
+          return;
+        }
+        stream.send('heartbeat', { at: new Date(clock.now()).toISOString() });
+        await refresh();
+      })().catch((error: unknown) => {
+        app.log.error(error);
+        stream.close();
+      });
+    }, heartbeatMs);
+    stream.onClose(() => {
+      clearInterval(beat);
+    });
+  };
+
   /**
    * The member of staff a request of a checkpoint needs, checked before anything else of the
    * request is read (S15).
@@ -418,6 +478,99 @@ export function buildApp(options: AppOptions): FastifyInstance {
               ],
         ),
       };
+    },
+  );
+
+  /**
+   * A display's stream (S16): the board after each command, with the calls since the previous
+   * message. A display that reconnects with `Last-Event-ID` gets the calls it missed first.
+   */
+  app.get<{ Params: { checkpointId: string } }>(
+    '/v1/checkpoints/:checkpointId/display',
+    async (request, reply) => {
+      const checkpointId = request.params.checkpointId;
+      await requireDevice(options.db, request, checkpointId, 'DISPLAY');
+      const cp = await loadCheckpoint(options.db, checkpointId);
+      const today = () => serviceDayOf(clock.now(), cp.timeZone, cp.dayStartsAt);
+      const stream = new EventStream(reply);
+      stream.onClose(hub.keep(stream));
+      const failed = (error: unknown) => {
+        app.log.error(error);
+        stream.close();
+      };
+      // The sequence number the display has, and the service day it shows.
+      let sent = lastEventIdOf(request);
+      let shown: string | null = null;
+      /** Sends the latest board, if the display does not have it, with the calls it missed. */
+      const sendLatest = async (): Promise<void> => {
+        const row = await boardOf(options.db, cp.id);
+        const day = today();
+        const seq = row?.seq ?? 0;
+        if (sent !== null && seq <= sent && day === shown) return;
+        // The calls since the display's last message, when that message is of this log.
+        const calls =
+          row?.serviceDay === day && sent !== null && sent <= seq
+            ? await callsBetween(options.db, cp.id, day, sent, seq)
+            : [];
+        stream.send('board', displayMessageOf(row, calls, day, clock.now()), seq);
+        sent = seq;
+        shown = day;
+      };
+      // One send at a time, in order; the changes that come meanwhile make one more.
+      let queued = false;
+      let chain: Promise<void> = Promise.resolve();
+      const pump = (): Promise<void> => {
+        if (queued) return chain;
+        queued = true;
+        chain = chain
+          .then(async () => {
+            queued = false;
+            if (!stream.closed) await sendLatest();
+          })
+          .catch(failed);
+        return chain;
+      };
+      stream.onClose(
+        hub.follow(cp.id, () => {
+          void pump();
+        }),
+      );
+      keepAlive(
+        stream,
+        async () => {
+          await requireDevice(options.db, request, cp.id, 'DISPLAY');
+        },
+        pump,
+      );
+      await pump();
+    },
+  );
+
+  /** The lane station's stream (S16): a message whenever the checkpoint's queue changes. */
+  app.get<{ Params: { checkpointId: string } }>(
+    '/v1/checkpoints/:checkpointId/stream',
+    async (request, reply) => {
+      const checkpointId = request.params.checkpointId;
+      await requireStaff(options.db, clock, request, 'OPERATOR', checkpointId);
+      const stream = new EventStream(reply);
+      stream.onClose(hub.keep(stream));
+      let sent = -1;
+      const tell = (seq: number) => {
+        if (seq <= sent) return;
+        stream.send('changed', { seq }, seq);
+        sent = seq;
+      };
+      stream.onClose(hub.follow(checkpointId, tell));
+      keepAlive(
+        stream,
+        async () => {
+          await requireStaff(options.db, clock, request, 'OPERATOR', checkpointId);
+        },
+        async () => {
+          tell(await seqOf(options.db, checkpointId));
+        },
+      );
+      tell(await seqOf(options.db, checkpointId));
     },
   );
 

@@ -4,6 +4,44 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Any change that alters simulated numbers
 must be listed, together with the component versions it bumps.
 
+## [0.16.0] - 2026-11-22: Slice S16, displays over server-sent events
+
+Displays in the hall show each call at once, and say when their data is not up to date; lane
+stations follow the queue as it changes (ADR-047).
+
+### Simulated numbers change
+
+- None.
+
+### Added
+
+- operations 0.5.0: `CheckpointDay.board()`, what the displays show: the numbers called, the latest
+  first, a second call marked, and the prepare window in call order.
+- API 0.16.0:
+  - `GET /v1/checkpoints/{id}/display`, a display's stream of server-sent events, with its token:
+    the board after each command and the calls since the previous message, with the log's
+    sequence number as id; `Last-Event-ID` gives a display that reconnects every call it missed;
+    a heartbeat every 10 seconds, at which a revoked display stops.
+  - `GET /v1/checkpoints/{id}/stream`, the lane stations' stream, with a staff session: a message
+    whenever the queue changes.
+  - The board is written with every command (migration `0008_display_board`). The server that
+    applies a command tells its streams at once; every server reads the boards its streams follow
+    every second, so another server's commands reach them within a second.
+  - `device add --kind display` prints the display's address.
+- Contracts 0.6.0: `DisplayBoard`, `DisplayCall`, `DisplayMessage`, `Heartbeat`, `QueueChanged`;
+  streams in the OpenAPI document (`text/event-stream`, `Last-Event-ID`).
+- Web 0.16.0:
+  - the display, `/display/<checkpoint>`: the numbers called and the numbers to get ready, in its
+    language and in English; a number just called flashes; "Not up to date" after 30 seconds
+    without news, the staff's instructions after 2 minutes; landscape and portrait screens, from a
+    720p television to a tablet.
+  - A reader of server-sent events over `fetch`, so that a display's token stays in a header; it
+    reconnects with `Last-Event-ID` after 1 to 15 seconds.
+  - The lane station follows its stream: it shows at once what other stations and kiosks do,
+    and asks for the queue every 20 seconds in case the stream is down.
+  - i18n: the display's texts, in the three languages.
+  - Unit tests of the stream reader (`pnpm --filter @gateflow/web test`).
+
 ## [0.15.1] - 2026-11-22: People travelling together take one number at the kiosk
 
 The founder's decisions after S15: families are grouped, by the passengers themselves at the

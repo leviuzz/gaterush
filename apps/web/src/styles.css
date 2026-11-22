@@ -1002,6 +1002,222 @@ input {
   font-weight: 650;
 }
 
+/*
+ * The display (S16): read from across a hall, so everything is large; light numbers on a dark
+ * screen. Landscape screens show the called numbers and the numbers to get ready side by side;
+ * portrait screens one above the other.
+ */
+
+.display {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  font-size: clamp(1rem, 0.5rem + 1.6vmin, 2.6rem);
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.display-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1em;
+  padding: 0.8em clamp(1rem, 3vw, 2.5rem);
+  border-bottom: 1px solid var(--line);
+}
+
+.display-clock {
+  font-size: 1.6em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.display-main {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.2em;
+  padding: 1.2em clamp(1rem, 3vw, 2.5rem);
+}
+
+@media (orientation: landscape) {
+  .display-main {
+    grid-template-columns: 3fr 2fr;
+  }
+}
+
+.display-column {
+  display: grid;
+  align-content: start;
+  gap: 0.6em;
+  padding: 1em 1.2em;
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.display-column h1,
+.display-column h2 {
+  display: grid;
+  font-size: 2em;
+  line-height: 1.1;
+  font-weight: 800;
+}
+
+.display-hint,
+.display-empty {
+  display: grid;
+  font-size: 1.05em;
+  color: var(--ink-2);
+}
+
+/* The second line of each text, in English, smaller. */
+.in-english {
+  font-size: 0.72em;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.display-numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em 0.6em;
+  margin: 0.4em 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.display-numbers li {
+  display: grid;
+  justify-items: center;
+  min-width: 4.2em;
+  padding: 0.25em 0.5em;
+  border-radius: 14px;
+  background: var(--accent-soft);
+}
+
+.display-number {
+  /* As large as the screen's height allows: short landscape screens too. */
+  font-size: min(3em, 5.5vh);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.display-called .display-number {
+  font-size: min(4.2em, 8.5vh);
+}
+
+/* On a portrait screen the two columns stand one above the other: smaller numbers. */
+@media (orientation: portrait) {
+  .display-number {
+    font-size: min(3em, 4vh);
+  }
+
+  .display-called .display-number {
+    font-size: min(4.2em, 6vh);
+  }
+}
+
+/* A small portrait screen (a tablet): smaller texts too. */
+@media (orientation: portrait) and (max-height: 1300px) {
+  .display {
+    font-size: clamp(0.85rem, 0.3rem + 1.6vmin, 2rem);
+  }
+
+  .display-main {
+    gap: 0.8em;
+    padding-block: 0.8em;
+  }
+
+  .display-column {
+    gap: 0.4em;
+    padding: 0.7em 1em;
+  }
+}
+
+/* A short screen (a 720p television): everything a little smaller, the numbers first. */
+@media (max-height: 800px) {
+  .display {
+    font-size: clamp(0.9rem, 0.4rem + 1.5vmin, 2rem);
+  }
+
+  .display-main {
+    gap: 0.8em;
+    padding-block: 0.8em;
+  }
+
+  .display-column {
+    gap: 0.4em;
+    padding: 0.7em 1em;
+  }
+}
+
+.display-second {
+  display: grid;
+  justify-items: center;
+  font-size: 0.85em;
+  font-weight: 700;
+  color: var(--warn);
+}
+
+/* A number just called flashes a few times; with reduced motion it only stands out. */
+.display-numbers li.fresh {
+  animation: called 1s ease-in-out 5;
+  outline: 4px solid var(--accent);
+}
+
+@keyframes called {
+  50% {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .display-numbers li.fresh {
+    animation: none;
+  }
+}
+
+.display-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5em 1.5em;
+  padding: 0.6em clamp(1rem, 3vw, 2.5rem);
+  border-top: 1px solid var(--line);
+  font-size: 0.85em;
+  color: var(--muted);
+}
+
+.display-stale {
+  display: grid;
+  padding: 0.3em 0.9em;
+  border-radius: 999px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-weight: 700;
+}
+
+.display-message {
+  display: grid;
+  place-items: center;
+  padding: 2em;
+  text-align: center;
+}
+
+.display-message p {
+  display: grid;
+  gap: 0.4em;
+  max-width: 24em;
+  font-size: 2.4em;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
 /* Printing a ticket: the number, the QR code, where and when; nothing else. */
 
 .print-only {

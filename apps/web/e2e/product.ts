@@ -33,6 +33,10 @@ export interface Product {
   >;
   /** Runs a command of gateflow-api on the product's database. */
   cli(args: readonly string[]): string;
+  /** Stops the server, as when it fails, leaving its database (S16). */
+  stopServer(): Promise<void>;
+  /** Starts the server again, at the same address. */
+  startServer(): Promise<void>;
   stop(): Promise<void>;
 }
 
@@ -130,28 +134,41 @@ export async function startProduct(serverUrl: string, scenario: string): Promise
   const operatorPassword = /^password (\S+)$/m.exec(operatorAdded)?.[1] ?? '';
 
   const port = await freePort();
-  const server = spawn(
-    process.execPath,
-    [API, 'serve', '--port', String(port), '--host', '127.0.0.1', '--web', WEB],
-    { env, stdio: ['ignore', 'pipe', 'pipe'] },
-  );
-  const output: string[] = [];
-  server.stdout.on('data', (chunk: Buffer) => output.push(chunk.toString()));
-  server.stderr.on('data', (chunk: Buffer) => output.push(chunk.toString()));
   const base = `http://127.0.0.1:${String(port)}`;
-  const deadline = Date.now() + 30_000;
-  for (;;) {
-    try {
-      if ((await fetch(`${base}/v1/health`)).ok) break;
-    } catch {
-      // not listening yet
+  /** Starts gateflow-api and waits until it answers. */
+  const launch = async () => {
+    const started = spawn(
+      process.execPath,
+      [API, 'serve', '--port', String(port), '--host', '127.0.0.1', '--web', WEB],
+      { env, stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    const output: string[] = [];
+    started.stdout.on('data', (chunk: Buffer) => output.push(chunk.toString()));
+    started.stderr.on('data', (chunk: Buffer) => output.push(chunk.toString()));
+    const deadline = Date.now() + 30_000;
+    for (;;) {
+      try {
+        if ((await fetch(`${base}/v1/health`)).ok) break;
+      } catch {
+        // not listening yet
+      }
+      if (started.exitCode !== null || Date.now() > deadline) {
+        started.kill();
+        throw new Error(`the server did not start:\n${output.join('')}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 200));
     }
-    if (server.exitCode !== null || Date.now() > deadline) {
-      server.kill();
-      throw new Error(`the server did not start:\n${output.join('')}`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 200));
-  }
+    return started;
+  };
+  let server: ReturnType<typeof spawn> | null = await launch();
+  const stopServer = async () => {
+    const running = server;
+    if (running === null) return;
+    server = null;
+    const exited = new Promise((resolve) => running.once('exit', resolve));
+    running.kill('SIGTERM');
+    await exited;
+  };
 
   const signedIn = await fetch(`${base}/v1/auth/sign-in`, {
     method: 'POST',
@@ -173,10 +190,12 @@ export async function startProduct(serverUrl: string, scenario: string): Promise
       operator: { login: 'e2e.operator', password: operatorPassword },
     },
     cli,
+    stopServer,
+    startServer: async () => {
+      server ??= await launch();
+    },
     stop: async () => {
-      const exited = new Promise((resolve) => server.once('exit', resolve));
-      server.kill('SIGTERM');
-      await exited;
+      await stopServer();
       const dropper = new pg.Client({ connectionString: serverUrl });
       await dropper.connect();
       await dropper.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);

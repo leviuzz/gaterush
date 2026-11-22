@@ -23,7 +23,7 @@ import type {
   StaffMemberResponse,
   Ticket,
 } from '@gateflow/contracts';
-import { OperationError } from '@gateflow/operations';
+import { MAX_PARTY_SIZE, OperationError } from '@gateflow/operations';
 import type { Command, CommandResult, TicketSummary } from '@gateflow/operations';
 import { requestHash } from './chain';
 import { readPass, recordScan, ticketOfPass } from './intake';
@@ -39,14 +39,14 @@ import {
   staffOf,
 } from './staff';
 import type { StaffMember, StaffRole } from './staff';
-import type { ScanOutcome, ScanReason } from './intake';
+import type { Accepted, ScanOutcome, ScanReason } from './intake';
 import type { Db } from './db/client';
 import { airport, checkpoint, flight, queueToken } from './db/schema';
 import { deviceOf, requireDevice } from './devices';
 import type { Ids } from './ids';
 import { randomIds } from './ids';
 import { ApiError, Runtime, loadCheckpoint } from './runtime';
-import type { BuildContext } from './runtime';
+import type { BuildContext, CheckpointRow } from './runtime';
 import { localDate, serviceDayOf, systemClock } from './time';
 import type { Clock } from './time';
 import { verifyChain } from './verify';
@@ -149,6 +149,14 @@ function scanAnswerFor(state: TicketSummary['state']): {
     case 'EXPIRED':
       throw new Error('an expired ticket gives way to a new one');
   }
+}
+
+/** What a kiosk is told of a scan. */
+interface ScanAnswer {
+  readonly outcome: ScanOutcome;
+  readonly reason: ScanReason | null;
+  readonly ticket: Ticket | null;
+  readonly ref: string | null;
 }
 
 function parse<T extends z.ZodType>(schema: T, value: unknown): z.output<T> {
@@ -396,6 +404,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
             ? []
             : [
                 {
+                  id: f.id,
                   carrier: f.carrier,
                   flightNumber: f.flightNumber,
                   departure: new Date(f.stdMs).toISOString(),
@@ -482,6 +491,102 @@ export function buildApp(options: AppOptions): FastifyInstance {
       admittedAtMs: r.admittedAtMs,
     });
 
+  /**
+   * A boarding pass joins the party of a waiting ticket (S15): a family scans its other passes onto
+   * the number it just took. The pass must be for the same flight and have no number of its own;
+   * the party must still wait and not be full. A pass added twice counts once.
+   */
+  const joinParty = async (
+    request: FastifyRequest,
+    kioskId: string,
+    cp: CheckpointRow,
+    intake: Accepted,
+    partyRef: string,
+  ): Promise<ScanAnswer> => {
+    const decided: { value?: ScanAnswer } = {};
+    const executed = await runtime.execute({
+      checkpointId: cp.id,
+      idempotencyKey: idempotencyKeyOf(request),
+      requestHash: requestHash('POST /v1/checkpoints/:checkpointId/scans', {
+        pass: intake.dedupKey,
+        party: partyRef,
+      }),
+      actor: `kiosk:${kioskId}`,
+      build: async ({ tx, day, atMs }) => {
+        const party = day.ticketByRef(partyRef);
+        if (party === undefined) {
+          throw new ApiError(404, 'UNKNOWN_TICKET', 'no such ticket today at this checkpoint');
+        }
+        const own = await ticketOfPass(tx, cp.id, intake.dedupKey);
+        const mine = own === undefined ? undefined : day.ticket(own.id);
+        const refuse = (outcome: ScanOutcome, reason: ScanReason): ScanAnswer => ({
+          outcome,
+          reason,
+          ticket: null,
+          ref: null,
+        });
+        let answer: ScanAnswer;
+        if (mine?.ticketId === party.ticketId) {
+          // The pass is on this number already: found again, not added twice.
+          answer = { outcome: 'RETRIEVED', reason: null, ticket: toTicket(party), ref: partyRef };
+        } else if (intake.flight.id !== party.flightId) {
+          answer = refuse('REJECTED', 'OTHER_FLIGHT');
+        } else if (mine !== undefined && mine.state !== 'EXPIRED') {
+          // Its own number stands: admitted, held or cancelled ones go to staff, as on a rescan.
+          const again = scanAnswerFor(mine.state);
+          answer =
+            again.outcome === 'NEEDS_ASSISTANCE' && again.reason !== null
+              ? refuse('NEEDS_ASSISTANCE', again.reason)
+              : refuse('REJECTED', 'HAS_OWN_NUMBER');
+        } else if (party.state !== 'QUEUED' && party.state !== 'PREPARE') {
+          answer = refuse('REJECTED', 'TOO_LATE');
+        } else if (party.partySize >= MAX_PARTY_SIZE) {
+          answer = refuse('REJECTED', 'PARTY_FULL');
+        } else {
+          return {
+            type: 'ADD_TO_PARTY',
+            ticketId: party.ticketId,
+            people: 1,
+            dedupKey: intake.dedupKey,
+          };
+        }
+        decided.value = answer;
+        await recordScan(tx, {
+          id: ids.uuid(),
+          checkpointId: cp.id,
+          atMs,
+          outcome: answer.outcome,
+          reason: answer.reason,
+          ticketId: party.ticketId,
+          pass: intake.pass,
+        });
+        return null;
+      },
+    });
+    const result = executed.result;
+    if (result?.type === 'ACTED') {
+      // Recorded once the queue has answered: a party called meanwhile takes no one more.
+      const answer: ScanAnswer =
+        result.outcome === 'DONE'
+          ? { outcome: 'ADDED', reason: null, ticket: toTicket(result.ticket), ref: partyRef }
+          : { outcome: 'REJECTED', reason: 'TOO_LATE', ticket: null, ref: null };
+      if (!executed.replayed) {
+        await recordScan(options.db, {
+          id: ids.uuid(),
+          checkpointId: cp.id,
+          atMs: clock.now(),
+          outcome: answer.outcome,
+          reason: answer.reason,
+          ticketId: result.ticket.ticketId,
+          pass: intake.pass,
+        });
+      }
+      return answer;
+    }
+    if (decided.value === undefined) throw new Error('the party scan gave no answer');
+    return decided.value;
+  };
+
   app.post<{ Params: { checkpointId: string } }>(
     '/v1/checkpoints/:checkpointId/scans',
     async (request, reply) => {
@@ -502,6 +607,10 @@ export function buildApp(options: AppOptions): FastifyInstance {
         return reply
           .status(200)
           .send({ outcome: intake.outcome, reason: intake.reason, ticket: null, ref: null });
+      }
+      if (body.party !== undefined) {
+        await timers.advanceIfDue(cp.id);
+        return reply.status(200).send(await joinParty(request, kiosk.id, cp, intake, body.party));
       }
       // Under the checkpoint's lock: the same pass at two kiosks at once still gives one ticket.
       const scanOnce = async (key: string): Promise<{ status: number; body: unknown } | null> => {
@@ -705,7 +814,10 @@ export function buildApp(options: AppOptions): FastifyInstance {
 
   /** The answer to a staff action (S15). */
   const acted = (result: CommandResult): { status: number; body: StaffActionResponse } => {
-    if (result.type !== 'ACTED') throw new Error(`unexpected result ${result.type}`);
+    // A party grows at the kiosk, not by a staff action.
+    if (result.type !== 'ACTED' || result.action === 'ADD_TO_PARTY') {
+      throw new Error(`unexpected result ${result.type}`);
+    }
     return {
       status: 200,
       body: {
@@ -867,6 +979,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
     const rows = await options.db
       .select({
         number: queueToken.number,
+        partySize: queueToken.partySize,
         state: queueToken.state,
         serviceDay: queueToken.serviceDay,
         checkpoint: checkpoint.name,

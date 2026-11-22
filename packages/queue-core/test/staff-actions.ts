@@ -10,6 +10,7 @@ export const ACTIONS = [
   'release',
   'reject',
   'cancel',
+  'grow',
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
@@ -35,6 +36,8 @@ export function act(
       return q.resolve(id, 'CANCEL', now, estimates);
     case 'cancel':
       return q.cancel(id, now, estimates);
+    case 'grow':
+      return q.grow(id, 1, now, estimates);
   }
 }
 
@@ -43,8 +46,8 @@ export function act(
  * to. An action missing from a state's row is refused.
  */
 export const TRANSITIONS: Readonly<Record<TicketState, Partial<Record<Action, TicketState>>>> = {
-  QUEUED: { hold: 'REVIEW', cancel: 'CANCELLED' },
-  PREPARE: { hold: 'REVIEW', cancel: 'CANCELLED' },
+  QUEUED: { hold: 'REVIEW', cancel: 'CANCELLED', grow: 'QUEUED' },
+  PREPARE: { hold: 'REVIEW', cancel: 'CANCELLED', grow: 'PREPARE' },
   CALLED: { recall: 'RECALLED', noShow: 'NO_SHOW', cancel: 'CANCELLED' },
   RECALLED: { recall: 'RECALLED', noShow: 'NO_SHOW', cancel: 'CANCELLED' },
   NO_SHOW: { reactivate: 'QUEUED', cancel: 'CANCELLED' },

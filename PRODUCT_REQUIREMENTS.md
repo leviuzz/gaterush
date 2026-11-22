@@ -60,7 +60,7 @@ without disproportionate harm to passengers who are not prioritised (ADR-002).
 | FR-13 | Administration: airports, checkpoints, lanes, devices, users; versioned policies with four-eyes approval and rollback. |
 | FR-14 | Audit of every state transition, override and configuration change. Since S12 every command and event of a checkpoint is in an append-only log with a chain of hashes, which an endpoint checks (ADR-042). |
 | FR-15 | Data quality: every datum has a source, observation time, validity and confidence; stale data leaves automatic mode for the affected criterion. |
-| FR-16 | Dedicated paths for assisted passengers, groups and families, without penalising existing rights. |
+| FR-16 | Dedicated paths for assisted passengers, groups and families, without penalising existing rights. Since S15, staff give a party one number at the lane (ADR-045), and people travelling together take one number at the kiosk by scanning each of their boarding passes onto it (0.15.1, ADR-046). |
 | FR-17 | Defined degraded modes for network or device failure; never disable security barriers. |
 | FR-18 | Simulator: scenarios (synthetic or from the airport's flight list, with the source and licence of every datum), policies (FIFO, rules, variants, lane opening by a supervisor or by recommendation, with the staff on call and a duty manager who may not follow), multi-seed batches, KPIs, reports, comparisons; in the command line and in the Simulator Studio, a page that runs offline in the browser (ADR-040); the replay of a day with each passenger's journey, the paired outcome and the reason for every call (ADR-041). |
 | FR-19 | Forecasts at 15/30/60/90 min, saturation, lane-opening recommendations with logged decisions and outcomes (simulated in S8: ADR-039). |

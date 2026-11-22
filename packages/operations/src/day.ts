@@ -239,6 +239,21 @@ export class CheckpointDay {
         case 'HOLD':
         case 'CANCEL':
           return this.act(command.type, command.ticketId, nowMs);
+        case 'ADD_TO_PARTY': {
+          this.requireTicket(command.ticketId);
+          const size = this.view(command.ticketId).partySize;
+          requireInteger(command.people, 'the people joining', 1, MAX_PARTY_SIZE - size);
+          if (command.dedupKey !== null && !/^[0-9a-f]{64}$/.test(command.dedupKey)) {
+            invalid('the deduplication key must be a hexadecimal SHA-256 HMAC');
+          }
+          const outcome = this.queue.grow(command.ticketId, command.people, nowMs, this.estimates);
+          return {
+            type: 'ACTED',
+            action: 'ADD_TO_PARTY',
+            outcome,
+            ticket: this.summaryOf(this.view(command.ticketId)),
+          };
+        }
         case 'RESOLVE_REVIEW': {
           // A command read back from a log is not trusted to carry a known decision.
           const decision: string = command.decision;

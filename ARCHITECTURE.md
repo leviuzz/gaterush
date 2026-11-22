@@ -266,6 +266,7 @@ an explicit time, and time may never go backwards.
 | `present(id, t, estimates)` | Validation at the access point: `ADMITTED`, `REACTIVATED` (a no-show rescanning in time), `EXPIRED`, or a refusal (`NOT_CALLED`, `ALREADY_ADMITTED`, `UNKNOWN_TICKET`). |
 | `advance(t)` / `nextDueMs()` | Applies the timeouts due by `t` / tells when the next one is due. |
 | `recall`, `markNoShow`, `reactivate`, `hold`, `resolve`, `cancel` (S15) | Staff actions, each allowed only in the states the table below gives; otherwise `NOT_ALLOWED`, and nothing changes. The simulator never takes them. |
+| `grow(id, people, t, estimates)` (ADR-046) | More people join a waiting ticket (`QUEUED` or `PREPARE`): a family adds its boarding passes at the kiosk. Reports `PARTY_GROWN` with the new size; otherwise `NOT_ALLOWED`. The simulator never takes it. |
 
 States: `QUEUED -> PREPARE -> CALLED -> RECALLED -> NO_SHOW -> EXPIRED`, where:
 - `PREPARE` is skipped when there is no prepare window (M = 0);
@@ -295,7 +296,8 @@ States: `QUEUED -> PREPARE -> CALLED -> RECALLED -> NO_SHOW -> EXPIRED`, where:
   assessment of the ticket chosen (ADR-041).
 - **Parties.** A ticket carries its party size, presentation time and scheduled departure. The
   window, the waiting list and the outstanding calls are also counted in people; a party called
-  ahead of older tickets adds its size to their overtake counts.
+  ahead of older tickets adds its size to their overtake counts. A waiting party may grow
+  (`grow`, ADR-046); the overtakes already counted keep the size it had then.
 - **Fast track.** A fast-track priority commitment goes ahead of the prepare window, behind earlier
   fast-track commitments only. The tickets it passes are overtaken by its people.
 - **Last seen.** Each ticket records when the passenger was last at the access point (issue,
@@ -657,6 +659,9 @@ flowchart LR
     due, written with every command.
   - Staff (ADR-045): `staff_user` (login, scrypt hash of the password, role, checkpoints) and
     `staff_session` (the SHA-256 of a session's token, its expiry, its end).
+  - Parties (ADR-046): `party_pass` (append-only), the HMAC of each boarding pass added to a
+    party, with its ticket and the command that added it. A rescan finds the latest ticket a pass
+    was given or joined.
 - **Timers (ADR-045).** `serve` runs a scheduler: every second it sends `ADVANCE` to each
   checkpoint whose next timeout is due. The command goes through the log like any other; its
   idempotency key names the timeout, so it applies once whichever servers see it due. A rescan at
@@ -666,7 +671,8 @@ flowchart LR
   log records the member as the actor (`staff:<id>`).
 - **Endpoints** (OpenAPI at `/v1/openapi.json`):
   - `POST /v1/checkpoints/{id}/scans`: a boarding pass gives a ticket, the same ticket again, or
-    a reason (ADR-043). Only a kiosk of the checkpoint may send one (ADR-044);
+    a reason (ADR-043). Only a kiosk of the checkpoint may send one (ADR-044). With `party`, the
+    pass joins that waiting ticket instead (ADR-046);
   - `GET /v1/devices/me` and `GET /v1/checkpoints/{id}/demo-flights`, for kiosks;
   - `POST /v1/auth/sign-in`, `GET /v1/auth/me`, `POST /v1/auth/sign-out` (ADR-045);
   - `POST /v1/checkpoints/{id}/tickets/{ticket}/recall`, `no-show`, `reactivate`, `review`,
@@ -708,6 +714,10 @@ flowchart LR
   - A number comes with a QR code to its page and a print layout; a refusal comes with its
     reason, in the passenger's language.
   - The kiosk is back on its welcome screen, in its own language, 45 seconds later.
+  - **People travelling together** (ADR-046): "Add people travelling with you", under a number
+    still waiting, opens a screen where each companion's pass joins the number. It shows the
+    people on the number and the answer to each scan, and closes after a minute without a pass.
+    The ticket, its printout and the passenger's page say for how many people it is.
 - **The passenger's page** shows the number and what to do now, in the phone's language or the
   one chosen. It asks the API again every 15 seconds while the ticket is open; S16 replaces this
   with server-sent events for displays.

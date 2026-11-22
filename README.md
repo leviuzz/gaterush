@@ -133,6 +133,8 @@ This prints the member's password once. `user password --login <login>` gives a 
 The endpoints:
 - `POST /v1/checkpoints/{id}/scans`: a kiosk scans a boarding pass (with its token). The answer
   is a ticket, the same ticket again, or a reason. The pass is read in memory and never stored.
+  With `party` (a ticket's reference), the pass joins that number: people travelling together
+  take one number;
 - `POST /v1/auth/sign-in`, `GET /v1/auth/me`, `POST /v1/auth/sign-out`: staff sign in; the
   session is a cookie the page cannot read. Every staff route below needs one, of the right role;
 - `POST /v1/checkpoints/{id}/tickets`: issue a manual ticket, with its reason and party size;

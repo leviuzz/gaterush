@@ -51,6 +51,18 @@ const EN = {
   'kiosk.reason.CANCELLED': 'Your number was cancelled. Please ask a member of staff.',
   'kiosk.reason.BOARDING_CLOSED':
     'Boarding for your flight may have closed. Please ask a member of staff at once.',
+  'kiosk.reason.OTHER_FLIGHT':
+    'This boarding pass is for another flight: it needs a number of its own. Scan it again after tapping Done.',
+  'kiosk.reason.HAS_OWN_NUMBER': 'This boarding pass already has a number of its own.',
+  'kiosk.reason.PARTY_FULL': 'This number cannot take more people. Please ask a member of staff.',
+  'kiosk.reason.TOO_LATE':
+    'Your number has been called already: go to the security entrance together.',
+  'kiosk.party.add': 'Add people travelling with you',
+  'kiosk.party.title': 'One number for everyone travelling together',
+  'kiosk.party.count': 'People on this number: {count}',
+  'kiosk.party.hint': 'Scan their boarding passes one at a time. When you have finished, tap Done.',
+  'kiosk.party.added': 'Added. Scan the next boarding pass, or tap Done.',
+  'kiosk.party.already': 'This boarding pass is already on this number.',
   'kiosk.notSetUp': 'This kiosk is not set up yet. Please ask a member of staff.',
   'kiosk.error': 'Something went wrong. Please ask a member of staff.',
   'kiosk.demo': 'Demo with synthetic data',
@@ -68,6 +80,7 @@ const EN = {
   'ticket.notFound': 'This ticket does not exist.',
   'ticket.updated': 'Updated at {time}',
   'ticket.ticketFor': 'Ticket for {checkpoint}',
+  'ticket.people': 'For {count} people',
   'lane.title': 'Lane station',
   'lane.signIn.title': 'Sign in',
   'lane.signIn.login': 'Login',
@@ -161,6 +174,20 @@ const IT: Readonly<Record<MessageKey, string>> = {
     "Questa carta d'imbarco ha già passato i controlli. Chiedi al personale.",
   'kiosk.reason.UNDER_REVIEW': 'Il personale sta verificando il tuo numero. Chiedi al personale.',
   'kiosk.reason.CANCELLED': 'Il tuo numero è stato annullato. Chiedi al personale.',
+  'kiosk.reason.OTHER_FLIGHT':
+    "Questa carta d'imbarco è per un altro volo: serve un numero a parte. Scansionala di nuovo dopo aver toccato Fatto.",
+  'kiosk.reason.HAS_OWN_NUMBER': "Questa carta d'imbarco ha già un suo numero.",
+  'kiosk.reason.PARTY_FULL':
+    'Su questo numero non possono stare altre persone. Chiedi al personale.',
+  'kiosk.reason.TOO_LATE':
+    "Il vostro numero è già stato chiamato: andate insieme all'ingresso dei controlli.",
+  'kiosk.party.add': 'Aggiungi chi viaggia con te',
+  'kiosk.party.title': 'Un solo numero per chi viaggia insieme',
+  'kiosk.party.count': 'Persone su questo numero: {count}',
+  'kiosk.party.hint':
+    "Scansiona le loro carte d'imbarco, una alla volta. Quando hai finito, tocca Fatto.",
+  'kiosk.party.added': "Aggiunta. Scansiona la prossima carta d'imbarco, oppure tocca Fatto.",
+  'kiosk.party.already': "Questa carta d'imbarco è già su questo numero.",
   'kiosk.reason.BOARDING_CLOSED':
     "L'imbarco del tuo volo potrebbe essere già chiuso. Chiedi subito al personale.",
   'kiosk.notSetUp': 'Questo totem non è ancora configurato. Chiedi al personale.',
@@ -181,6 +208,7 @@ const IT: Readonly<Record<MessageKey, string>> = {
   'ticket.notFound': 'Questo ticket non esiste.',
   'ticket.updated': 'Aggiornato alle {time}',
   'ticket.ticketFor': 'Ticket per {checkpoint}',
+  'ticket.people': 'Per {count} persone',
   'lane.title': 'Postazione varco',
   'lane.signIn.title': 'Accedi',
   'lane.signIn.login': 'Utente',
@@ -272,6 +300,18 @@ const ES: Readonly<Record<MessageKey, string>> = {
     'Este pase de abordar ya pasó el control de seguridad. Pida ayuda al personal.',
   'kiosk.reason.UNDER_REVIEW': 'El personal está revisando su número. Pida ayuda al personal.',
   'kiosk.reason.CANCELLED': 'Su número fue cancelado. Pida ayuda al personal.',
+  'kiosk.reason.OTHER_FLIGHT':
+    'Este pase de abordar es de otro vuelo: necesita su propio número. Escanéelo de nuevo después de tocar Listo.',
+  'kiosk.reason.HAS_OWN_NUMBER': 'Este pase de abordar ya tiene su propio número.',
+  'kiosk.reason.PARTY_FULL': 'Este número no admite más personas. Pida ayuda al personal.',
+  'kiosk.reason.TOO_LATE':
+    'Su número ya fue llamado: vayan juntos a la entrada del control de seguridad.',
+  'kiosk.party.add': 'Agregar a quien viaja con usted',
+  'kiosk.party.title': 'Un solo número para quienes viajan juntos',
+  'kiosk.party.count': 'Personas en este número: {count}',
+  'kiosk.party.hint': 'Escanee sus pases de abordar uno por uno. Cuando termine, toque Listo.',
+  'kiosk.party.added': 'Agregado. Escanee el siguiente pase de abordar o toque Listo.',
+  'kiosk.party.already': 'Este pase de abordar ya está en este número.',
   'kiosk.reason.BOARDING_CLOSED':
     'Es posible que el abordaje de su vuelo ya haya cerrado. Pida ayuda al personal de inmediato.',
   'kiosk.notSetUp': 'Este quiosco todavía no está configurado. Pida ayuda al personal.',
@@ -292,6 +332,7 @@ const ES: Readonly<Record<MessageKey, string>> = {
   'ticket.notFound': 'Este boleto no existe.',
   'ticket.updated': 'Actualizado a las {time}',
   'ticket.ticketFor': 'Boleto para {checkpoint}',
+  'ticket.people': 'Para {count} personas',
   'lane.title': 'Estación de control',
   'lane.signIn.title': 'Iniciar sesión',
   'lane.signIn.login': 'Usuario',

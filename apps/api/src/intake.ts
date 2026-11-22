@@ -3,7 +3,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import { dedupMaterial, legForDeparture, parseBoardingPass } from '@gateflow/bcbp';
 import type { BoardingPass } from '@gateflow/bcbp';
 import type { Db, Tx } from './db/client';
-import { dedupSecret, flight, queueToken, scan } from './db/schema';
+import { dedupSecret, flight, partyPass, queueToken, scan } from './db/schema';
 import type { CheckpointRow } from './runtime';
 import { localDate } from './time';
 
@@ -14,7 +14,8 @@ import { localDate } from './time';
  * never stored or logged.
  */
 
-export type ScanOutcome = 'ISSUED' | 'RETRIEVED' | 'REACTIVATED' | 'REJECTED' | 'NEEDS_ASSISTANCE';
+export type ScanOutcome =
+  'ISSUED' | 'RETRIEVED' | 'REACTIVATED' | 'ADDED' | 'REJECTED' | 'NEEDS_ASSISTANCE';
 export type ScanReason =
   | 'UNREADABLE'
   | 'WRONG_AIRPORT'
@@ -23,7 +24,11 @@ export type ScanReason =
   | 'ALREADY_ADMITTED'
   | 'UNDER_REVIEW'
   | 'CANCELLED'
-  | 'BOARDING_CLOSED';
+  | 'BOARDING_CLOSED'
+  | 'OTHER_FLIGHT'
+  | 'HAS_OWN_NUMBER'
+  | 'PARTY_FULL'
+  | 'TOO_LATE';
 
 /** A boarding pass that can give a ticket at this checkpoint. */
 export interface Accepted {
@@ -102,14 +107,29 @@ export async function readPass(
 }
 
 /** The latest ticket of this boarding pass at the checkpoint, if any. */
+/**
+ * The latest ticket of a boarding pass at the checkpoint: the one it was issued, or the party it
+ * joined at the kiosk (S15), whichever came last.
+ */
 export async function ticketOfPass(tx: Tx, checkpointId: string, dedupKey: string) {
-  const rows = await tx
+  const own = await tx
     .select()
     .from(queueToken)
     .where(and(eq(queueToken.checkpointId, checkpointId), eq(queueToken.dedupKey, dedupKey)))
     .orderBy(desc(queueToken.issuedAtMs))
     .limit(1);
-  return rows[0];
+  const joined = await tx
+    .select({ ticket: queueToken, atMs: partyPass.atMs })
+    .from(partyPass)
+    .innerJoin(queueToken, eq(queueToken.id, partyPass.ticketId))
+    .where(and(eq(partyPass.checkpointId, checkpointId), eq(partyPass.dedupKey, dedupKey)))
+    .orderBy(desc(partyPass.atMs))
+    .limit(1);
+  const issued = own[0];
+  const party = joined[0];
+  if (party === undefined) return issued;
+  if (issued === undefined) return party.ticket;
+  return party.atMs > issued.issuedAtMs ? party.ticket : issued;
 }
 
 /** Records a scan: its outcome and what describes the pass, nothing that identifies anybody. */

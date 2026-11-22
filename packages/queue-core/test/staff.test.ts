@@ -223,6 +223,26 @@ describe('staff actions on the ticket state machine (S15)', () => {
     expect(late.ticket('a')?.state).toBe('EXPIRED');
   });
 
+  it('lets a party grow while it waits, and calls it as one (S15)', () => {
+    const events: QueueEvent[] = [];
+    const q = new CheckpointQueue(virtual(), CLASSIFICATION, { listener: (e) => events.push(e) });
+    q.issue(ticket('family'), 0, EST);
+    expect(q.grow('family', 2, MIN, EST)).toBe('DONE');
+    expect(q.grow('family', 1, MIN, EST)).toBe('DONE');
+    expect(q.ticket('family')?.partySize).toBe(4);
+    expect(q.waitingPeople).toBe(4);
+    expect(events.at(-1)).toEqual({
+      type: 'PARTY_GROWN',
+      ticketId: 'family',
+      atMs: MIN,
+      partySize: 4,
+    });
+    expect(() => q.grow('family', 0, MIN, EST)).toThrow(/whole number/);
+    expect(q.callNext(2 * MIN, EST)?.partySize).toBe(4);
+    // Once called, the party is what it is.
+    expect(q.grow('family', 1, 2 * MIN, EST)).toBe('NOT_ALLOWED');
+  });
+
   it('has no calls to answer in a physical queue', () => {
     const q = new CheckpointQueue(FIFO_POLICY, CLASSIFICATION);
     q.issue(ticket('a'), 0, EST);

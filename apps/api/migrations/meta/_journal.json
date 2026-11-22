@@ -50,6 +50,13 @@
       "when": 1795344560519,
       "tag": "0006_staff",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795346650667,
+      "tag": "0007_party",
+      "breakpoints": true
     }
   ]
 }

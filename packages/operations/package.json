@@ -1,6 +1,6 @@
 {
   "name": "@gateflow/operations",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "The operational checkpoint: one service day of a checkpoint run on the simulator's queue, commands in, events out, rebuilt exactly from its command log (pure).",
   "type": "module",

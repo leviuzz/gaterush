@@ -46,8 +46,8 @@ interface TicketRecord {
   lastChange: -1 | 0 | 1;
   /** Changes of class opposite in direction to the previous change (flapping). */
   classReversals: number;
-  /** People on the ticket (a group or family is called together). */
-  readonly partySize: number;
+  /** People on the ticket (a group or family is called together); a party may grow (S15). */
+  partySize: number;
   /** When the passenger first presented at the checkpoint (kept across new tickets). */
   readonly presentedAtMs: Millis;
   readonly scheduledDepartureMs: Millis | null;
@@ -533,6 +533,34 @@ export class CheckpointQueue {
     this.waiting.splice(insertionIndex(this.waiting, record.fifoKey), 0, record);
     this.emit({ type: 'RELEASED', ticketId: record.id, atMs: nowMs });
     this.refillWindow(nowMs, estimates);
+    return 'DONE';
+  }
+
+  /**
+   * More people join a waiting ticket (S15): a family adds its boarding passes at the kiosk.
+   * Allowed while the ticket waits (QUEUED or PREPARE). The overtakes and priority calls already
+   * counted keep the size the party had then.
+   */
+  grow(
+    ticketId: string,
+    people: number,
+    nowMs: Millis,
+    estimates: CheckpointEstimates,
+  ): StaffActionOutcome {
+    if (!Number.isSafeInteger(people) || people < 1) {
+      throw new QueueError(`people joining a party must be a whole number from 1, not ${people}`);
+    }
+    this.begin(nowMs, estimates);
+    const record = this.byId.get(ticketId);
+    if (record === undefined) return 'UNKNOWN_TICKET';
+    if (record.state !== 'QUEUED' && record.state !== 'PREPARE') return 'NOT_ALLOWED';
+    record.partySize += people;
+    this.emit({
+      type: 'PARTY_GROWN',
+      ticketId: record.id,
+      atMs: nowMs,
+      partySize: record.partySize,
+    });
     return 'DONE';
   }
 

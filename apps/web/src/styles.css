@@ -430,6 +430,61 @@ input {
   max-width: 30em;
 }
 
+/* The people on a number, when more than one (S15). */
+.party-size {
+  font-size: 1.2em;
+  font-weight: 650;
+  color: var(--ink);
+}
+
+/* The passes of those travelling together join the number on screen (S15). */
+.party {
+  display: grid;
+  justify-items: center;
+  gap: 0.6em;
+}
+
+.party h1 {
+  font-size: 1.6em;
+  line-height: 1.15;
+  font-weight: 800;
+  max-width: 20em;
+}
+
+.party .number {
+  font-size: clamp(3.5rem, 11vmin, 7.5rem);
+}
+
+.party-count {
+  font-size: 1.3em;
+  font-weight: 650;
+  color: var(--ink);
+}
+
+/* Two lines kept for the latest scan's answer: the screen does not jump as it changes. */
+.party-status {
+  display: grid;
+  place-items: center;
+  min-height: 3.6em;
+  width: min(100%, 30em);
+  padding: 0.6em 1em;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.party-status[data-kind='ok'] {
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-weight: 650;
+}
+
+.party-status[data-kind='warn'] {
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-weight: 650;
+}
+
 .qr-block {
   display: grid;
   justify-items: center;

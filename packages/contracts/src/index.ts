@@ -6,7 +6,7 @@ import { z } from 'zod';
  * ticket is a number, a state and a flight, never a name.
  */
 
-export const CONTRACTS_VERSION = '0.4.0';
+export const CONTRACTS_VERSION = '0.5.0';
 
 export const Segment = z.enum(['DEPARTING', 'TRANSFER']);
 
@@ -51,13 +51,25 @@ export type Ticket = z.infer<typeof Ticket>;
  * A kiosk scans a boarding pass (IATA BCBP). The pass is read in memory and never stored or logged
  * (ADR-043).
  */
-export const ScanRequest = z.strictObject({ bcbp: z.string().min(1).max(1100) });
+export const ScanRequest = z.strictObject({
+  bcbp: z.string().min(1).max(1100),
+  /**
+   * The reference of a ticket the pass joins (S15): a family scans its other boarding passes onto
+   * one number, right after taking it.
+   */
+  party: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{16,64}$/)
+    .optional(),
+});
 
 export const ScanOutcome = z.enum([
   'ISSUED',
   'RETRIEVED',
   /** A no-show scanned again within its window: back in the queue (S15). */
   'REACTIVATED',
+  /** The pass joined the party of a waiting ticket (S15). */
+  'ADDED',
   'REJECTED',
   'NEEDS_ASSISTANCE',
 ]);
@@ -75,6 +87,14 @@ export const ScanReason = z.enum([
   'CANCELLED',
   /** Boarding of the flight has closed, as GateFlow knows it: staff decide (S15). */
   'BOARDING_CLOSED',
+  /** A pass added to a party is for another flight than the party's (S15). */
+  'OTHER_FLIGHT',
+  /** A pass added to a party already has a number of its own (S15). */
+  'HAS_OWN_NUMBER',
+  /** A party has the largest size a ticket may have (S15). */
+  'PARTY_FULL',
+  /** The party's number is called already: the pass takes its own (S15). */
+  'TOO_LATE',
 ]);
 
 /** Why staff issue a ticket by hand: a coded reason, never free text (S15). */
@@ -168,6 +188,8 @@ export const QueueResponse = z.object({
 /** What a passenger sees on the page of their ticket: no personal data. */
 export const PublicTicketResponse = z.object({
   number: z.string(),
+  /** The people on the ticket (S15). */
+  partySize: z.int().min(1).max(20),
   state: TicketState,
   checkpoint: z.string(),
   serviceDay: z.iso.date(),
@@ -214,6 +236,8 @@ export const DemoFlightsResponse = z.object({
   date: z.iso.date(),
   flights: z.array(
     z.object({
+      /** The flight a ticket names (S15): a party's sample passes are for its own flight. */
+      id: z.uuid(),
       carrier: z.string(),
       flightNumber: z.string(),
       departure: Instant,
@@ -358,13 +382,17 @@ export const ROUTES: readonly Route[] = [
   {
     method: 'post',
     path: '/v1/checkpoints/{checkpointId}/scans',
-    summary: 'A kiosk scans a boarding pass: a ticket, the same ticket again, or a reason',
+    summary:
+      'A kiosk scans a boarding pass: a ticket, the same ticket again, the pass added to a party, or a reason',
     command: true,
     device: true,
     body: ScanRequest,
     responses: {
       '201': { description: 'A ticket was issued', schema: ScanResponse },
-      '200': { description: 'The ticket found again, or why there is none', schema: ScanResponse },
+      '200': {
+        description: 'The ticket found again, the party the pass joined, or why there is none',
+        schema: ScanResponse,
+      },
       ...errors,
       ...deviceErrors,
     },

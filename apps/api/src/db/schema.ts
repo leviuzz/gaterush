@@ -313,7 +313,10 @@ export const scan = pgTable(
       .notNull()
       .references(() => checkpoint.id),
     atMs: ms('at_ms').notNull(),
-    /** `ISSUED`, `RETRIEVED`, `REACTIVATED` (S15), `REJECTED` or `NEEDS_ASSISTANCE`. */
+    /**
+     * `ISSUED`, `RETRIEVED`, `REACTIVATED` (S15), `ADDED` to a party (S15), `REJECTED` or
+     * `NEEDS_ASSISTANCE`.
+     */
     outcome: text('outcome').notNull(),
     reason: text('reason'),
     ticketId: uuid('ticket_id'),
@@ -324,7 +327,7 @@ export const scan = pgTable(
   (t) => [
     check(
       'scan_outcome',
-      sql`${t.outcome} IN ('ISSUED', 'RETRIEVED', 'REACTIVATED', 'REJECTED', 'NEEDS_ASSISTANCE')`,
+      sql`${t.outcome} IN ('ISSUED', 'RETRIEVED', 'REACTIVATED', 'ADDED', 'REJECTED', 'NEEDS_ASSISTANCE')`,
     ),
   ],
 );
@@ -394,4 +397,29 @@ export const staffSession = pgTable(
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
   },
   (t) => [check('staff_session_token_hash', sql`${t.tokenHash} ~ '^[0-9a-f]{64}$'`)],
+);
+
+/**
+ * The boarding passes a party added to its number at the kiosk (S15), by their HMAC (ADR-043): a
+ * rescan of any of them finds the family's number. Written from the log's ADD_TO_PARTY commands.
+ */
+export const partyPass = pgTable(
+  'party_pass',
+  {
+    checkpointId: uuid('checkpoint_id')
+      .notNull()
+      .references(() => checkpoint.id),
+    dedupKey: text('dedup_key').notNull(),
+    ticketId: uuid('ticket_id')
+      .notNull()
+      .references(() => queueToken.id),
+    commandSeq: bigint('command_seq', { mode: 'number' }).notNull(),
+    /** When the pass joined: a rescan finds the latest ticket the pass gave or joined. */
+    atMs: ms('at_ms').notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.checkpointId, t.commandSeq] }),
+    index('party_pass_dedup').on(t.checkpointId, t.dedupKey),
+    check('party_pass_dedup_key', sql`${t.dedupKey} ~ '^[0-9a-f]{64}$'`),
+  ],
 );

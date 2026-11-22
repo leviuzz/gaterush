@@ -1727,9 +1727,71 @@ founder on 2026-11-21 together with all of its recommendations.
 - **Consequences:**
   - The pilot replaces the local passwords with the airport's identity provider and MFA.
   - The slowing of failures is per server. Behind several servers it holds for each of them.
-  - A party at the kiosk (one number for several passes) is not offered. Families get one number
-    from staff at the lane, with the party's size. How a kiosk should prove a party is a question
-    for the airports.
+  - A party at the kiosk (one number for several passes) was not offered at first: families got
+    one number from staff at the lane. Since 0.15.1 a party also takes one number at the kiosk,
+    each of its boarding passes scanned onto it (ADR-046).
   - Overrides, modes (FIFO only, paused, emergency) and the audit view come with the supervisor's
     console (S17).
 
+## ADR-046: People travelling together take one number at the kiosk
+
+- **Status:** Accepted (2026-11-22). Founder's decision after S15: "va raggruppato", passengers
+  group themselves at the kiosk. queue-core 0.8.0, operations 0.4.0, contracts 0.5.0, API and web
+  0.15.1. No simulated number changes: the golden files change only in the version of the queue.
+- **Context:**
+  - The queue counts people, not tickets: the prepare window, the outstanding calls, the cap on
+    priority and the lane's throughput are all in people (ADR-021). A family of four on a ticket
+    for one is called as one person and arrives as four.
+  - A father who scans only his own pass still works at the lane: he is called and his family
+    goes with him. But the queue undercounts, its estimates drift for everybody, and the
+    people actually served are not measured.
+  - Until now only staff could give one number to a party, by hand at the lane (ADR-045).
+- **Decision:**
+  - After a number, the kiosk offers **"Add people travelling with you"**. On the screen that
+    opens, each companion scans their own boarding pass; the screen shows the people on the
+    number and the answer to each scan, until "Done", or for a minute without a pass.
+  - A pass joins the number (`POST /scans` with `party`, the ticket's reference) when:
+    - it is for **the same flight** (else `OTHER_FLIGHT`: it takes a number of its own);
+    - it has **no number of its own** that stands (else `HAS_OWN_NUMBER`); an expired one does
+      not count, and one admitted, under review or cancelled sends the passenger to staff, as a
+      rescan would;
+    - the number **still waits** (`QUEUED` or `PREPARE`; else `TOO_LATE`);
+    - the party has **fewer than 20** people (else `PARTY_FULL`).
+  - A pass already on the number is found again (`RETRIEVED`), not added twice. A request sent
+    twice with the same `Idempotency-Key` adds the pass once.
+  - **The log.** `ADD_TO_PARTY` is a command like any other (operations 0.4.0); the queue's `grow`
+    adds the people and reports `PARTY_GROWN` (queue-core 0.8.0). Overtakes and priority calls
+    already counted keep the size the party had then. The simulator never takes it.
+  - **The passes.** Only each pass's HMAC is kept (ADR-043), in `party_pass`, with the ticket and
+    the command that added it; the table is append-only, like the scans. A rescan of a
+    companion's pass finds the family's number, and the access point admits the family by any of
+    its passes.
+  - The ticket, its printout and the passenger's page say for how many people the number is.
+- **Alternatives considered:**
+  - **Asking "how many are you?".** Quicker for the family, but nothing proves the count: one pass
+    could claim the room of twenty in the lane's plan, and people without a boarding pass for this
+    flight would be on the number. Scanning each pass proves each person.
+  - **Grouping by booking reference.** It is never kept (ADR-043), and families often travel on
+    several bookings.
+  - **Merging two numbers already taken.** More rules for a rare case; staff can cancel one and
+    give a manual ticket for the party.
+- **Evidence:**
+  - **queue-core:** `grow` in the table of every state (allowed only while the ticket waits), and
+    1,000 random sequences with growing parties keep every invariant.
+  - **operations:** random days with `ADD_TO_PARTY` rebuild from their log.
+  - **API on PostgreSQL:** a family's passes join one number, once each, also when the request
+    is sent twice; a companion's rescan finds the family's number; the family is admitted by a
+    companion's pass; another flight, a number of its own, a number held by staff, a full party
+    and a number already called are refused, and an unknown number is not found; no pass, name
+    or booking reference in any table, and the passes added cannot be changed or removed; the log
+    rebuilds every party; the audit chain is intact.
+  - **In Chromium, on the product:** a number, then a companion's pass by the scanner, the same
+    pass twice, another flight's pass; the number for two on the ticket screen and the
+    passenger's page; the companion scanning alone later finds the family's number; the demo's
+    sample pass is for the family's flight; the screen fits portrait and landscape kiosks.
+- **Consequences:**
+  - The step is optional. A family that skips it is a party of one in the queue's count; the lane
+    still admits them together.
+  - A party grows only while its number waits: once called, a late companion goes with the family
+    and is not counted.
+  - Nothing yet lets staff change a party's size after the fact; the lane station may get it.

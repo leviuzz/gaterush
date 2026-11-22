@@ -243,7 +243,14 @@ export type QueueEvent =
   | { readonly type: 'REVIEW'; readonly ticketId: string; readonly atMs: Millis }
   /** The review is resolved: the ticket is back in the queue at its place. */
   | { readonly type: 'RELEASED'; readonly ticketId: string; readonly atMs: Millis }
-  | { readonly type: 'CANCELLED'; readonly ticketId: string; readonly atMs: Millis };
+  | { readonly type: 'CANCELLED'; readonly ticketId: string; readonly atMs: Millis }
+  /** More people joined the party of a waiting ticket (S15): its size now. */
+  | {
+      readonly type: 'PARTY_GROWN';
+      readonly ticketId: string;
+      readonly atMs: Millis;
+      readonly partySize: number;
+    };
 
 export type QueueListener = (event: QueueEvent) => void;
 

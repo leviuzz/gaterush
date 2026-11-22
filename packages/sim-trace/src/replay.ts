@@ -76,6 +76,7 @@ function stageAfterQueueEvent(event: QueueEvent): Stage | null {
     case 'RELEASED':
       return 'WAITING';
     case 'CANCELLED':
+    case 'PARTY_GROWN':
       return null;
   }
 }

@@ -528,8 +528,8 @@ describe('queue state machine properties', () => {
     expect(hits.fastTrackPasses).toBeGreaterThanOrEqual(15);
     expect(hits.classChanges).toBeGreaterThanOrEqual(50);
     expect(hits.classReversals).toBeGreaterThanOrEqual(10);
-    // Each staff action changes tickets in many runs (observed: recall 70, no-show 72,
-    // reactivate 24, hold 174, release 29, reject 32, cancel 205).
+    // Each staff action changes tickets in many runs (observed: recall 57, no-show 73,
+    // reactivate 20, hold 158, release 31, reject 25, cancel 177, a party growing 165).
     const thresholds: Record<Action, number> = {
       recall: 35,
       noShow: 35,
@@ -538,6 +538,7 @@ describe('queue state machine properties', () => {
       release: 14,
       reject: 15,
       cancel: 100,
+      grow: 80,
     };
     for (const action of ACTIONS) {
       expect(staffHits[action], action).toBeGreaterThanOrEqual(thresholds[action]);

@@ -19,8 +19,26 @@ import { samplePass } from './sample';
  * The kiosk at a checkpoint: a passenger scans a boarding pass and gets a number, on screen with a
  * QR code to follow it on a phone, and on paper. A keyboard-wedge scanner types the pass into the
  * field and ends it with Enter; staff can type or paste a code. The pass goes to the server and is
- * forgotten: the kiosk keeps nothing of it.
+ * forgotten: the kiosk keeps nothing of it. People travelling together scan their other passes
+ * onto the same number (S15): the queue then counts the people it will call.
  */
+
+/** A number on the screen. */
+interface ShownTicket {
+  /** A new number, the same number again, or a no-show back in the queue (S15). */
+  readonly heading: 'kiosk.issued' | 'kiosk.retrieved' | 'kiosk.reactivated';
+  readonly number: string;
+  readonly ref: string;
+  readonly atMs: number;
+  readonly flightId: string;
+  /** The people on the number (S15). */
+  readonly partySize: number;
+  /** Whether more people may join it: while it waits to be called (S15). */
+  readonly canGrow: boolean;
+}
+
+/** What the latest scan of a party's pass did (S15). */
+type PartyStatus = 'ready' | 'reading' | 'added' | 'already' | 'error' | ScanReason;
 
 type Screen =
   | { readonly kind: 'starting' }
@@ -29,19 +47,16 @@ type Screen =
   | { readonly kind: 'offline' }
   | { readonly kind: 'welcome' }
   | { readonly kind: 'reading' }
-  | {
-      readonly kind: 'ticket';
-      /** A new number, the same number again, or a no-show back in the queue (S15). */
-      readonly heading: 'kiosk.issued' | 'kiosk.retrieved' | 'kiosk.reactivated';
-      readonly number: string;
-      readonly ref: string;
-      readonly atMs: number;
-    }
+  | { readonly kind: 'ticket'; readonly ticket: ShownTicket }
+  /** The passes of those travelling together join the number on screen (S15). */
+  | { readonly kind: 'party'; readonly ticket: ShownTicket; readonly status: PartyStatus }
   | { readonly kind: 'refused'; readonly reason: ScanReason }
   | { readonly kind: 'error' };
 
 /** How long a result stays on screen before the kiosk is ready for the next passenger. */
 const TICKET_SECONDS = 45;
+/** How long the screen of a party waits for its next pass. */
+const PARTY_SECONDS = 60;
 const REFUSAL_SECONDS = 20;
 const RETRY_SECONDS = 5;
 const MAX_PASS_LENGTH = 1100;
@@ -193,18 +208,22 @@ export function Kiosk({
   }, [defaultLocale]);
 
   const submit = useCallback(
-    async (text: string) => {
+    /** Reads a pass: for a number of its own, or, with `party`, to join the number on screen. */
+    async (text: string, party: ShownTicket | null) => {
       const bcbp = text.replace(/[\r\n]+$/, '');
       if (busy.current || token === null || me === null || bcbp.trim() === '') return;
       busy.current = true;
       setCode('');
-      setScreen({ kind: 'reading' });
+      setScreen(
+        party === null ? { kind: 'reading' } : { kind: 'party', ticket: party, status: 'reading' },
+      );
       const key = randomKey();
+      const pass = bcbp.slice(0, MAX_PASS_LENGTH);
       const send = () =>
         api<ScanResponse>(`/v1/checkpoints/${checkpointId}/scans`, {
           method: 'POST',
           token,
-          body: { bcbp: bcbp.slice(0, MAX_PASS_LENGTH) },
+          body: party === null ? { bcbp: pass } : { bcbp: pass, party: party.ref },
           idempotencyKey: key,
         });
       let answer = await send();
@@ -215,6 +234,27 @@ export function Kiosk({
       }
       busy.current = false;
       setAnswers((n) => n + 1);
+      if (party !== null && (answer.ok || (answer.status !== 401 && answer.status !== 403))) {
+        let status: PartyStatus = 'error';
+        let ticket = party;
+        if (answer.ok) {
+          const scan = answer.body;
+          if (scan.ticket !== null) {
+            ticket = { ...party, partySize: scan.ticket.partySize };
+          }
+          if (scan.outcome === 'ADDED') status = 'added';
+          else if (scan.outcome === 'RETRIEVED') status = 'already';
+          else if (scan.reason !== null) status = scan.reason;
+          if (scan.reason === 'TOO_LATE') ticket = { ...ticket, canGrow: false };
+        } else if (answer.status === 400) {
+          status = 'UNREADABLE';
+        }
+        // Unless the party was left meanwhile (Done, or the time ran out).
+        setScreen((s) =>
+          s.kind === 'party' && s.ticket.ref === party.ref ? { kind: 'party', ticket, status } : s,
+        );
+        return;
+      }
       if (!answer.ok) {
         if (answer.status === 401 || answer.status === 403) setScreen({ kind: 'not-set-up' });
         else if (answer.status === 400) setScreen({ kind: 'refused', reason: 'UNREADABLE' });
@@ -231,15 +271,20 @@ export function Kiosk({
       ) {
         setScreen({
           kind: 'ticket',
-          heading:
-            scan.outcome === 'ISSUED'
-              ? 'kiosk.issued'
-              : scan.outcome === 'RETRIEVED'
-                ? 'kiosk.retrieved'
-                : 'kiosk.reactivated',
-          number: scan.ticket.number,
-          ref: scan.ref,
-          atMs: Date.now(),
+          ticket: {
+            heading:
+              scan.outcome === 'ISSUED'
+                ? 'kiosk.issued'
+                : scan.outcome === 'RETRIEVED'
+                  ? 'kiosk.retrieved'
+                  : 'kiosk.reactivated',
+            number: scan.ticket.number,
+            ref: scan.ref,
+            atMs: Date.now(),
+            flightId: scan.ticket.flightId,
+            partySize: scan.ticket.partySize,
+            canGrow: scan.ticket.state === 'QUEUED' || scan.ticket.state === 'PREPARE',
+          },
         });
         return;
       }
@@ -248,18 +293,30 @@ export function Kiosk({
     [token, me, checkpointId],
   );
 
-  // A result goes back to the welcome screen by itself.
+  // A result goes back to the welcome screen by itself; a party's screen, when no pass comes.
   useEffect(() => {
-    if (screen.kind !== 'ticket' && screen.kind !== 'refused' && screen.kind !== 'error') return;
-    const seconds = screen.kind === 'ticket' ? TICKET_SECONDS : REFUSAL_SECONDS;
+    const seconds =
+      screen.kind === 'ticket'
+        ? TICKET_SECONDS
+        : screen.kind === 'party'
+          ? PARTY_SECONDS
+          : screen.kind === 'refused' || screen.kind === 'error'
+            ? REFUSAL_SECONDS
+            : null;
+    if (seconds === null) return;
     const timer = window.setTimeout(reset, seconds * 1000);
     return () => {
       window.clearTimeout(timer);
     };
   }, [screen, reset]);
 
+  // A new number prints once: not again when its party has added its passes.
+  const printed = useRef<string | null>(null);
   useEffect(() => {
-    if (autoPrint && screen.kind === 'ticket' && screen.heading === 'kiosk.issued') window.print();
+    if (!autoPrint || screen.kind !== 'ticket' || screen.ticket.heading !== 'kiosk.issued') return;
+    if (printed.current === screen.ticket.ref) return;
+    printed.current = screen.ticket.ref;
+    window.print();
   }, [screen, autoPrint]);
 
   // The scanner types into the field: it keeps the focus, but never takes it from the dialog.
@@ -289,14 +346,30 @@ export function Kiosk({
   }, [privacy]);
 
   const ready = me !== null && token !== null;
+  const party = screen.kind === 'party' ? screen.ticket : null;
   const onSubmit = (event: SyntheticEvent) => {
     event.preventDefault();
-    void submit(code);
+    void submit(code, party);
   };
+  /** A sample pass (demo): a companion's is for the party's flight. */
   const sample = () => {
     if (me === null || demo === null) return;
-    const text = samplePass(me.airport.iata, demo, Date.now());
-    if (text !== null) void submit(text);
+    const text = samplePass(me.airport.iata, demo, Date.now(), party?.flightId);
+    if (text !== null) void submit(text, party);
+  };
+  const sampleButton =
+    me?.airport.synthetic === true && demo !== null && demo.flights.length > 0 ? (
+      <KioskButton className="button secondary" id="kiosk-sample" onClick={sample}>
+        {t(locale, 'kiosk.sample')}
+      </KioskButton>
+    ) : null;
+  const partyText = (status: PartyStatus): string => {
+    if (status === 'ready') return t(locale, 'kiosk.party.hint');
+    if (status === 'reading') return t(locale, 'kiosk.reading');
+    if (status === 'added') return t(locale, 'kiosk.party.added');
+    if (status === 'already') return t(locale, 'kiosk.party.already');
+    if (status === 'error') return t(locale, 'kiosk.error');
+    return t(locale, `kiosk.reason.${status}`);
   };
 
   let content: ReactNode;
@@ -324,11 +397,7 @@ export function Kiosk({
           <PassIllustration />
           <h1>{t(locale, 'kiosk.title')}</h1>
           <p className="lead">{t(locale, 'kiosk.hint')}</p>
-          {me?.airport.synthetic === true && demo !== null && demo.flights.length > 0 ? (
-            <KioskButton className="button secondary" id="kiosk-sample" onClick={sample}>
-              {t(locale, 'kiosk.sample')}
-            </KioskButton>
-          ) : null}
+          {sampleButton}
         </section>
       );
       break;
@@ -341,9 +410,10 @@ export function Kiosk({
       );
       break;
     case 'ticket': {
-      const url = `${window.location.origin}/t/${screen.ref}`;
+      const shown = screen.ticket;
+      const url = `${window.location.origin}/t/${shown.ref}`;
       content = (
-        <section className="card ticket" id="kiosk-ticket">
+        <section className="card ticket" id="kiosk-ticket" data-party-size={shown.partySize}>
           <div className="ticket-text">
             <p className="eyebrow print-only">
               {me === null
@@ -351,19 +421,24 @@ export function Kiosk({
                 : t(locale, 'ticket.ticketFor', { checkpoint: me.checkpoint.label })}
             </p>
             <h1 className="eyebrow" id="ticket-heading">
-              {t(locale, screen.heading)}
+              {t(locale, shown.heading)}
             </h1>
             <p
               className="number"
               id="ticket-number"
-              data-length={screen.number.length}
+              data-length={shown.number.length}
               aria-describedby="ticket-heading"
             >
-              {screen.number}
+              {shown.number}
             </p>
+            {shown.partySize > 1 ? (
+              <p className="party-size" id="ticket-party">
+                {t(locale, 'ticket.people', { count: shown.partySize })}
+              </p>
+            ) : null}
             <p className="wait">{t(locale, 'kiosk.wait')}</p>
             <p className="print-only issued-at">
-              {me === null ? '' : dateAndTime(screen.atMs, locale, me.airport.timeZone)}
+              {me === null ? '' : dateAndTime(shown.atMs, locale, me.airport.timeZone)}
             </p>
           </div>
           <figure className="qr-block" data-ticket-url={url}>
@@ -371,6 +446,17 @@ export function Kiosk({
             <figcaption>{t(locale, 'kiosk.qr')}</figcaption>
           </figure>
           <div className="actions">
+            {shown.canGrow ? (
+              <KioskButton
+                className="button secondary"
+                id="kiosk-add-pass"
+                onClick={() => {
+                  setScreen({ kind: 'party', ticket: shown, status: 'ready' });
+                }}
+              >
+                {t(locale, 'kiosk.party.add')}
+              </KioskButton>
+            ) : null}
             <KioskButton
               className="button secondary"
               id="kiosk-print"
@@ -381,6 +467,52 @@ export function Kiosk({
               {t(locale, 'kiosk.print')}
             </KioskButton>
             <KioskButton className="button primary" id="kiosk-done" onClick={reset}>
+              {t(locale, 'kiosk.done')}
+            </KioskButton>
+          </div>
+        </section>
+      );
+      break;
+    }
+    case 'party': {
+      const shown = screen.ticket;
+      const status = screen.status;
+      content = (
+        <section
+          className="card party"
+          id="kiosk-party"
+          data-status={status}
+          data-party-size={shown.partySize}
+        >
+          <h1>{t(locale, 'kiosk.party.title')}</h1>
+          <p className="number" id="party-number" data-length={shown.number.length}>
+            {shown.number}
+          </p>
+          <p className="party-count" id="kiosk-party-count">
+            {t(locale, 'kiosk.party.count', { count: shown.partySize })}
+          </p>
+          <p
+            className="party-status"
+            id="kiosk-party-status"
+            data-kind={
+              status === 'added'
+                ? 'ok'
+                : status === 'ready' || status === 'reading' || status === 'already'
+                  ? 'info'
+                  : 'warn'
+            }
+          >
+            {partyText(status)}
+          </p>
+          <div className="actions">
+            {sampleButton}
+            <KioskButton
+              className="button primary"
+              id="kiosk-party-done"
+              onClick={() => {
+                setScreen({ kind: 'ticket', ticket: shown });
+              }}
+            >
               {t(locale, 'kiosk.done')}
             </KioskButton>
           </div>

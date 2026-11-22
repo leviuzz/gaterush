@@ -86,6 +86,7 @@ function stepsOf(view: RunView, party: number): Step[] {
           case 'REVIEW':
           case 'RELEASED':
           case 'CANCELLED':
+          case 'PARTY_GROWN':
             break;
           case 'ADMITTED':
             if (!view.physical) {

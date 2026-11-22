@@ -17,6 +17,7 @@ import {
   airport,
   checkpoint,
   checkpointTimer,
+  partyPass,
   queueCommand,
   queueEvent,
   queueToken,
@@ -384,12 +385,29 @@ export class Runtime {
           riskClass: t.riskClass,
           priority: t.priority,
           calls: t.calls,
+          partySize: t.partySize,
           firstCalledAtMs: t.firstCalledAtMs,
           lastCalledAtMs: t.lastCalledAtMs,
           admittedAtMs: t.admittedAtMs,
           updatedSeq: record.seq,
         })
         .where(eq(queueToken.id, ticketId));
+    }
+    // A pass that joined a party: its rescans find the party's ticket (S15).
+    const command = record.command;
+    if (
+      command.type === 'ADD_TO_PARTY' &&
+      command.dedupKey !== null &&
+      result.type === 'ACTED' &&
+      result.outcome === 'DONE'
+    ) {
+      await tx.insert(partyPass).values({
+        checkpointId: cp.id,
+        dedupKey: command.dedupKey,
+        ticketId: command.ticketId,
+        commandSeq: record.seq,
+        atMs: record.atMs,
+      });
     }
     for (const event of applied.events) {
       if (event.type !== 'ADMITTED' || record.command.type !== 'PRESENT') continue;

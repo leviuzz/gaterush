@@ -668,7 +668,7 @@ here once, for the product. The slices follow the kickoff (section 3, M3), renum
 | **S12** | Operational core: API server (Fastify), PostgreSQL with migrations, one writer per checkpoint, command and event log, current-state tables, idempotent commands, hash-chained audit, demo data. The queue runs the same `queue-core` as the simulator | 100 concurrent "call next" give no double call; the database refuses a second admission; the audit check finds tampering; the same command twice is applied once; a restart, or a second server, gives the same queue | **Done** |
 | **S13** | BCBP package: multi-leg parser, synthetic generator, validations, HMAC deduplication key; the kiosk's scan endpoint (a ticket, the same ticket again, or a reason) | Round trip and fuzzing pass; no boarding pass in the logs; Julian date to the right year across year end (ADR-043) | **Done** |
 | **S14** | Web application, kiosk and ticket: scan (paste, sample, HID scanner), outcomes, digital and printable ticket, ticket page, Italian, English and Spanish, privacy notice, kiosk credentials | A rescan returns the same ticket; another airport's boarding pass is refused with a reason (both already true of the API since S13); no personal data on screen | **Done** |
-| **S15** | Queue life cycle and lane station: timers on a scheduler, recall, no-show, reactivation, admission, manual ticket, review; staff users and roles. From S14: a party's number (at the lane), and the rule for a pass whose boarding has closed | The state machine is covered by tests; every transition is idempotent | **Done** |
+| **S15** | Queue life cycle and lane station: timers on a scheduler, recall, no-show, reactivation, admission, manual ticket, review; staff users and roles. From S14: a party's number (at the lane; at the kiosk since 0.15.1), and the rule for a pass whose boarding has closed | The state machine is covered by tests; every transition is idempotent | **Done** |
 | S16 | Display over SSE: called and prepare numbers, data freshness, reconnection with `Last-Event-ID` | No event lost after a disconnection; "data not up to date" within the timeout | Planned |
 | S17 | Supervisor: modes (FIFO only, paused, emergency), overrides with a reason, lanes, audit view; versioned policies and their activation | Overrides and mode changes are always in the audit; in FIFO only the order is pure FIFO | Planned |
 | S18 | Digital twin: the simulator drives the live system at accelerated time; demo page | Same scenario and seed: the live system calls passengers in the same order as the offline simulator | Planned |
@@ -835,8 +835,31 @@ Verification beyond the criteria:
 - The CI's check of the bundle signs a supervisor in with the command line and the API.
 
 Not done (ADR-045):
-- One number for a party at the kiosk: families get one at the lane.
+- One number for a party at the kiosk: families get one at the lane. Done in 0.15.1, below.
 - OIDC/MFA: they come with the pilot.
+
+### After S15 (0.15.1): people travelling together take one number at the kiosk
+
+The founder's decisions on S15 (2026-11-22): a pass whose boarding has closed goes to staff by
+default, as built; families are grouped, by the passengers themselves at the kiosk; local
+passwords until the pilot. ADR-046.
+
+- **Scope.** After a number, "Add people travelling with you": each companion scans their own
+  boarding pass onto it. Same flight, no number of their own, a number still waiting, 20 people
+  at most. A companion's rescan finds the family's number, and the access point admits the
+  family by any of its passes. queue-core 0.8.0 (`grow`), operations 0.4.0 (`ADD_TO_PARTY`),
+  contracts 0.5.0, API and web 0.15.1, migration `0007_party`.
+- **Evidence:**
+  - queue-core: `grow` in the table of every state against every action; 1,000 random sequences
+    with growing parties keep every invariant.
+  - operations: random days with `ADD_TO_PARTY` rebuild from their log.
+  - API on PostgreSQL (4 tests): passes join once each, also when a request is sent twice; the
+    companion's rescan and admission; every refusal; nothing of the passes kept; the log rebuilds
+    every party; the audit chain is intact.
+  - In Chromium (the kiosk's 13 tests): the whole flow with a scanner, in English, Italian and
+    Spanish; the ticket screen and the passenger's page say for how many people; the party's
+    screen fits the four kiosk sizes (1080x1920, 1920x1080, 1280x800, 768x1024).
+  - No simulated number changes: the golden files change only in the version of the queue.
 
 ## Later milestones (summary)
 

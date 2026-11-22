@@ -228,6 +228,7 @@ const dayArb = fc
               'CANCEL',
               'QUEUE',
               'REJECT',
+              'GROW',
             ),
             pick: fc.nat(),
           }),
@@ -265,7 +266,9 @@ const dayArb = fc
       } else if (step.kind === 'staff') {
         if (issued === 0) return;
         const ticketId = `t-${(step.pick % issued) + 1}`;
-        if (step.action === 'QUEUE' || step.action === 'REJECT') {
+        if (step.action === 'GROW') {
+          commands.push({ type: 'ADD_TO_PARTY', ticketId, people: 1, dedupKey: null });
+        } else if (step.action === 'QUEUE' || step.action === 'REJECT') {
           commands.push({
             type: 'RESOLVE_REVIEW',
             ticketId,
@@ -350,6 +353,8 @@ describe('the log of a day', () => {
             queue.cancel(command.ticketId, atMs, estimates);
           } else if (command.type === 'RESOLVE_REVIEW') {
             queue.resolve(command.ticketId, command.decision, atMs, estimates);
+          } else if (command.type === 'ADD_TO_PARTY') {
+            queue.grow(command.ticketId, command.people, atMs, estimates);
           }
         }
         expect(applied.slice(1).flatMap((a) => a.events)).toEqual(events);

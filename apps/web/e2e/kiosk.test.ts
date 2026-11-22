@@ -125,13 +125,21 @@ async function demoFlights(): Promise<DemoFlightsResponse> {
   return (await response.json()) as DemoFlightsResponse;
 }
 
-/** A synthetic boarding pass for one of today's demo flights, `days` after today if asked. */
+/**
+ * A synthetic boarding pass for one of today's demo flights, `days` after today if asked; with
+ * `another`, for another flight of the same date.
+ */
 async function passForToday(
-  options: { from?: string; days?: number; flightNumber?: string } = {},
+  options: { from?: string; days?: number; flightNumber?: string; another?: boolean } = {},
 ): Promise<{ text: string; input: BoardingPassInput }> {
   const demo = await demoFlights();
   const later = demo.flights.filter((f) => Date.parse(f.departure) > Date.now() + 30 * 60_000);
-  const flight = (later.length > 0 ? later : demo.flights)[0];
+  const pool = later.length > 0 ? later : demo.flights;
+  const first = pool[0];
+  const flight =
+    options.another === true
+      ? pool.find((f) => f.id !== first?.id && f.date === first?.date)
+      : first;
   if (flight === undefined) throw new Error('no demo flight in the next 24 hours');
   const [year = 0, month = 0, day = 0] = flight.date.split('-').map(Number);
   const date = new Date(Date.UTC(year, month - 1, day + (options.days ?? 0)));
@@ -155,6 +163,17 @@ const refOf = (url: string | null): string => {
   if (ref === undefined) throw new Error(`no ticket reference in ${String(url)}`);
   return ref;
 };
+
+/** The height the kiosk's screen needs: its own, without its stretching (min-height). */
+const naturalHeight = (page: Page) =>
+  page.evaluate(() => {
+    const root = document.querySelector<HTMLElement>('.kiosk');
+    if (root === null) return Infinity;
+    root.style.minHeight = '0';
+    const natural = root.getBoundingClientRect().height;
+    root.style.minHeight = '';
+    return natural;
+  });
 
 const noOverflow = (page: Page) =>
   page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
@@ -248,6 +267,66 @@ describe('the kiosk', () => {
       expect(stored).not.toContain(secret);
     }
     expect(await page.inputValue('#kiosk-code')).toBe('');
+    expect(errors).toEqual([]);
+    await page.context().close();
+  });
+
+  it('puts people travelling together on one number, and says for how many (S15)', async () => {
+    const { page, errors } = await openKiosk('en');
+    const father = await passForToday();
+    await scan(page, father.text);
+    const number = await page.textContent('#ticket-number');
+    const url = await page.getAttribute('[data-ticket-url]', 'data-ticket-url');
+    expect(await page.locator('#ticket-party').count()).toBe(0);
+    await page.click('#kiosk-add-pass');
+    await page.waitForSelector('#kiosk-party[data-status="ready"]');
+    expect(await page.textContent('#party-number')).toBe(number);
+    const count = (locale: Locale, people: number) =>
+      t(locale, 'kiosk.party.count', { count: people });
+    expect(await page.textContent('#kiosk-party-count')).toBe(count('en', 1));
+    expect(await page.textContent('#kiosk-party-status')).toBe(MESSAGES.en['kiosk.party.hint']);
+    // A companion's pass, read by the scanner, joins the number; read twice, it counts once.
+    const mother = await passForToday();
+    await scan(page, mother.text);
+    expect(await page.getAttribute('#kiosk-party', 'data-status')).toBe('added');
+    expect(await page.textContent('#kiosk-party-count')).toBe(count('en', 2));
+    await shot(page, 'kiosk-party');
+    await scan(page, mother.text);
+    expect(await page.textContent('#kiosk-party-status')).toBe(MESSAGES.en['kiosk.party.already']);
+    expect(await page.textContent('#kiosk-party-count')).toBe(count('en', 2));
+    // A pass of another flight takes a number of its own.
+    await scan(page, (await passForToday({ another: true })).text);
+    expect(await page.textContent('#kiosk-party-status')).toBe(
+      MESSAGES.en['kiosk.reason.OTHER_FLIGHT'],
+    );
+    expect(await page.getAttribute('#kiosk-party-status', 'data-kind')).toBe('warn');
+    // Done: the same number, for two people; its page says so too.
+    await page.click('#kiosk-party-done');
+    await page.waitForSelector('#kiosk-ticket[data-party-size="2"]');
+    expect(await page.textContent('#ticket-number')).toBe(number);
+    expect(await page.textContent('#ticket-party')).toBe(t('en', 'ticket.people', { count: 2 }));
+    expect(await page.getAttribute('[data-ticket-url]', 'data-ticket-url')).toBe(url);
+    expect((await ticketOf(refOf(url))).partySize).toBe(2);
+    // The companion, scanning alone later, finds the family's number.
+    await page.click('#kiosk-done');
+    await page.waitForSelector('#kiosk-welcome');
+    await scan(page, mother.text);
+    expect(await page.textContent('#ticket-heading')).toBe(MESSAGES.en['kiosk.retrieved']);
+    expect(await page.textContent('#ticket-number')).toBe(number);
+    // In the demo, a sample pass on this screen is for the family's flight.
+    await page.click('#kiosk-add-pass');
+    await page.click('button[lang="it"]');
+    await page.click('#kiosk-sample');
+    await page.waitForSelector('#kiosk-party[data-party-size="3"]');
+    expect(await page.textContent('#kiosk-party-status')).toBe(MESSAGES.it['kiosk.party.added']);
+    expect(await page.textContent('#kiosk-party-count')).toBe(count('it', 3));
+    const phone = await open(`/t/${refOf(url)}?lang=es`, { width: 360, height: 740 });
+    await phone.page.waitForSelector('#ticket-party');
+    expect(await phone.page.textContent('#ticket-party')).toBe(
+      t('es', 'ticket.people', { count: 3 }),
+    );
+    expect(phone.errors).toEqual([]);
+    await phone.page.context().close();
     expect(errors).toEqual([]);
     await page.context().close();
   });
@@ -347,18 +426,18 @@ describe('the kiosk', () => {
       expect(await noOverflow(page), name).toBe(true);
       expect(await numberFits(page), name).toBe(true);
       // The whole ticket on screen: the screen's own height without its stretching (min-height).
-      const { needed, height } = await page.evaluate(() => {
-        const root = document.querySelector<HTMLElement>('.kiosk');
-        if (root === null) return { needed: Infinity, height: window.innerHeight };
-        root.style.minHeight = '0';
-        const natural = root.getBoundingClientRect().height;
-        root.style.minHeight = '';
-        return { needed: natural, height: window.innerHeight };
-      });
+      const needed = await naturalHeight(page);
+      const height = size.height;
       process.stdout.write(
         `${name}: ${String(Math.round((100 * needed) / height))}% of the height\n`,
       );
       expect(needed, `${name}: the whole ticket on screen`).toBeLessThanOrEqual(height);
+      // The screen that adds a party's passes fits as well (S15).
+      await page.click('#kiosk-add-pass');
+      await page.waitForSelector('#kiosk-party');
+      await shot(page, `kiosk-party-${name}`);
+      expect(await noOverflow(page), `${name} party`).toBe(true);
+      expect(await naturalHeight(page), `${name}: the party's screen`).toBeLessThanOrEqual(height);
       expect(errors).toEqual([]);
       await page.context().close();
     }

@@ -4,6 +4,44 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Any change that alters simulated numbers
 must be listed, together with the component versions it bumps.
 
+## [0.15.1] - 2026-11-22: People travelling together take one number at the kiosk
+
+The founder's decision after S15: families are grouped, by the passengers themselves at the kiosk
+(ADR-046).
+
+### Simulated numbers change
+
+- None. The golden files change only in the version of the queue (0.8.0); the simulator never
+  grows a party, and fails at once if it is ever asked to.
+
+### Added
+
+- queue-core 0.8.0: `grow`, more people join a waiting ticket (`QUEUED` or `PREPARE`), with the
+  event `PARTY_GROWN`. Overtakes and priority calls already counted keep the size the party had
+  then.
+- operations 0.4.0: the command `ADD_TO_PARTY`, with the HMAC of the pass added.
+- API 0.15.1:
+  - `POST /v1/checkpoints/{id}/scans` with `party`, a ticket's reference: the pass joins that
+    number if it is for the same flight, has no number of its own, the number still waits and its
+    party has fewer than 20 people. The answer is `ADDED`, `RETRIEVED` for a pass already on the
+    number, or a refusal: `OTHER_FLIGHT`, `HAS_OWN_NUMBER`, `TOO_LATE`, `PARTY_FULL` (or staff,
+    for a pass whose own number is admitted, under review or cancelled).
+  - A companion's rescan finds the family's number; the access point admits the family by any of
+    its passes.
+  - The passenger's view of a ticket gives its party size; the demo flights of a kiosk give their
+    id.
+  - Migration `0007_party`: `party_pass` (append-only) and the scan outcome `ADDED`.
+- Contracts 0.5.0: `ScanRequest.party`, the outcome `ADDED` and the four reasons,
+  `PublicTicketResponse.partySize`, the id of a demo flight.
+- Web 0.15.1:
+  - the kiosk's "Add people travelling with you" under a number still waiting, and the screen
+    where each companion's pass joins it: the people on the number, the answer to each scan,
+    "Done", and back to the welcome screen after a minute without a pass. In the demo, the sample
+    pass is for the family's flight.
+  - The ticket screen, its printout and the passenger's page say for how many people a number
+    is.
+  - i18n: the texts of a party, in the three languages.
+
 ## [0.15.0] - 2026-11-22: Slice S15, the queue's life cycle and the lane station
 
 The queue's timeouts on a clock, staff actions, staff who sign in, and the lane station

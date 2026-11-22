@@ -443,11 +443,12 @@ export function simulateCheckpoint(
       case 'ADMITTED':
       case 'EXPIRED':
         break;
-      // Staff actions of the live product (S15): nobody takes them in a simulated day.
+      // Staff's actions and a party growing at the kiosk happen in the live product only (S15).
       case 'REVIEW':
       case 'RELEASED':
       case 'CANCELLED':
-        throw new Error(`staff action ${event.type} in a simulated day`);
+      case 'PARTY_GROWN':
+        throw new Error(`${event.type} in a simulated day: only the live product has it`);
     }
   };
   const observe = options.listener;

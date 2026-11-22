@@ -116,6 +116,11 @@ export function TicketPage({
               <span className="visually-hidden">{t(locale, 'ticket.title')}: </span>
               {ticket.number}
             </h1>
+            {ticket.partySize > 1 ? (
+              <p className="party-size" id="ticket-party">
+                {t(locale, 'ticket.people', { count: ticket.partySize })}
+              </p>
+            ) : null}
             <p className="state" id="ticket-state" role="status">
               {t(locale, `ticket.state.${ticket.state}`)}
             </p>

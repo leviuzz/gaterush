@@ -139,8 +139,21 @@ export interface ResolveReview {
   readonly decision: ReviewDecision;
 }
 
+/**
+ * More people join the party of a waiting ticket (S15): at the kiosk, a family scans its other
+ * boarding passes onto one number. The HMAC of each pass added is recorded, so that a rescan of it
+ * finds the family's number.
+ */
+export interface AddToParty {
+  readonly type: 'ADD_TO_PARTY';
+  readonly ticketId: string;
+  readonly people: number;
+  /** The HMAC of the boarding pass added (ADR-043); null when staff add people by hand. */
+  readonly dedupKey: string | null;
+}
+
 export type Command =
-  OpenDay | IssueTicket | CallNext | Present | Advance | ActOnTicket | ResolveReview;
+  OpenDay | IssueTicket | CallNext | Present | Advance | ActOnTicket | ResolveReview | AddToParty;
 export type CommandType = Command['type'];
 
 /** A command as recorded in a checkpoint's log: its place in the log and its time. */
@@ -193,7 +206,7 @@ export type CommandResult =
   | { readonly type: 'ADVANCED'; readonly nextDueMs: Millis | null }
   | {
       readonly type: 'ACTED';
-      readonly action: StaffAction | 'RESOLVE_REVIEW';
+      readonly action: StaffAction | 'RESOLVE_REVIEW' | 'ADD_TO_PARTY';
       readonly outcome: StaffActionOutcome;
       readonly ticket: TicketSummary;
     };

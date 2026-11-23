@@ -46,6 +46,8 @@ export const SWEEP_PARAMETERS = [
   'maxExtraLanes',
   'laneOpenDelayMinutes',
   'laneFollowShare',
+  // S22.4: the day's screening time, the plan and GateFlow's settings keeping the scenario's.
+  'actualServiceTimeMeanSeconds',
 ] as const;
 export type SweepParameter = (typeof SWEEP_PARAMETERS)[number];
 
@@ -225,6 +227,24 @@ export function applySetting(
         throw new SweepConfigError(`serviceTimeMeanSeconds must be positive, got ${seconds}`);
       }
       return days((copy) => {
+        copy.checkpoint.serviceTimeMeanSeconds = {
+          ...copy.checkpoint.serviceTimeMeanSeconds,
+          value: seconds,
+        };
+      });
+    }
+    case 'actualServiceTimeMeanSeconds': {
+      const seconds = requireNumber(parameter, value);
+      if (seconds <= 0) {
+        throw new SweepConfigError(`actualServiceTimeMeanSeconds must be positive, got ${seconds}`);
+      }
+      return days((copy) => {
+        // The plan and GateFlow's settings keep what they assumed (ADR-059).
+        const day = copy.checkpoint.serviceTimeMeanSeconds;
+        copy.checkpoint.plannedServiceTimeMeanSeconds ??= {
+          ...day,
+          note: "What the plan and GateFlow's settings assume; the sweep sets the day's screening time (checkpoint.serviceTimeMeanSeconds).",
+        };
         copy.checkpoint.serviceTimeMeanSeconds = {
           ...copy.checkpoint.serviceTimeMeanSeconds,
           value: seconds,

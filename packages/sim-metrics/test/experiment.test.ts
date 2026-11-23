@@ -197,7 +197,7 @@ describe('results document', () => {
         queueCore: '0.12.0',
         model: '0.7.0',
         kernel: '0.1.0',
-        populationGenerator: '0.6.0',
+        populationGenerator: '0.7.0',
         scenarioSchema: 5,
       },
     });

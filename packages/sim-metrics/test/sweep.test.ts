@@ -119,6 +119,31 @@ describe('sweep settings', () => {
     const service = apply('serviceTimeMeanSeconds', 48).scenario.checkpoint.serviceTimeMeanSeconds;
     expect(service).toEqual({ ...demo.checkpoint.serviceTimeMeanSeconds, value: 48 });
     expect(() => apply('serviceTimeMeanSeconds', 0)).toThrow(/must be positive/);
+    // A checkpoint known to screen that slowly: the plan and GateFlow's settings know it.
+    expect(
+      apply('serviceTimeMeanSeconds', 48).scenario.checkpoint.plannedServiceTimeMeanSeconds,
+    ).toBeUndefined();
+    // A day slower than planned (S22.4, ADR-059): the plan and GateFlow's settings do not.
+    const slower = apply('actualServiceTimeMeanSeconds', 48);
+    expect(slower.scenario.checkpoint.serviceTimeMeanSeconds.value).toBe(48);
+    expect(slower.scenario.checkpoint.plannedServiceTimeMeanSeconds?.value).toBe(
+      demo.checkpoint.serviceTimeMeanSeconds.value,
+    );
+    const population = generatePopulation(slower.scenario, 3);
+    expect(population.checkpoint.serviceRatePerLanePerHour).toBe(
+      3600 / demo.checkpoint.serviceTimeMeanSeconds.value,
+    );
+    // Applied again, the plan still assumes the scenario's screening time.
+    const again = applySetting(
+      slower,
+      { parameter: 'actualServiceTimeMeanSeconds', value: 30 },
+      'priority-v3',
+    ).scenario.checkpoint;
+    expect([
+      again.serviceTimeMeanSeconds.value,
+      again.plannedServiceTimeMeanSeconds?.value,
+    ]).toEqual([30, demo.checkpoint.serviceTimeMeanSeconds.value]);
+    expect(() => apply('actualServiceTimeMeanSeconds', 0)).toThrow(/must be positive/);
     const feed = applySetting(
       { scenario: disrupted, policies: POLICIES },
       { parameter: 'feedOutagesPerDay', value: 4 },

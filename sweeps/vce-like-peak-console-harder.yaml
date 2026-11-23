@@ -1,0 +1,57 @@
+# GateFlow sensitivity sweep (schema version 1).
+#
+# SYNTHETIC: every number comes from the synthetic library scenario vce-like-peak-day and its
+# airport configuration. Results are simulated and must never be presented as operational evidence.
+
+schemaVersion: 1
+id: vce-like-peak-console-harder
+title: The console's lane recommendations on a VCE-like peak day harder than planned
+description: >-
+  What do the console's lane recommendations (S22) buy on a day harder than planned, which neither
+  the plan nor GateFlow's settings know of (ADR-059)? The plan of the day and GateFlow's settings
+  assume a screening time of 24 seconds per person; only the queue shows a slower day. Today's
+  practice with staff calls (fifo-manual) runs with the plan only, with a supervisor who opens a
+  lane when the queue is long (@reactive), with S8's rule (@predict) and with the console's
+  (@advise); GateFlow's priority calls (priority-v3) run with the plan only and with the console's
+  lanes. The first two curves make the day harder than planned (slower screening on the day, a
+  roster one lane short). The other two start from a day when screening takes 26 seconds (8%
+  slower than planned) and vary the staff on call (base 2 extra lanes) and the share of
+  recommendations followed (base 4 out of 5).
+scenario: ../scenarios/vce-like-peak-day.yaml
+seeds: 1-200
+policies:
+  - fifo-manual
+  - fifo-manual@reactive
+  - fifo-manual@predict
+  - fifo-manual@advise
+  - priority-v3
+  - priority-v3@advise
+baseline: fifo-manual
+candidate: fifo-manual@advise
+# The first comparison is drawn in the charts: the console's lanes against today's supervisor.
+compare:
+  - fifo-manual@advise:fifo-manual@reactive
+  - fifo-manual@advise:fifo-manual
+  - fifo-manual@reactive:fifo-manual
+  - fifo-manual@advise:fifo-manual@predict
+  - priority-v3@advise:fifo-manual@reactive
+  - priority-v3:fifo-manual
+dimensions:
+  - id: screening-time
+    title: Screening slower than planned
+    parameter: actualServiceTimeMeanSeconds
+    values: [24, 25, 26, 27]
+  - id: roster
+    title: A roster one lane short
+    parameter: lanesDelta
+    values: [-1, 0]
+  - id: staff
+    title: Staff on call on a day of slower screening
+    parameter: maxExtraLanes
+    base: [{ parameter: actualServiceTimeMeanSeconds, value: 26 }]
+    values: [0, 1, 2, 3]
+  - id: follow
+    title: Recommendations followed on a day of slower screening
+    parameter: laneFollowShare
+    base: [{ parameter: actualServiceTimeMeanSeconds, value: 26 }]
+    values: [0.5, 0.8, 1]

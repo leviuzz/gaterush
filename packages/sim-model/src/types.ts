@@ -136,9 +136,14 @@ export interface CheckpointSpec {
    * finishes the passenger it is screening.
    */
   readonly laneSchedule: readonly LaneScheduleEntry[];
-  /** Nominal screening rate of one lane, for the engine's throughput estimate (passengers/h). */
+  /**
+   * Nominal screening rate of one lane (passengers/h): what the plan and GateFlow's settings
+   * assume, which the day's screening (each passenger's `serviceMs`) may not match (ADR-059). The
+   * engine's throughput estimate, the call-ahead, the lane rules and the supervisor's reading of
+   * the queue use it.
+   */
   readonly serviceRatePerLanePerHour: number;
-  /** The engine's estimate of the screening time (P). */
+  /** The engine's estimate of the screening time (P), from the same assumption. */
   readonly processEstimateMs: Millis;
 }
 

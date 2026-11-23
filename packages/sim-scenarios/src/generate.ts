@@ -26,7 +26,7 @@ import { clockMinutes } from './schema';
 import type { LaneStaffingSpec, Scenario } from './schema';
 
 /** Version of the population generator. Bump on any change that can alter generated data. */
-export const GENERATOR_VERSION = '0.6.0';
+export const GENERATOR_VERSION = '0.7.0';
 
 const DOMAIN = labelCode('gateflow.population');
 const KEY = {
@@ -364,11 +364,15 @@ export function generatePopulation(scenario: Scenario, seed: number): Population
           ),
         );
 
+  // What the plan and GateFlow's settings assume of the screening (ADR-059): the day's, unless the
+  // scenario says the day differs from the plan. Each passenger's screening is the day's.
+  const plannedSeconds =
+    checkpoint.plannedServiceTimeMeanSeconds?.value ?? checkpoint.serviceTimeMeanSeconds.value;
   return {
     checkpoint: {
       laneSchedule,
-      serviceRatePerLanePerHour: 3600 / checkpoint.serviceTimeMeanSeconds.value,
-      processEstimateMs: serviceMeanMs,
+      serviceRatePerLanePerHour: 3600 / plannedSeconds,
+      processEstimateMs: secondsToMs(plannedSeconds),
     },
     flights: flights.map((flight) => disrupt(scenario, seed, flight)),
     passengers,

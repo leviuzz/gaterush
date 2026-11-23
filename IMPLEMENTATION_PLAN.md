@@ -1635,7 +1635,9 @@ Evidence:
 On "Confermo vai avanti" (2026-11-23), the next step proposed with S22.3: the simulated figures
 the pitch can say, on one page, each with the report it comes from, its interval and what to say
 with it. Today they are spread over the reports of S8, S21 and S22.3, and a figure copied by hand
-drifts from its report when that report is published again. ADR-058.
+drifts from its report when that report is published again. ADR-058. The founder confirmed every
+proposal on 2026-11-23 ("Confermo vai avanti"): the marks **[to confirm]** below are kept to show
+what was decided.
 
 - **One page, written by the command line [to confirm]:** `gateflow-sim pitch` reads the published
   reports (the library and the sweeps of S22.3, the sweep of S8 on days harder than planned, the
@@ -1689,6 +1691,45 @@ Evidence:
   lanes). On the VCE-like days neither part changes the missed flights measurably, and at the
   TSF-like base GateFlow is sold on the wait (1.9 to 0.9 minutes against the supervisor), not on
   flights (-0.06 [-0.10, -0.02] a day).
+
+### S22.4: the console's recommendations on a day harder than planned
+
+On "Confermo vai avanti" (2026-11-23), the next step proposed with the pitch figures: the one
+figure of the page still from S8's rule, a day harder than planned, measured with the console's
+rule. It is the case of a VCE-like departures checkpoint, where the library's days show no gain.
+ADR-059.
+
+What the analysis found: on a day whose screening is slower than planned, GateFlow's simulated
+estimates read the day's own screening time. The population's lanes' rate and screening estimate,
+from which the queue's estimates, the call-ahead, S8's projection, the simulated console and the
+twin's settings are made, followed the scenario's `serviceTimeMeanSeconds`, which the sweeps of
+S7 (`vce-like-peak-capacity`) and S8 (`vce-like-peak-lanes`) changed: GateFlow knew the day was
+slower. Live, the console and the queue read the checkpoint's settings, made for the plan. On the
+library's days the two are the same: no published figure of a library day changes.
+
+- **What GateFlow knows of the screening time [to confirm]:** a scenario may say the screening
+  time its plan and GateFlow's settings assume (`checkpoint.plannedServiceTimeMeanSeconds`; by
+  default the day's). The generator makes GateFlow's estimates from it (the lanes' rate, the
+  screening time of a person) and each passenger's screening from the day's; a lane plan rule
+  plans on it. The supervisor reads the queue with the same rate: it judges the wait from the
+  queue's length and the usual throughput.
+- **A day slower than planned, in sweeps:** a new parameter, `actualServiceTimeMeanSeconds`,
+  sets the day's screening time and keeps what the plan and GateFlow's settings assume.
+  `serviceTimeMeanSeconds` keeps its meaning (a checkpoint whose screening takes that long, as the
+  Studio's lever has it), so the published sweeps reproduce.
+- **The sweep [to confirm]:** `vce-like-peak-console-harder`, the VCE-like peak day, 200 days per
+  point: screening on the day at 24 (as planned), 25, 26 and 27 seconds a person; a roster one
+  lane short; on the 26-second day, the staff on call (0 to 3 extra lanes) and the share of
+  recommendations followed (0.5, 0.8, 1). Policies: today's calls with the plan only, with today's
+  supervisor, with S8's rule and with the console's; GateFlow's calls with the plan only and with
+  the console's lanes. Comparisons: the console against the supervisor, the plan and S8's rule;
+  GateFlow as a whole against today's practice; the priority calls alone.
+- **Earlier sweeps [to confirm]:** the sweeps of slower screening of S7 and S8 stay published as
+  they are, with a note that GateFlow knew the day's screening time there; the new sweep measures
+  the same VCE-like days without it, S8's rule included, and the pitch page reads it instead of
+  S8's sweep.
+- **Records:** population generator 0.7.0 (no day of a scenario without the new field changes),
+  sim-metrics and the command line 0.16.0; CI runs the new sweep with 20 days per point.
 
 ## Later milestones (summary)
 

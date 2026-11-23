@@ -175,6 +175,7 @@ function currentValue(
     case 'loadFactorScale':
       return 1;
     case 'serviceTimeMeanSeconds':
+    case 'actualServiceTimeMeanSeconds':
       return scenario.checkpoint.serviceTimeMeanSeconds.value;
     case 'callResponseMedianSeconds':
       return scenario.passengers.callResponse.value.medianSeconds;

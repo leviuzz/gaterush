@@ -4,6 +4,36 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Any change that alters simulated numbers
 must be listed, together with the component versions it bumps.
 
+## [0.22.3] - 2026-11-23: Slice S22.4, the console's recommendations on a day harder than planned
+
+GateFlow now knows the screening time of the plan, not the day's (ADR-059): on a day slower than
+planned, only the queue shows it, as it does live. ADR-058 (the pitch figures) is accepted as the
+founder confirmed it.
+
+### Changed
+- A scenario may give `checkpoint.plannedServiceTimeMeanSeconds`, the screening time its plan and
+  GateFlow's settings assume (by default the day's). The population generator (0.7.0) makes
+  GateFlow's estimates from it (the lanes' rate and a person's screening estimate, which the
+  queue's estimates and call-ahead, S8's projection, the console's forecast, the supervisor's
+  reading of the queue and the twin's settings use) and each passenger's screening time from the
+  day's; a lane plan rule plans on it. No day of a scenario without the new field changes: the
+  library, the backtests, the calibration's levels and the twin are as they were.
+- Until now a sweep of slower screening (`serviceTimeMeanSeconds`: S7's `vce-like-peak-capacity`,
+  S8's `vce-like-peak-lanes`) gave GateFlow the day's screening time. Those sweeps keep their
+  meaning and their published figures, with that note.
+
+### Added
+- The sweep parameter `actualServiceTimeMeanSeconds`: the day's screening time, the plan and
+  GateFlow's settings keeping the scenario's.
+- `sweeps/vce-like-peak-console-harder.yaml`: the VCE-like peak day harder than planned (slower
+  screening on the day, a roster one lane short; on a day of 26 seconds, the staff on call and the
+  share of recommendations followed), with today's calls on the plan, with the supervisor, S8's
+  rule and the console's, and GateFlow's calls on the plan and with the console's lanes.
+
+### Versions
+- Population generator and sim-scenarios 0.7.0, sim-metrics 0.16.0, command line 0.16.0. Results
+  record the new generator; the golden files and the calibration module change in that line only.
+
 ## [0.22.2] - 2026-11-23: The pitch figures, one page written from the published reports
 
 The simulated figures for the pitch on one page ([docs/pitch](docs/pitch/README.md)), each read

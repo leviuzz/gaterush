@@ -595,6 +595,11 @@ export const ScenarioSchema = z
       laneStaffing: param(LaneStaffingSchema).optional(),
       serviceTimeMeanSeconds: param(z.number().positive().max(3600)),
       serviceTimeCv: param(z.number().min(0).max(3)),
+      /**
+       * The mean screening time the plan and GateFlow's settings assume (S22.4, ADR-059), when the
+       * day's (`serviceTimeMeanSeconds`) differs from it; absent, they assume the day's.
+       */
+      plannedServiceTimeMeanSeconds: param(z.number().positive().max(3600)).optional(),
     }),
     schedule: z.discriminatedUnion('kind', [
       SyntheticHourlyScheduleSchema,

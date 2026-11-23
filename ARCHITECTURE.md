@@ -401,6 +401,15 @@ day (`DayEvent`, ADR-041) and never changes the run:
   deadline is marked as confirmed at the start of the outage (so that a policy with a maximum data
   age stops trusting it). After a gate change, passengers who finish screening from that instant
   walk to the new gate, their walk scaled by the nominal walking times of the two gates.
+- **The screening time of the plan (S22.4, ADR-059).** GateFlow's estimates (the lanes' rate and
+  a person's screening time: the queue's throughput estimate, its call-ahead, S8's projection, the
+  console's forecast, the twin's settings) and the supervisor's reading of the queue come from the
+  population's `serviceRatePerLanePerHour` and `processEstimateMs`, which the generator makes from
+  the screening time the plan and the checkpoint's settings assume
+  (`checkpoint.plannedServiceTimeMeanSeconds`, by default the day's). Each passenger's screening
+  time comes from the day's `serviceTimeMeanSeconds`. A day slower than planned therefore shows
+  only in the queue, as it does live; the sweep parameter `actualServiceTimeMeanSeconds` makes
+  one.
 - **Events and order at the same instant:** the feed recovers, the feed goes down, feed messages
   arrive, lane change (and an extra lane ready), end of service, presentation at the access point,
   timeouts, arrival, then the lane review. With instant calls and no call-ahead or window, this

@@ -11,14 +11,16 @@ import {
 import type { LiveState } from '@gateflow/forecast';
 import { LANE_MODES, findPolicyPreset } from '@gateflow/queue-core';
 import type { AdvisedLanes, Policy } from '@gateflow/queue-core';
-import { parseScenarioText } from '@gateflow/sim-scenarios';
+import { generatePopulation, parseScenarioText } from '@gateflow/sim-scenarios';
 import type { DayEvent } from '@gateflow/sim-model';
 import { simulateCheckpoint } from '@gateflow/sim-model';
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_BOOTSTRAP,
+  LiveView,
   SimulatedDay,
   applyScenarioSettings,
+  applySetting,
   arrivalClassification,
   buildResults,
   dayPopulation,
@@ -144,6 +146,19 @@ describe("GateFlow's console in the simulator (S22.3)", () => {
     expect(() =>
       simulatePolicy(population, advised, { classification: job.classification }, undefined),
     ).toThrow(/profile/);
+  });
+
+  it("reads the lanes' rate of the plan on a day slower than planned (S22.4, ADR-059)", () => {
+    const advised = policy('fifo-manual@advise');
+    const planned = tsf.checkpoint.serviceTimeMeanSeconds.value;
+    const slower = applySetting(
+      { scenario: tsf, policies: [advised] },
+      { parameter: 'actualServiceTimeMeanSeconds', value: planned + 4 },
+      advised.id,
+    ).scenario;
+    const view = new LiveView(generatePopulation(slower, 1));
+    // The console's forecast reads the checkpoint's settings, made for the plan, as it does live.
+    expect(view.stateNow(6 * 60 * MIN).ratePerLanePerHour).toBe(3600 / planned);
   });
 
   it('runs in experiments: deterministic, compared with the plan, the supervisor and S8', () => {

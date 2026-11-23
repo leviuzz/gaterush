@@ -1,6 +1,6 @@
 {
   "name": "@gateflow/sim-metrics",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "private": true,
   "description": "Experiment runner, paired metrics, statistics, results document and Markdown report (pure).",
   "type": "module",

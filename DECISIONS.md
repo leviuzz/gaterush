@@ -2682,9 +2682,10 @@ founder on 2026-11-21 together with all of its recommendations.
 
 ## ADR-058: The pitch figures, one page written from the published reports
 
-- **Status:** Proposed (2026-11-23). After S22, on "Confermo vai avanti". The choices marked
-  **[to confirm]** in IMPLEMENTATION_PLAN.md are for the founder. sim-metrics 0.15.0, command
-  line 0.15.0. No simulated number changes.
+- **Status:** Accepted (2026-11-23). After S22, as the founder confirmed it ("Confermo vai
+  avanti"): the page written by the command line and checked by CI, the uncomfortable claims kept
+  as caveats, GateFlow's lanes as the console's, the demo checkpoint out of the claims, English.
+  sim-metrics 0.15.0, command line 0.15.0. No simulated number changes.
 - **Context:**
   - M4 ends ready for the pitch. The figures the pitch can say are spread over the reports of S8,
     S21 and S22.3: an interval in one table, its caveat in a paragraph of another report. A figure
@@ -2718,3 +2719,45 @@ founder on 2026-11-21 together with all of its recommendations.
   - A report published again changes the page in the same commit, or CI fails; a claim its new
     figures no longer support fails until it is rewritten.
   - The page is in English, as the reports; a translation changes its sentences, not its figures.
+
+## ADR-059: GateFlow knows the screening time of the plan, not the day's
+
+- **Status:** Proposed (2026-11-23). Slice S22.4, on "Confermo vai avanti". The choices marked
+  **[to confirm]** in IMPLEMENTATION_PLAN.md are for the founder. Population generator 0.7.0,
+  sim-metrics 0.16.0, command line 0.16.0. No generated day of the library changes.
+- **Context:**
+  - The simulator gives GateFlow estimates made from the population's lanes' rate and screening
+    estimate: the queue's estimates and its call-ahead, S8's projection, the console's rule
+    (S22.3) and the twin's checkpoint settings. The generator made them from the scenario's
+    screening time, the same that times each passenger's screening.
+  - A sweep of slower screening (`serviceTimeMeanSeconds`, S7's `vce-like-peak-capacity` and
+    S8's `vce-like-peak-lanes`) changes the day's screening and leaves the lane plan as planned,
+    but GateFlow's estimates followed the day: GateFlow knew the day was slower than planned.
+    Live, the console and the queue read the checkpoint's settings, made for the plan; a slow day
+    shows only in the queue.
+- **Decision:**
+  - **The screening time of the plan [to confirm]:** a scenario may give
+    `checkpoint.plannedServiceTimeMeanSeconds`, what the plan and GateFlow's settings assume (by
+    default the day's `serviceTimeMeanSeconds`). The generator makes GateFlow's estimates from it
+    and each passenger's screening from the day's; a lane plan rule plans on it.
+  - **The supervisor reads the queue as GateFlow does [to confirm]:** its estimate of the wait
+    (the people waiting over the lanes' rate) uses the same rate: the usual throughput, not the
+    day's.
+  - **In sweeps,** `actualServiceTimeMeanSeconds` sets the day's screening and keeps what the plan
+    and the settings assume; `serviceTimeMeanSeconds` keeps its meaning (a checkpoint whose
+    screening takes that long, known as such), so the published sweeps and the Studio's lever
+    reproduce.
+- **Alternatives considered:**
+  - **Give `serviceTimeMeanSeconds` the new meaning in sweeps:** one parameter, but the published
+    sweeps of S6 to S8 and the Studio's lever would change meaning and no longer reproduce.
+  - **The console learns the day's throughput from the lanes' admissions:** what a live console
+    could do, since the log has them; a product change, to measure first (M5, on an airport's
+    days).
+  - **The supervisor sees the true wait:** it would give today's practice more than GateFlow
+    knows; both read the same queue the same way.
+- **Consequences:**
+  - The figures of S7 and S8 on days of slower screening gave GateFlow the day's screening time;
+    they stay published with that note, and the VCE-like peak day harder than planned is measured
+    again without it (S22.4), S8's rule included.
+  - Nothing changes for a scenario without the new field: every day of the library, the
+    backtests and the twin are as they were.

@@ -29,6 +29,8 @@ export const SWEEP_PARAMETER_LABELS: Readonly<Record<SweepParameter, string>> = 
   maxExtraLanes: 'Extra lanes the staff on call can open',
   laneOpenDelayMinutes: 'Median time to open an extra lane (min)',
   laneFollowShare: "Share of GateFlow's lane recommendations followed",
+  actualServiceTimeMeanSeconds:
+    "Mean screening time on the day, the plan assuming the scenario's (s)",
 };
 
 function num(value: number, digits = 1): string {

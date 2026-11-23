@@ -73,11 +73,14 @@ export function withLaneSchedule(input: ScenarioInput): Scenario {
   if (lanePlanRule === undefined || lanesAvailable === undefined) {
     throw new RangeError('a scenario without a lane schedule needs a lane plan rule and lanes');
   }
-  // The population does not depend on the lane schedule: plan with a placeholder.
+  // The population does not depend on the lane schedule: plan with a placeholder, on the screening
+  // time the plan assumes (ADR-059).
+  const planned = input.checkpoint.plannedServiceTimeMeanSeconds;
   const draft: Scenario = {
     ...input,
     checkpoint: {
       ...input.checkpoint,
+      ...(planned === undefined ? {} : { serviceTimeMeanSeconds: planned }),
       laneSchedule: { value: [{ from: '00:00', lanes: 1 }], source: lanePlanRule.source },
     },
   };

@@ -12,7 +12,7 @@ import type { Calibration } from './calibration';
  * - vce-like-disrupted-day (priority-v3, sha256:faef7a1cf319...)
  * - tsf-like-peak-day (priority-v3, sha256:d305399bbbdf...)
  * - mx-like-transfer-hub (priority-v3, sha256:28845aefd9f2...)
- * Forecast 0.3.0, model 0.7.0, population generator 0.6.0.
+ * Forecast 0.3.0, model 0.7.0, population generator 0.7.0.
  */
 export const LIBRARY_CALIBRATION: Calibration = {
   "levels": {

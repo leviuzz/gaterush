@@ -174,3 +174,65 @@ plan only 96.7; at the TSF-like base nobody misses a flight with A' and the gain
   the queue rarely asks for an extra lane (none on the normal day).
 - Every number is SIMULATED on synthetic airports: what an airport's own days give is for its
   data (M5).
+
+## S22.4: a VCE-like peak day harder than planned (200 simulated days per point)
+
+Produced by `gateflow-sim` 0.16.0 from a clean checkout of commit
+`af593efd10dca74458fa6f19ab704addde75dd08` (S22.4), as recorded in its manifest. SIMULATED,
+synthetic data.
+
+| Sweep | Report | Page with charts | Results |
+|---|---|---|---|
+| `vce-like-peak-console-harder`: the console's lanes, S8's rule, today's supervisor and GateFlow as a whole on the VCE-like peak day made harder than planned | [sweep.md](sweeps/vce-like-peak-console-harder/sweep.md) | [sweep.html](sweeps/vce-like-peak-console-harder/sweep.html) | [sweep.json](sweeps/vce-like-peak-console-harder/sweep.json) |
+
+Since S22.4 GateFlow knows the screening time of the plan, not the day's (ADR-059): the plan of the
+VCE-like peak day and GateFlow's settings assume 24 seconds a person, and a slower day shows only
+in the queue, as it does live. The supervisor reads the queue the same way. S8's sweep of the same
+day (`vce-like-peak-lanes`, slice-8) let GateFlow and the supervisor know the day's screening time.
+The points of this sweep without a slower day (as planned, and a roster one lane short) give S8's
+figures exactly (102 values, no difference), and so do the plan's days at every screening time.
+
+Missed flights per day, and the net flights saved per day with 95% confidence intervals:
+
+| Day | Plan only | Supervisor | S8's rule | Console | GateFlow's calls, plan only | GateFlow as a whole | Console vs supervisor | GateFlow vs today | Extra lane-hours: supervisor / console |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| As planned: 24 s a person | 18.8 | 18.7 | 18.7 | 18.7 | 18.6 | 18.5 | 0.0 [-0.0, 0.0] | +0.2 [-0.2, 0.6] | 0.1 / 0.1 |
+| 25 s a person | 22.1 | 20.3 | 20.0 | 20.4 | 20.5 | 20.1 | -0.1 [-0.3, 0.0] | +0.3 [-0.2, 0.7] | 0.9 / 1.0 |
+| 26 s a person | 33.1 | 22.5 | 22.0 | 22.5 | 25.4 | 21.9 | 0.0 [-0.2, 0.2] | +0.6 [0.0, 1.2] | 2.1 / 2.5 |
+| 27 s a person | 108.0 | 27.1 | 26.5 | 26.6 | 74.4 | 24.4 | +0.5 [0.1, 0.8] | +2.7 [1.9, 3.5] | 3.2 / 4.1 |
+| A roster one lane short (24 s) | 84.9 | 24.9 | 21.4 | 21.2 | 61.8 | 20.3 | +3.8 [3.4, 4.2] | +4.7 [4.0, 5.4] | 3.7 / 4.2 |
+
+| On the 26-second day | Supervisor | Console | GateFlow as a whole | Console vs supervisor | GateFlow vs today | Console vs S8's rule |
+|---|---:|---:|---:|---:|---:|---:|
+| No staff on call | 33.1 | 33.1 | 25.4 | 0.0 [0.0, 0.0] | +7.6 [6.6, 8.8] | 0.0 [0.0, 0.0] |
+| Staff for 1 extra lane | 23.8 | 23.4 | 22.2 | +0.4 [0.2, 0.6] | +1.6 [1.0, 2.3] | -0.4 [-0.6, -0.2] |
+| Staff for 2 extra lanes (as assumed) | 22.5 | 22.5 | 21.9 | 0.0 [-0.2, 0.2] | +0.6 [0.0, 1.2] | -0.5 [-0.7, -0.3] |
+| Staff for 3 extra lanes | 22.5 | 22.5 | 21.9 | 0.0 [-0.2, 0.2] | +0.6 [0.0, 1.3] | -0.5 [-0.7, -0.3] |
+| Half of the recommendations followed | 22.5 | 22.9 | 21.9 | -0.4 [-0.7, -0.2] | +0.6 [0.0, 1.2] | -0.5 [-0.7, -0.3] |
+| All of them followed | 22.5 | 22.3 | 21.8 | +0.2 [0.0, 0.4] | +0.7 [0.0, 1.3] | -0.3 [-0.5, -0.1] |
+
+What knowing the day's screening time was worth (S8's sweep against this one, the same days):
+S8's rule missed 20.9 flights a day at 26 s and 23.6 at 27 s when it knew; 22.0 and 26.5 when it
+does not. The supervisor 22.2 and 26.5 when it knew; 22.5 and 27.1 when it does not.
+
+### What S22.4 says
+
+- **On a day slower than planned that nobody has measured, the console's lanes do as well as an
+  idealised supervisor, not better:** 0.0 [-0.2, 0.2] flights a day at 26 seconds a person,
+  +0.5 [0.1, 0.8] at 27. Its forecast assumes the planned screening: it sees the queue grow, not
+  why. S8's rule, blind too, misses 0.5 [0.3, 0.7] flights a day fewer than the console at 26
+  seconds.
+- **A roster one lane short is where the console's lanes pay on such a checkpoint:** 3.8
+  [3.4, 4.2] flights a day more than the supervisor, and GateFlow as a whole 4.7 [4.0, 5.4] more
+  than today's practice.
+- **The priority calls are worth most when lanes are short:** on the plan's lanes they save
+  1.6 [1.0, 2.2] flights a day at 25 seconds, 7.6 [6.6, 8.7] at 26 and 33.6 [30.4, 36.8] at 27, and
+  23.1 [21.3, 25.0] with a roster one lane short. With no staff on call to open a lane, GateFlow
+  as a whole saves 7.6 [6.6, 8.8] flights a day on the 26-second day; once extra lanes open, the
+  priority calls add less: GateFlow as a whole +0.6 [0.0, 1.2] at 26 seconds, +2.7 [1.9, 3.5] at
+  27.
+- **Knowing the day's screening time was worth about a flight a day to S8's rule at 26 seconds and
+  three at 27.** A console that learns the day's throughput from the lanes' admissions (the log
+  has them) could get some of it back: ADR-059's alternative, to measure next.
+- Following only half of the console's recommendations on such a day costs 0.4 [0.2, 0.7] flights
+  a day against the supervisor.

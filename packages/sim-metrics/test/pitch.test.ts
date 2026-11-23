@@ -76,6 +76,7 @@ function everyFigure(doc: PitchDocument): PitchFigure[] {
 const doc = buildPitch(readPublished, { reports: '../reports' });
 const HUB = 'slice-22/mx-like-transfer-hub/results.json';
 const BASE = 'slice-22/tsf-like-peak-day/results.json';
+const HARDER = 'slice-22/sweeps/vce-like-peak-console-harder/sweep.json';
 
 describe('the pitch figures (ADR-058)', () => {
   it('reads every figure where it says, in a published report', () => {
@@ -111,6 +112,7 @@ describe('the pitch figures (ADR-058)', () => {
       'base-gateflow',
       'vce-quiet',
       'harder-day',
+      'vce-harder-gateflow',
       'forecast-arrivals',
       'forecast-wait',
       'hub-fairness',
@@ -175,7 +177,7 @@ describe('the pitch figures (ADR-058)', () => {
     const html = renderPitchHtml(doc);
     expect(html.startsWith('<!doctype html>')).toBe(true);
     expect(balancedTags(html)).toBe(true);
-    expect(html.match(/<svg /g)).toHaveLength(2);
+    expect(html.match(/<svg /g)).toHaveLength(3);
     expect(html).not.toMatch(/(src|href)="(https?:)?\/\//);
     expect(html).not.toContain('<script');
     expect(html).toContain('SIMULATED RESULTS ON SYNTHETIC DATA.');
@@ -268,6 +270,24 @@ describe('the pitch figures (ADR-058)', () => {
         member(d, 'summary', 'arrivals', '60', 'all').coverage = 0.7;
       }),
     ).toMatch(/hold their bands" no longer holds/);
+    // GateFlow no longer saves flights on a VCE-like day with a roster one lane short.
+    expect(
+      stopped(HARDER, (d) => {
+        const roster = (d.dimensions as { id: string; points: { value: number }[] }[]).find(
+          (x) => x.id === 'roster',
+        );
+        const short = roster?.points.find((p) => p.value === -1) as unknown;
+        member(
+          short,
+          'comparisons',
+          'priority-v3@advise vs fifo-manual@reactive',
+          'metrics',
+          'net',
+        ).ciLower = -0.2;
+      }),
+    ).toMatch(
+      /"When a departures checkpoint is short of lanes, GateFlow saves flights" no longer holds/,
+    );
     // A ticket passed by more people than GateFlow's bound.
     expect(
       stopped(HUB, (d) => {

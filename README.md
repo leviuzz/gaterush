@@ -16,8 +16,9 @@ border procedures: it organises the flow before they start.
 > simulations through the API (S19); M4, the operations console and a preview of Predict: the
 > day's overview, checked against the log (S20), forecasts of the next 90 minutes measured
 > against the simulator (S21), and lane recommendations with the supervisor's decision and their
-> outcome (S22), measured in the simulator (S22.3); the figures for the pitch on one page, each
-> read from its report ([docs/pitch](docs/pitch/README.md)).**
+> outcome (S22), measured in the simulator (S22.3) and on a day harder than planned, which GateFlow
+> knows only from the queue (S22.4); the figures for the pitch on one page, each read from its
+> report ([docs/pitch](docs/pitch/README.md)).**
 > This repository contains the simulation foundations:
 > - the priority engine;
 > - the queue state machine that the operational product will share;
@@ -444,7 +445,9 @@ How to read these numbers:
 - **At a departures checkpoint, capacity decides.** On the VCE-like peak day the margin over A'
   grows from nothing to 2-35 flights per day with 1 to 3 more seconds of screening per person,
   and to 23 with one lane fewer. Where a real checkpoint sits depends on its lanes, its throughput
-  and its measured waits: the data to ask the airport for.
+  and its measured waits: the data to ask the airport for. (That sweep let GateFlow know the day's
+  screening time; without it, S22.4 finds 1.6, 7.6 and 33.6 flights per day at 25, 26 and 27
+  seconds, and 23.1 with one lane fewer: ADR-059.)
 - Non-prioritised passengers wait 0.03 to 0.24 minutes longer on average on the demo days; at
   most 0.10% of them more than 5 minutes. At the hub and at the low-cost base, 0.5-0.8% are
   delayed by more than 5 minutes with K = 30, so the bound is to be set for each checkpoint. Risk
@@ -466,7 +469,11 @@ How to read these numbers:
   - where the roster follows demand (VCE-like days), extra lanes are rarely needed: 0.3-0.5
     lane-hours per day on the peak days, with little change in missed flights. On a day harder
     than planned (screening 8% slower) they are the safety valve: 33.1 missed flights per day
-    with the plan alone, 22.2 with a supervisor, 20.9 with GateFlow's lanes;
+    with the plan alone, 22.2 with a supervisor, 20.9 with GateFlow's lanes. S8 let GateFlow and
+    the supervisor know the day was slower; measured again without it (S22.4, ADR-059), the
+    supervisor misses 22.5, S8's rule 22.0 and the console's lanes 22.5, as the supervisor; with a
+    roster one lane short the console's lanes save 3.8 [3.4, 4.2] flights a day more than the
+    supervisor, and GateFlow as a whole 4.7 [4.0, 5.4] more than today's practice;
   - each extra lane-hour saves 35 to 180 hours of passenger waiting;
   - GateFlow's target wait (10 minutes by default) trades lane-hours for flights, and is set for
     each checkpoint.

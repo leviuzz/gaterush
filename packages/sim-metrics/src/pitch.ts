@@ -57,7 +57,7 @@ const experimentFile = (id: string) => `slice-22/${id}/results.json`;
 const backtestFile = (id: string) => `slice-21/${id}/backtest.json`;
 const FOLLOWED_AT_THE_HUB = 'slice-22/sweeps/mx-like-hub-console/sweep.json';
 const FOLLOWED_AT_THE_BASE = 'slice-22/sweeps/tsf-like-peak-console/sweep.json';
-const HARDER_DAY = 'slice-8/sweeps/vce-like-peak-lanes/sweep.json';
+const HARDER_DAY = 'slice-22/sweeps/vce-like-peak-console-harder/sweep.json';
 
 /** The files the page reads, relative to the reports' directory (docs/reports), in its order. */
 export const PITCH_SOURCES: readonly string[] = [
@@ -217,6 +217,8 @@ interface Style {
 
 const FLIGHTS: Style = { digits: 1, signed: true };
 const FEW_FLIGHTS: Style = { digits: 2, signed: true };
+/** Flights saved, in a sentence that says they are more: no sign. */
+const SAVED: Style = { digits: 1 };
 const COUNT: Style = { digits: 1 };
 const LANE_HOURS: Style = { digits: 1, signed: true };
 const EXTRA_HOURS: Style = { digits: 1 };
@@ -519,7 +521,7 @@ export function buildPitch(read: (file: string) => unknown, options: PitchOption
   const harder = load(
     HARDER_DAY,
     'sweep',
-    'A VCE-like peak day harder than planned (S8)',
+    'A VCE-like peak day harder than planned (S22.4)',
     'vce-like-peak-day',
   );
   const backtests = FORECASTS.map((id) =>
@@ -1013,12 +1015,12 @@ export function buildPitch(read: (file: string) => unknown, options: PitchOption
       id: 'vce-quiet',
       title,
       text: `At a VCE-like departures checkpoint, whose roster follows the day's demand, the console makes ${value(r1)}, ${value(r2)} and ${value(r3)} recommendations a day (a normal, a peak and a disrupted day), and the missed flights hardly change against today's supervisor: ${text(n1)}, ${text(n2)} and ${text(n3)} a day.`,
-      caveat: `That is what it should do there: no lane the queue does not need. GateFlow's priority calls do not change the missed flights measurably there either (${text(p1)}, ${text(p2)} and ${text(p3)} a day, every interval across zero): these simulated days show no gain in flights at such a checkpoint.`,
+      caveat: `That is what it should do there: no lane the queue does not need. GateFlow's priority calls do not change the missed flights measurably there either (${text(p1)}, ${text(p2)} and ${text(p3)} a day, every interval across zero): on days as planned these simulated days show no gain in flights at such a checkpoint, unlike a day short of lanes (below).`,
       figures: [...recommendations, ...nets, ...priorities],
     });
   }
 
-  // 8. A day harder than planned (S8's rule).
+  // 8. A day harder than planned (S22.4): GateFlow knows the plan's screening time, not the day's.
   const harderPoint = (
     dimension: string,
     at: number,
@@ -1028,39 +1030,35 @@ export function buildPitch(read: (file: string) => unknown, options: PitchOption
   ) => harder.point(dimension, at, path, label, style);
   const harderMissed = (dimension: string, at: number, policyId: string, label: string) =>
     harderPoint(dimension, at, ['policies', policyId, 'missed'], label, COUNT);
-  const harderNet = (dimension: string, at: number, label: string) =>
+  const harderNet = (
+    dimension: string,
+    at: number,
+    candidate: string,
+    reference: string,
+    label: string,
+    style: Style = FLIGHTS,
+  ) =>
     harderPoint(
       dimension,
       at,
-      ['comparisons', versus(S8_LANES, TODAY), 'metrics', 'net'],
+      ['comparisons', versus(candidate, reference), 'metrics', 'net'],
       label,
-      FLIGHTS,
+      style,
     );
-  const hubVsS8 = compared(
-    hub,
-    CONSOLE,
-    S8_LANES,
-    'net',
-    "Net flights saved per day at the hub, the console's lanes against S8's",
-    FLIGHTS,
-  );
+  const seconds = (at: number, label: string) =>
+    harder.figure([...harder.pointPath('screening-time', at), 'value'], label, WHOLE);
   {
     const title = 'On a day harder than planned, extra lanes are the safety valve';
-    const planned = harder.figure(
-      [...harder.pointPath('screening-time', 24), 'value'],
-      'Seconds of screening per person the roster assumes',
-      WHOLE,
+    const planned = seconds(
+      24,
+      "Seconds of screening per person the plan and GateFlow's settings assume",
     );
     holds(
       harder.at([...harder.pointPath('screening-time', 24), 'isBase']) === true,
       title,
       'the day as planned is no longer 24 s a person',
     );
-    const slow = harder.figure(
-      [...harder.pointPath('screening-time', 26), 'value'],
-      'Seconds of screening per person on the harder day',
-      WHOLE,
-    );
+    const slow = seconds(26, 'Seconds of screening per person on the harder day');
     const plan = harderMissed(
       'screening-time',
       26,
@@ -1076,13 +1074,21 @@ export function buildPitch(read: (file: string) => unknown, options: PitchOption
     const lanes = harderMissed(
       'screening-time',
       26,
-      S8_LANES,
-      "Missed flights per day at 26 s, GateFlow's lanes (S8)",
+      CONSOLE,
+      "Missed flights per day at 26 s, the console's lanes",
     );
     const net = harderNet(
       'screening-time',
       26,
-      "Net flights saved per day at 26 s, GateFlow's lanes (S8) against the supervisor",
+      CONSOLE,
+      TODAY,
+      "Net flights saved per day at 26 s, the console's lanes against the supervisor",
+    );
+    const s8 = harderMissed(
+      'screening-time',
+      26,
+      S8_LANES,
+      "Missed flights per day at 26 s, S8's rule",
     );
     const planShort = harderMissed(
       'roster',
@@ -1099,38 +1105,46 @@ export function buildPitch(read: (file: string) => unknown, options: PitchOption
     const lanesShort = harderMissed(
       'roster',
       -1,
-      S8_LANES,
-      "Missed flights per day, a roster one lane short, GateFlow's lanes (S8)",
+      CONSOLE,
+      "Missed flights per day, a roster one lane short, the console's lanes",
     );
     const netShort = harderNet(
       'roster',
       -1,
-      "Net flights saved per day, a roster one lane short, GateFlow's lanes (S8) against the supervisor",
+      CONSOLE,
+      TODAY,
+      "Net flights saved per day, a roster one lane short, the console's lanes against the supervisor",
+      SAVED,
     );
     const noStaff = harderMissed(
       'staff',
       0,
-      S8_LANES,
-      "Missed flights per day at 26 s with no staff on call, GateFlow's lanes (S8)",
+      CONSOLE,
+      "Missed flights per day at 26 s with no staff on call, the console's lanes",
     );
     holds(
-      supervisor.value < plan.value && lanes.value < supervisor.value,
+      supervisor.value < plan.value && lanes.value < plan.value,
       title,
-      "the plan, the supervisor and GateFlow's lanes are no longer in that order",
+      'extra lanes no longer save flights on the slower day',
     );
     holds(
-      aboveZero(net) && aboveZero(netShort),
+      acrossZero(net),
       title,
-      "the interval of GateFlow's lanes against the supervisor is not above zero",
+      "the console's lanes no longer do just as well as the supervisor on the slower day",
+    );
+    holds(
+      aboveZero(netShort),
+      title,
+      'with a roster one lane short the console no longer saves more than the supervisor',
     );
     claims.push({
       id: 'harder-day',
       title,
-      text: `On the VCE-like peak day with screening at ${value(slow)} s a person instead of the ${value(planned)} its roster assumed, the plan alone misses ${value(plan)} flights a day, today's supervisor ${value(supervisor)} and GateFlow's lanes ${strong(lanes)} (${text(net)} against the supervisor); with a roster one lane short, ${value(planShort)}, ${value(supervisorShort)} and ${value(lanesShort)} (${text(netShort)}).`,
-      caveat: `Measured in S8 with S8's rule (\`@predict\`): the console's rule was not swept on such days. On the library's days the console's rule gives ${text(hubVsS8)} flights a day against S8's at the hub. Without staff on call nothing opens: ${value(noStaff)} flights a day are missed on the slower day.`,
+      text: `On the VCE-like peak day with screening at ${value(slow)} s a person instead of the ${value(planned)} its plan and GateFlow's settings assume, the plan alone misses ${value(plan)} flights a day, today's supervisor ${value(supervisor)} and the console's lanes ${strong(lanes)} (${text(net)} against the supervisor): both open lanes as the queue grows. With a roster one lane short, ${value(planShort)}, ${value(supervisorShort)} and ${value(lanesShort)}: the console's lanes save ${strong(netShort)} flights a day more than the supervisor.`,
+      caveat: `Nobody tells GateFlow the day is slower: it reads the checkpoint's settings, made for the plan, and sees only the queue grow, as it would live (ADR-059); S8's rule, as blind, misses ${value(s8)}. Without staff on call nothing opens: ${value(noStaff)} flights a day are missed on the slower day.`,
       figures: [
-        slow,
         planned,
+        slow,
         plan,
         supervisor,
         lanes,
@@ -1139,9 +1153,78 @@ export function buildPitch(read: (file: string) => unknown, options: PitchOption
         supervisorShort,
         lanesShort,
         netShort,
-        hubVsS8,
+        s8,
         noStaff,
       ],
+    });
+  }
+
+  // 9. GateFlow on a departures checkpoint short of lanes (S22.4).
+  {
+    const title = 'When a departures checkpoint is short of lanes, GateFlow saves flights';
+    const short = harderNet(
+      'roster',
+      -1,
+      GATEFLOW,
+      TODAY,
+      "Net flights saved per day, a roster one lane short, GateFlow against today's practice",
+      SAVED,
+    );
+    const slowest = seconds(27, 'Seconds of screening per person on the slowest day');
+    const atSlowest = harderNet(
+      'screening-time',
+      27,
+      GATEFLOW,
+      TODAY,
+      "Net flights saved per day at 27 s, GateFlow against today's practice",
+      SAVED,
+    );
+    const noStaff = harderNet(
+      'staff',
+      0,
+      GATEFLOW,
+      TODAY,
+      "Net flights saved per day at 26 s with no staff on call, GateFlow against today's practice",
+      SAVED,
+    );
+    const asPlanned = harderNet(
+      'screening-time',
+      24,
+      GATEFLOW,
+      TODAY,
+      "Net flights saved per day on the day as planned, GateFlow against today's practice",
+    );
+    const slowDay = harderNet(
+      'screening-time',
+      26,
+      GATEFLOW,
+      TODAY,
+      "Net flights saved per day at 26 s with staff on call, GateFlow against today's practice",
+    );
+    const priority = harderNet(
+      'screening-time',
+      26,
+      PRIORITY,
+      CALLS,
+      "Net flights saved per day at 26 s by the priority calls alone (the plan's lanes)",
+    );
+    holds(
+      aboveZero(short) && aboveZero(atSlowest) && aboveZero(noStaff),
+      title,
+      "an interval of GateFlow against today's practice is not above zero",
+    );
+    holds(acrossZero(asPlanned), title, 'GateFlow now changes the day as planned measurably');
+    holds(
+      aboveZero(priority) && priority.value > slowDay.value,
+      title,
+      'the priority calls are no longer worth most when lanes are short',
+    );
+    claims.push({
+      id: 'vce-harder-gateflow',
+      title,
+      text: `On the same VCE-like peak day, GateFlow as a whole (its priority calls and its console's lanes) saves ${strong(short)} flights a day against today's practice with a roster one lane short, ${text(atSlowest)} with screening at ${value(slowest)} s a person, and ${text(noStaff)} on the 26-second day when no staff are on call to open a lane.`,
+      caveat: `On a day as planned it changes nothing measurable (${text(asPlanned)}), and on the 26-second day with staff on call ${text(slowDay)}: the shorter the day is of lanes, the more the priority calls are worth (${text(priority)} on the plan's lanes at 26 s).`,
+      figures: [short, slowest, atSlowest, noStaff, asPlanned, slowDay, priority],
     });
   }
 
@@ -1489,44 +1572,106 @@ export function buildPitch(read: (file: string) => unknown, options: PitchOption
     { dimension: 'screening-time', at: 27, label: 'Screening at 27 s a person' },
     { dimension: 'roster', at: -1, label: 'A roster one lane short (24 s a person)' },
   ];
+  const harderHours = (dimension: string, at: number, policyId: string, label: string) =>
+    harderPoint(dimension, at, ['policies', policyId, 'extraLaneHours'], label, COUNT);
   tables.push({
     id: 'harder',
     title: 'A day harder than planned',
     intro:
-      "The VCE-like peak day of S8, made harder one assumption at a time: screening slower than the roster assumed, or a roster one lane short. Today's calls with the plan only, with today's supervisor, and with GateFlow's lanes as S8 recommended them (`@predict`, S8's rule: the console's rule was not swept on such days). 200 simulated days per point.",
+      "The VCE-like peak day made harder one assumption at a time: screening slower on the day than the 24 seconds a person the plan and GateFlow's settings assume, or a roster one lane short. Neither the plan nor GateFlow knows the day is slower: only the queue shows it, as live (ADR-059). Today's calls with the plan only, with today's supervisor, with S8's rule (`@predict`) and with the console's (`@advise`); GateFlow as a whole is its priority calls with the console's lanes. 200 simulated days per point.",
     columns: [
       { title: 'Day', numeric: false },
       { title: 'Missed per day: plan only', numeric: true },
       { title: 'Supervisor', numeric: true },
-      { title: "GateFlow's lanes (S8)", numeric: true },
-      { title: "GateFlow's lanes vs supervisor: net flights saved", numeric: true },
+      { title: "S8's rule", numeric: true },
+      { title: 'Console', numeric: true },
+      { title: 'GateFlow as a whole', numeric: true },
+      { title: 'Console vs supervisor: net flights saved', numeric: true },
+      { title: 'GateFlow vs today: net flights saved', numeric: true },
       { title: 'Extra lane-hours: supervisor', numeric: true },
-      { title: "Extra lane-hours: GateFlow's lanes", numeric: true },
+      { title: 'Extra lane-hours: console', numeric: true },
     ],
     rows: harderRows.map(({ dimension, at, label }) => [
       label,
       harderMissed(dimension, at, CALLS, `Missed flights per day, plan only, ${label}`),
       harderMissed(dimension, at, TODAY, `Missed flights per day, today's supervisor, ${label}`),
+      harderMissed(dimension, at, S8_LANES, `Missed flights per day, S8's rule, ${label}`),
+      harderMissed(dimension, at, CONSOLE, `Missed flights per day, the console's lanes, ${label}`),
       harderMissed(
         dimension,
         at,
-        S8_LANES,
-        `Missed flights per day, GateFlow's lanes (S8), ${label}`,
+        GATEFLOW,
+        `Missed flights per day, GateFlow as a whole, ${label}`,
       ),
-      harderNet(dimension, at, `Net flights saved per day against the supervisor, ${label}`),
-      harderPoint(
+      harderNet(
         dimension,
         at,
-        ['policies', TODAY, 'extraLaneHours'],
-        `Extra lane-hours per day, today's supervisor, ${label}`,
-        COUNT,
+        CONSOLE,
+        TODAY,
+        `Net flights saved per day, the console against the supervisor, ${label}`,
       ),
-      harderPoint(
+      harderNet(
         dimension,
         at,
-        ['policies', S8_LANES, 'extraLaneHours'],
-        `Extra lane-hours per day, GateFlow's lanes (S8), ${label}`,
-        COUNT,
+        GATEFLOW,
+        TODAY,
+        `Net flights saved per day, GateFlow against today's practice, ${label}`,
+      ),
+      harderHours(dimension, at, TODAY, `Extra lane-hours per day, today's supervisor, ${label}`),
+      harderHours(
+        dimension,
+        at,
+        CONSOLE,
+        `Extra lane-hours per day, the console's lanes, ${label}`,
+      ),
+    ]),
+    notes: [`Source: ${link(harder.label, harder.report)}.`],
+  });
+
+  const slowerRows: { dimension: string; at: number; label: string }[] = [
+    { dimension: 'staff', at: 0, label: 'No staff on call' },
+    { dimension: 'staff', at: 1, label: 'Staff for 1 extra lane' },
+    { dimension: 'staff', at: 2, label: 'Staff for 2 extra lanes (as assumed)' },
+    { dimension: 'staff', at: 3, label: 'Staff for 3 extra lanes' },
+    { dimension: 'follow', at: 0.5, label: 'Half of the recommendations followed' },
+    { dimension: 'follow', at: 1, label: 'All of them followed' },
+  ];
+  tables.push({
+    id: 'slower',
+    title: 'On the slower day: staff on call and recommendations followed',
+    intro:
+      'The same VCE-like peak day with screening at 26 seconds a person, as the staff on call or the share of the recommendations the duty manager follows varies (as assumed: staff for 2 extra lanes, 4 recommendations in 5 followed).',
+    columns: [
+      { title: 'On the 26-second day', numeric: false },
+      { title: 'Supervisor', numeric: true },
+      { title: 'Console', numeric: true },
+      { title: 'GateFlow as a whole', numeric: true },
+      { title: 'Console vs supervisor: net flights saved', numeric: true },
+      { title: 'GateFlow vs today: net flights saved', numeric: true },
+    ],
+    rows: slowerRows.map(({ dimension, at, label }) => [
+      label,
+      harderMissed(dimension, at, TODAY, `Missed flights per day, today's supervisor, ${label}`),
+      harderMissed(dimension, at, CONSOLE, `Missed flights per day, the console's lanes, ${label}`),
+      harderMissed(
+        dimension,
+        at,
+        GATEFLOW,
+        `Missed flights per day, GateFlow as a whole, ${label}`,
+      ),
+      harderNet(
+        dimension,
+        at,
+        CONSOLE,
+        TODAY,
+        `Net flights saved per day, the console against the supervisor, ${label}`,
+      ),
+      harderNet(
+        dimension,
+        at,
+        GATEFLOW,
+        TODAY,
+        `Net flights saved per day, GateFlow against today's practice, ${label}`,
       ),
     ]),
     notes: [`Source: ${link(harder.label, harder.report)}.`],
@@ -1627,6 +1772,25 @@ export function buildPitch(read: (file: string) => unknown, options: PitchOption
     ),
     emphasis,
   });
+  const harderBar = (policyId: string, label: string, emphasis: boolean) => ({
+    label,
+    value: harderMissed('screening-time', 26, policyId, `Missed flights per day at 26 s, ${label}`),
+    low: harderPoint(
+      'screening-time',
+      26,
+      ['policies', policyId, 'missed', 'p05'],
+      `5th percentile of the days at 26 s, ${label}`,
+      COUNT,
+    ),
+    high: harderPoint(
+      'screening-time',
+      26,
+      ['policies', policyId, 'missed', 'p95'],
+      `95th percentile of the days at 26 s, ${label}`,
+      COUNT,
+    ),
+    emphasis,
+  });
   const charts: PitchChart[] = [
     {
       kind: 'intervals',
@@ -1656,6 +1820,20 @@ export function buildPitch(read: (file: string) => unknown, options: PitchOption
         missedBar(GATEFLOW, 'GateFlow as a whole', true),
       ],
     },
+    {
+      kind: 'bars',
+      id: 'harder-missed',
+      section: 'harder',
+      title: 'Missed flights per day on the VCE-like peak day screening at 26 s a person',
+      note: "The plan and GateFlow's settings assume 24 s. Mean over 200 simulated days; the whisker spans the 5th to the 95th percentile of the days. In blue, with a part of GateFlow. SIMULATED.",
+      rows: [
+        harderBar(CALLS, "Today's calls, plan's lanes", false),
+        harderBar(TODAY, "Today's practice (supervisor)", false),
+        harderBar(PRIORITY, "GateFlow's calls, plan's lanes", true),
+        harderBar(CONSOLE, "Today's calls, console's lanes", true),
+        harderBar(GATEFLOW, 'GateFlow as a whole', true),
+      ],
+    },
   ];
 
   // A claim on the forecasts speaks of every checkpoint of the library, not only of its extremes.
@@ -1668,7 +1846,8 @@ export function buildPitch(read: (file: string) => unknown, options: PitchOption
 
   const limits = [
     "They are simulated, on synthetic airports made to look like three kinds of checkpoint (a VCE-like departures checkpoint, a TSF-like low-cost base, an MX-like transfer hub): they are not those airports' data. An airport's own figures come from its own days (M5).",
-    "Today's practice is idealised: staff call every closing flight, and the supervisor sees the exact wait every 5 minutes and never forgets. A real supervisor reacts later, so GateFlow's margin is probably understated.",
+    "Today's practice is idealised: staff call every closing flight, and the supervisor reads the queue every 5 minutes and never forgets. A real supervisor reacts later, so GateFlow's margin is probably understated.",
+    "GateFlow knows what the checkpoint's settings say, not how fast the day screens: on a day slower than planned it sees only the queue, as live (ADR-059). Earlier sweeps that let it know the day's screening time (S7, S8) are not on this page.",
     'The staff on call, the time to open a lane and the share of recommendations followed are assumptions; the data request asks the airport for them.',
     'An extra lane costs only its lane-hours here: no other duty of the staff on call is modelled, and the airport prices the lane-hours.',
     'The forecasts learn from other simulated days of the same model: a real forecast will be worse at first.',

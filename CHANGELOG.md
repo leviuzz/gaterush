@@ -30,6 +30,19 @@ founder confirmed it.
   share of recommendations followed), with today's calls on the plan, with the supervisor, S8's
   rule and the console's, and GateFlow's calls on the plan and with the console's lanes.
 
+### Reports and the pitch page
+- `docs/reports/slice-22/sweeps/vce-like-peak-console-harder` (200 days per point, gateflow-sim
+  0.16.0 from a clean checkout of `af593ef`), SIMULATED: on the VCE-like peak day screening at 26
+  seconds a person (the plan assumes 24), the plan alone misses 33.1 flights a day, the supervisor
+  22.5, S8's rule 22.0, the console's lanes 22.5 (0.0 [-0.2, 0.2] against the supervisor) and
+  GateFlow as a whole 21.9; with a roster one lane short 84.9, 24.9, 21.4, 21.2 and 20.3 (the
+  console +3.8 [3.4, 4.2] against the supervisor, GateFlow as a whole +4.7 [4.0, 5.4] against
+  today). With no staff on call GateFlow's priority calls save 7.6 [6.6, 8.8] flights a day. The
+  points without a slower day give S8's figures exactly.
+- The pitch page reads the new sweep instead of S8's: its harder day is the console's (claim 8),
+  a new claim says where GateFlow saves flights at a departures checkpoint (claim 9), two tables
+  and a third chart; 12 claims and 294 figures.
+
 ### Versions
 - Population generator and sim-scenarios 0.7.0, sim-metrics 0.16.0, command line 0.16.0. Results
   record the new generator; the golden files and the calibration module change in that line only.

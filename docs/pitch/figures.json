@@ -81,15 +81,15 @@
       "reproduce": "gateflow-sim sweep --spec sweeps/tsf-like-peak-console.yaml --seeds 1-200 --bootstrap-resamples 2000"
     },
     {
-      "file": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
-      "report": "slice-8/sweeps/vce-like-peak-lanes/sweep.md",
-      "label": "A VCE-like peak day harder than planned (S8)",
-      "title": "Extra lanes on the VCE-like peak day, recommended by GateFlow or opened by a supervisor",
+      "file": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+      "report": "slice-22/sweeps/vce-like-peak-console-harder/sweep.md",
+      "label": "A VCE-like peak day harder than planned (S22.4)",
+      "title": "The console's lane recommendations on a VCE-like peak day harder than planned",
       "schema": "gateflow.sim.sweep/3",
-      "commit": "b3c9f7e3b0fae64477fb45231fcb31cb4864982e",
-      "generator": "gateflow-sim 0.8.0",
+      "commit": "af593efd10dca74458fa6f19ab704addde75dd08",
+      "generator": "gateflow-sim 0.16.0",
       "days": 200,
-      "reproduce": "gateflow-sim sweep --spec sweeps/vce-like-peak-lanes.yaml --seeds 1-200 --bootstrap-resamples 2000"
+      "reproduce": "gateflow-sim sweep --spec sweeps/vce-like-peak-console-harder.yaml --seeds 1-200 --bootstrap-resamples 2000"
     },
     {
       "file": "slice-21/single-checkpoint-demo/backtest.json",
@@ -671,7 +671,7 @@
       "id": "vce-quiet",
       "title": "Where the roster follows demand, the console stays quiet",
       "text": "At a VCE-like departures checkpoint, whose roster follows the day's demand, the console makes 0.0, 0.3 and 1.0 recommendations a day (a normal, a peak and a disrupted day), and the missed flights hardly change against today's supervisor: 0.0 [0.0, 0.0], 0.0 [-0.0, 0.0] and +0.1 [0.0, 0.2] a day.",
-      "caveat": "That is what it should do there: no lane the queue does not need. GateFlow's priority calls do not change the missed flights measurably there either (0.0 [-0.1, 0.1], +0.2 [-0.1, 0.6] and +0.3 [-0.1, 0.7] a day, every interval across zero): these simulated days show no gain in flights at such a checkpoint.",
+      "caveat": "That is what it should do there: no lane the queue does not need. GateFlow's priority calls do not change the missed flights measurably there either (0.0 [-0.1, 0.1], +0.2 [-0.1, 0.6] and +0.3 [-0.1, 0.7] a day, every interval across zero): on days as planned these simulated days show no gain in flights at such a checkpoint, unlike a day short of lanes (below).",
       "figures": [
         {
           "label": "Recommendations per day, VCE-like normal day",
@@ -782,27 +782,27 @@
     {
       "id": "harder-day",
       "title": "On a day harder than planned, extra lanes are the safety valve",
-      "text": "On the VCE-like peak day with screening at 26 s a person instead of the 24 its roster assumed, the plan alone misses 33.1 flights a day, today's supervisor 22.2 and GateFlow's lanes **20.9** (+1.3 [1.1, 1.6] against the supervisor); with a roster one lane short, 84.9, 24.9 and 21.4 (+3.5 [3.1, 4.0]).",
-      "caveat": "Measured in S8 with S8's rule (`@predict`): the console's rule was not swept on such days. On the library's days the console's rule gives +0.7 [0.0, 1.4] flights a day against S8's at the hub. Without staff on call nothing opens: 33.1 flights a day are missed on the slower day.",
+      "text": "On the VCE-like peak day with screening at 26 s a person instead of the 24 its plan and GateFlow's settings assume, the plan alone misses 33.1 flights a day, today's supervisor 22.5 and the console's lanes **22.5** (0.0 [-0.2, 0.2] against the supervisor): both open lanes as the queue grows. With a roster one lane short, 84.9, 24.9 and 21.2: the console's lanes save **3.8** [3.4, 4.2] flights a day more than the supervisor.",
+      "caveat": "Nobody tells GateFlow the day is slower: it reads the checkpoint's settings, made for the plan, and sees only the queue grow, as it would live (ADR-059); S8's rule, as blind, misses 22.0. Without staff on call nothing opens: 33.1 flights a day are missed on the slower day.",
       "figures": [
         {
-          "label": "Seconds of screening per person on the harder day",
-          "value": 26,
+          "label": "Seconds of screening per person the plan and GateFlow's settings assume",
+          "value": 24,
           "lower": null,
           "upper": null,
-          "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
-          "pointer": "/dimensions/0/points/2/value",
+          "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+          "pointer": "/dimensions/0/points/0/value",
           "digits": 0,
           "signed": false,
           "percent": false
         },
         {
-          "label": "Seconds of screening per person the roster assumes",
-          "value": 24,
+          "label": "Seconds of screening per person on the harder day",
+          "value": 26,
           "lower": null,
           "upper": null,
-          "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
-          "pointer": "/dimensions/0/points/0/value",
+          "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+          "pointer": "/dimensions/0/points/2/value",
           "digits": 0,
           "signed": false,
           "percent": false
@@ -812,7 +812,7 @@
           "value": 33.09,
           "lower": null,
           "upper": null,
-          "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+          "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
           "pointer": "/dimensions/0/points/2/policies/fifo-manual/missed",
           "digits": 1,
           "signed": false,
@@ -820,33 +820,33 @@
         },
         {
           "label": "Missed flights per day at 26 s, today's supervisor",
-          "value": 22.195,
+          "value": 22.485,
           "lower": null,
           "upper": null,
-          "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+          "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
           "pointer": "/dimensions/0/points/2/policies/fifo-manual@reactive/missed",
           "digits": 1,
           "signed": false,
           "percent": false
         },
         {
-          "label": "Missed flights per day at 26 s, GateFlow's lanes (S8)",
-          "value": 20.86,
+          "label": "Missed flights per day at 26 s, the console's lanes",
+          "value": 22.505,
           "lower": null,
           "upper": null,
-          "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
-          "pointer": "/dimensions/0/points/2/policies/fifo-manual@predict/missed",
+          "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+          "pointer": "/dimensions/0/points/2/policies/fifo-manual@advise/missed",
           "digits": 1,
           "signed": false,
           "percent": false
         },
         {
-          "label": "Net flights saved per day at 26 s, GateFlow's lanes (S8) against the supervisor",
-          "value": 1.335,
-          "lower": 1.055,
-          "upper": 1.6151,
-          "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
-          "pointer": "/dimensions/0/points/2/comparisons/fifo-manual@predict vs fifo-manual@reactive/metrics/net",
+          "label": "Net flights saved per day at 26 s, the console's lanes against the supervisor",
+          "value": -0.02,
+          "lower": -0.2101,
+          "upper": 0.175,
+          "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+          "pointer": "/dimensions/0/points/2/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
           "digits": 1,
           "signed": true,
           "percent": false
@@ -856,7 +856,7 @@
           "value": 84.93,
           "lower": null,
           "upper": null,
-          "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+          "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
           "pointer": "/dimensions/1/points/0/policies/fifo-manual/missed",
           "digits": 1,
           "signed": false,
@@ -867,60 +867,147 @@
           "value": 24.94,
           "lower": null,
           "upper": null,
-          "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+          "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
           "pointer": "/dimensions/1/points/0/policies/fifo-manual@reactive/missed",
           "digits": 1,
           "signed": false,
           "percent": false
         },
         {
-          "label": "Missed flights per day, a roster one lane short, GateFlow's lanes (S8)",
-          "value": 21.4,
+          "label": "Missed flights per day, a roster one lane short, the console's lanes",
+          "value": 21.16,
           "lower": null,
           "upper": null,
-          "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
-          "pointer": "/dimensions/1/points/0/policies/fifo-manual@predict/missed",
+          "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+          "pointer": "/dimensions/1/points/0/policies/fifo-manual@advise/missed",
           "digits": 1,
           "signed": false,
           "percent": false
         },
         {
-          "label": "Net flights saved per day, a roster one lane short, GateFlow's lanes (S8) against the supervisor",
-          "value": 3.54,
-          "lower": 3.065,
-          "upper": 4.0101,
-          "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
-          "pointer": "/dimensions/1/points/0/comparisons/fifo-manual@predict vs fifo-manual@reactive/metrics/net",
+          "label": "Net flights saved per day, a roster one lane short, the console's lanes against the supervisor",
+          "value": 3.78,
+          "lower": 3.3549,
+          "upper": 4.235,
+          "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+          "pointer": "/dimensions/1/points/0/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
           "digits": 1,
-          "signed": true,
+          "signed": false,
           "percent": false
         },
         {
-          "label": "Net flights saved per day at the hub, the console's lanes against S8's",
-          "value": 0.705,
-          "lower": 0.01,
-          "upper": 1.38,
-          "source": "slice-22/mx-like-transfer-hub/results.json",
-          "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual@predict/metrics/net",
+          "label": "Missed flights per day at 26 s, S8's rule",
+          "value": 22.025,
+          "lower": null,
+          "upper": null,
+          "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+          "pointer": "/dimensions/0/points/2/policies/fifo-manual@predict/missed",
           "digits": 1,
-          "signed": true,
+          "signed": false,
           "percent": false
         },
         {
-          "label": "Missed flights per day at 26 s with no staff on call, GateFlow's lanes (S8)",
+          "label": "Missed flights per day at 26 s with no staff on call, the console's lanes",
           "value": 33.09,
           "lower": null,
           "upper": null,
-          "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
-          "pointer": "/dimensions/3/points/0/policies/fifo-manual@predict/missed",
+          "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+          "pointer": "/dimensions/2/points/0/policies/fifo-manual@advise/missed",
           "digits": 1,
           "signed": false,
           "percent": false
         }
       ],
       "sources": [
-        "slice-22/mx-like-transfer-hub/results.json",
-        "slice-8/sweeps/vce-like-peak-lanes/sweep.json"
+        "slice-22/sweeps/vce-like-peak-console-harder/sweep.json"
+      ]
+    },
+    {
+      "id": "vce-harder-gateflow",
+      "title": "When a departures checkpoint is short of lanes, GateFlow saves flights",
+      "text": "On the same VCE-like peak day, GateFlow as a whole (its priority calls and its console's lanes) saves **4.7** [4.0, 5.4] flights a day against today's practice with a roster one lane short, 2.7 [1.9, 3.5] with screening at 27 s a person, and 7.6 [6.6, 8.8] on the 26-second day when no staff are on call to open a lane.",
+      "caveat": "On a day as planned it changes nothing measurable (+0.2 [-0.2, 0.6]), and on the 26-second day with staff on call +0.6 [0.0, 1.2]: the shorter the day is of lanes, the more the priority calls are worth (+7.6 [6.6, 8.7] on the plan's lanes at 26 s).",
+      "figures": [
+        {
+          "label": "Net flights saved per day, a roster one lane short, GateFlow against today's practice",
+          "value": 4.66,
+          "lower": 3.9999,
+          "upper": 5.365,
+          "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+          "pointer": "/dimensions/1/points/0/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/net",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Seconds of screening per person on the slowest day",
+          "value": 27,
+          "lower": null,
+          "upper": null,
+          "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+          "pointer": "/dimensions/0/points/3/value",
+          "digits": 0,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Net flights saved per day at 27 s, GateFlow against today's practice",
+          "value": 2.695,
+          "lower": 1.875,
+          "upper": 3.5152,
+          "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+          "pointer": "/dimensions/0/points/3/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/net",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Net flights saved per day at 26 s with no staff on call, GateFlow against today's practice",
+          "value": 7.64,
+          "lower": 6.5548,
+          "upper": 8.775,
+          "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+          "pointer": "/dimensions/2/points/0/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/net",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Net flights saved per day on the day as planned, GateFlow against today's practice",
+          "value": 0.2,
+          "lower": -0.1501,
+          "upper": 0.5601,
+          "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+          "pointer": "/dimensions/0/points/0/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/net",
+          "digits": 1,
+          "signed": true,
+          "percent": false
+        },
+        {
+          "label": "Net flights saved per day at 26 s with staff on call, GateFlow against today's practice",
+          "value": 0.635,
+          "lower": 0.015,
+          "upper": 1.235,
+          "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+          "pointer": "/dimensions/0/points/2/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/net",
+          "digits": 1,
+          "signed": true,
+          "percent": false
+        },
+        {
+          "label": "Net flights saved per day at 26 s by the priority calls alone (the plan's lanes)",
+          "value": 7.64,
+          "lower": 6.5599,
+          "upper": 8.7251,
+          "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+          "pointer": "/dimensions/0/points/2/comparisons/priority-v3 vs fifo-manual/metrics/net",
+          "digits": 1,
+          "signed": true,
+          "percent": false
+        }
+      ],
+      "sources": [
+        "slice-22/sweeps/vce-like-peak-console-harder/sweep.json"
       ]
     },
     {
@@ -2116,7 +2203,7 @@
     {
       "id": "harder",
       "title": "A day harder than planned",
-      "intro": "The VCE-like peak day of S8, made harder one assumption at a time: screening slower than the roster assumed, or a roster one lane short. Today's calls with the plan only, with today's supervisor, and with GateFlow's lanes as S8 recommended them (`@predict`, S8's rule: the console's rule was not swept on such days). 200 simulated days per point.",
+      "intro": "The VCE-like peak day made harder one assumption at a time: screening slower on the day than the 24 seconds a person the plan and GateFlow's settings assume, or a roster one lane short. Neither the plan nor GateFlow knows the day is slower: only the queue shows it, as live (ADR-059). Today's calls with the plan only, with today's supervisor, with S8's rule (`@predict`) and with the console's (`@advise`); GateFlow as a whole is its priority calls with the console's lanes. 200 simulated days per point.",
       "columns": [
         {
           "title": "Day",
@@ -2131,11 +2218,23 @@
           "numeric": true
         },
         {
-          "title": "GateFlow's lanes (S8)",
+          "title": "S8's rule",
           "numeric": true
         },
         {
-          "title": "GateFlow's lanes vs supervisor: net flights saved",
+          "title": "Console",
+          "numeric": true
+        },
+        {
+          "title": "GateFlow as a whole",
+          "numeric": true
+        },
+        {
+          "title": "Console vs supervisor: net flights saved",
+          "numeric": true
+        },
+        {
+          "title": "GateFlow vs today: net flights saved",
           "numeric": true
         },
         {
@@ -2143,7 +2242,7 @@
           "numeric": true
         },
         {
-          "title": "Extra lane-hours: GateFlow's lanes",
+          "title": "Extra lane-hours: console",
           "numeric": true
         }
       ],
@@ -2155,7 +2254,7 @@
             "value": 18.79,
             "lower": null,
             "upper": null,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
             "pointer": "/dimensions/0/points/0/policies/fifo-manual/missed",
             "digits": 1,
             "signed": false,
@@ -2166,30 +2265,63 @@
             "value": 18.74,
             "lower": null,
             "upper": null,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
             "pointer": "/dimensions/0/points/0/policies/fifo-manual@reactive/missed",
             "digits": 1,
             "signed": false,
             "percent": false
           },
           {
-            "label": "Missed flights per day, GateFlow's lanes (S8), As planned: 24 s a person",
+            "label": "Missed flights per day, S8's rule, As planned: 24 s a person",
             "value": 18.69,
             "lower": null,
             "upper": null,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
             "pointer": "/dimensions/0/points/0/policies/fifo-manual@predict/missed",
             "digits": 1,
             "signed": false,
             "percent": false
           },
           {
-            "label": "Net flights saved per day against the supervisor, As planned: 24 s a person",
-            "value": 0.05,
-            "lower": 0,
-            "upper": 0.1,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
-            "pointer": "/dimensions/0/points/0/comparisons/fifo-manual@predict vs fifo-manual@reactive/metrics/net",
+            "label": "Missed flights per day, the console's lanes, As planned: 24 s a person",
+            "value": 18.74,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/0/policies/fifo-manual@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, GateFlow as a whole, As planned: 24 s a person",
+            "value": 18.54,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/0/policies/priority-v3@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, the console against the supervisor, As planned: 24 s a person",
+            "value": 0,
+            "lower": -0.04,
+            "upper": 0.03,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/0/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, GateFlow against today's practice, As planned: 24 s a person",
+            "value": 0.2,
+            "lower": -0.1501,
+            "upper": 0.5601,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/0/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/net",
             "digits": 1,
             "signed": true,
             "percent": false
@@ -2199,19 +2331,19 @@
             "value": 0.0727,
             "lower": null,
             "upper": null,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
             "pointer": "/dimensions/0/points/0/policies/fifo-manual@reactive/extraLaneHours",
             "digits": 1,
             "signed": false,
             "percent": false
           },
           {
-            "label": "Extra lane-hours per day, GateFlow's lanes (S8), As planned: 24 s a person",
-            "value": 0.2649,
+            "label": "Extra lane-hours per day, the console's lanes, As planned: 24 s a person",
+            "value": 0.1167,
             "lower": null,
             "upper": null,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
-            "pointer": "/dimensions/0/points/0/policies/fifo-manual@predict/extraLaneHours",
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/0/policies/fifo-manual@advise/extraLaneHours",
             "digits": 1,
             "signed": false,
             "percent": false
@@ -2224,7 +2356,7 @@
             "value": 22.07,
             "lower": null,
             "upper": null,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
             "pointer": "/dimensions/0/points/1/policies/fifo-manual/missed",
             "digits": 1,
             "signed": false,
@@ -2232,55 +2364,88 @@
           },
           {
             "label": "Missed flights per day, today's supervisor, Screening at 25 s a person",
-            "value": 20.21,
+            "value": 20.305,
             "lower": null,
             "upper": null,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
             "pointer": "/dimensions/0/points/1/policies/fifo-manual@reactive/missed",
             "digits": 1,
             "signed": false,
             "percent": false
           },
           {
-            "label": "Missed flights per day, GateFlow's lanes (S8), Screening at 25 s a person",
-            "value": 19.44,
+            "label": "Missed flights per day, S8's rule, Screening at 25 s a person",
+            "value": 19.98,
             "lower": null,
             "upper": null,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
             "pointer": "/dimensions/0/points/1/policies/fifo-manual@predict/missed",
             "digits": 1,
             "signed": false,
             "percent": false
           },
           {
-            "label": "Net flights saved per day against the supervisor, Screening at 25 s a person",
-            "value": 0.77,
-            "lower": 0.575,
-            "upper": 0.9751,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
-            "pointer": "/dimensions/0/points/1/comparisons/fifo-manual@predict vs fifo-manual@reactive/metrics/net",
+            "label": "Missed flights per day, the console's lanes, Screening at 25 s a person",
+            "value": 20.43,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/1/policies/fifo-manual@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, GateFlow as a whole, Screening at 25 s a person",
+            "value": 20.055,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/1/policies/priority-v3@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, the console against the supervisor, Screening at 25 s a person",
+            "value": -0.125,
+            "lower": -0.27,
+            "upper": 0.015,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/1/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, GateFlow against today's practice, Screening at 25 s a person",
+            "value": 0.25,
+            "lower": -0.2151,
+            "upper": 0.715,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/1/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/net",
             "digits": 1,
             "signed": true,
             "percent": false
           },
           {
             "label": "Extra lane-hours per day, today's supervisor, Screening at 25 s a person",
-            "value": 0.9881,
+            "value": 0.8645,
             "lower": null,
             "upper": null,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
             "pointer": "/dimensions/0/points/1/policies/fifo-manual@reactive/extraLaneHours",
             "digits": 1,
             "signed": false,
             "percent": false
           },
           {
-            "label": "Extra lane-hours per day, GateFlow's lanes (S8), Screening at 25 s a person",
-            "value": 1.4245,
+            "label": "Extra lane-hours per day, the console's lanes, Screening at 25 s a person",
+            "value": 1.0031,
             "lower": null,
             "upper": null,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
-            "pointer": "/dimensions/0/points/1/policies/fifo-manual@predict/extraLaneHours",
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/1/policies/fifo-manual@advise/extraLaneHours",
             "digits": 1,
             "signed": false,
             "percent": false
@@ -2293,7 +2458,7 @@
             "value": 33.09,
             "lower": null,
             "upper": null,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
             "pointer": "/dimensions/0/points/2/policies/fifo-manual/missed",
             "digits": 1,
             "signed": false,
@@ -2301,55 +2466,88 @@
           },
           {
             "label": "Missed flights per day, today's supervisor, Screening at 26 s a person",
-            "value": 22.195,
+            "value": 22.485,
             "lower": null,
             "upper": null,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
             "pointer": "/dimensions/0/points/2/policies/fifo-manual@reactive/missed",
             "digits": 1,
             "signed": false,
             "percent": false
           },
           {
-            "label": "Missed flights per day, GateFlow's lanes (S8), Screening at 26 s a person",
-            "value": 20.86,
+            "label": "Missed flights per day, S8's rule, Screening at 26 s a person",
+            "value": 22.025,
             "lower": null,
             "upper": null,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
             "pointer": "/dimensions/0/points/2/policies/fifo-manual@predict/missed",
             "digits": 1,
             "signed": false,
             "percent": false
           },
           {
-            "label": "Net flights saved per day against the supervisor, Screening at 26 s a person",
-            "value": 1.335,
-            "lower": 1.055,
-            "upper": 1.6151,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
-            "pointer": "/dimensions/0/points/2/comparisons/fifo-manual@predict vs fifo-manual@reactive/metrics/net",
+            "label": "Missed flights per day, the console's lanes, Screening at 26 s a person",
+            "value": 22.505,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/2/policies/fifo-manual@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, GateFlow as a whole, Screening at 26 s a person",
+            "value": 21.85,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/2/policies/priority-v3@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, the console against the supervisor, Screening at 26 s a person",
+            "value": -0.02,
+            "lower": -0.2101,
+            "upper": 0.175,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/2/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, GateFlow against today's practice, Screening at 26 s a person",
+            "value": 0.635,
+            "lower": 0.015,
+            "upper": 1.235,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/2/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/net",
             "digits": 1,
             "signed": true,
             "percent": false
           },
           {
             "label": "Extra lane-hours per day, today's supervisor, Screening at 26 s a person",
-            "value": 2.2082,
+            "value": 2.0644,
             "lower": null,
             "upper": null,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
             "pointer": "/dimensions/0/points/2/policies/fifo-manual@reactive/extraLaneHours",
             "digits": 1,
             "signed": false,
             "percent": false
           },
           {
-            "label": "Extra lane-hours per day, GateFlow's lanes (S8), Screening at 26 s a person",
-            "value": 2.563,
+            "label": "Extra lane-hours per day, the console's lanes, Screening at 26 s a person",
+            "value": 2.4857,
             "lower": null,
             "upper": null,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
-            "pointer": "/dimensions/0/points/2/policies/fifo-manual@predict/extraLaneHours",
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/2/policies/fifo-manual@advise/extraLaneHours",
             "digits": 1,
             "signed": false,
             "percent": false
@@ -2362,7 +2560,7 @@
             "value": 108.015,
             "lower": null,
             "upper": null,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
             "pointer": "/dimensions/0/points/3/policies/fifo-manual/missed",
             "digits": 1,
             "signed": false,
@@ -2370,55 +2568,88 @@
           },
           {
             "label": "Missed flights per day, today's supervisor, Screening at 27 s a person",
-            "value": 26.53,
+            "value": 27.08,
             "lower": null,
             "upper": null,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
             "pointer": "/dimensions/0/points/3/policies/fifo-manual@reactive/missed",
             "digits": 1,
             "signed": false,
             "percent": false
           },
           {
-            "label": "Missed flights per day, GateFlow's lanes (S8), Screening at 27 s a person",
-            "value": 23.64,
+            "label": "Missed flights per day, S8's rule, Screening at 27 s a person",
+            "value": 26.49,
             "lower": null,
             "upper": null,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
             "pointer": "/dimensions/0/points/3/policies/fifo-manual@predict/missed",
             "digits": 1,
             "signed": false,
             "percent": false
           },
           {
-            "label": "Net flights saved per day against the supervisor, Screening at 27 s a person",
-            "value": 2.89,
-            "lower": 2.48,
-            "upper": 3.33,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
-            "pointer": "/dimensions/0/points/3/comparisons/fifo-manual@predict vs fifo-manual@reactive/metrics/net",
+            "label": "Missed flights per day, the console's lanes, Screening at 27 s a person",
+            "value": 26.625,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/3/policies/fifo-manual@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, GateFlow as a whole, Screening at 27 s a person",
+            "value": 24.385,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/3/policies/priority-v3@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, the console against the supervisor, Screening at 27 s a person",
+            "value": 0.455,
+            "lower": 0.135,
+            "upper": 0.765,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/3/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, GateFlow against today's practice, Screening at 27 s a person",
+            "value": 2.695,
+            "lower": 1.875,
+            "upper": 3.5152,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/3/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/net",
             "digits": 1,
             "signed": true,
             "percent": false
           },
           {
             "label": "Extra lane-hours per day, today's supervisor, Screening at 27 s a person",
-            "value": 3.3794,
+            "value": 3.1719,
             "lower": null,
             "upper": null,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
             "pointer": "/dimensions/0/points/3/policies/fifo-manual@reactive/extraLaneHours",
             "digits": 1,
             "signed": false,
             "percent": false
           },
           {
-            "label": "Extra lane-hours per day, GateFlow's lanes (S8), Screening at 27 s a person",
-            "value": 3.952,
+            "label": "Extra lane-hours per day, the console's lanes, Screening at 27 s a person",
+            "value": 4.0559,
             "lower": null,
             "upper": null,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
-            "pointer": "/dimensions/0/points/3/policies/fifo-manual@predict/extraLaneHours",
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/3/policies/fifo-manual@advise/extraLaneHours",
             "digits": 1,
             "signed": false,
             "percent": false
@@ -2431,7 +2662,7 @@
             "value": 84.93,
             "lower": null,
             "upper": null,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
             "pointer": "/dimensions/1/points/0/policies/fifo-manual/missed",
             "digits": 1,
             "signed": false,
@@ -2442,30 +2673,63 @@
             "value": 24.94,
             "lower": null,
             "upper": null,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
             "pointer": "/dimensions/1/points/0/policies/fifo-manual@reactive/missed",
             "digits": 1,
             "signed": false,
             "percent": false
           },
           {
-            "label": "Missed flights per day, GateFlow's lanes (S8), A roster one lane short (24 s a person)",
+            "label": "Missed flights per day, S8's rule, A roster one lane short (24 s a person)",
             "value": 21.4,
             "lower": null,
             "upper": null,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
             "pointer": "/dimensions/1/points/0/policies/fifo-manual@predict/missed",
             "digits": 1,
             "signed": false,
             "percent": false
           },
           {
-            "label": "Net flights saved per day against the supervisor, A roster one lane short (24 s a person)",
-            "value": 3.54,
-            "lower": 3.065,
-            "upper": 4.0101,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
-            "pointer": "/dimensions/1/points/0/comparisons/fifo-manual@predict vs fifo-manual@reactive/metrics/net",
+            "label": "Missed flights per day, the console's lanes, A roster one lane short (24 s a person)",
+            "value": 21.16,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/1/points/0/policies/fifo-manual@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, GateFlow as a whole, A roster one lane short (24 s a person)",
+            "value": 20.28,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/1/points/0/policies/priority-v3@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, the console against the supervisor, A roster one lane short (24 s a person)",
+            "value": 3.78,
+            "lower": 3.3549,
+            "upper": 4.235,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/1/points/0/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, GateFlow against today's practice, A roster one lane short (24 s a person)",
+            "value": 4.66,
+            "lower": 3.9999,
+            "upper": 5.365,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/1/points/0/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/net",
             "digits": 1,
             "signed": true,
             "percent": false
@@ -2475,19 +2739,19 @@
             "value": 3.7324,
             "lower": null,
             "upper": null,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
             "pointer": "/dimensions/1/points/0/policies/fifo-manual@reactive/extraLaneHours",
             "digits": 1,
             "signed": false,
             "percent": false
           },
           {
-            "label": "Extra lane-hours per day, GateFlow's lanes (S8), A roster one lane short (24 s a person)",
-            "value": 4.4822,
+            "label": "Extra lane-hours per day, the console's lanes, A roster one lane short (24 s a person)",
+            "value": 4.2328,
             "lower": null,
             "upper": null,
-            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
-            "pointer": "/dimensions/1/points/0/policies/fifo-manual@predict/extraLaneHours",
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/1/points/0/policies/fifo-manual@advise/extraLaneHours",
             "digits": 1,
             "signed": false,
             "percent": false
@@ -2495,7 +2759,391 @@
         ]
       ],
       "notes": [
-        "Source: [A VCE-like peak day harder than planned (S8)](../reports/slice-8/sweeps/vce-like-peak-lanes/sweep.md)."
+        "Source: [A VCE-like peak day harder than planned (S22.4)](../reports/slice-22/sweeps/vce-like-peak-console-harder/sweep.md)."
+      ]
+    },
+    {
+      "id": "slower",
+      "title": "On the slower day: staff on call and recommendations followed",
+      "intro": "The same VCE-like peak day with screening at 26 seconds a person, as the staff on call or the share of the recommendations the duty manager follows varies (as assumed: staff for 2 extra lanes, 4 recommendations in 5 followed).",
+      "columns": [
+        {
+          "title": "On the 26-second day",
+          "numeric": false
+        },
+        {
+          "title": "Supervisor",
+          "numeric": true
+        },
+        {
+          "title": "Console",
+          "numeric": true
+        },
+        {
+          "title": "GateFlow as a whole",
+          "numeric": true
+        },
+        {
+          "title": "Console vs supervisor: net flights saved",
+          "numeric": true
+        },
+        {
+          "title": "GateFlow vs today: net flights saved",
+          "numeric": true
+        }
+      ],
+      "rows": [
+        [
+          "No staff on call",
+          {
+            "label": "Missed flights per day, today's supervisor, No staff on call",
+            "value": 33.09,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/2/points/0/policies/fifo-manual@reactive/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, the console's lanes, No staff on call",
+            "value": 33.09,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/2/points/0/policies/fifo-manual@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, GateFlow as a whole, No staff on call",
+            "value": 25.45,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/2/points/0/policies/priority-v3@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, the console against the supervisor, No staff on call",
+            "value": 0,
+            "lower": 0,
+            "upper": 0,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/2/points/0/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, GateFlow against today's practice, No staff on call",
+            "value": 7.64,
+            "lower": 6.5548,
+            "upper": 8.775,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/2/points/0/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          }
+        ],
+        [
+          "Staff for 1 extra lane",
+          {
+            "label": "Missed flights per day, today's supervisor, Staff for 1 extra lane",
+            "value": 23.79,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/2/points/1/policies/fifo-manual@reactive/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, the console's lanes, Staff for 1 extra lane",
+            "value": 23.39,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/2/points/1/policies/fifo-manual@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, GateFlow as a whole, Staff for 1 extra lane",
+            "value": 22.18,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/2/points/1/policies/priority-v3@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, the console against the supervisor, Staff for 1 extra lane",
+            "value": 0.4,
+            "lower": 0.19,
+            "upper": 0.6202,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/2/points/1/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, GateFlow against today's practice, Staff for 1 extra lane",
+            "value": 1.61,
+            "lower": 0.97,
+            "upper": 2.2852,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/2/points/1/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          }
+        ],
+        [
+          "Staff for 2 extra lanes (as assumed)",
+          {
+            "label": "Missed flights per day, today's supervisor, Staff for 2 extra lanes (as assumed)",
+            "value": 22.485,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/2/points/2/policies/fifo-manual@reactive/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, the console's lanes, Staff for 2 extra lanes (as assumed)",
+            "value": 22.505,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/2/points/2/policies/fifo-manual@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, GateFlow as a whole, Staff for 2 extra lanes (as assumed)",
+            "value": 21.85,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/2/points/2/policies/priority-v3@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, the console against the supervisor, Staff for 2 extra lanes (as assumed)",
+            "value": -0.02,
+            "lower": -0.215,
+            "upper": 0.16,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/2/points/2/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, GateFlow against today's practice, Staff for 2 extra lanes (as assumed)",
+            "value": 0.635,
+            "lower": 0.035,
+            "upper": 1.24,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/2/points/2/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          }
+        ],
+        [
+          "Staff for 3 extra lanes",
+          {
+            "label": "Missed flights per day, today's supervisor, Staff for 3 extra lanes",
+            "value": 22.485,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/2/points/3/policies/fifo-manual@reactive/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, the console's lanes, Staff for 3 extra lanes",
+            "value": 22.505,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/2/points/3/policies/fifo-manual@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, GateFlow as a whole, Staff for 3 extra lanes",
+            "value": 21.85,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/2/points/3/policies/priority-v3@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, the console against the supervisor, Staff for 3 extra lanes",
+            "value": -0.02,
+            "lower": -0.22,
+            "upper": 0.185,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/2/points/3/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, GateFlow against today's practice, Staff for 3 extra lanes",
+            "value": 0.635,
+            "lower": 0.0399,
+            "upper": 1.26,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/2/points/3/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          }
+        ],
+        [
+          "Half of the recommendations followed",
+          {
+            "label": "Missed flights per day, today's supervisor, Half of the recommendations followed",
+            "value": 22.485,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/3/points/0/policies/fifo-manual@reactive/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, the console's lanes, Half of the recommendations followed",
+            "value": 22.9,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/3/points/0/policies/fifo-manual@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, GateFlow as a whole, Half of the recommendations followed",
+            "value": 21.86,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/3/points/0/policies/priority-v3@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, the console against the supervisor, Half of the recommendations followed",
+            "value": -0.415,
+            "lower": -0.675,
+            "upper": -0.1649,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/3/points/0/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, GateFlow against today's practice, Half of the recommendations followed",
+            "value": 0.625,
+            "lower": 0.0299,
+            "upper": 1.23,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/3/points/0/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          }
+        ],
+        [
+          "All of them followed",
+          {
+            "label": "Missed flights per day, today's supervisor, All of them followed",
+            "value": 22.485,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/3/points/2/policies/fifo-manual@reactive/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, the console's lanes, All of them followed",
+            "value": 22.28,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/3/points/2/policies/fifo-manual@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, GateFlow as a whole, All of them followed",
+            "value": 21.8,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/3/points/2/policies/priority-v3@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, the console against the supervisor, All of them followed",
+            "value": 0.205,
+            "lower": 0,
+            "upper": 0.415,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/3/points/2/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, GateFlow against today's practice, All of them followed",
+            "value": 0.685,
+            "lower": 0.0449,
+            "upper": 1.295,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/3/points/2/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          }
+        ]
+      ],
+      "notes": [
+        "Source: [A VCE-like peak day harder than planned (S22.4)](../reports/slice-22/sweeps/vce-like-peak-console-harder/sweep.md)."
       ]
     },
     {
@@ -3323,10 +3971,10 @@
           "200"
         ],
         [
-          "[A VCE-like peak day harder than planned (S8)](../reports/slice-8/sweeps/vce-like-peak-lanes/sweep.md)",
-          "Extra lanes on the VCE-like peak day, recommended by GateFlow or opened by a supervisor",
-          "`b3c9f7e`",
-          "gateflow-sim 0.8.0",
+          "[A VCE-like peak day harder than planned (S22.4)](../reports/slice-22/sweeps/vce-like-peak-console-harder/sweep.md)",
+          "The console's lane recommendations on a VCE-like peak day harder than planned",
+          "`af593ef`",
+          "gateflow-sim 0.16.0",
           "200"
         ],
         [
@@ -3650,11 +4298,206 @@
           "emphasis": true
         }
       ]
+    },
+    {
+      "kind": "bars",
+      "id": "harder-missed",
+      "section": "harder",
+      "title": "Missed flights per day on the VCE-like peak day screening at 26 s a person",
+      "note": "The plan and GateFlow's settings assume 24 s. Mean over 200 simulated days; the whisker spans the 5th to the 95th percentile of the days. In blue, with a part of GateFlow. SIMULATED.",
+      "rows": [
+        {
+          "label": "Today's calls, plan's lanes",
+          "value": {
+            "label": "Missed flights per day at 26 s, Today's calls, plan's lanes",
+            "value": 33.09,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/2/policies/fifo-manual/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "low": {
+            "label": "5th percentile of the days at 26 s, Today's calls, plan's lanes",
+            "value": 17.95,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/2/policies/fifo-manual/missed/p05",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "high": {
+            "label": "95th percentile of the days at 26 s, Today's calls, plan's lanes",
+            "value": 51,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/2/policies/fifo-manual/missed/p95",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "emphasis": false
+        },
+        {
+          "label": "Today's practice (supervisor)",
+          "value": {
+            "label": "Missed flights per day at 26 s, Today's practice (supervisor)",
+            "value": 22.485,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/2/policies/fifo-manual@reactive/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "low": {
+            "label": "5th percentile of the days at 26 s, Today's practice (supervisor)",
+            "value": 11,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/2/policies/fifo-manual@reactive/missed/p05",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "high": {
+            "label": "95th percentile of the days at 26 s, Today's practice (supervisor)",
+            "value": 35,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/2/policies/fifo-manual@reactive/missed/p95",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "emphasis": false
+        },
+        {
+          "label": "GateFlow's calls, plan's lanes",
+          "value": {
+            "label": "Missed flights per day at 26 s, GateFlow's calls, plan's lanes",
+            "value": 25.45,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/2/policies/priority-v3/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "low": {
+            "label": "5th percentile of the days at 26 s, GateFlow's calls, plan's lanes",
+            "value": 14,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/2/policies/priority-v3/missed/p05",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "high": {
+            "label": "95th percentile of the days at 26 s, GateFlow's calls, plan's lanes",
+            "value": 39,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/2/policies/priority-v3/missed/p95",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "emphasis": true
+        },
+        {
+          "label": "Today's calls, console's lanes",
+          "value": {
+            "label": "Missed flights per day at 26 s, Today's calls, console's lanes",
+            "value": 22.505,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/2/policies/fifo-manual@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "low": {
+            "label": "5th percentile of the days at 26 s, Today's calls, console's lanes",
+            "value": 11.95,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/2/policies/fifo-manual@advise/missed/p05",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "high": {
+            "label": "95th percentile of the days at 26 s, Today's calls, console's lanes",
+            "value": 36.05,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/2/policies/fifo-manual@advise/missed/p95",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "emphasis": true
+        },
+        {
+          "label": "GateFlow as a whole",
+          "value": {
+            "label": "Missed flights per day at 26 s, GateFlow as a whole",
+            "value": 21.85,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/2/policies/priority-v3@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "low": {
+            "label": "5th percentile of the days at 26 s, GateFlow as a whole",
+            "value": 12,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/2/policies/priority-v3@advise/missed/p05",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "high": {
+            "label": "95th percentile of the days at 26 s, GateFlow as a whole",
+            "value": 35,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/vce-like-peak-console-harder/sweep.json",
+            "pointer": "/dimensions/0/points/2/policies/priority-v3@advise/missed/p95",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "emphasis": true
+        }
+      ]
     }
   ],
   "limits": [
     "They are simulated, on synthetic airports made to look like three kinds of checkpoint (a VCE-like departures checkpoint, a TSF-like low-cost base, an MX-like transfer hub): they are not those airports' data. An airport's own figures come from its own days (M5).",
-    "Today's practice is idealised: staff call every closing flight, and the supervisor sees the exact wait every 5 minutes and never forgets. A real supervisor reacts later, so GateFlow's margin is probably understated.",
+    "Today's practice is idealised: staff call every closing flight, and the supervisor reads the queue every 5 minutes and never forgets. A real supervisor reacts later, so GateFlow's margin is probably understated.",
+    "GateFlow knows what the checkpoint's settings say, not how fast the day screens: on a day slower than planned it sees only the queue, as live (ADR-059). Earlier sweeps that let it know the day's screening time (S7, S8) are not on this page.",
     "The staff on call, the time to open a lane and the share of recommendations followed are assumptions; the data request asks the airport for them.",
     "An extra lane costs only its lane-hours here: no other duty of the staff on call is modelled, and the airport prices the lane-hours.",
     "The forecasts learn from other simulated days of the same model: a real forecast will be worse at first.",

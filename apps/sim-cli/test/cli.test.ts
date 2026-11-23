@@ -702,7 +702,7 @@ describe('gateflow-sim pitch', () => {
       join(repo, 'docs', 'pitch'),
     ]);
     expect(checked.code, checked.stderr).toBe(EXIT_OK);
-    expect(checked.stdout).toMatch(/11 claims and \d+ figures from 14 reports \(SIMULATED\)/);
+    expect(checked.stdout).toMatch(/12 claims and \d+ figures from 14 reports \(SIMULATED\)/);
     const out = join(workDir, 'pitch');
     const written = await cli(['pitch', '--reports', reports, '--out', out]);
     expect(written.code, written.stderr).toBe(EXIT_OK);

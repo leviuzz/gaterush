@@ -2755,6 +2755,14 @@ founder on 2026-11-21 together with all of its recommendations.
     days).
   - **The supervisor sees the true wait:** it would give today's practice more than GateFlow
     knows; both read the same queue the same way.
+- **Evidence:** the S22.4 section of IMPLEMENTATION_PLAN.md and
+  `docs/reports/slice-22/sweeps/vce-like-peak-console-harder` (200 days per point, from a clean
+  checkout of `af593ef`), whose points without a slower day give S8's figures exactly. On the
+  VCE-like peak day screening at 26 seconds a person, S8's rule missed 20.9 flights a day when it
+  knew the day's screening time and 22.0 when it does not; the supervisor 22.2 and 22.5; the
+  console's lanes 22.5, as the supervisor (0.0 [-0.2, 0.2]). With a roster one lane short the
+  console's lanes save 3.8 [3.4, 4.2] flights a day more than the supervisor, and GateFlow as a
+  whole 4.7 [4.0, 5.4] more than today's practice.
 - **Consequences:**
   - The figures of S7 and S8 on days of slower screening gave GateFlow the day's screening time;
     they stay published with that note, and the VCE-like peak day harder than planned is measured

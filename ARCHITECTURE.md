@@ -571,10 +571,10 @@ changelog.
 
 The pitch figures (ADR-058) are a page written from the published reports, not a simulation:
 `buildPitch` (sim-metrics, pure) is given the parsed JSON of the reports it lists
-(`PITCH_SOURCES`: the library and sweeps of S22.3, the sweep of S8 on days harder than planned,
+(`PITCH_SOURCES`: the library and sweeps of S22.3, the sweep of S22.4 on a day harder than planned,
 the backtests of S21) and reads every figure at a JSON pointer, keeping the file and the pointer
 with it; `renderPitchMarkdown`, `renderPitchHtml` and `stringifyPitch` write the page, its HTML
-twin with two charts and the document (`gateflow.pitch.figures/1`). It refuses a source whose
+twin with three charts and the document (`gateflow.pitch.figures/1`). It refuses a source whose
 schema is not the one it reads, without the SIMULATED disclaimer, not on synthetic data or not of
 a clean commit, and each claim checks the words its figures must support. `gateflow-sim pitch`
 reads the files and writes `docs/pitch` (`pnpm pitch`) or checks it (`pnpm pitch:check`, in CI);

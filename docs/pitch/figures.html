@@ -195,21 +195,25 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 <p>Sources: <a href="../reports/slice-22/tsf-like-peak-day/report.md">TSF-like peak day (S22.3)</a>.</p>
 <h3 id="7-where-the-roster-follows-demand-the-console-stays-quiet">7. Where the roster follows demand, the console stays quiet</h3>
 <p>At a VCE-like departures checkpoint, whose roster follows the day's demand, the console makes 0.0, 0.3 and 1.0 recommendations a day (a normal, a peak and a disrupted day), and the missed flights hardly change against today's supervisor: 0.0 [0.0, 0.0], 0.0 [-0.0, 0.0] and +0.1 [0.0, 0.2] a day.</p>
-<p><strong>Say it with:</strong> That is what it should do there: no lane the queue does not need. GateFlow's priority calls do not change the missed flights measurably there either (0.0 [-0.1, 0.1], +0.2 [-0.1, 0.6] and +0.3 [-0.1, 0.7] a day, every interval across zero): these simulated days show no gain in flights at such a checkpoint.</p>
+<p><strong>Say it with:</strong> That is what it should do there: no lane the queue does not need. GateFlow's priority calls do not change the missed flights measurably there either (0.0 [-0.1, 0.1], +0.2 [-0.1, 0.6] and +0.3 [-0.1, 0.7] a day, every interval across zero): on days as planned these simulated days show no gain in flights at such a checkpoint, unlike a day short of lanes (below).</p>
 <p>Sources: <a href="../reports/slice-22/vce-like-normal-day/report.md">VCE-like normal day (S22.3)</a>, <a href="../reports/slice-22/vce-like-peak-day/report.md">VCE-like peak day (S22.3)</a>, <a href="../reports/slice-22/vce-like-disrupted-day/report.md">VCE-like disrupted day (S22.3)</a>.</p>
 <h3 id="8-on-a-day-harder-than-planned-extra-lanes-are-the-safety-valve">8. On a day harder than planned, extra lanes are the safety valve</h3>
-<p>On the VCE-like peak day with screening at 26 s a person instead of the 24 its roster assumed, the plan alone misses 33.1 flights a day, today's supervisor 22.2 and GateFlow's lanes <strong>20.9</strong> (+1.3 [1.1, 1.6] against the supervisor); with a roster one lane short, 84.9, 24.9 and 21.4 (+3.5 [3.1, 4.0]).</p>
-<p><strong>Say it with:</strong> Measured in S8 with S8's rule (<code>@predict</code>): the console's rule was not swept on such days. On the library's days the console's rule gives +0.7 [0.0, 1.4] flights a day against S8's at the hub. Without staff on call nothing opens: 33.1 flights a day are missed on the slower day.</p>
-<p>Sources: <a href="../reports/slice-22/mx-like-transfer-hub/report.md">MX-like transfer hub (S22.3)</a>, <a href="../reports/slice-8/sweeps/vce-like-peak-lanes/sweep.md">A VCE-like peak day harder than planned (S8)</a>.</p>
-<h3 id="9-the-forecasts-behind-the-recommendations-hold-their-bands">9. The forecasts behind the recommendations hold their bands</h3>
+<p>On the VCE-like peak day with screening at 26 s a person instead of the 24 its plan and GateFlow's settings assume, the plan alone misses 33.1 flights a day, today's supervisor 22.5 and the console's lanes <strong>22.5</strong> (0.0 [-0.2, 0.2] against the supervisor): both open lanes as the queue grows. With a roster one lane short, 84.9, 24.9 and 21.2: the console's lanes save <strong>3.8</strong> [3.4, 4.2] flights a day more than the supervisor.</p>
+<p><strong>Say it with:</strong> Nobody tells GateFlow the day is slower: it reads the checkpoint's settings, made for the plan, and sees only the queue grow, as it would live (ADR-059); S8's rule, as blind, misses 22.0. Without staff on call nothing opens: 33.1 flights a day are missed on the slower day.</p>
+<p>Sources: <a href="../reports/slice-22/sweeps/vce-like-peak-console-harder/sweep.md">A VCE-like peak day harder than planned (S22.4)</a>.</p>
+<h3 id="9-when-a-departures-checkpoint-is-short-of-lanes-gateflow-saves-flights">9. When a departures checkpoint is short of lanes, GateFlow saves flights</h3>
+<p>On the same VCE-like peak day, GateFlow as a whole (its priority calls and its console's lanes) saves <strong>4.7</strong> [4.0, 5.4] flights a day against today's practice with a roster one lane short, 2.7 [1.9, 3.5] with screening at 27 s a person, and 7.6 [6.6, 8.8] on the 26-second day when no staff are on call to open a lane.</p>
+<p><strong>Say it with:</strong> On a day as planned it changes nothing measurable (+0.2 [-0.2, 0.6]), and on the 26-second day with staff on call +0.6 [0.0, 1.2]: the shorter the day is of lanes, the more the priority calls are worth (+7.6 [6.6, 8.7] on the plan's lanes at 26 s).</p>
+<p>Sources: <a href="../reports/slice-22/sweeps/vce-like-peak-console-harder/sweep.md">A VCE-like peak day harder than planned (S22.4)</a>.</p>
+<h3 id="10-the-forecasts-behind-the-recommendations-hold-their-bands">10. The forecasts behind the recommendations hold their bands</h3>
 <p>GateFlow forecasts the people arriving in each 5 minutes, 15 to 90 minutes ahead, within 11% to 22% of them (WAPE) at the five checkpoints of the library, and its 80% bands hold 77% to 81% of what then happened.</p>
 <p><strong>Say it with:</strong> Measured on 12,145 to 15,524 forecasts per checkpoint and horizon over 200 simulated days, against the full simulator. The forecasts learn from 50 other simulated days of the same model, so they are better than a real forecast would be at first; they know the day's flights, not their loads or disruptions.</p>
 <p>Sources: <a href="../reports/slice-21/vce-like-normal-day/backtest.md">Forecasts, VCE-like normal day (S21)</a>, <a href="../reports/slice-21/vce-like-peak-day/backtest.md">Forecasts, VCE-like peak day (S21)</a>, <a href="../reports/slice-21/vce-like-disrupted-day/backtest.md">Forecasts, VCE-like disrupted day (S21)</a>, <a href="../reports/slice-21/tsf-like-peak-day/backtest.md">Forecasts, TSF-like peak day (S21)</a>, <a href="../reports/slice-21/mx-like-transfer-hub/backtest.md">Forecasts, MX-like transfer hub (S21)</a>.</p>
-<h3 id="10-when-a-queue-builds-the-forecast-of-the-wait-is-within-minutes">10. When a queue builds, the forecast of the wait is within minutes</h3>
+<h3 id="11-when-a-queue-builds-the-forecast-of-the-wait-is-within-minutes">11. When a queue builds, the forecast of the wait is within minutes</h3>
 <p>When there is a queue, GateFlow's forecast of the wait of a party arriving is off by 1.3 to 5.3 minutes on average (the median's error), and its bands hold 75% to 98% of the waits.</p>
 <p><strong>Say it with:</strong> Before the calibration of S21.3 those bands held as little as 37% of the waits. Most of the day nobody waits: those forecasts are left out. The forecast of the queue itself runs high on the VCE-like days, by 19 people 90 minutes ahead on the peak day.</p>
 <p>Sources: <a href="../reports/slice-21/vce-like-normal-day/backtest.md">Forecasts, VCE-like normal day (S21)</a>, <a href="../reports/slice-21/vce-like-peak-day/backtest.md">Forecasts, VCE-like peak day (S21)</a>, <a href="../reports/slice-21/vce-like-disrupted-day/backtest.md">Forecasts, VCE-like disrupted day (S21)</a>, <a href="../reports/slice-21/tsf-like-peak-day/backtest.md">Forecasts, TSF-like peak day (S21)</a>, <a href="../reports/slice-21/mx-like-transfer-hub/backtest.md">Forecasts, MX-like transfer hub (S21)</a>.</p>
-<h3 id="11-the-passengers-not-prioritised-do-not-pay-for-it">11. The passengers not prioritised do not pay for it</h3>
+<h3 id="12-the-passengers-not-prioritised-do-not-pay-for-it">12. The passengers not prioritised do not pay for it</h3>
 <p>At the hub the passengers GateFlow does not prioritise wait <strong>-0.30</strong> [-0.36, -0.25] minutes on average against today's practice, that is less, since the console's lanes shorten the queue; 0.6% of them wait more than 5 minutes longer.</p>
 <p><strong>Say it with:</strong> Without the console's lanes, the priority calls alone make them wait 0.13 [0.12, 0.14] minutes longer on average. A priority call passes people who came before, never more than 30 for one ticket (the policy's bound; 30 on the worst of the 200 days); staff calling flights out of today's queue passed up to 68.</p>
 <p>Sources: <a href="../reports/slice-22/mx-like-transfer-hub/report.md">MX-like transfer hub (S22.3)</a>.</p>
@@ -301,15 +305,86 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 </tbody></table></div>
 <p>Sources: <a href="../reports/slice-22/sweeps/mx-like-hub-console/sweep.md">Recommendations followed or not, MX-like hub (S22.3)</a>, <a href="../reports/slice-22/sweeps/tsf-like-peak-console/sweep.md">Recommendations followed or not, TSF-like base (S22.3)</a>.</p>
 <h2 id="a-day-harder-than-planned">A day harder than planned</h2>
-<p>The VCE-like peak day of S8, made harder one assumption at a time: screening slower than the roster assumed, or a roster one lane short. Today's calls with the plan only, with today's supervisor, and with GateFlow's lanes as S8 recommended them (<code>@predict</code>, S8's rule: the console's rule was not swept on such days). 200 simulated days per point.</p>
-<div class="table"><table><thead><tr><th>Day</th><th class="right">Missed per day: plan only</th><th class="right">Supervisor</th><th class="right">GateFlow's lanes (S8)</th><th class="right">GateFlow's lanes vs supervisor: net flights saved</th><th class="right">Extra lane-hours: supervisor</th><th class="right">Extra lane-hours: GateFlow's lanes</th></tr></thead><tbody>
-<tr><td>As planned: 24 s a person</td><td class="right">18.8</td><td class="right">18.7</td><td class="right">18.7</td><td class="right">+0.1 [0.0, 0.1]</td><td class="right">0.1</td><td class="right">0.3</td></tr>
-<tr><td>Screening at 25 s a person</td><td class="right">22.1</td><td class="right">20.2</td><td class="right">19.4</td><td class="right">+0.8 [0.6, 1.0]</td><td class="right">1.0</td><td class="right">1.4</td></tr>
-<tr><td>Screening at 26 s a person</td><td class="right">33.1</td><td class="right">22.2</td><td class="right">20.9</td><td class="right">+1.3 [1.1, 1.6]</td><td class="right">2.2</td><td class="right">2.6</td></tr>
-<tr><td>Screening at 27 s a person</td><td class="right">108.0</td><td class="right">26.5</td><td class="right">23.6</td><td class="right">+2.9 [2.5, 3.3]</td><td class="right">3.4</td><td class="right">4.0</td></tr>
-<tr><td>A roster one lane short (24 s a person)</td><td class="right">84.9</td><td class="right">24.9</td><td class="right">21.4</td><td class="right">+3.5 [3.1, 4.0]</td><td class="right">3.7</td><td class="right">4.5</td></tr>
+<figure class="chart">
+<figcaption>Missed flights per day on the VCE-like peak day screening at 26 s a person</figcaption>
+<p class="note">The plan and GateFlow's settings assume 24 s. Mean over 200 simulated days; the whisker spans the 5th to the 95th percentile of the days. In blue, with a part of GateFlow. SIMULATED.</p>
+<svg viewBox="0 0 720 206" role="img" aria-label="Missed flights per day on the VCE-like peak day screening at 26 s a person">
+<line x1="210" y1="8" x2="210" y2="178" stroke="var(--grid)" stroke-width="1"/>
+<text x="210" y="198" text-anchor="middle" font-size="11" fill="var(--muted)">0</text>
+<line x1="358.7" y1="8" x2="358.7" y2="178" stroke="var(--grid)" stroke-width="1"/>
+<text x="358.7" y="198" text-anchor="middle" font-size="11" fill="var(--muted)">20</text>
+<line x1="507.3" y1="8" x2="507.3" y2="178" stroke="var(--grid)" stroke-width="1"/>
+<text x="507.3" y="198" text-anchor="middle" font-size="11" fill="var(--muted)">40</text>
+<line x1="656" y1="8" x2="656" y2="178" stroke="var(--grid)" stroke-width="1"/>
+<text x="656" y="198" text-anchor="middle" font-size="11" fill="var(--muted)">60</text>
+<g><title>Today's calls, plan's lanes: 33.1 (spread 17.9 to 51.0)</title>
+<rect x="0" y="8" width="720" height="34" fill="transparent"/>
+<text x="200" y="29" text-anchor="end" font-size="12" fill="var(--text-primary)">Today's calls, plan's lanes</text>
+<path d="M210 17H452Q456 17 456 21V29Q456 33 452 33H210Z" fill="var(--deemph)"/>
+<line x1="343.4" y1="25" x2="589.1" y2="25" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="343.4" y1="21" x2="343.4" y2="29" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="589.1" y1="21" x2="589.1" y2="29" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<text x="595.1" y="29" font-size="12" fill="var(--text-primary)">33.1</text>
+</g>
+<g><title>Today's practice (supervisor): 22.5 (spread 11.0 to 35.0)</title>
+<rect x="0" y="42" width="720" height="34" fill="transparent"/>
+<text x="200" y="63" text-anchor="end" font-size="12" fill="var(--text-primary)">Today's practice (supervisor)</text>
+<path d="M210 51H373.1Q377.1 51 377.1 55V63Q377.1 67 373.1 67H210Z" fill="var(--deemph)"/>
+<line x1="291.8" y1="59" x2="470.2" y2="59" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="291.8" y1="55" x2="291.8" y2="63" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="470.2" y1="55" x2="470.2" y2="63" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<text x="476.2" y="63" font-size="12" fill="var(--text-primary)">22.5</text>
+</g>
+<g><title>GateFlow's calls, plan's lanes: 25.4 (spread 14.0 to 39.0)</title>
+<rect x="0" y="76" width="720" height="34" fill="transparent"/>
+<text x="200" y="97" text-anchor="end" font-size="12" fill="var(--text-primary)">GateFlow's calls, plan's lanes</text>
+<path d="M210 85H395.2Q399.2 85 399.2 89V97Q399.2 101 395.2 101H210Z" fill="var(--series-1)"/>
+<line x1="314.1" y1="93" x2="499.9" y2="93" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="314.1" y1="89" x2="314.1" y2="97" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="499.9" y1="89" x2="499.9" y2="97" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<text x="505.9" y="97" font-size="12" fill="var(--text-primary)">25.4</text>
+</g>
+<g><title>Today's calls, console's lanes: 22.5 (spread 11.9 to 36.0)</title>
+<rect x="0" y="110" width="720" height="34" fill="transparent"/>
+<text x="200" y="131" text-anchor="end" font-size="12" fill="var(--text-primary)">Today's calls, console's lanes</text>
+<path d="M210 119H373.3Q377.3 119 377.3 123V131Q377.3 135 373.3 135H210Z" fill="var(--series-1)"/>
+<line x1="298.8" y1="127" x2="478" y2="127" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="298.8" y1="123" x2="298.8" y2="131" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="478" y1="123" x2="478" y2="131" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<text x="484" y="131" font-size="12" fill="var(--text-primary)">22.5</text>
+</g>
+<g><title>GateFlow as a whole: 21.9 (spread 12.0 to 35.0)</title>
+<rect x="0" y="144" width="720" height="34" fill="transparent"/>
+<text x="200" y="165" text-anchor="end" font-size="12" fill="var(--text-primary)">GateFlow as a whole</text>
+<path d="M210 153H368.4Q372.4 153 372.4 157V165Q372.4 169 368.4 169H210Z" fill="var(--series-1)"/>
+<line x1="299.2" y1="161" x2="470.2" y2="161" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="299.2" y1="157" x2="299.2" y2="165" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<line x1="470.2" y1="157" x2="470.2" y2="165" stroke="var(--text-secondary)" stroke-width="1.5"/>
+<text x="476.2" y="165" font-size="12" fill="var(--text-primary)">21.9</text>
+</g>
+<line x1="210" y1="8" x2="210" y2="178" stroke="var(--axis)" stroke-width="1"/>
+</svg>
+</figure>
+<p>The VCE-like peak day made harder one assumption at a time: screening slower on the day than the 24 seconds a person the plan and GateFlow's settings assume, or a roster one lane short. Neither the plan nor GateFlow knows the day is slower: only the queue shows it, as live (ADR-059). Today's calls with the plan only, with today's supervisor, with S8's rule (<code>@predict</code>) and with the console's (<code>@advise</code>); GateFlow as a whole is its priority calls with the console's lanes. 200 simulated days per point.</p>
+<div class="table"><table><thead><tr><th>Day</th><th class="right">Missed per day: plan only</th><th class="right">Supervisor</th><th class="right">S8's rule</th><th class="right">Console</th><th class="right">GateFlow as a whole</th><th class="right">Console vs supervisor: net flights saved</th><th class="right">GateFlow vs today: net flights saved</th><th class="right">Extra lane-hours: supervisor</th><th class="right">Extra lane-hours: console</th></tr></thead><tbody>
+<tr><td>As planned: 24 s a person</td><td class="right">18.8</td><td class="right">18.7</td><td class="right">18.7</td><td class="right">18.7</td><td class="right">18.5</td><td class="right">0.0 [-0.0, 0.0]</td><td class="right">+0.2 [-0.2, 0.6]</td><td class="right">0.1</td><td class="right">0.1</td></tr>
+<tr><td>Screening at 25 s a person</td><td class="right">22.1</td><td class="right">20.3</td><td class="right">20.0</td><td class="right">20.4</td><td class="right">20.1</td><td class="right">-0.1 [-0.3, 0.0]</td><td class="right">+0.3 [-0.2, 0.7]</td><td class="right">0.9</td><td class="right">1.0</td></tr>
+<tr><td>Screening at 26 s a person</td><td class="right">33.1</td><td class="right">22.5</td><td class="right">22.0</td><td class="right">22.5</td><td class="right">21.9</td><td class="right">0.0 [-0.2, 0.2]</td><td class="right">+0.6 [0.0, 1.2]</td><td class="right">2.1</td><td class="right">2.5</td></tr>
+<tr><td>Screening at 27 s a person</td><td class="right">108.0</td><td class="right">27.1</td><td class="right">26.5</td><td class="right">26.6</td><td class="right">24.4</td><td class="right">+0.5 [0.1, 0.8]</td><td class="right">+2.7 [1.9, 3.5]</td><td class="right">3.2</td><td class="right">4.1</td></tr>
+<tr><td>A roster one lane short (24 s a person)</td><td class="right">84.9</td><td class="right">24.9</td><td class="right">21.4</td><td class="right">21.2</td><td class="right">20.3</td><td class="right">+3.8 [3.4, 4.2]</td><td class="right">+4.7 [4.0, 5.4]</td><td class="right">3.7</td><td class="right">4.2</td></tr>
 </tbody></table></div>
-<p>Source: <a href="../reports/slice-8/sweeps/vce-like-peak-lanes/sweep.md">A VCE-like peak day harder than planned (S8)</a>.</p>
+<p>Source: <a href="../reports/slice-22/sweeps/vce-like-peak-console-harder/sweep.md">A VCE-like peak day harder than planned (S22.4)</a>.</p>
+<h2 id="on-the-slower-day-staff-on-call-and-recommendations-followed">On the slower day: staff on call and recommendations followed</h2>
+<p>The same VCE-like peak day with screening at 26 seconds a person, as the staff on call or the share of the recommendations the duty manager follows varies (as assumed: staff for 2 extra lanes, 4 recommendations in 5 followed).</p>
+<div class="table"><table><thead><tr><th>On the 26-second day</th><th class="right">Supervisor</th><th class="right">Console</th><th class="right">GateFlow as a whole</th><th class="right">Console vs supervisor: net flights saved</th><th class="right">GateFlow vs today: net flights saved</th></tr></thead><tbody>
+<tr><td>No staff on call</td><td class="right">33.1</td><td class="right">33.1</td><td class="right">25.4</td><td class="right">0.0 [0.0, 0.0]</td><td class="right">+7.6 [6.6, 8.8]</td></tr>
+<tr><td>Staff for 1 extra lane</td><td class="right">23.8</td><td class="right">23.4</td><td class="right">22.2</td><td class="right">+0.4 [0.2, 0.6]</td><td class="right">+1.6 [1.0, 2.3]</td></tr>
+<tr><td>Staff for 2 extra lanes (as assumed)</td><td class="right">22.5</td><td class="right">22.5</td><td class="right">21.9</td><td class="right">0.0 [-0.2, 0.2]</td><td class="right">+0.6 [0.0, 1.2]</td></tr>
+<tr><td>Staff for 3 extra lanes</td><td class="right">22.5</td><td class="right">22.5</td><td class="right">21.9</td><td class="right">0.0 [-0.2, 0.2]</td><td class="right">+0.6 [0.0, 1.3]</td></tr>
+<tr><td>Half of the recommendations followed</td><td class="right">22.5</td><td class="right">22.9</td><td class="right">21.9</td><td class="right">-0.4 [-0.7, -0.2]</td><td class="right">+0.6 [0.0, 1.2]</td></tr>
+<tr><td>All of them followed</td><td class="right">22.5</td><td class="right">22.3</td><td class="right">21.8</td><td class="right">+0.2 [0.0, 0.4]</td><td class="right">+0.7 [0.0, 1.3]</td></tr>
+</tbody></table></div>
+<p>Source: <a href="../reports/slice-22/sweeps/vce-like-peak-console-harder/sweep.md">A VCE-like peak day harder than planned (S22.4)</a>.</p>
 <h2 id="the-forecasts-behind-the-recommendations">The forecasts behind the recommendations</h2>
 <p>GateFlow Predict (S21), measured on 200 simulated days a scenario: a forecast every 15 minutes, compared 15 and 90 minutes later with what happened. Arrivals: the people arriving in the 5 minutes before the horizon; the WAPE is the error as a share of them, the coverage the share of the truths in the 80% band. Wait: minutes from arrival to admission, on the forecasts of a queue.</p>
 <div class="table"><table><thead><tr><th>Scenario</th><th class="right">Minutes ahead</th><th class="right">Arrivals: WAPE</th><th class="right">Arrivals: in the band</th><th class="right">Wait: mean error (min)</th><th class="right">Wait: in the band</th><th class="right">Forecasts</th></tr></thead><tbody>
@@ -330,7 +405,8 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 <h2 id="what-the-figures-do-not-say">What the figures do not say</h2>
 <ul>
 <li>They are simulated, on synthetic airports made to look like three kinds of checkpoint (a VCE-like departures checkpoint, a TSF-like low-cost base, an MX-like transfer hub): they are not those airports' data. An airport's own figures come from its own days (M5).</li>
-<li>Today's practice is idealised: staff call every closing flight, and the supervisor sees the exact wait every 5 minutes and never forgets. A real supervisor reacts later, so GateFlow's margin is probably understated.</li>
+<li>Today's practice is idealised: staff call every closing flight, and the supervisor reads the queue every 5 minutes and never forgets. A real supervisor reacts later, so GateFlow's margin is probably understated.</li>
+<li>GateFlow knows what the checkpoint's settings say, not how fast the day screens: on a day slower than planned it sees only the queue, as live (ADR-059). Earlier sweeps that let it know the day's screening time (S7, S8) are not on this page.</li>
 <li>The staff on call, the time to open a lane and the share of recommendations followed are assumptions; the data request asks the airport for them.</li>
 <li>An extra lane costs only its lane-hours here: no other duty of the staff on call is modelled, and the airport prices the lane-hours.</li>
 <li>The forecasts learn from other simulated days of the same model: a real forecast will be worse at first.</li>
@@ -346,7 +422,7 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 <tr><td><a href="../reports/slice-22/mx-like-transfer-hub/report.md">MX-like transfer hub (S22.3)</a></td><td>MX-like hub, transfer security checkpoint (synthetic)</td><td><code>529b232</code></td><td>gateflow-sim 0.14.0</td><td class="right">200</td></tr>
 <tr><td><a href="../reports/slice-22/sweeps/mx-like-hub-console/sweep.md">Recommendations followed or not, MX-like hub (S22.3)</a></td><td>The console's lane recommendations on the MX-like transfer hub, followed or not</td><td><code>529b232</code></td><td>gateflow-sim 0.14.0</td><td class="right">200</td></tr>
 <tr><td><a href="../reports/slice-22/sweeps/tsf-like-peak-console/sweep.md">Recommendations followed or not, TSF-like base (S22.3)</a></td><td>The console's lane recommendations on the TSF-like peak day, followed or not</td><td><code>529b232</code></td><td>gateflow-sim 0.14.0</td><td class="right">200</td></tr>
-<tr><td><a href="../reports/slice-8/sweeps/vce-like-peak-lanes/sweep.md">A VCE-like peak day harder than planned (S8)</a></td><td>Extra lanes on the VCE-like peak day, recommended by GateFlow or opened by a supervisor</td><td><code>b3c9f7e</code></td><td>gateflow-sim 0.8.0</td><td class="right">200</td></tr>
+<tr><td><a href="../reports/slice-22/sweeps/vce-like-peak-console-harder/sweep.md">A VCE-like peak day harder than planned (S22.4)</a></td><td>The console's lane recommendations on a VCE-like peak day harder than planned</td><td><code>af593ef</code></td><td>gateflow-sim 0.16.0</td><td class="right">200</td></tr>
 <tr><td><a href="../reports/slice-21/single-checkpoint-demo/backtest.md">Forecasts, Demo checkpoint, congested morning (S21)</a></td><td>Single departure checkpoint, synthetic day with a congested morning peak</td><td><code>c2ce38c</code></td><td>gateflow-sim 0.13.0</td><td class="right">200</td></tr>
 <tr><td><a href="../reports/slice-21/vce-like-normal-day/backtest.md">Forecasts, VCE-like normal day (S21)</a></td><td>VCE-like departures checkpoint, normal day (synthetic)</td><td><code>c2ce38c</code></td><td>gateflow-sim 0.13.0</td><td class="right">200</td></tr>
 <tr><td><a href="../reports/slice-21/vce-like-peak-day/backtest.md">Forecasts, VCE-like peak day (S21)</a></td><td>VCE-like departures checkpoint, summer peak day (synthetic)</td><td><code>c2ce38c</code></td><td>gateflow-sim 0.13.0</td><td class="right">200</td></tr>

@@ -382,6 +382,9 @@ describe("the supervisor's console (S17)", () => {
     await page.waitForSelector(
       `#console-advice-history li[data-advice="${advice.id}"][data-status="ACCEPTED"]`,
     );
+    // The notice follows once the console has asked for the day again, its audit last; the list can
+    // show the decision before it, from the refresh the stream asks for.
+    await page.waitForSelector('#console-advice-notice[data-kind="ok"]');
     expect(await page.textContent('#console-advice-notice')).toBe(en['supervisor.advice.accepted']);
     await page.waitForSelector('#console-audit-list [data-command="DECIDE_ADVICE"]');
     const decided = page.locator('#console-audit-list [data-command="DECIDE_ADVICE"]').first();

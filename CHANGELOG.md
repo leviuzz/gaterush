@@ -32,6 +32,14 @@ founder confirmed it.
 - None for the existing policies: the golden files change only in the queue core version they
   record, the calibration module only in its line of versions. The new mode gives new numbers.
 
+### Fixed
+- An end-to-end test of the console (S22) read the notice of an accepted recommendation as soon as
+  the day's list showed the decision. The console writes the notice once it has asked for the day
+  again, its audit last, and the list can show the decision before it, from the refresh the stream
+  asks for: with the audit slow to answer (CI, 06:19 UTC) the test read an empty notice. It now
+  waits for the notice, as the test of an override does. Reproduced by delaying the audit's
+  answers in the test's browser; the console is unchanged.
+
 ### Versions
 - forecast 0.4.0, queue-core 0.13.0, sim-metrics 0.17.0, command line 0.17.0.
 

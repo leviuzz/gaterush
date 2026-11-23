@@ -42,6 +42,11 @@ founder confirmed it.
   practice. It costs 0.5 to 0.6 extra lane-hours a day more on those days, 0.2 on the day as
   planned (+0.1 [0.0, 0.1] flights). The policies shared with S22.4's sweep give its figures
   exactly.
+- `docs/reports/slice-22/console-measured` (the five library scenarios, 200 days, same checkout),
+  SIMULATED: the measure against the settings saves from 0.0 to +0.3 [0.1, 0.6] flights a day and
+  makes more recommendations on the VCE-like peak and disrupted days (0.8 and 1.5 a day against
+  0.3 and 1.0, 0.3 and 0.7 extra lane-hours against 0.1 and 0.5). The policies of S22.3 give
+  S22.3's outcomes day by day.
 
 ### Fixed
 - An end-to-end test of the console (S22) read the notice of an accepted recommendation as soon as

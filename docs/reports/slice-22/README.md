@@ -272,3 +272,49 @@ planned, +0.6 [0.4, 0.8] at 25 seconds, +1.0 [0.7, 1.3] at 26, +1.2 [0.9, 1.6] a
 0.37 [0.34, 0.41] minutes shorter than with the console on the settings at 26 seconds, 0.45
 [0.41, 0.49] at 27.
 
+### The library with the console on the measure (200 simulated days each)
+
+The five library scenarios as planned, from the same clean checkout: today's calls with the plan
+only, with the supervisor, with the console on the settings and on the measure; GateFlow's calls
+with the console on the settings and on the measure. The four policies of S22.3 give S22.3's
+outcomes exactly, day by day (1040 values per scenario, no difference).
+
+| Scenario | Report | Page with charts | Results |
+|---|---|---|---|
+| `vce-like-normal-day` | [report.md](console-measured/vce-like-normal-day/report.md) | [report.html](console-measured/vce-like-normal-day/report.html) | [results.json](console-measured/vce-like-normal-day/results.json) |
+| `vce-like-peak-day` | [report.md](console-measured/vce-like-peak-day/report.md) | [report.html](console-measured/vce-like-peak-day/report.html) | [results.json](console-measured/vce-like-peak-day/results.json) |
+| `vce-like-disrupted-day` | [report.md](console-measured/vce-like-disrupted-day/report.md) | [report.html](console-measured/vce-like-disrupted-day/report.html) | [results.json](console-measured/vce-like-disrupted-day/results.json) |
+| `tsf-like-peak-day` | [report.md](console-measured/tsf-like-peak-day/report.md) | [report.html](console-measured/tsf-like-peak-day/report.html) | [results.json](console-measured/tsf-like-peak-day/results.json) |
+| `mx-like-transfer-hub` | [report.md](console-measured/mx-like-transfer-hub/report.md) | [report.html](console-measured/mx-like-transfer-hub/report.html) | [results.json](console-measured/mx-like-transfer-hub/results.json) |
+
+Missed flights per day with today's calls and the console, the net flights saved per day by the
+measure with 95% confidence intervals, and what it costs:
+
+| Scenario | Console, settings | Console, measured | Measured vs settings | GateFlow as a whole, settings / measured | Measured vs settings, GateFlow's calls | Extra lane-hours: settings / measured | Recommendations a day: settings / measured |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| VCE-like normal day | 10.9 | 10.9 | 0.0 [0.0, 0.0] | 10.9 / 10.9 | 0.0 [0.0, 0.0] | 0.0 / 0.0 | 0.0 / 0.0 |
+| VCE-like peak day | 18.7 | 18.7 | +0.1 [0.0, 0.1] | 18.5 / 18.5 | 0.0 [-0.0, 0.1] | 0.1 / 0.3 | 0.3 / 0.8 |
+| VCE-like disrupted day | 13.9 | 13.8 | +0.1 [0.0, 0.1] | 13.8 / 13.8 | 0.0 [-0.0, 0.1] | 0.5 / 0.7 | 1.0 / 1.5 |
+| TSF-like peak day | 0.0 | 0.0 | 0.0 [0.0, 0.0] | 0.1 / 0.1 | 0.0 [0.0, 0.0] | 1.7 / 1.8 | 2.8 / 2.8 |
+| MX-like transfer hub | 63.8 | 63.6 | +0.1 [-0.1, 0.5] | 63.5 / 63.2 | +0.3 [0.1, 0.6] | 2.3 / 2.4 | 5.2 / 5.3 |
+
+### What S22.5 says
+
+- **On a day slower than planned, measuring the lanes is what the console lacked:** at 26 seconds
+  a person it misses 21.4 flights a day, against 22.5 for the console on the settings and for the
+  supervisor (+1.1 [0.9, 1.4]); at 27 seconds 24.6 against 26.6 (+2.1 [1.7, 2.5]). GateFlow as a
+  whole then saves 1.6 [1.1, 2.1] and 3.9 [3.2, 4.7] flights a day against today's practice,
+  where it saved 0.6 [0.0, 1.2] and 2.7 [1.9, 3.5] on the settings (S22.4). That is about what
+  knowing the day's screening time was worth to S8's rule at 26 seconds (1.1 flights a day), and
+  two of the three at 27.
+- **It pays in lane-hours:** half an extra lane-hour a day more on the slower days.
+- **On the library's days, as planned, it costs no flight** (no estimate below zero): from 0.0 to
+  +0.3 [0.1, 0.6] flights a day (the MX-like hub, with GateFlow's calls). It opens more on the VCE-like peak and
+  disrupted days: 0.3 and 0.7 extra lane-hours a day against 0.1 and 0.5, and 0.8 and 1.5
+  recommendations a day against 0.3 and 1.0. More alerts for the duty manager on an ordinary
+  day: to weigh before the console reads the measure live (S22.6).
+- With a roster one lane short, where the settings' rate is right, the two consoles are close
+  (+0.2 [0.1, 0.3]).
+- The pitch page is unchanged: the console on the measure is ADR-060's, proposed.
+- Every number is SIMULATED on synthetic airports.
+

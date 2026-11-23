@@ -18,7 +18,7 @@ border procedures: it organises the flow before they start.
 > against the simulator (S21), and lane recommendations with the supervisor's decision and their
 > outcome (S22), measured in the simulator (S22.3) and on a day harder than planned, which GateFlow
 > knows only from the queue (S22.4), with a console that measures what the lanes screen today
-> (S22.5, in progress); the figures for the pitch on one page, each read from its report
+> (S22.5); the figures for the pitch on one page, each read from its report
 > ([docs/pitch](docs/pitch/README.md)).**
 > This repository contains the simulation foundations:
 > - the priority engine;
@@ -477,7 +477,8 @@ How to read these numbers:
     supervisor, and GateFlow as a whole 4.7 [4.0, 5.4] more than today's practice. A console that
     measures what the lanes screen today, from the log (S22.5, ADR-060, proposed), misses 21.4 on
     the 26-second day: 1.1 [0.9, 1.4] flights a day fewer than on the settings, 2.1 [1.7, 2.5] at
-    27 seconds, for half an extra lane-hour a day more;
+    27 seconds, for half an extra lane-hour a day more; on the library's days as planned it costs
+    no flight, and recommends a lane a little more often;
   - each extra lane-hour saves 35 to 180 hours of passenger waiting;
   - GateFlow's target wait (10 minutes by default) trades lane-hours for flights, and is set for
     each checkpoint.

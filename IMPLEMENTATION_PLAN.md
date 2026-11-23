@@ -1759,7 +1759,7 @@ Evidence:
 - the pitch page reads the new sweep: its harder day is the console's, and a claim says where
   GateFlow saves flights at a departures checkpoint (short of lanes).
 
-### S22.5: the console measures the lanes' throughput (in progress)
+### S22.5: the console measures the lanes' throughput (done)
 
 On "Confermo vai avanti" (2026-11-23), the next step proposed with S22.4, which the founder
 confirmed with ADR-059: on a day slower than planned the console's forecast reads the lanes' rate
@@ -1843,7 +1843,13 @@ Evidence:
   where the console on the settings did no better than the supervisor, for 0.5 to 0.6 extra
   lane-hours a day more. On the day as planned it buys next to nothing (+0.1 [0.0, 0.1]) and costs
   0.2 extra lane-hours a day (0.3 against 0.1). With a roster one lane short, where the settings'
-  rate is right, the two consoles are close (+0.2 [0.1, 0.3]).
+  rate is right, the two consoles are close (+0.2 [0.1, 0.3]);
+- the library (`docs/reports/slice-22/console-measured`, 200 days, same checkout): the four
+  policies of S22.3 give S22.3's outcomes day by day (1040 values per scenario); the measure
+  against the settings saves from 0.0 to +0.3 [0.1, 0.6] flights a day (no estimate below zero)
+  and, on the VCE-like peak and disrupted days, opens more: 0.3 and 0.7 extra lane-hours a day
+  against 0.1 and 0.5, 0.8 and 1.5 recommendations a day against 0.3 and 1.0. More alerts on an
+  ordinary day: to weigh before the live console reads the measure (S22.6).
 
 ## Later milestones (summary)
 

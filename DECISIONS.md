@@ -2813,7 +2813,10 @@ founder on 2026-11-21 together with all of its recommendations.
   and today's supervisor 22.5 (+1.1 [0.9, 1.4] against the settings); at 27 seconds 24.6 against
   26.6 and 27.1 (+2.1 [1.7, 2.5]); GateFlow as a whole on the measure saves 1.6 [1.1, 2.1] and
   3.9 [3.2, 4.7] flights a day against today's practice. It costs 0.5 to 0.6 extra lane-hours a
-  day more on those days, and 0.2 on the day as planned, where it buys next to nothing.
+  day more on those days, and 0.2 on the day as planned, where it buys next to nothing. On the
+  five library days (`docs/reports/slice-22/console-measured`) it costs no flight (0.0 to +0.3
+  [0.1, 0.6] flights a day) and makes more recommendations on the VCE-like peak and disrupted
+  days (0.8 and 1.5 a day against 0.3 and 1.0).
 - **Consequences:**
   - The console on the measure is a policy of its own in the reports; the published figures of
     `@advise` reproduce.

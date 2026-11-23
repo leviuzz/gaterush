@@ -1,4 +1,4 @@
-# Slice S22.3 reports (SIMULATED, synthetic data)
+# Slice S22 reports: S22.3, S22.4 and S22.5 (SIMULATED, synthetic data)
 
 Reports produced by `gateflow-sim` 0.14.0 from a clean checkout of commit
 `529b2323a5489dd0be5f8adeb13d2d64f946fad5` (S22.3), as recorded in each manifest.
@@ -236,3 +236,39 @@ does not. The supervisor 22.2 and 26.5 when it knew; 22.5 and 27.1 when it does 
   has them) could get some of it back: ADR-059's alternative, to measure next.
 - Following only half of the console's recommendations on such a day costs 0.4 [0.2, 0.7] flights
   a day against the supervisor.
+
+## S22.5: the console on the lanes' measured throughput (200 simulated days per point)
+
+Produced by `gateflow-sim` 0.17.0 from a clean checkout of commit
+`cc259fb6d02f3bc241d6925217a156b6382c9198` (S22.5), as recorded in each manifest. SIMULATED,
+synthetic data.
+
+| Sweep | Report | Page with charts | Results |
+|---|---|---|---|
+| `vce-like-peak-console-measured`: the console on the checkpoint's settings and on the lanes' measured throughput, on the VCE-like peak day made harder than planned | [sweep.md](sweeps/vce-like-peak-console-measured/sweep.md) | [sweep.html](sweeps/vce-like-peak-console-measured/sweep.html) | [sweep.json](sweeps/vce-like-peak-console-measured/sweep.json) |
+
+The console of S22.3 and S22.4 (`@advise`) drains its forecast queue at the lanes' rate of the
+checkpoint's settings, made for the plan. The console of S22.5 (`@advise-measured`, ADR-060)
+measures what the lanes screen today: the people admitted per open lane in the minutes of the last
+30 that start with at least 4 people per open lane not yet admitted, once there are 15 such
+minutes and 30 people (else the settings' rate), kept within half and one and a half times the
+settings'. Nothing else changes: the same review every 5 minutes, the same targets, the same duty
+manager. The policies this sweep shares with S22.4's give S22.4's figures exactly (1590 values,
+no difference).
+
+Missed flights per day, and the net flights saved per day with 95% confidence intervals:
+
+| Day | Supervisor | Console, settings | Console, measured | GateFlow as a whole, settings | GateFlow as a whole, measured | Measured vs settings | Measured vs supervisor | GateFlow (measured) vs today | Extra lane-hours: console, settings / measured |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| As planned: 24 s a person | 18.7 | 18.7 | 18.7 | 18.5 | 18.5 | +0.1 [0.0, 0.1] | +0.1 [0.0, 0.1] | +0.2 [-0.1, 0.6] | 0.1 / 0.3 |
+| 25 s a person | 20.3 | 20.4 | 19.8 | 20.1 | 19.5 | +0.7 [0.5, 0.9] | +0.6 [0.4, 0.7] | +0.8 [0.4, 1.2] | 1.0 / 1.5 |
+| 26 s a person | 22.5 | 22.5 | 21.4 | 21.9 | 20.9 | +1.1 [0.9, 1.4] | +1.1 [0.9, 1.3] | +1.6 [1.1, 2.1] | 2.5 / 3.1 |
+| 27 s a person | 27.1 | 26.6 | 24.6 | 24.4 | 23.1 | +2.1 [1.7, 2.5] | +2.5 [2.2, 2.9] | +3.9 [3.2, 4.7] | 4.1 / 4.5 |
+| A roster one lane short (24 s) | 24.9 | 21.2 | 21.0 | 20.3 | 20.2 | +0.2 [0.1, 0.3] | +4.0 [3.5, 4.4] | +4.8 [4.1, 5.5] | 4.2 / 4.6 |
+
+With GateFlow's calls, the measure against the settings: +0.0 [-0.0, 0.1] flights a day as
+planned, +0.6 [0.4, 0.8] at 25 seconds, +1.0 [0.7, 1.3] at 26, +1.2 [0.9, 1.6] at 27 and
++0.1 [0.0, 0.2] with a roster one lane short. The mean wait with the console on the measure is
+0.37 [0.34, 0.41] minutes shorter than with the console on the settings at 26 seconds, 0.45
+[0.41, 0.49] at 27.
+

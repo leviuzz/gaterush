@@ -474,7 +474,10 @@ How to read these numbers:
     the supervisor know the day was slower; measured again without it (S22.4, ADR-059), the
     supervisor misses 22.5, S8's rule 22.0 and the console's lanes 22.5, as the supervisor; with a
     roster one lane short the console's lanes save 3.8 [3.4, 4.2] flights a day more than the
-    supervisor, and GateFlow as a whole 4.7 [4.0, 5.4] more than today's practice;
+    supervisor, and GateFlow as a whole 4.7 [4.0, 5.4] more than today's practice. A console that
+    measures what the lanes screen today, from the log (S22.5, ADR-060, proposed), misses 21.4 on
+    the 26-second day: 1.1 [0.9, 1.4] flights a day fewer than on the settings, 2.1 [1.7, 2.5] at
+    27 seconds, for half an extra lane-hour a day more;
   - each extra lane-hour saves 35 to 180 hours of passenger waiting;
   - GateFlow's target wait (10 minutes by default) trades lane-hours for flights, and is set for
     each checkpoint.

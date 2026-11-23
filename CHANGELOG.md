@@ -32,6 +32,17 @@ founder confirmed it.
 - None for the existing policies: the golden files change only in the queue core version they
   record, the calibration module only in its line of versions. The new mode gives new numbers.
 
+### Reports
+- `docs/reports/slice-22/sweeps/vce-like-peak-console-measured` (200 days per point, gateflow-sim
+  0.17.0 from a clean checkout of `cc259fb`), SIMULATED: on the VCE-like peak day screening at 26
+  seconds a person (the plan assumes 24) the console on the measured throughput misses 21.4
+  flights a day, the console on the settings and the supervisor 22.5 (+1.1 [0.9, 1.4] flights a
+  day against the settings), at 27 seconds 24.6 against 26.6 and 27.1 (+2.1 [1.7, 2.5]); GateFlow
+  as a whole on the measure saves 1.6 [1.1, 2.1] and 3.9 [3.2, 4.7] flights a day against today's
+  practice. It costs 0.5 to 0.6 extra lane-hours a day more on those days, 0.2 on the day as
+  planned (+0.1 [0.0, 0.1] flights). The policies shared with S22.4's sweep give its figures
+  exactly.
+
 ### Fixed
 - An end-to-end test of the console (S22) read the notice of an accepted recommendation as soon as
   the day's list showed the decision. The console writes the notice once it has asked for the day

@@ -2806,7 +2806,14 @@ founder on 2026-11-21 together with all of its recommendations.
 - **Evidence:** the S22.5 section of IMPLEMENTATION_PLAN.md: on 20 VCE-like peak days at each of
   24 and 26 seconds a person the measure's median error is -0.2% and -0.3% of the day's rate, 8
   measures in 10 within -3.7% and +3.8%, with a measure at 6 reviews in 10 with a queue; the busy
-  threshold matters little between 2 and 6 people per lane.
+  threshold matters little between 2 and 6 people per lane. The sweep
+  `docs/reports/slice-22/sweeps/vce-like-peak-console-measured` (200 days per point, from a clean
+  checkout of `cc259fb`): on the VCE-like peak day screening at 26 seconds a person (the plan
+  assumes 24) the console on the measure misses 21.4 flights a day, the console on the settings
+  and today's supervisor 22.5 (+1.1 [0.9, 1.4] against the settings); at 27 seconds 24.6 against
+  26.6 and 27.1 (+2.1 [1.7, 2.5]); GateFlow as a whole on the measure saves 1.6 [1.1, 2.1] and
+  3.9 [3.2, 4.7] flights a day against today's practice. It costs 0.5 to 0.6 extra lane-hours a
+  day more on those days, and 0.2 on the day as planned, where it buys next to nothing.
 - **Consequences:**
   - The console on the measure is a policy of its own in the reports; the published figures of
     `@advise` reproduce.

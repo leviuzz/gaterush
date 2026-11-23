@@ -1824,8 +1824,26 @@ Evidence:
   than planned the console reads the measure where there is one, the settings elsewhere, and the
   measure's median error is within 5% of the day's rate;
 - the mode (2 tests): its numbers are the console's, its measure is validated; the command line
-  knows it;
-- no published figure changes: the golden files change in their version line only.
+  knows it; the report tells the console on the measure from the console on the settings;
+- no published figure changes: the golden files change in their version line only;
+- the sweep (`docs/reports/slice-22/sweeps/vce-like-peak-console-measured`, 200 days per point, from
+  a clean checkout of `cc259fb`): the policies it shares with S22.4's sweep give S22.4's figures
+  exactly (1590 values);
+
+  | VCE-like peak day | Supervisor | Console, settings | Console, measured | GateFlow as a whole, measured | Measured vs settings | Measured vs supervisor | GateFlow vs today | Extra lane-hours: settings / measured |
+  |---|---:|---:|---:|---:|---:|---:|---:|---:|
+  | As planned (24 s) | 18.7 | 18.7 | 18.7 | 18.5 | +0.1 [0.0, 0.1] | +0.1 [0.0, 0.1] | +0.2 [-0.1, 0.6] | 0.1 / 0.3 |
+  | 25 s a person | 20.3 | 20.4 | 19.8 | 19.5 | +0.7 [0.5, 0.9] | +0.6 [0.4, 0.7] | +0.8 [0.4, 1.2] | 1.0 / 1.5 |
+  | 26 s a person | 22.5 | 22.5 | 21.4 | 20.9 | +1.1 [0.9, 1.4] | +1.1 [0.9, 1.3] | +1.6 [1.1, 2.1] | 2.5 / 3.1 |
+  | 27 s a person | 27.1 | 26.6 | 24.6 | 23.1 | +2.1 [1.7, 2.5] | +2.5 [2.2, 2.9] | +3.9 [3.2, 4.7] | 4.1 / 4.5 |
+  | A roster one lane short | 24.9 | 21.2 | 21.0 | 20.2 | +0.2 [0.1, 0.3] | +4.0 [3.5, 4.4] | +4.8 [4.1, 5.5] | 4.2 / 4.6 |
+
+- what it says (SIMULATED): on a day slower than planned, the console that measures the lanes
+  saves a flight a day more than the console on the settings at 26 seconds a person and two at 27,
+  where the console on the settings did no better than the supervisor, for 0.5 to 0.6 extra
+  lane-hours a day more. On the day as planned it buys next to nothing (+0.1 [0.0, 0.1]) and costs
+  0.2 extra lane-hours a day (0.3 against 0.1). With a roster one lane short, where the settings'
+  rate is right, the two consoles are close (+0.2 [0.1, 0.3]).
 
 ## Later milestones (summary)
 

@@ -332,13 +332,92 @@ describe('priority engine properties', () => {
           .slice(0, selection.positionInFifo)
           .reduce((sum, t) => sum + people(t), offset);
         const after = assessTicket(earlier, ahead, inp.nowMs, inp.checkpoint, policy, offset);
-        // Only meaningful while the ticket stays feasible (CRITICAL tickets are escalated instead).
-        fc.pre(after.feasibilitySlackMs === null || after.feasibilitySlackMs >= 0);
+        // Only meaningful while the ticket does not become CRITICAL: CRITICAL tickets are escalated
+        // instead, and a ticket that was CRITICAL stays so until its feasibility margin exceeds the
+        // hysteresis h, however feasible it is (ADR-030; the case below, found in CI).
+        fc.pre(after.riskClass !== 'CRITICAL');
         const waiting = inp.waiting.map((t) => (t.id === chosen.id ? earlier : t));
         expect(selectNext({ ...inp, waiting })?.ticketId).toBe(chosen.id);
       }),
       RUNS,
     );
+  });
+
+  it('P8 stops at a ticket the hysteresis keeps CRITICAL, however feasible (CI, seed 1735679738)', () => {
+    // The shrunk counterexample of P8 before its precondition named the hysteresis: a ticket last
+    // CRITICAL whose feasibility margin equals h is URGENT and selected; a deadline 1 ms earlier
+    // leaves it feasible (margin h - 1) but CRITICAL, escalated to staff, and the FIFO head goes.
+    const ticket = (
+      id: string,
+      fifoKey: number,
+      partySize: number,
+      atMs: number | null,
+      extra: Partial<WaitingTicket> = {},
+    ): WaitingTicket => ({
+      id,
+      fifoKey,
+      segment: 'DEPARTING',
+      deadline: atMs === null ? { atMs: null, source: 'NONE' } : { atMs, source: 'FEED' },
+      walkEstimateMs: 0,
+      overtakenCount: 0,
+      partySize,
+      presentedAtMs: 0,
+      scheduledDepartureMs: null,
+      lastSeenAtMs: 0,
+      ...extra,
+    });
+    const policy: ConstrainedEdfSelection = {
+      kind: 'constrained-edf',
+      capWindowCalls: 12,
+      capMaxPriorityCalls: 12,
+      maxOvertakes: 14,
+      attentionThresholdMs: 9,
+      safetyBufferMs: 195_749,
+      feasibilityMarginMs: 29_745,
+      allowRuleBasedDeadline: false,
+      eligibleSegments: ['DEPARTING', 'TRANSFER'],
+      latePresentationCutoffMs: 3_653_266,
+      fastTrack: false,
+      maxDeadlineAgeMs: 1_681_399,
+      hysteresisMs: 165_736,
+    };
+    const critical = (atMs: number) =>
+      ticket('t9991', 9991, 2, atMs, {
+        deadline: { atMs, source: 'FEED', observedAtMs: 0 },
+        scheduledDepartureMs: 3_653_266,
+        lastRiskClass: 'CRITICAL',
+      });
+    const input = (atMs: number): EngineInput => ({
+      nowMs: 0,
+      checkpoint: {
+        throughputPerHour: 30,
+        processMs: 0,
+        responseMs: 104_491,
+        fastTrackResponseMs: 0,
+      },
+      waiting: [
+        ticket('t15389', 15389, 1, 0),
+        ticket('t26721', 26721, 2, null),
+        ticket('t5030', 5030, 2, null),
+        critical(atMs),
+        ticket('t11775', 11775, 1, null),
+        ticket('t90833', 90833, 1, 0),
+        ticket('t95288', 95288, 1, 0),
+        ticket('t12468', 12468, 2, 0),
+        ticket('t19869', 19869, 2, 0),
+        ticket('t8139', 8139, 1, null),
+      ],
+      recentPriorityCalls: [],
+      aheadOfWaiting: 0,
+      aheadMaxOvertakenCount: 0,
+      selection: policy,
+    });
+    const at = (atMs: number) =>
+      assessTicket(critical(atMs), 3, 0, input(atMs).checkpoint, policy, 0);
+    expect([at(299_972).riskClass, at(299_972).feasibilitySlackMs]).toEqual(['URGENT', 165_736]);
+    expect(selectNext(input(299_972))?.ticketId).toBe('t9991');
+    expect([at(299_971).riskClass, at(299_971).feasibilitySlackMs]).toEqual(['CRITICAL', 165_735]);
+    expect(selectNext(input(299_971))?.ticketId).toBe('t5030');
   });
 
   it('P10 computes the margins from their definitions (independent oracle)', () => {

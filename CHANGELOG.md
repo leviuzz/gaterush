@@ -30,6 +30,12 @@ founder confirmed it.
   share of recommendations followed), with today's calls on the plan, with the supervisor, S8's
   rule and the console's, and GateFlow's calls on the plan and with the console's lanes.
 
+### Fixed
+- A test of the priority engine: the property P8 (an earlier, still feasible deadline never
+  stops a selected ticket from being selected) did not exclude a ticket the hysteresis keeps
+  CRITICAL until its margin exceeds h (ADR-030); a random seed in CI found one (seed 1735679738),
+  now a test of its own. The engine is unchanged.
+
 ### Reports and the pitch page
 - `docs/reports/slice-22/sweeps/vce-like-peak-console-harder` (200 days per point, gateflow-sim
   0.16.0 from a clean checkout of `af593ef`), SIMULATED: on the VCE-like peak day screening at 26

@@ -17,8 +17,9 @@ border procedures: it organises the flow before they start.
 > day's overview, checked against the log (S20), forecasts of the next 90 minutes measured
 > against the simulator (S21), and lane recommendations with the supervisor's decision and their
 > outcome (S22), measured in the simulator (S22.3) and on a day harder than planned, which GateFlow
-> knows only from the queue (S22.4); the figures for the pitch on one page, each read from its
-> report ([docs/pitch](docs/pitch/README.md)).**
+> knows only from the queue (S22.4), with a console that measures what the lanes screen today
+> (S22.5, in progress); the figures for the pitch on one page, each read from its report
+> ([docs/pitch](docs/pitch/README.md)).**
 > This repository contains the simulation foundations:
 > - the priority engine;
 > - the queue state machine that the operational product will share;

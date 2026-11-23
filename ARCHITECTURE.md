@@ -395,6 +395,15 @@ day (`DayEvent`, ADR-041) and never changes the run:
     S21's forecast) and what the live system would know of the day (`LiveView`, from the day's
     events as they happen). None within 15 minutes of the previous one; the duty manager decides
     at once, as for *Predict*. The simulator itself does not depend on the forecasts.
+  - *Advise on the measured throughput* (`@advise-measured`, S22.5, ADR-060): the same, with
+    `AdvisedLanes.measuredThroughput`. The console's forecast then drains the queue at the lanes'
+    throughput measured from the day (`measureThroughput` in `@gateflow/forecast`, on the minutes
+    of the last 30 that `LiveView.minutesBefore` rebuilds from the day's events: the people not
+    yet admitted and the lanes open at each minute's start, the people admitted in it). Only the
+    busy minutes count (at least 4 people per open lane not yet admitted), once there are 15 of
+    them and 30 people; the measure is kept within 0.5 to 1.5 times the settings' rate
+    (`consoleRate`), and without it the console reads the settings'. The queue's estimates and
+    call-ahead, *Predict* and the supervisor keep the usual throughput.
 - **Ground truth and knowledge (S5, ADR-030).** The system starts the day with the known
   deadlines and learns of delays and gate changes from the feed messages, at the time the feed
   sends them. During a feed outage the messages are held until the feed recovers, and every known

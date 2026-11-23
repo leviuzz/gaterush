@@ -194,7 +194,7 @@ describe('results document', () => {
       comparisons: COMPARISONS,
       versions: {
         engine: '0.5.0',
-        queueCore: '0.12.0',
+        queueCore: '0.13.0',
         model: '0.7.0',
         kernel: '0.1.0',
         populationGenerator: '0.7.0',

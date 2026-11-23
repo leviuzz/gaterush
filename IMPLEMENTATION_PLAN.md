@@ -1759,6 +1759,74 @@ Evidence:
 - the pitch page reads the new sweep: its harder day is the console's, and a claim says where
   GateFlow saves flights at a departures checkpoint (short of lanes).
 
+### S22.5: the console measures the lanes' throughput (in progress)
+
+On "Confermo vai avanti" (2026-11-23), the next step proposed with S22.4, which the founder
+confirmed with ADR-059: on a day slower than planned the console's forecast reads the lanes' rate
+of the checkpoint's settings, made for the plan, and its lanes do as well as the supervisor's, not
+better. The log records every admission to screening and the lanes open: the console can measure
+from it what the lanes screen today. ADR-060.
+
+What the analysis found:
+- The console's forecast (S21) drains the queue at the lanes open times a rate per lane: live, the
+  checkpoint's settings (`liveForecastInput`, `settings.ratePerLanePerHour`); in the simulator,
+  the population's rate, the plan's since S22.4. Nothing in it learns from the day.
+- Admissions measure the lanes only when the lanes have people to screen: in a quiet minute they
+  count who came. A minute whose people not yet admitted (waiting, announced or called) at its
+  start are at least 4 per open lane keeps its lanes busy; the people admitted in such minutes,
+  per lane-minute, are what the lanes screen. On VCE-like peak days screening at 24 and at 26
+  seconds a person (20 days each: today's supervisor and GateFlow's calls 8 days each, the
+  measuring console 4), the measure's median error is -0.2% and -0.3% of the day's own rate, 8
+  measures in 10 within -3.7% and +3.8%; it has a measure at 6 reviews in 10 with a queue (at
+  least 2 people per open lane). The threshold matters little: 2 or 6 people per lane give the
+  same accuracy (median -0.2% to -0.5%, 8 in 10 within about 4%), with a measure at 6.5 and 5
+  reviews in 10; 4 keeps a margin for the people called and still walking, who count as not yet
+  admitted. (A measurement of the analysis; a test checks the bound on a TSF-like day.)
+- What it does not say: why the lanes are slower (a lane waiting for the people called, or open in
+  the log and short of staff, counts as a slower lane: the throughput the queue drains at, which is
+  what the forecast needs). It looks back, not ahead: at the start of a peak, before the window has
+  its busy minutes, the console has only the settings' rate.
+
+Choices:
+- **The measure [to confirm]:** the people admitted per open lane in the busy minutes of the last
+  30 (a minute is busy when at least 4 people per open lane are not yet admitted at its start),
+  once there are at least 15 busy minutes and 30 people in them; else, as on a quiet morning, the
+  settings' rate.
+- **A guard [to confirm]:** the measure is kept within half and one and a half times the
+  settings' rate, so that a window that says something untrue (a lane open in the log and not on
+  the floor) cannot make the forecast say anything.
+- **Only the console reads it [to confirm]:** the console's forecast and its recommendations
+  (open, close) read the measure; the queue's estimates and call-ahead, S8's rule and the
+  supervisor keep the usual throughput. A new lane mode, `@advise-measured`: the console's
+  numbers with the measure. `@advise` stays the console of S22.3 and S22.4, whose published
+  figures reproduce.
+- **The sweep [to confirm]:** `vce-like-peak-console-measured`, the VCE-like peak day, 200 days
+  per point: screening on the day at 24 (as planned), 25, 26 and 27 seconds a person; a roster
+  one lane short. Policies: today's calls with the plan only, with today's supervisor, with the
+  console on the settings and on the measure; GateFlow's calls with the console on the settings
+  and on the measure. Comparisons: the measure against the settings and against the supervisor;
+  GateFlow as a whole against today's practice.
+- **The library [to confirm]:** the five library scenarios, 200 days, the console on the settings
+  and on the measure, with today's calls and GateFlow's: on days as planned the measure must not
+  cost flights, and the extra lane-hours it costs are reported.
+- **Live, later [to confirm]:** the API's console reads the same measure from the checkpoint's
+  log (admissions and lanes open, in `queue_event`) in S22.6, once the simulator says it is worth
+  it; nothing changes live in S22.5.
+- **Records:** forecast 0.4.0 (`measureThroughput`, `consoleRate`), queue-core 0.13.0 (the mode),
+  sim-metrics and the command line 0.17.0. No number of an existing policy changes; CI runs the
+  new sweep with 20 days per point and the library with the new mode.
+
+Evidence:
+- the measure (3 tests): only busy minutes count, per open lane; nothing until 15 busy minutes
+  and 30 people; the guard;
+- the view of the log (1 test): the minutes of a window, as the simulated console reads them at a
+  review, are what replaying the day up to each minute gives; on a TSF-like day 4 seconds slower
+  than planned the console reads the measure where there is one, the settings elsewhere, and the
+  measure's median error is within 5% of the day's rate;
+- the mode (2 tests): its numbers are the console's, its measure is validated; the command line
+  knows it;
+- no published figure changes: the golden files change in their version line only.
+
 ## Later milestones (summary)
 
 - **M2 Simulator Studio:** S9 and S11 done; S10 moved into M3 (S12 and S19).

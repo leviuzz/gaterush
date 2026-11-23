@@ -41,17 +41,18 @@ describe('parsePolicies', () => {
 
   it('resolves lane modes (S8) and names the known ones on a mistake', () => {
     expect(
-      parsePolicies('fifo-manual,fifo-manual@reactive,priority-v3@predict').map((p) => [
-        p.id,
-        p.lanes?.kind ?? null,
-      ]),
+      parsePolicies(
+        'fifo-manual,fifo-manual@reactive,priority-v3@predict,priority-v3@advise-measured',
+      ).map((p) => [p.id, p.lanes?.kind ?? null]),
     ).toEqual([
       ['fifo-manual', null],
       ['fifo-manual@reactive', 'reactive'],
       ['priority-v3@predict', 'predict'],
+      // The console on the lanes' measured throughput (S22.5) is the console's mode with a measure.
+      ['priority-v3@advise-measured', 'advise'],
     ]);
     expect(() => parsePolicies('fifo@later')).toThrow(
-      'unknown lane mode "later" in "fifo@later" (known: @reactive, @predict, @advise)',
+      'unknown lane mode "later" in "fifo@later" (known: @reactive, @predict, @advise, @advise-measured)',
     );
     expect(() => parsePolicies('nope@reactive')).toThrow(/unknown policy "nope@reactive"/);
   });

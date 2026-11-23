@@ -4,6 +4,37 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Any change that alters simulated numbers
 must be listed, together with the component versions it bumps.
 
+## [0.22.4] - 2026-11-23: Slice S22.5, the console measures the lanes' throughput
+
+The console's forecast can read what the lanes screen today, measured from the log, instead of
+the checkpoint's settings, made for the plan (ADR-060, proposed). In the simulator it is a lane
+mode of its own, `@advise-measured`; `@advise` is unchanged. ADR-059 (S22.4) is accepted as the
+founder confirmed it.
+
+### Added
+- forecast 0.4.0: `measureThroughput`, the people admitted per open lane in the busy minutes of a
+  window (a minute is busy when at least so many people per open lane are not yet admitted at its
+  start), once there are enough of them; `consoleRate`, the measure kept within half and one and
+  a half times the settings' rate, or the settings' without a measure.
+- queue-core 0.13.0: `AdvisedLanes.measuredThroughput`, validated, and the lane mode
+  `advise-measured`: the console's numbers with the measure over the last 30 minutes (4 people
+  per open lane, at least 15 busy minutes and 30 people).
+- sim-metrics 0.17.0: `LiveView.minutesBefore`, the minutes of a window as the log gives them
+  (people not yet admitted and lanes open at each minute's start, people admitted in it); the
+  simulated console reads the measure when its rule asks for it; the report describes the console
+  on the measure apart from the console on the settings.
+- Command line 0.17.0: `<policy>@advise-measured`; `sweeps/vce-like-peak-console-measured.yaml`,
+  the VCE-like peak day slower than planned and with a roster one lane short, the console on the
+  settings and on the measure, with today's calls and GateFlow's.
+- CI runs the library with `@advise-measured` too, and the same results on 1 and 4 worker threads.
+
+### Simulated numbers change
+- None for the existing policies: the golden files change only in the queue core version they
+  record, the calibration module only in its line of versions. The new mode gives new numbers.
+
+### Versions
+- forecast 0.4.0, queue-core 0.13.0, sim-metrics 0.17.0, command line 0.17.0.
+
 ## [0.22.3] - 2026-11-23: Slice S22.4, the console's recommendations on a day harder than planned
 
 GateFlow now knows the screening time of the plan, not the day's (ADR-059): on a day slower than

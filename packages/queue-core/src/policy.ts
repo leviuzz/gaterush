@@ -69,6 +69,18 @@ export function validateLaneManagement(lanes: LaneManagement): void {
   if (lanes.closeWhenWaitMs >= lanes.targetWaitMs) {
     throw new QueueError('lanes.closeWhenWaitMs must be below lanes.targetWaitMs');
   }
+  if (lanes.kind === 'advise' && lanes.measuredThroughput !== undefined) {
+    const rule = lanes.measuredThroughput;
+    requireInteger(rule.windowMinutes, 'lanes.measuredThroughput.windowMinutes', 1);
+    requireInteger(rule.minBusyMinutes, 'lanes.measuredThroughput.minBusyMinutes', 1);
+    requireInteger(rule.minPeople, 'lanes.measuredThroughput.minPeople', 1);
+    if (!Number.isFinite(rule.busyPeoplePerLane) || rule.busyPeoplePerLane <= 0) {
+      throw new QueueError('lanes.measuredThroughput.busyPeoplePerLane must be positive');
+    }
+    if (rule.minBusyMinutes > rule.windowMinutes) {
+      throw new QueueError('lanes.measuredThroughput.minBusyMinutes exceeds its window');
+    }
+  }
 }
 
 export function validatePolicy(policy: Policy): void {
@@ -363,6 +375,28 @@ export const LANE_MODES: Readonly<
       targetWaitMs: 10 * MS_PER_MINUTE,
       closeWhenWaitMs: 2 * MS_PER_MINUTE,
       cooldownMs: 15 * MS_PER_MINUTE,
+    },
+  },
+  /**
+   * The console's rule on the lanes' throughput measured from the day (S22.5): the people admitted
+   * per lane in the busy minutes of the last 30 (at least 4 people per open lane waiting), once
+   * there are 15 of them and 30 people; else the checkpoint's settings.
+   */
+  'advise-measured': {
+    title: "extra lanes recommended by GateFlow's console, on the lanes' measured throughput",
+    lanes: {
+      kind: 'advise',
+      reviewIntervalMs: 5 * MS_PER_MINUTE,
+      horizonMs: 60 * MS_PER_MINUTE,
+      targetWaitMs: 10 * MS_PER_MINUTE,
+      closeWhenWaitMs: 2 * MS_PER_MINUTE,
+      cooldownMs: 15 * MS_PER_MINUTE,
+      measuredThroughput: {
+        windowMinutes: 30,
+        busyPeoplePerLane: 4,
+        minBusyMinutes: 15,
+        minPeople: 30,
+      },
     },
   },
 };

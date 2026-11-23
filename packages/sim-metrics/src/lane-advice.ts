@@ -1,4 +1,9 @@
-import { LIBRARY_CALIBRATION, adviseLanes } from '@gateflow/forecast';
+import {
+  LIBRARY_CALIBRATION,
+  adviseLanes,
+  consoleRate,
+  measureThroughput,
+} from '@gateflow/forecast';
 import type { CheckpointProfile, LiveState } from '@gateflow/forecast';
 import type { Policy } from '@gateflow/queue-core';
 import { simulateCheckpoint } from '@gateflow/sim-model';
@@ -35,7 +40,19 @@ export function simulatedConsole(
 ): SimulatedConsole {
   const view = new LiveView(population);
   const advisor: LaneAdvisor = (nowMs, rule) => {
-    const state = view.stateNow(nowMs);
+    const live = view.stateNow(nowMs);
+    // The lanes' throughput measured from the day, when the rule asks for it (S22.5).
+    const measured = rule.measuredThroughput;
+    const state =
+      measured === undefined
+        ? live
+        : {
+            ...live,
+            ratePerLanePerHour: consoleRate(
+              measureThroughput(view.minutesBefore(nowMs, measured.windowMinutes), measured),
+              live.ratePerLanePerHour,
+            ),
+          };
     onState?.(state, view.lanesChangedAtMs);
     const advice = adviseLanes(profile, state, {
       calibration: LIBRARY_CALIBRATION,

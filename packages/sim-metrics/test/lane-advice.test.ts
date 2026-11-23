@@ -7,6 +7,8 @@ import {
   LIBRARY_CALIBRATION,
   LIBRARY_CALIBRATION_SOURCE,
   adviseLanes,
+  consoleRate,
+  measureThroughput,
 } from '@gateflow/forecast';
 import type { LiveState } from '@gateflow/forecast';
 import { LANE_MODES, findPolicyPreset } from '@gateflow/queue-core';
@@ -26,6 +28,7 @@ import {
   dayPopulation,
   planBacktest,
   planExperiment,
+  renderReport,
   runDay,
   runExperiment,
   simulatePolicy,
@@ -161,12 +164,83 @@ describe("GateFlow's console in the simulator (S22.3)", () => {
     expect(view.stateNow(6 * 60 * MIN).ratePerLanePerHour).toBe(3600 / planned);
   });
 
+  it("measures the lanes' throughput from the day as the log gives it (S22.5)", () => {
+    // A TSF-like day screening 4 s a person slower than its plan and settings assume.
+    const advised = policy('fifo-manual@advise-measured');
+    const rule = advised.lanes?.kind === 'advise' ? advised.lanes.measuredThroughput : undefined;
+    if (rule === undefined) throw new Error('no measured throughput');
+    const planned = tsf.checkpoint.serviceTimeMeanSeconds.value;
+    const slower = applySetting(
+      { scenario: tsf, policies: [advised] },
+      { parameter: 'actualServiceTimeMeanSeconds', value: planned + 4 },
+      advised.id,
+    ).scenario;
+    const job = planBacktest(slower, advised, arrivalClassification([advised]));
+    const population = dayPopulation(slower, job.forecast, 1);
+    const asked: LiveState[] = [];
+    const gateflow = simulatedConsole(job.profile, population, (state) => asked.push(state));
+    const events: DayEvent[] = [];
+    simulateCheckpoint(population, advised, {
+      classification: job.classification,
+      laneAdvisor: gateflow.advisor,
+      observer: (event) => {
+        gateflow.observe(event);
+        events.push(event);
+      },
+    });
+    const view = new LiveView(population);
+    for (const event of events) view.observe(event);
+    // A window's minutes are what replaying the day up to each minute's start gives.
+    const replayed = (nowMs: number) =>
+      Array.from({ length: rule.windowMinutes }, (_, m) => {
+        const from = nowMs - (rule.windowMinutes - m) * MIN;
+        const until = new LiveView(population);
+        let lanes = 0;
+        let admitted = 0;
+        for (const e of events) {
+          if (e.atMs <= from) {
+            until.observe(e);
+            if (e.type === 'LANES') lanes = e.open;
+          }
+          if (
+            e.type === 'QUEUE' &&
+            e.event.type === 'ADMITTED' &&
+            e.atMs >= from &&
+            e.atMs < from + MIN
+          ) {
+            admitted += population.passengers[e.party]?.partySize ?? 0;
+          }
+        }
+        return { backlog: until.stateNow(from).backlog, lanes, admitted };
+      });
+    const busy = asked.filter((s) => s.backlog >= 20).map((s) => s.nowMs);
+    expect(busy.length).toBeGreaterThan(3);
+    for (const nowMs of [busy[0], busy[Math.floor(busy.length / 2)], busy.at(-1)] as number[]) {
+      expect(view.minutesBefore(nowMs, rule.windowMinutes)).toEqual(replayed(nowMs));
+    }
+    // The console read the measure where there was one, else the settings, made for the plan.
+    const settings = 3600 / planned;
+    const truth = 3600 / (planned + 4);
+    const errors: number[] = [];
+    for (const state of asked) {
+      const measured = measureThroughput(view.minutesBefore(state.nowMs, rule.windowMinutes), rule);
+      expect(state.ratePerLanePerHour).toBe(consoleRate(measured, settings));
+      if (measured.ratePerLanePerHour !== null) errors.push(state.ratePerLanePerHour / truth - 1);
+    }
+    // When it measures, it sees the day as it is: within a few percent of the day's throughput (on
+    // 8 VCE-like days the measure's median error was under 1%, 8 in 10 within 4%).
+    expect(errors.length).toBeGreaterThan(10);
+    errors.sort((a, b) => a - b);
+    expect(Math.abs(errors[Math.floor(errors.length / 2)] ?? 1)).toBeLessThan(0.05);
+  });
+
   it('runs in experiments: deterministic, compared with the plan, the supervisor and S8', () => {
     const policies = [
       'fifo-manual',
       'fifo-manual@reactive',
       'fifo-manual@predict',
       'fifo-manual@advise',
+      'fifo-manual@advise-measured',
     ].map(policy);
     const config = {
       scenario: tsf,
@@ -198,6 +272,14 @@ describe("GateFlow's console in the simulator (S22.3)", () => {
     });
     expect(doc.manifest.versions.forecast).toBe(
       `${FORECAST_VERSION}, calibrated on ${LIBRARY_CALIBRATION_SOURCE}`,
+    );
+    // The report tells the console on the settings from the console on the measure (S22.5).
+    const report = renderReport(doc);
+    expect(report).toContain(
+      "`@advise-measured`, S22.5, with the lanes' throughput measured from the day instead of the checkpoint's settings",
+    );
+    expect(report).toContain(
+      "reads the lanes' throughput measured over the last 30 min (the minutes with at least 4 people per open lane not yet admitted, once 15 of them and 30 people; else the settings')",
     );
   });
 });

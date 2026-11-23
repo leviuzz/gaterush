@@ -1,0 +1,44 @@
+# GateFlow sensitivity sweep (schema version 1).
+#
+# SYNTHETIC: every number comes from the synthetic library scenario vce-like-peak-day and its
+# airport configuration. Results are simulated and must never be presented as operational evidence.
+
+schemaVersion: 1
+id: vce-like-peak-console-measured
+title: The console on the lanes' measured throughput, on a VCE-like peak day harder than planned
+description: >-
+  Does the console recommend better lanes on a day slower than planned when it measures the
+  lanes' throughput from the day (S22.5) instead of reading the checkpoint's settings, made for the
+  plan (ADR-059)? The plan and GateFlow's settings assume a screening time of 24 seconds per
+  person. Today's practice with staff calls (fifo-manual) runs with the plan only, with a
+  supervisor who opens a lane when the queue is long (@reactive), with the console on the settings
+  (@advise) and on the measured throughput (@advise-measured); GateFlow's priority calls
+  (priority-v3) run with the console on the settings and on the measured throughput. The curves
+  make the day harder than planned: slower screening on the day, and a roster one lane short.
+scenario: ../scenarios/vce-like-peak-day.yaml
+seeds: 1-200
+policies:
+  - fifo-manual
+  - fifo-manual@reactive
+  - fifo-manual@advise
+  - fifo-manual@advise-measured
+  - priority-v3@advise
+  - priority-v3@advise-measured
+baseline: fifo-manual
+candidate: fifo-manual@advise-measured
+# The first comparison is drawn in the charts: the measuring console against today's supervisor.
+compare:
+  - fifo-manual@advise-measured:fifo-manual@reactive
+  - fifo-manual@advise-measured:fifo-manual@advise
+  - fifo-manual@advise:fifo-manual@reactive
+  - priority-v3@advise-measured:fifo-manual@reactive
+  - priority-v3@advise-measured:priority-v3@advise
+dimensions:
+  - id: screening-time
+    title: Screening slower than planned
+    parameter: actualServiceTimeMeanSeconds
+    values: [24, 25, 26, 27]
+  - id: roster
+    title: A roster one lane short
+    parameter: lanesDelta
+    values: [-1, 0]

@@ -150,11 +150,12 @@ jobs:
             --policies fifo-manual,fifo-manual@reactive,fifo-manual@predict,priority-v3@predict
           cmp out/la/results.json out/lb/results.json
           cmp out/la/report.html out/lb/report.html
-          # The console's recommendations (S22.3): its forecasts are the same in every worker.
+          # The console's recommendations (S22.3), on the lanes' measured throughput too (S22.5):
+          # its forecasts are the same in every worker.
           node apps/sim-cli/dist/gateflow-sim.mjs run --scenario scenarios/mx-like-transfer-hub.yaml --seeds 1-8 --out out/aa --quiet --workers 1 \
-            --policies fifo-manual,fifo-manual@reactive,fifo-manual@advise,priority-v3@advise
+            --policies fifo-manual,fifo-manual@reactive,fifo-manual@advise,fifo-manual@advise-measured,priority-v3@advise
           node apps/sim-cli/dist/gateflow-sim.mjs run --scenario scenarios/mx-like-transfer-hub.yaml --seeds 1-8 --out out/ab --quiet --workers 4 \
-            --policies fifo-manual,fifo-manual@reactive,fifo-manual@advise,priority-v3@advise
+            --policies fifo-manual,fifo-manual@reactive,fifo-manual@advise,fifo-manual@advise-measured,priority-v3@advise
           cmp out/aa/results.json out/ab/results.json
           cmp out/aa/report.html out/ab/report.html
           # The backtest of the forecasts (S21): the same file whatever the number of workers.
@@ -250,11 +251,11 @@ jobs:
             node apps/sim-cli/dist/gateflow-sim.mjs run --scenario "scenarios/$scenario.yaml" --seeds 1-200 \
               --policies fifo,fifo-manual,virtual-fifo,priority-v2,priority-v3 --out "out/$scenario"
           done
-      - name: Extra lanes on the scenario library (S8), with the console's recommendations (S22.3)
+      - name: Extra lanes on the scenario library (S8), with the console's recommendations (S22.3, S22.5)
         run: |
           for scenario in vce-like-normal-day vce-like-peak-day vce-like-disrupted-day tsf-like-peak-day mx-like-transfer-hub; do
             node apps/sim-cli/dist/gateflow-sim.mjs run --scenario "scenarios/$scenario.yaml" --seeds 1-200 \
-              --policies fifo,fifo-manual,fifo-manual@reactive,fifo-manual@predict,fifo-manual@advise,priority-v3,priority-v3@predict,priority-v3@advise \
+              --policies fifo,fifo-manual,fifo-manual@reactive,fifo-manual@predict,fifo-manual@advise,fifo-manual@advise-measured,priority-v3,priority-v3@predict,priority-v3@advise,priority-v3@advise-measured \
               --out "out/lanes/$scenario"
           done
       - name: The error report of the forecasts per horizon (S21)

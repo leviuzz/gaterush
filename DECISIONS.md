@@ -2722,8 +2722,8 @@ founder on 2026-11-21 together with all of its recommendations.
 
 ## ADR-059: GateFlow knows the screening time of the plan, not the day's
 
-- **Status:** Proposed (2026-11-23). Slice S22.4, on "Confermo vai avanti". The choices marked
-  **[to confirm]** in IMPLEMENTATION_PLAN.md are for the founder. Population generator 0.7.0,
+- **Status:** Accepted (2026-11-23). Slice S22.4, on "Confermo vai avanti", as the founder
+  confirmed it with the next step ("Confermo vai avanti", S22.5). Population generator 0.7.0,
   sim-metrics 0.16.0, command line 0.16.0. No generated day of the library changes.
 - **Context:**
   - The simulator gives GateFlow estimates made from the population's lanes' rate and screening
@@ -2751,8 +2751,7 @@ founder on 2026-11-21 together with all of its recommendations.
   - **Give `serviceTimeMeanSeconds` the new meaning in sweeps:** one parameter, but the published
     sweeps of S6 to S8 and the Studio's lever would change meaning and no longer reproduce.
   - **The console learns the day's throughput from the lanes' admissions:** what a live console
-    could do, since the log has them; a product change, to measure first (M5, on an airport's
-    days).
+    could do, since the log has them; a product change, to measure first (S22.5, ADR-060).
   - **The supervisor sees the true wait:** it would give today's practice more than GateFlow
     knows; both read the same queue the same way.
 - **Evidence:** the S22.4 section of IMPLEMENTATION_PLAN.md and
@@ -2769,3 +2768,46 @@ founder on 2026-11-21 together with all of its recommendations.
     again without it (S22.4), S8's rule included.
   - Nothing changes for a scenario without the new field: every day of the library, the
     backtests and the twin are as they were.
+
+## ADR-060: The console measures the lanes' throughput from the log
+
+- **Status:** Proposed (2026-11-23). Slice S22.5, on "Confermo vai avanti". The choices marked
+  **[to confirm]** in IMPLEMENTATION_PLAN.md are for the founder. Forecast 0.4.0, queue-core
+  0.13.0, sim-metrics 0.17.0, command line 0.17.0. No number of an existing policy changes.
+- **Context:**
+  - The console's forecast (S21) drains the queue at the lanes open times a rate per lane, the
+    checkpoint's settings', made for the plan (ADR-059). On a day slower than planned the console
+    sees the queue grow and not why: on the VCE-like peak day screening at 26 seconds a person
+    (the plan assumes 24) its lanes do as well as today's supervisor, not better (S22.4).
+  - The log records every admission to screening and the lanes open. Admissions measure the lanes
+    only when they have people to screen; in a quiet minute they count who came.
+- **Decision:**
+  - **The measure [to confirm]:** the people admitted per open lane in the busy minutes of the
+    last 30, a minute being busy when at least 4 people per open lane are not yet admitted at its
+    start (waiting, announced or called); once there are 15 busy minutes and 30 people in them.
+    Until then, the settings' rate.
+  - **A guard [to confirm]:** the measure is kept within half and one and a half times the
+    settings' rate.
+  - **Only the console reads it [to confirm]:** its forecast and its recommendations; the queue's
+    estimates and call-ahead, S8's rule and the supervisor keep the usual throughput. In the
+    simulator a new lane mode, `@advise-measured`, is the console with the measure; `@advise`
+    stays the console of S22.3 and S22.4.
+  - **Live, later [to confirm]:** the API's console reads the same measure from the checkpoint's
+    log in S22.6, if the simulator says it is worth it.
+- **Alternatives considered:**
+  - **The settings' rate updated by the supervisor:** what a checkpoint does today when it knows
+    its lanes are slow; it needs someone to notice, which is what the measure does.
+  - **All admissions of the window, busy or not:** a quiet morning would read as slow lanes and
+    the console would recommend lanes nobody needs.
+  - **The measure in the queue's estimates too (call-ahead, a ticket's wait):** a change to what
+    passengers see; to measure separately, once the console's is known.
+  - **A shorter window or fewer busy minutes:** a measure sooner at the start of a peak, from
+    fewer people; not measured in S22.5, a sweep of the rule's numbers can follow.
+- **Evidence:** the S22.5 section of IMPLEMENTATION_PLAN.md: on 20 VCE-like peak days at each of
+  24 and 26 seconds a person the measure's median error is -0.2% and -0.3% of the day's rate, 8
+  measures in 10 within -3.7% and +3.8%, with a measure at 6 reviews in 10 with a queue; the busy
+  threshold matters little between 2 and 6 people per lane.
+- **Consequences:**
+  - The console on the measure is a policy of its own in the reports; the published figures of
+    `@advise` reproduce.
+  - The measure looks back: at the start of a peak the console has only the settings' rate.

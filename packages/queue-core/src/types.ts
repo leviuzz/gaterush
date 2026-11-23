@@ -109,6 +109,21 @@ export interface AdvisedLanes {
   readonly targetWaitMs: Millis;
   readonly closeWhenWaitMs: Millis;
   readonly cooldownMs: Millis;
+  /**
+   * The lanes' throughput the console's forecast reads (S22.5): absent, the checkpoint's settings
+   * (made for the plan); given, the people admitted per lane in the minutes of the last window
+   * that start with at least `busyPeoplePerLane` people per open lane not yet admitted, once there
+   * are enough of them, else the settings.
+   */
+  readonly measuredThroughput?: MeasuredThroughputRule;
+}
+
+/** How the console measures the lanes' throughput from the day (S22.5). */
+export interface MeasuredThroughputRule {
+  readonly windowMinutes: number;
+  readonly busyPeoplePerLane: number;
+  readonly minBusyMinutes: number;
+  readonly minPeople: number;
 }
 
 /** How lanes are opened beyond the plan during the day (S8, S22.3). */

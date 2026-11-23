@@ -616,6 +616,46 @@ describe('lane modes (S8)', () => {
       [{ ...predict, kind: 'hunch' } as unknown as Policy['lanes'], /unknown lane management/],
       [{ ...predict, kind: 'advise', targetWaitMs: 0 }, /targetWaitMs/],
       [{ ...predict, kind: 'advise', closeWhenWaitMs: predict.targetWaitMs }, /below/],
+      // The console's measured throughput (S22.5).
+      [
+        {
+          ...predict,
+          kind: 'advise',
+          measuredThroughput: {
+            windowMinutes: 30,
+            busyPeoplePerLane: 0,
+            minBusyMinutes: 15,
+            minPeople: 30,
+          },
+        },
+        /busyPeoplePerLane/,
+      ],
+      [
+        {
+          ...predict,
+          kind: 'advise',
+          measuredThroughput: {
+            windowMinutes: 10,
+            busyPeoplePerLane: 4,
+            minBusyMinutes: 15,
+            minPeople: 30,
+          },
+        },
+        /exceeds its window/,
+      ],
+      [
+        {
+          ...predict,
+          kind: 'advise',
+          measuredThroughput: {
+            windowMinutes: 30,
+            busyPeoplePerLane: 4,
+            minBusyMinutes: 15,
+            minPeople: 0,
+          },
+        },
+        /minPeople/,
+      ],
     ];
     for (const [lanes, message] of invalid) {
       expect(() => {
@@ -628,6 +668,23 @@ describe('lane modes (S8)', () => {
     expect(() => {
       validatePolicy({ ...FIFO_POLICY, lanes: LANE_MODES.advise?.lanes });
     }).not.toThrow();
+    // The console's two modes differ only by the measured throughput (S22.5).
+    const measured = LANE_MODES['advise-measured']?.lanes;
+    expect(() => {
+      validatePolicy({ ...FIFO_POLICY, lanes: measured });
+    }).not.toThrow();
+    expect(measured).toEqual({
+      ...LANE_MODES.advise?.lanes,
+      measuredThroughput: {
+        windowMinutes: 30,
+        busyPeoplePerLane: 4,
+        minBusyMinutes: 15,
+        minPeople: 30,
+      },
+    });
+    expect(withLaneMode(FIFO_POLICY, 'advise-measured').id).toBe(
+      `${FIFO_POLICY.id}@advise-measured`,
+    );
   });
 });
 

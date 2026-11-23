@@ -162,7 +162,12 @@ describe('gateflow-sim validate, policies, help', () => {
       'priority-v2',
       'priority-v3',
     ]);
-    expect(Object.keys(listed.laneModes)).toEqual(['reactive', 'predict', 'advise']);
+    expect(Object.keys(listed.laneModes)).toEqual([
+      'reactive',
+      'predict',
+      'advise',
+      'advise-measured',
+    ]);
   });
 
   it.each([

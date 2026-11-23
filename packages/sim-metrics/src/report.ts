@@ -68,7 +68,11 @@ function laneRule(policy: Policy): string {
     return `supervisor: opens when the queue shows more than ${minutesOf(lanes.openWhenWaitMs)} min, closes below ${minutesOf(lanes.closeWhenWaitMs)} min`;
   }
   if (lanes.kind === 'advise') {
-    return `GateFlow's console: keeps the median wait forecast below ${minutesOf(lanes.targetWaitMs)} min over the next ${minutesOf(lanes.horizonMs)} min, closes a lane beyond the plan below ${minutesOf(lanes.closeWhenWaitMs)} min, ${minutesOf(lanes.cooldownMs)} min between recommendations`;
+    const rule = `GateFlow's console: keeps the median wait forecast below ${minutesOf(lanes.targetWaitMs)} min over the next ${minutesOf(lanes.horizonMs)} min, closes a lane beyond the plan below ${minutesOf(lanes.closeWhenWaitMs)} min, ${minutesOf(lanes.cooldownMs)} min between recommendations`;
+    const measured = lanes.measuredThroughput;
+    if (measured === undefined) return rule;
+    // The lanes' throughput measured from the day (S22.5).
+    return `${rule}; reads the lanes' throughput measured over the last ${String(measured.windowMinutes)} min (the minutes with at least ${String(measured.busyPeoplePerLane)} people per open lane not yet admitted, once ${String(measured.minBusyMinutes)} of them and ${String(measured.minPeople)} people; else the settings')`;
   }
   return `GateFlow: keeps the projected wait below ${minutesOf(lanes.targetWaitMs)} min over the next ${minutesOf(lanes.horizonMs)} min, closes below ${minutesOf(lanes.closeWhenWaitMs)} min`;
 }
@@ -354,6 +358,19 @@ export function renderReport(doc: ResultsDocument): string {
     const lanesAvailable = assumption('checkpoint.lanesAvailable') as number | undefined;
     push(`## ${section}. Lane management`, '');
     section++;
+    // The console's lanes (S22), on the checkpoint's settings or on the measured throughput (S22.5).
+    const consoles = managed.filter((p) => p.lanes?.kind === 'advise');
+    const measuring = consoles.filter(
+      (p) => p.lanes?.kind === 'advise' && p.lanes.measuredThroughput !== undefined,
+    );
+    const asConsole =
+      consoles.length === 0
+        ? ''
+        : measuring.length === 0
+          ? ', as the console does (`@advise`, S22: its rule on the forecast of the next hour, from what the live system knows)'
+          : measuring.length === consoles.length
+            ? ", as the console does (`@advise-measured`, S22.5: its rule on the forecast of the next hour, from what the live system knows, with the lanes' throughput measured from the day)"
+            : ", as the console does (`@advise`, S22: its rule on the forecast of the next hour, from what the live system knows; `@advise-measured`, S22.5, with the lanes' throughput measured from the day instead of the checkpoint's settings)";
     push(
       staffing === undefined
         ? 'The scenario has no staff on call (`checkpoint.laneStaffing`): no lane opens beyond the plan, whatever the policy.'
@@ -363,9 +380,7 @@ export function renderReport(doc: ResultsDocument): string {
             `stays open at least ${num(staffing.minOpenMinutes, 0)} min. The supervisor of today's practice (\`@reactive\`) ` +
             'decides on the wait the queue shows; GateFlow (`@predict`) projects the queue from the forecast of arrivals ' +
             'and recommends lanes' +
-            (managed.some((p) => p.lanes?.kind === 'advise')
-              ? ', as the console does (`@advise`, S22: its rule on the forecast of the next hour, from what the live system knows)'
-              : '') +
+            asConsole +
             `, and the duty manager follows ${pct(staffing.followShare, 0)} of its recommendations. ` +
             'Means per day; "most" is the largest value over all simulated days.',
       '',

@@ -1,5 +1,5 @@
 /** Version of the forecasts (S21). Bump on any change to a forecast or to its errors. */
-export const FORECAST_VERSION = '0.3.0';
+export const FORECAST_VERSION = '0.4.0';
 
 export { BUCKET_MS, ForecastError, HORIZONS_MIN, QUANTITIES, SPAN_MS, quantile } from './base';
 export type { Band, Quantity } from './base';
@@ -52,3 +52,5 @@ export {
   roomForLanes,
 } from './advice';
 export type { AdviceAction, AdviceOptions, AdviceReason, AdviceRule, LaneAdvice } from './advice';
+export { consoleRate, measureThroughput, validateThroughputRule } from './throughput';
+export type { MeasuredThroughput, ThroughputMinute, ThroughputRule } from './throughput';

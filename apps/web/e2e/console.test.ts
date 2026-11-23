@@ -387,8 +387,32 @@ describe("the supervisor's console (S17)", () => {
     const decided = page.locator('#console-audit-list [data-command="DECIDE_ADVICE"]').first();
     expect(await decided.textContent()).toContain(product.staff.supervisor.login);
     expect(await decided.textContent()).toContain(en['supervisor.advice.status.ACCEPTED']);
-    const advised = page.locator('#console-audit-list [data-command="ADVISE_LANES"]').first();
-    expect(await advised.textContent()).toContain('GateFlow');
+    // The recommendation may be older than the audit's latest page: the review every 5 minutes can
+    // make it from what the earlier tests left in the queue, before this test's passengers (around
+    // the demo's morning peak). Older entries load on demand; the console's refresh shows the
+    // latest page again, so ask until the entry is read.
+    const advised = page.locator('#console-audit-list [data-command="ADVISE_LANES"]');
+    let advisedBy = '';
+    await expect
+      .poll(
+        async () => {
+          if ((await advised.count()) > 0) {
+            advisedBy =
+              (await advised
+                .first()
+                .textContent({ timeout: 1_000 })
+                .catch(() => null)) ?? '';
+            if (advisedBy !== '') return true;
+          }
+          const older = page.locator('#console-audit-older');
+          if ((await older.count()) > 0)
+            await older.click({ timeout: 1_000 }).catch(() => undefined);
+          return false;
+        },
+        { timeout: 30_000, interval: 500 },
+      )
+      .toBe(true);
+    expect(advisedBy).toContain('GateFlow');
     // In Italian.
     await page.click('button[lang="it"]');
     expect(await page.textContent('#advice-title')).toContain(t('it', 'supervisor.advice.title'));

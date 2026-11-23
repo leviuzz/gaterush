@@ -35,6 +35,10 @@ founder confirmed it.
   stops a selected ticket from being selected) did not exclude a ticket the hysteresis keeps
   CRITICAL until its margin exceeds h (ADR-030); a random seed in CI found one (seed 1735679738),
   now a test of its own. The engine is unchanged.
+- An end-to-end test of the console (S22) read the recommendation it accepts in the audit's latest
+  page. Around the demo's morning peak the review every 5 minutes makes it from what the earlier
+  tests left in the queue, before the test's 50 passengers, which push it to the next page; the
+  test now loads older entries until it reads it. The console is unchanged.
 
 ### Reports and the pitch page
 - `docs/reports/slice-22/sweeps/vce-like-peak-console-harder` (200 days per point, gateflow-sim

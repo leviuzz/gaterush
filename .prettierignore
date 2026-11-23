@@ -10,5 +10,8 @@ docs/reports/**
 # Written by `pnpm calibrate:library` (gateflow-sim calibrate), checked by CI.
 packages/forecast/src/library-calibration.ts
 
+# Written by `pnpm pitch` (gateflow-sim pitch) from the published reports, checked by CI.
+docs/pitch/
+
 # Written by drizzle-kit on every `db:generate`.
 apps/api/migrations/meta/

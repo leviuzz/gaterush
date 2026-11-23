@@ -166,6 +166,8 @@ jobs:
         run: node scenarios/flights/make-library-flights.mjs --check
       - name: The forecasts' calibration is what the scenario library gives (S21.3)
         run: pnpm calibrate:check
+      - name: The pitch figures are what the published reports give (ADR-058)
+        run: pnpm pitch:check
 
   studio:
     name: Simulator Studio in Chromium

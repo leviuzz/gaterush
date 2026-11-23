@@ -41,7 +41,8 @@ packages/
   sim-kernel/       seeded RNG streams, deterministic math, distributions, event calendar (pure)
   sim-model/        checkpoint simulation: physical queue or GateFlow virtual queue, extra lanes (pure)
   sim-scenarios/    scenario schema, validation, assumptions, synthetic population, arrival forecast (pure)
-  sim-metrics/      experiments, sweeps, paired metrics, statistics, results, Markdown and HTML, backtests (pure)
+  sim-metrics/      experiments, sweeps, paired metrics, statistics, results, Markdown and HTML, backtests,
+                    the pitch figures read from the published reports (pure)
   sim-trace/        the trace of one day: every event of two policies, replay views, explanations (pure)
   studio-core/      what the Studio adds in the browser: SHA-256, files, library, setup, what-if, comparison, traces (pure)
   twin/             the digital twin: a simulated day as the live system's commands at virtual times, checked (pure)
@@ -558,6 +559,17 @@ of the demo scenario for seeds 1-3, the report of the disrupted scenario, and a 
 Markdown and HTML). To regenerate them after an intentional change, run
 `UPDATE_GOLDEN=1 pnpm --filter @gateflow/sim-metrics test` and explain the change in the
 changelog.
+
+The pitch figures (ADR-058) are a page written from the published reports, not a simulation:
+`buildPitch` (sim-metrics, pure) is given the parsed JSON of the reports it lists
+(`PITCH_SOURCES`: the library and sweeps of S22.3, the sweep of S8 on days harder than planned,
+the backtests of S21) and reads every figure at a JSON pointer, keeping the file and the pointer
+with it; `renderPitchMarkdown`, `renderPitchHtml` and `stringifyPitch` write the page, its HTML
+twin with two charts and the document (`gateflow.pitch.figures/1`). It refuses a source whose
+schema is not the one it reads, without the SIMULATED disclaimer, not on synthetic data or not of
+a clean commit, and each claim checks the words its figures must support. `gateflow-sim pitch`
+reads the files and writes `docs/pitch` (`pnpm pitch`) or checks it (`pnpm pitch:check`, in CI);
+a test of sim-metrics compares the committed page with what the reports give.
 
 ## 10. Build and tooling (ADR-006, ADR-007)
 

@@ -1,0 +1,3663 @@
+{
+  "schema": "gateflow.pitch.figures/1",
+  "disclaimer": "SIMULATED RESULTS ON SYNTHETIC OR HYPOTHETICAL DATA. These numbers are model outputs, not measurements, and must not be presented as evidence of operational performance.",
+  "reports": "../reports",
+  "sources": [
+    {
+      "file": "slice-22/vce-like-normal-day/results.json",
+      "report": "slice-22/vce-like-normal-day/report.md",
+      "label": "VCE-like normal day (S22.3)",
+      "title": "VCE-like departures checkpoint, normal day (synthetic)",
+      "schema": "gateflow.sim.results/7",
+      "commit": "529b2323a5489dd0be5f8adeb13d2d64f946fad5",
+      "generator": "gateflow-sim 0.14.0",
+      "days": 200,
+      "reproduce": "gateflow-sim run --scenario scenarios/vce-like-normal-day.yaml --seeds 1-200 --policies fifo,fifo-manual,fifo-manual@reactive,fifo-manual@predict,fifo-manual@advise,priority-v3,priority-v3@predict,priority-v3@advise --baseline fifo --compare fifo-manual:fifo,fifo-manual@reactive:fifo,fifo-manual@predict:fifo,fifo-manual@advise:fifo,priority-v3:fifo,priority-v3@predict:fifo,priority-v3@advise:fifo,fifo-manual@reactive:fifo-manual,fifo-manual@predict:fifo-manual,fifo-manual@predict:fifo-manual@reactive,fifo-manual@advise:fifo-manual,fifo-manual@advise:fifo-manual@reactive,fifo-manual@advise:fifo-manual@predict,priority-v3:fifo-manual,priority-v3@predict:priority-v3,priority-v3@predict:fifo-manual@predict,priority-v3@predict:fifo-manual@reactive,priority-v3@advise:priority-v3,priority-v3@advise:priority-v3@predict,priority-v3@advise:fifo-manual@advise,priority-v3@advise:fifo-manual@reactive --bootstrap-resamples 2000"
+    },
+    {
+      "file": "slice-22/vce-like-peak-day/results.json",
+      "report": "slice-22/vce-like-peak-day/report.md",
+      "label": "VCE-like peak day (S22.3)",
+      "title": "VCE-like departures checkpoint, summer peak day (synthetic)",
+      "schema": "gateflow.sim.results/7",
+      "commit": "529b2323a5489dd0be5f8adeb13d2d64f946fad5",
+      "generator": "gateflow-sim 0.14.0",
+      "days": 200,
+      "reproduce": "gateflow-sim run --scenario scenarios/vce-like-peak-day.yaml --seeds 1-200 --policies fifo,fifo-manual,fifo-manual@reactive,fifo-manual@predict,fifo-manual@advise,priority-v3,priority-v3@predict,priority-v3@advise --baseline fifo --compare fifo-manual:fifo,fifo-manual@reactive:fifo,fifo-manual@predict:fifo,fifo-manual@advise:fifo,priority-v3:fifo,priority-v3@predict:fifo,priority-v3@advise:fifo,fifo-manual@reactive:fifo-manual,fifo-manual@predict:fifo-manual,fifo-manual@predict:fifo-manual@reactive,fifo-manual@advise:fifo-manual,fifo-manual@advise:fifo-manual@reactive,fifo-manual@advise:fifo-manual@predict,priority-v3:fifo-manual,priority-v3@predict:priority-v3,priority-v3@predict:fifo-manual@predict,priority-v3@predict:fifo-manual@reactive,priority-v3@advise:priority-v3,priority-v3@advise:priority-v3@predict,priority-v3@advise:fifo-manual@advise,priority-v3@advise:fifo-manual@reactive --bootstrap-resamples 2000"
+    },
+    {
+      "file": "slice-22/vce-like-disrupted-day/results.json",
+      "report": "slice-22/vce-like-disrupted-day/report.md",
+      "label": "VCE-like disrupted day (S22.3)",
+      "title": "VCE-like departures checkpoint, disrupted summer peak day (synthetic)",
+      "schema": "gateflow.sim.results/7",
+      "commit": "529b2323a5489dd0be5f8adeb13d2d64f946fad5",
+      "generator": "gateflow-sim 0.14.0",
+      "days": 200,
+      "reproduce": "gateflow-sim run --scenario scenarios/vce-like-disrupted-day.yaml --seeds 1-200 --policies fifo,fifo-manual,fifo-manual@reactive,fifo-manual@predict,fifo-manual@advise,priority-v3,priority-v3@predict,priority-v3@advise --baseline fifo --compare fifo-manual:fifo,fifo-manual@reactive:fifo,fifo-manual@predict:fifo,fifo-manual@advise:fifo,priority-v3:fifo,priority-v3@predict:fifo,priority-v3@advise:fifo,fifo-manual@reactive:fifo-manual,fifo-manual@predict:fifo-manual,fifo-manual@predict:fifo-manual@reactive,fifo-manual@advise:fifo-manual,fifo-manual@advise:fifo-manual@reactive,fifo-manual@advise:fifo-manual@predict,priority-v3:fifo-manual,priority-v3@predict:priority-v3,priority-v3@predict:fifo-manual@predict,priority-v3@predict:fifo-manual@reactive,priority-v3@advise:priority-v3,priority-v3@advise:priority-v3@predict,priority-v3@advise:fifo-manual@advise,priority-v3@advise:fifo-manual@reactive --bootstrap-resamples 2000"
+    },
+    {
+      "file": "slice-22/tsf-like-peak-day/results.json",
+      "report": "slice-22/tsf-like-peak-day/report.md",
+      "label": "TSF-like peak day (S22.3)",
+      "title": "TSF-like low-cost base, summer peak day (synthetic)",
+      "schema": "gateflow.sim.results/7",
+      "commit": "529b2323a5489dd0be5f8adeb13d2d64f946fad5",
+      "generator": "gateflow-sim 0.14.0",
+      "days": 200,
+      "reproduce": "gateflow-sim run --scenario scenarios/tsf-like-peak-day.yaml --seeds 1-200 --policies fifo,fifo-manual,fifo-manual@reactive,fifo-manual@predict,fifo-manual@advise,priority-v3,priority-v3@predict,priority-v3@advise --baseline fifo --compare fifo-manual:fifo,fifo-manual@reactive:fifo,fifo-manual@predict:fifo,fifo-manual@advise:fifo,priority-v3:fifo,priority-v3@predict:fifo,priority-v3@advise:fifo,fifo-manual@reactive:fifo-manual,fifo-manual@predict:fifo-manual,fifo-manual@predict:fifo-manual@reactive,fifo-manual@advise:fifo-manual,fifo-manual@advise:fifo-manual@reactive,fifo-manual@advise:fifo-manual@predict,priority-v3:fifo-manual,priority-v3@predict:priority-v3,priority-v3@predict:fifo-manual@predict,priority-v3@predict:fifo-manual@reactive,priority-v3@advise:priority-v3,priority-v3@advise:priority-v3@predict,priority-v3@advise:fifo-manual@advise,priority-v3@advise:fifo-manual@reactive --bootstrap-resamples 2000"
+    },
+    {
+      "file": "slice-22/mx-like-transfer-hub/results.json",
+      "report": "slice-22/mx-like-transfer-hub/report.md",
+      "label": "MX-like transfer hub (S22.3)",
+      "title": "MX-like hub, transfer security checkpoint (synthetic)",
+      "schema": "gateflow.sim.results/7",
+      "commit": "529b2323a5489dd0be5f8adeb13d2d64f946fad5",
+      "generator": "gateflow-sim 0.14.0",
+      "days": 200,
+      "reproduce": "gateflow-sim run --scenario scenarios/mx-like-transfer-hub.yaml --seeds 1-200 --policies fifo,fifo-manual,fifo-manual@reactive,fifo-manual@predict,fifo-manual@advise,priority-v3,priority-v3@predict,priority-v3@advise --baseline fifo --compare fifo-manual:fifo,fifo-manual@reactive:fifo,fifo-manual@predict:fifo,fifo-manual@advise:fifo,priority-v3:fifo,priority-v3@predict:fifo,priority-v3@advise:fifo,fifo-manual@reactive:fifo-manual,fifo-manual@predict:fifo-manual,fifo-manual@predict:fifo-manual@reactive,fifo-manual@advise:fifo-manual,fifo-manual@advise:fifo-manual@reactive,fifo-manual@advise:fifo-manual@predict,priority-v3:fifo-manual,priority-v3@predict:priority-v3,priority-v3@predict:fifo-manual@predict,priority-v3@predict:fifo-manual@reactive,priority-v3@advise:priority-v3,priority-v3@advise:priority-v3@predict,priority-v3@advise:fifo-manual@advise,priority-v3@advise:fifo-manual@reactive --bootstrap-resamples 2000"
+    },
+    {
+      "file": "slice-22/sweeps/mx-like-hub-console/sweep.json",
+      "report": "slice-22/sweeps/mx-like-hub-console/sweep.md",
+      "label": "Recommendations followed or not, MX-like hub (S22.3)",
+      "title": "The console's lane recommendations on the MX-like transfer hub, followed or not",
+      "schema": "gateflow.sim.sweep/3",
+      "commit": "529b2323a5489dd0be5f8adeb13d2d64f946fad5",
+      "generator": "gateflow-sim 0.14.0",
+      "days": 200,
+      "reproduce": "gateflow-sim sweep --spec sweeps/mx-like-hub-console.yaml --seeds 1-200 --bootstrap-resamples 2000"
+    },
+    {
+      "file": "slice-22/sweeps/tsf-like-peak-console/sweep.json",
+      "report": "slice-22/sweeps/tsf-like-peak-console/sweep.md",
+      "label": "Recommendations followed or not, TSF-like base (S22.3)",
+      "title": "The console's lane recommendations on the TSF-like peak day, followed or not",
+      "schema": "gateflow.sim.sweep/3",
+      "commit": "529b2323a5489dd0be5f8adeb13d2d64f946fad5",
+      "generator": "gateflow-sim 0.14.0",
+      "days": 200,
+      "reproduce": "gateflow-sim sweep --spec sweeps/tsf-like-peak-console.yaml --seeds 1-200 --bootstrap-resamples 2000"
+    },
+    {
+      "file": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+      "report": "slice-8/sweeps/vce-like-peak-lanes/sweep.md",
+      "label": "A VCE-like peak day harder than planned (S8)",
+      "title": "Extra lanes on the VCE-like peak day, recommended by GateFlow or opened by a supervisor",
+      "schema": "gateflow.sim.sweep/3",
+      "commit": "b3c9f7e3b0fae64477fb45231fcb31cb4864982e",
+      "generator": "gateflow-sim 0.8.0",
+      "days": 200,
+      "reproduce": "gateflow-sim sweep --spec sweeps/vce-like-peak-lanes.yaml --seeds 1-200 --bootstrap-resamples 2000"
+    },
+    {
+      "file": "slice-21/single-checkpoint-demo/backtest.json",
+      "report": "slice-21/single-checkpoint-demo/backtest.md",
+      "label": "Forecasts, Demo checkpoint, congested morning (S21)",
+      "title": "Single departure checkpoint, synthetic day with a congested morning peak",
+      "schema": "gateflow.forecast.backtest/2",
+      "commit": "c2ce38c31a826655dc59fc9eebed44c748f7a003",
+      "generator": "gateflow-sim 0.13.0",
+      "days": 200,
+      "reproduce": "gateflow-sim backtest --scenario scenarios/single-checkpoint-demo.yaml --seeds 1-200"
+    },
+    {
+      "file": "slice-21/vce-like-normal-day/backtest.json",
+      "report": "slice-21/vce-like-normal-day/backtest.md",
+      "label": "Forecasts, VCE-like normal day (S21)",
+      "title": "VCE-like departures checkpoint, normal day (synthetic)",
+      "schema": "gateflow.forecast.backtest/2",
+      "commit": "c2ce38c31a826655dc59fc9eebed44c748f7a003",
+      "generator": "gateflow-sim 0.13.0",
+      "days": 200,
+      "reproduce": "gateflow-sim backtest --scenario scenarios/vce-like-normal-day.yaml --seeds 1-200"
+    },
+    {
+      "file": "slice-21/vce-like-peak-day/backtest.json",
+      "report": "slice-21/vce-like-peak-day/backtest.md",
+      "label": "Forecasts, VCE-like peak day (S21)",
+      "title": "VCE-like departures checkpoint, summer peak day (synthetic)",
+      "schema": "gateflow.forecast.backtest/2",
+      "commit": "c2ce38c31a826655dc59fc9eebed44c748f7a003",
+      "generator": "gateflow-sim 0.13.0",
+      "days": 200,
+      "reproduce": "gateflow-sim backtest --scenario scenarios/vce-like-peak-day.yaml --seeds 1-200"
+    },
+    {
+      "file": "slice-21/vce-like-disrupted-day/backtest.json",
+      "report": "slice-21/vce-like-disrupted-day/backtest.md",
+      "label": "Forecasts, VCE-like disrupted day (S21)",
+      "title": "VCE-like departures checkpoint, disrupted summer peak day (synthetic)",
+      "schema": "gateflow.forecast.backtest/2",
+      "commit": "c2ce38c31a826655dc59fc9eebed44c748f7a003",
+      "generator": "gateflow-sim 0.13.0",
+      "days": 200,
+      "reproduce": "gateflow-sim backtest --scenario scenarios/vce-like-disrupted-day.yaml --seeds 1-200"
+    },
+    {
+      "file": "slice-21/tsf-like-peak-day/backtest.json",
+      "report": "slice-21/tsf-like-peak-day/backtest.md",
+      "label": "Forecasts, TSF-like peak day (S21)",
+      "title": "TSF-like low-cost base, summer peak day (synthetic)",
+      "schema": "gateflow.forecast.backtest/2",
+      "commit": "c2ce38c31a826655dc59fc9eebed44c748f7a003",
+      "generator": "gateflow-sim 0.13.0",
+      "days": 200,
+      "reproduce": "gateflow-sim backtest --scenario scenarios/tsf-like-peak-day.yaml --seeds 1-200"
+    },
+    {
+      "file": "slice-21/mx-like-transfer-hub/backtest.json",
+      "report": "slice-21/mx-like-transfer-hub/backtest.md",
+      "label": "Forecasts, MX-like transfer hub (S21)",
+      "title": "MX-like hub, transfer security checkpoint (synthetic)",
+      "schema": "gateflow.forecast.backtest/2",
+      "commit": "c2ce38c31a826655dc59fc9eebed44c748f7a003",
+      "generator": "gateflow-sim 0.13.0",
+      "days": 200,
+      "reproduce": "gateflow-sim backtest --scenario scenarios/mx-like-transfer-hub.yaml --seeds 1-200"
+    }
+  ],
+  "claims": [
+    {
+      "id": "hub-gateflow",
+      "title": "At a transfer hub, GateFlow saves flights",
+      "text": "At the MX-like transfer hub, GateFlow as a whole (its priority calls and its console's lane recommendations) saves **+18.0** [16.1, 19.9] flights a day against today's practice (staff calling the closing flights, a supervisor opening lanes when the queue is long), for 1.5 [1.3, 1.6] extra lane-hours a day: 24.2 passengers a day make a flight they would have missed, 6.2 miss one they would have made.",
+      "caveat": "A synthetic transfer checkpoint: 4,473 passengers a day, 5 lanes of which the roster plans at most 4, staff on call for 1 more. Today's supervisor is idealised (it sees the exact wait every 5 minutes and never forgets), so GateFlow's margin is probably understated. The staff on call, about 10 minutes to open a lane and a duty manager following 80% of the recommendations are assumptions.",
+      "figures": [
+        {
+          "label": "Net flights saved per day, GateFlow against today's practice",
+          "value": 17.96,
+          "lower": 16.0947,
+          "upper": 19.9255,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/net",
+          "digits": 1,
+          "signed": true,
+          "percent": false
+        },
+        {
+          "label": "Extra lane-hours per day",
+          "value": 1.4667,
+          "lower": 1.3488,
+          "upper": 1.5839,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/extraLaneHoursDelta",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Passengers per day who make a flight they would have missed",
+          "value": 24.16,
+          "lower": 22.3249,
+          "upper": 26.015,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/saved",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Passengers per day who miss a flight they would have made",
+          "value": 6.2,
+          "lower": 5.635,
+          "upper": 6.7701,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/harmed",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "People per day",
+          "value": 4473,
+          "lower": null,
+          "upper": null,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/summary/peoplePerDay",
+          "digits": 0,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Lanes of the checkpoint",
+          "value": 5,
+          "lower": null,
+          "upper": null,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/assumptions/0/value",
+          "digits": 0,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Most lanes the roster plans",
+          "value": 4,
+          "lower": null,
+          "upper": null,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/assumptions/2/value/maxLanes",
+          "digits": 0,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Extra lanes the staff on call can open",
+          "value": 1,
+          "lower": null,
+          "upper": null,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/assumptions/3/value/maxExtraLanes",
+          "digits": 0,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Minutes to open a lane (median)",
+          "value": 10,
+          "lower": null,
+          "upper": null,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/assumptions/3/value/openDelayMinutes/median",
+          "digits": 0,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Share of the recommendations the duty manager follows",
+          "value": 0.8,
+          "lower": null,
+          "upper": null,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/assumptions/3/value/followShare",
+          "digits": 0,
+          "signed": false,
+          "percent": true
+        }
+      ],
+      "sources": [
+        "slice-22/mx-like-transfer-hub/results.json"
+      ]
+    },
+    {
+      "id": "hub-lanes",
+      "title": "Most of it is the console's lane recommendations",
+      "text": "The console's lane recommendations alone, with today's calls, save **+17.7** [16.0, 19.4] flights a day at the hub against today's supervisor, for 1.8 [1.6, 1.9] extra lane-hours; once those lanes are open, GateFlow's priority calls add +0.3 [-0.8, 1.3].",
+      "caveat": "The console opens 2.4 lanes a day there, for 2.3 extra lane-hours: one extra lane-hour of it saves 14.1 [12.6, 15.8] flights against the plan only, less than one of the supervisor's (26.7 [22.2, 32.3]), who opens few lanes and only once the queue is long, but in all it saves more. The extra lanes are the airport's staff on call: GateFlow says when to open them.",
+      "figures": [
+        {
+          "label": "Net flights saved per day, the console's lanes against today's supervisor (today's calls)",
+          "value": 17.695,
+          "lower": 15.9599,
+          "upper": 19.3952,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+          "digits": 1,
+          "signed": true,
+          "percent": false
+        },
+        {
+          "label": "Extra lane-hours per day",
+          "value": 1.7644,
+          "lower": 1.6497,
+          "upper": 1.8827,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/extraLaneHoursDelta",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Net flights saved per day by the priority calls once the console's lanes are open",
+          "value": 0.265,
+          "lower": -0.79,
+          "upper": 1.2551,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@advise/metrics/net",
+          "digits": 1,
+          "signed": true,
+          "percent": false
+        },
+        {
+          "label": "Lanes the console opens per day",
+          "value": 2.41,
+          "lower": null,
+          "upper": null,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/summary/policies/fifo-manual@advise/lanesOpened",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Extra lane-hours per day of the console",
+          "value": 2.3328,
+          "lower": null,
+          "upper": null,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/summary/policies/fifo-manual@advise/extraLaneHours",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Net flights saved per extra lane-hour of the console's (against the plan only)",
+          "value": 14.0924,
+          "lower": 12.6336,
+          "upper": 15.7966,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual/perExtraLaneHour/netMadeFlight",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Net flights saved per extra lane-hour of the supervisor's (against the plan only)",
+          "value": 26.7038,
+          "lower": 22.2383,
+          "upper": 32.336,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/summary/comparisons/fifo-manual@reactive vs fifo-manual/perExtraLaneHour/netMadeFlight",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        }
+      ],
+      "sources": [
+        "slice-22/mx-like-transfer-hub/results.json"
+      ]
+    },
+    {
+      "id": "hub-followed",
+      "title": "Followed one time in two, the recommendations still pay",
+      "text": "If the duty manager follows one recommendation in two, the console's lanes still save **+12.9** [10.9, 15.0] flights a day more than today's supervisor at the hub (+19.3 [17.4, 21.1] when all are followed). If none is followed nothing opens beyond the plan: -15.2 [-18.7, -12.2] flights a day against the supervisor.",
+      "caveat": "Whether a recommendation is followed is drawn day by day; one not followed comes back 15 minutes later if it is still needed. At the TSF-like base, one in two followed already changes the mean wait by -2.40 [-2.50, -2.30] minutes against the plan only, all of them by -2.55 [-2.65, -2.45].",
+      "figures": [
+        {
+          "label": "Net flights saved per day against today's supervisor, 50% of the recommendations followed",
+          "value": 12.925,
+          "lower": 10.8598,
+          "upper": 15.0006,
+          "source": "slice-22/sweeps/mx-like-hub-console/sweep.json",
+          "pointer": "/dimensions/0/points/1/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+          "digits": 1,
+          "signed": true,
+          "percent": false
+        },
+        {
+          "label": "Net flights saved per day against today's supervisor, 100% of the recommendations followed",
+          "value": 19.3,
+          "lower": 17.4399,
+          "upper": 21.0657,
+          "source": "slice-22/sweeps/mx-like-hub-console/sweep.json",
+          "pointer": "/dimensions/0/points/3/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+          "digits": 1,
+          "signed": true,
+          "percent": false
+        },
+        {
+          "label": "Net flights saved per day against today's supervisor, 0% of the recommendations followed",
+          "value": -15.18,
+          "lower": -18.6655,
+          "upper": -12.17,
+          "source": "slice-22/sweeps/mx-like-hub-console/sweep.json",
+          "pointer": "/dimensions/0/points/0/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+          "digits": 1,
+          "signed": true,
+          "percent": false
+        },
+        {
+          "label": "Change in mean wait against the plan only (min), 50% followed",
+          "value": -2.3952,
+          "lower": -2.4965,
+          "upper": -2.3024,
+          "source": "slice-22/sweeps/tsf-like-peak-console/sweep.json",
+          "pointer": "/dimensions/0/points/1/comparisons/fifo-manual@advise vs fifo-manual/metrics/waitMeanDeltaMin",
+          "digits": 2,
+          "signed": true,
+          "percent": false
+        },
+        {
+          "label": "Change in mean wait against the plan only (min), 100% followed",
+          "value": -2.5509,
+          "lower": -2.6486,
+          "upper": -2.4536,
+          "source": "slice-22/sweeps/tsf-like-peak-console/sweep.json",
+          "pointer": "/dimensions/0/points/3/comparisons/fifo-manual@advise vs fifo-manual/metrics/waitMeanDeltaMin",
+          "digits": 2,
+          "signed": true,
+          "percent": false
+        }
+      ],
+      "sources": [
+        "slice-22/sweeps/mx-like-hub-console/sweep.json",
+        "slice-22/sweeps/tsf-like-peak-console/sweep.json"
+      ]
+    },
+    {
+      "id": "hub-priority",
+      "title": "Where lanes are short, the priority calls save flights",
+      "text": "With the lanes of the plan only, GateFlow's priority calls save **+8.7** [7.2, 10.4] flights a day at the hub against today's staff calls, with no extra lane: 22.7 passengers a day make a flight they would have missed, 14.0 miss one they would have made.",
+      "caveat": "The passengers not prioritised wait 0.13 [0.12, 0.14] minutes longer on average, and 0.9% of them more than 5 minutes longer. Once the console's lanes are open the priority calls add little. At the TSF-like base, where staff calling the closing flights catch everyone, the priority calls alone lose flights: -2.3 [-3.1, -1.6] a day.",
+      "figures": [
+        {
+          "label": "Net flights saved per day, GateFlow's calls against today's (the plan's lanes)",
+          "value": 8.725,
+          "lower": 7.2146,
+          "upper": 10.3957,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/summary/comparisons/priority-v3 vs fifo-manual/metrics/net",
+          "digits": 1,
+          "signed": true,
+          "percent": false
+        },
+        {
+          "label": "Passengers per day who make a flight they would have missed",
+          "value": 22.74,
+          "lower": 21.075,
+          "upper": 24.4403,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/summary/comparisons/priority-v3 vs fifo-manual/metrics/saved",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Passengers per day who miss a flight they would have made",
+          "value": 14.015,
+          "lower": 12.6949,
+          "upper": 15.4453,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/summary/comparisons/priority-v3 vs fifo-manual/metrics/harmed",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Mean extra wait of the passengers not prioritised (min)",
+          "value": 0.1298,
+          "lower": 0.1199,
+          "upper": 0.1393,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/summary/comparisons/priority-v3 vs fifo-manual/metrics/nonPriorityExtraWaitMeanMin",
+          "digits": 2,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Share of the passengers not prioritised who wait more than 5 minutes longer",
+          "value": 0.0088,
+          "lower": 0.0081,
+          "upper": 0.0097,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/summary/comparisons/priority-v3 vs fifo-manual/metrics/nonPriorityDelayedOver5MinShare",
+          "digits": 1,
+          "signed": false,
+          "percent": true
+        },
+        {
+          "label": "Net flights saved per day at the TSF-like base, GateFlow's calls against today's (the plan's lanes)",
+          "value": -2.25,
+          "lower": -3.1201,
+          "upper": -1.5699,
+          "source": "slice-22/tsf-like-peak-day/results.json",
+          "pointer": "/summary/comparisons/priority-v3 vs fifo-manual/metrics/net",
+          "digits": 1,
+          "signed": true,
+          "percent": false
+        }
+      ],
+      "sources": [
+        "slice-22/tsf-like-peak-day/results.json",
+        "slice-22/mx-like-transfer-hub/results.json"
+      ]
+    },
+    {
+      "id": "base-wait",
+      "title": "At a low-cost base, the console halves the wait",
+      "text": "At the TSF-like base (one morning bank of based aircraft), the console's lanes halve the mean wait against today's supervisor, from 1.9 to **0.9** minutes (-0.93 [-0.96, -0.90] minutes a person), and its 90th percentile from 8.3 to 3.3 minutes, for 0.7 [0.6, 0.7] extra lane-hours a day.",
+      "caveat": "Nobody misses a flight there with today's practice either (0.0 a day): the gain is the wait. One extra lane-hour of the console's saves 145 [140, 150] hours of passengers' waiting against the plan only.",
+      "figures": [
+        {
+          "label": "Mean wait with today's supervisor (min)",
+          "value": 1.8682,
+          "lower": null,
+          "upper": null,
+          "source": "slice-22/tsf-like-peak-day/results.json",
+          "pointer": "/summary/policies/fifo-manual@reactive/waitMeanMin",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Mean wait with the console's lanes (min)",
+          "value": 0.9387,
+          "lower": null,
+          "upper": null,
+          "source": "slice-22/tsf-like-peak-day/results.json",
+          "pointer": "/summary/policies/fifo-manual@advise/waitMeanMin",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Change in mean wait (min), the console's lanes against today's supervisor",
+          "value": -0.9295,
+          "lower": -0.9581,
+          "upper": -0.9021,
+          "source": "slice-22/tsf-like-peak-day/results.json",
+          "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/waitMeanDeltaMin",
+          "digits": 2,
+          "signed": true,
+          "percent": false
+        },
+        {
+          "label": "90th percentile of the wait with today's supervisor (min)",
+          "value": 8.3041,
+          "lower": null,
+          "upper": null,
+          "source": "slice-22/tsf-like-peak-day/results.json",
+          "pointer": "/summary/policies/fifo-manual@reactive/waitP90Min",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "90th percentile of the wait with the console's lanes (min)",
+          "value": 3.3392,
+          "lower": null,
+          "upper": null,
+          "source": "slice-22/tsf-like-peak-day/results.json",
+          "pointer": "/summary/policies/fifo-manual@advise/waitP90Min",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Extra lane-hours per day",
+          "value": 0.691,
+          "lower": 0.6437,
+          "upper": 0.741,
+          "source": "slice-22/tsf-like-peak-day/results.json",
+          "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/extraLaneHoursDelta",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Missed flights per day with today's practice",
+          "value": 0.005,
+          "lower": null,
+          "upper": null,
+          "source": "slice-22/tsf-like-peak-day/results.json",
+          "pointer": "/summary/policies/fifo-manual@reactive/missed",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Hours of waiting saved per extra lane-hour of the console's (against the plan only)",
+          "value": 144.8882,
+          "lower": 139.8573,
+          "upper": 150.0108,
+          "source": "slice-22/tsf-like-peak-day/results.json",
+          "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual/perExtraLaneHour/waitSavedPersonHours",
+          "digits": 0,
+          "signed": false,
+          "percent": false
+        }
+      ],
+      "sources": [
+        "slice-22/tsf-like-peak-day/results.json"
+      ]
+    },
+    {
+      "id": "base-gateflow",
+      "title": "Where staff calls already catch everyone, there is no flight to save",
+      "text": "At the TSF-like base GateFlow as a whole gives -0.06 [-0.10, -0.02] flights a day against today's practice: there is no flight to save, and its priority calls lose a few. Its gain there is the wait: -0.86 [-0.89, -0.83] minutes a person.",
+      "caveat": "Today's practice is strong there: staff calling the closing flights miss 0.0 a day, a plain queue with nobody called would miss 25.8. Sell GateFlow there on the wait, not on flights.",
+      "figures": [
+        {
+          "label": "Net flights saved per day, GateFlow against today's practice",
+          "value": -0.055,
+          "lower": -0.1,
+          "upper": -0.02,
+          "source": "slice-22/tsf-like-peak-day/results.json",
+          "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/net",
+          "digits": 2,
+          "signed": true,
+          "percent": false
+        },
+        {
+          "label": "Change in mean wait (min), GateFlow against today's practice",
+          "value": -0.8587,
+          "lower": -0.8883,
+          "upper": -0.8282,
+          "source": "slice-22/tsf-like-peak-day/results.json",
+          "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/waitMeanDeltaMin",
+          "digits": 2,
+          "signed": true,
+          "percent": false
+        },
+        {
+          "label": "Missed flights per day with today's staff calls (A')",
+          "value": 0.03,
+          "lower": null,
+          "upper": null,
+          "source": "slice-22/tsf-like-peak-day/results.json",
+          "pointer": "/summary/policies/fifo-manual/missed",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Missed flights per day with a plain queue, nobody called (A)",
+          "value": 25.77,
+          "lower": null,
+          "upper": null,
+          "source": "slice-22/tsf-like-peak-day/results.json",
+          "pointer": "/summary/policies/fifo/missed",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        }
+      ],
+      "sources": [
+        "slice-22/tsf-like-peak-day/results.json"
+      ]
+    },
+    {
+      "id": "vce-quiet",
+      "title": "Where the roster follows demand, the console stays quiet",
+      "text": "At a VCE-like departures checkpoint, whose roster follows the day's demand, the console makes 0.0, 0.3 and 1.0 recommendations a day (a normal, a peak and a disrupted day), and the missed flights hardly change against today's supervisor: 0.0 [0.0, 0.0], 0.0 [-0.0, 0.0] and +0.1 [0.0, 0.2] a day.",
+      "caveat": "That is what it should do there: no lane the queue does not need. GateFlow's priority calls do not change the missed flights measurably there either (0.0 [-0.1, 0.1], +0.2 [-0.1, 0.6] and +0.3 [-0.1, 0.7] a day, every interval across zero): these simulated days show no gain in flights at such a checkpoint.",
+      "figures": [
+        {
+          "label": "Recommendations per day, VCE-like normal day",
+          "value": 0.015,
+          "lower": null,
+          "upper": null,
+          "source": "slice-22/vce-like-normal-day/results.json",
+          "pointer": "/summary/policies/fifo-manual@advise/laneDecisions",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Recommendations per day, VCE-like peak day",
+          "value": 0.33,
+          "lower": null,
+          "upper": null,
+          "source": "slice-22/vce-like-peak-day/results.json",
+          "pointer": "/summary/policies/fifo-manual@advise/laneDecisions",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Recommendations per day, VCE-like disrupted day",
+          "value": 1.04,
+          "lower": null,
+          "upper": null,
+          "source": "slice-22/vce-like-disrupted-day/results.json",
+          "pointer": "/summary/policies/fifo-manual@advise/laneDecisions",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Net flights saved per day, the console's lanes against today's supervisor, VCE-like normal day",
+          "value": 0,
+          "lower": 0,
+          "upper": 0,
+          "source": "slice-22/vce-like-normal-day/results.json",
+          "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+          "digits": 1,
+          "signed": true,
+          "percent": false
+        },
+        {
+          "label": "Net flights saved per day, the console's lanes against today's supervisor, VCE-like peak day",
+          "value": 0,
+          "lower": -0.04,
+          "upper": 0.03,
+          "source": "slice-22/vce-like-peak-day/results.json",
+          "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+          "digits": 1,
+          "signed": true,
+          "percent": false
+        },
+        {
+          "label": "Net flights saved per day, the console's lanes against today's supervisor, VCE-like disrupted day",
+          "value": 0.115,
+          "lower": 0.035,
+          "upper": 0.205,
+          "source": "slice-22/vce-like-disrupted-day/results.json",
+          "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+          "digits": 1,
+          "signed": true,
+          "percent": false
+        },
+        {
+          "label": "Net flights saved per day, GateFlow's calls against today's, VCE-like normal day",
+          "value": 0.025,
+          "lower": -0.085,
+          "upper": 0.14,
+          "source": "slice-22/vce-like-normal-day/results.json",
+          "pointer": "/summary/comparisons/priority-v3 vs fifo-manual/metrics/net",
+          "digits": 1,
+          "signed": true,
+          "percent": false
+        },
+        {
+          "label": "Net flights saved per day, GateFlow's calls against today's, VCE-like peak day",
+          "value": 0.23,
+          "lower": -0.11,
+          "upper": 0.5851,
+          "source": "slice-22/vce-like-peak-day/results.json",
+          "pointer": "/summary/comparisons/priority-v3 vs fifo-manual/metrics/net",
+          "digits": 1,
+          "signed": true,
+          "percent": false
+        },
+        {
+          "label": "Net flights saved per day, GateFlow's calls against today's, VCE-like disrupted day",
+          "value": 0.255,
+          "lower": -0.1,
+          "upper": 0.66,
+          "source": "slice-22/vce-like-disrupted-day/results.json",
+          "pointer": "/summary/comparisons/priority-v3 vs fifo-manual/metrics/net",
+          "digits": 1,
+          "signed": true,
+          "percent": false
+        }
+      ],
+      "sources": [
+        "slice-22/vce-like-normal-day/results.json",
+        "slice-22/vce-like-peak-day/results.json",
+        "slice-22/vce-like-disrupted-day/results.json"
+      ]
+    },
+    {
+      "id": "harder-day",
+      "title": "On a day harder than planned, extra lanes are the safety valve",
+      "text": "On the VCE-like peak day with screening at 26 s a person instead of the 24 its roster assumed, the plan alone misses 33.1 flights a day, today's supervisor 22.2 and GateFlow's lanes **20.9** (+1.3 [1.1, 1.6] against the supervisor); with a roster one lane short, 84.9, 24.9 and 21.4 (+3.5 [3.1, 4.0]).",
+      "caveat": "Measured in S8 with S8's rule (`@predict`): the console's rule was not swept on such days. On the library's days the console's rule gives +0.7 [0.0, 1.4] flights a day against S8's at the hub. Without staff on call nothing opens: 33.1 flights a day are missed on the slower day.",
+      "figures": [
+        {
+          "label": "Seconds of screening per person on the harder day",
+          "value": 26,
+          "lower": null,
+          "upper": null,
+          "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+          "pointer": "/dimensions/0/points/2/value",
+          "digits": 0,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Seconds of screening per person the roster assumes",
+          "value": 24,
+          "lower": null,
+          "upper": null,
+          "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+          "pointer": "/dimensions/0/points/0/value",
+          "digits": 0,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Missed flights per day at 26 s, the plan only",
+          "value": 33.09,
+          "lower": null,
+          "upper": null,
+          "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+          "pointer": "/dimensions/0/points/2/policies/fifo-manual/missed",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Missed flights per day at 26 s, today's supervisor",
+          "value": 22.195,
+          "lower": null,
+          "upper": null,
+          "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+          "pointer": "/dimensions/0/points/2/policies/fifo-manual@reactive/missed",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Missed flights per day at 26 s, GateFlow's lanes (S8)",
+          "value": 20.86,
+          "lower": null,
+          "upper": null,
+          "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+          "pointer": "/dimensions/0/points/2/policies/fifo-manual@predict/missed",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Net flights saved per day at 26 s, GateFlow's lanes (S8) against the supervisor",
+          "value": 1.335,
+          "lower": 1.055,
+          "upper": 1.6151,
+          "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+          "pointer": "/dimensions/0/points/2/comparisons/fifo-manual@predict vs fifo-manual@reactive/metrics/net",
+          "digits": 1,
+          "signed": true,
+          "percent": false
+        },
+        {
+          "label": "Missed flights per day, a roster one lane short, the plan only",
+          "value": 84.93,
+          "lower": null,
+          "upper": null,
+          "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+          "pointer": "/dimensions/1/points/0/policies/fifo-manual/missed",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Missed flights per day, a roster one lane short, today's supervisor",
+          "value": 24.94,
+          "lower": null,
+          "upper": null,
+          "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+          "pointer": "/dimensions/1/points/0/policies/fifo-manual@reactive/missed",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Missed flights per day, a roster one lane short, GateFlow's lanes (S8)",
+          "value": 21.4,
+          "lower": null,
+          "upper": null,
+          "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+          "pointer": "/dimensions/1/points/0/policies/fifo-manual@predict/missed",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Net flights saved per day, a roster one lane short, GateFlow's lanes (S8) against the supervisor",
+          "value": 3.54,
+          "lower": 3.065,
+          "upper": 4.0101,
+          "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+          "pointer": "/dimensions/1/points/0/comparisons/fifo-manual@predict vs fifo-manual@reactive/metrics/net",
+          "digits": 1,
+          "signed": true,
+          "percent": false
+        },
+        {
+          "label": "Net flights saved per day at the hub, the console's lanes against S8's",
+          "value": 0.705,
+          "lower": 0.01,
+          "upper": 1.38,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual@predict/metrics/net",
+          "digits": 1,
+          "signed": true,
+          "percent": false
+        },
+        {
+          "label": "Missed flights per day at 26 s with no staff on call, GateFlow's lanes (S8)",
+          "value": 33.09,
+          "lower": null,
+          "upper": null,
+          "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+          "pointer": "/dimensions/3/points/0/policies/fifo-manual@predict/missed",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        }
+      ],
+      "sources": [
+        "slice-22/mx-like-transfer-hub/results.json",
+        "slice-8/sweeps/vce-like-peak-lanes/sweep.json"
+      ]
+    },
+    {
+      "id": "forecast-arrivals",
+      "title": "The forecasts behind the recommendations hold their bands",
+      "text": "GateFlow forecasts the people arriving in each 5 minutes, 15 to 90 minutes ahead, within 11% to 22% of them (WAPE) at the five checkpoints of the library, and its 80% bands hold 77% to 81% of what then happened.",
+      "caveat": "Measured on 12,145 to 15,524 forecasts per checkpoint and horizon over 200 simulated days, against the full simulator. The forecasts learn from 50 other simulated days of the same model, so they are better than a real forecast would be at first; they know the day's flights, not their loads or disruptions.",
+      "figures": [
+        {
+          "label": "Error of the arrivals (WAPE), VCE-like peak day, 90 minutes ahead",
+          "value": 0.1096,
+          "lower": null,
+          "upper": null,
+          "source": "slice-21/vce-like-peak-day/backtest.json",
+          "pointer": "/summary/arrivals/90/all/wape",
+          "digits": 0,
+          "signed": false,
+          "percent": true
+        },
+        {
+          "label": "Error of the arrivals (WAPE), MX-like transfer hub, 15 minutes ahead",
+          "value": 0.2151,
+          "lower": null,
+          "upper": null,
+          "source": "slice-21/mx-like-transfer-hub/backtest.json",
+          "pointer": "/summary/arrivals/15/all/wape",
+          "digits": 0,
+          "signed": false,
+          "percent": true
+        },
+        {
+          "label": "Share of the arrivals in the 80% band, VCE-like peak day, 60 minutes ahead",
+          "value": 0.7702,
+          "lower": null,
+          "upper": null,
+          "source": "slice-21/vce-like-peak-day/backtest.json",
+          "pointer": "/summary/arrivals/60/all/coverage",
+          "digits": 0,
+          "signed": false,
+          "percent": true
+        },
+        {
+          "label": "Share of the arrivals in the 80% band, VCE-like normal day, 15 minutes ahead",
+          "value": 0.8129,
+          "lower": null,
+          "upper": null,
+          "source": "slice-21/vce-like-normal-day/backtest.json",
+          "pointer": "/summary/arrivals/15/all/coverage",
+          "digits": 0,
+          "signed": false,
+          "percent": true
+        },
+        {
+          "label": "Forecasts measured, TSF-like peak day, 90 minutes ahead",
+          "value": 12145,
+          "lower": null,
+          "upper": null,
+          "source": "slice-21/tsf-like-peak-day/backtest.json",
+          "pointer": "/summary/arrivals/90/all/n",
+          "digits": 0,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Forecasts measured, VCE-like peak day, 15 minutes ahead",
+          "value": 15524,
+          "lower": null,
+          "upper": null,
+          "source": "slice-21/vce-like-peak-day/backtest.json",
+          "pointer": "/summary/arrivals/15/all/n",
+          "digits": 0,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Simulated days per scenario",
+          "value": 200,
+          "lower": null,
+          "upper": null,
+          "source": "slice-21/mx-like-transfer-hub/backtest.json",
+          "pointer": "/manifest/seeds/count",
+          "digits": 0,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Other simulated days the forecasts learn from",
+          "value": 50,
+          "lower": null,
+          "upper": null,
+          "source": "slice-21/mx-like-transfer-hub/backtest.json",
+          "pointer": "/manifest/profile/days",
+          "digits": 0,
+          "signed": false,
+          "percent": false
+        }
+      ],
+      "sources": [
+        "slice-21/vce-like-normal-day/backtest.json",
+        "slice-21/vce-like-peak-day/backtest.json",
+        "slice-21/vce-like-disrupted-day/backtest.json",
+        "slice-21/tsf-like-peak-day/backtest.json",
+        "slice-21/mx-like-transfer-hub/backtest.json"
+      ]
+    },
+    {
+      "id": "forecast-wait",
+      "title": "When a queue builds, the forecast of the wait is within minutes",
+      "text": "When there is a queue, GateFlow's forecast of the wait of a party arriving is off by 1.3 to 5.3 minutes on average (the median's error), and its bands hold 75% to 98% of the waits.",
+      "caveat": "Before the calibration of S21.3 those bands held as little as 37% of the waits. Most of the day nobody waits: those forecasts are left out. The forecast of the queue itself runs high on the VCE-like days, by 19 people 90 minutes ahead on the peak day.",
+      "figures": [
+        {
+          "label": "Mean error of the wait's median (min), with a queue, VCE-like peak day, 15 minutes ahead",
+          "value": 1.3404,
+          "lower": null,
+          "upper": null,
+          "source": "slice-21/vce-like-peak-day/backtest.json",
+          "pointer": "/summary/wait/15/busy/mae",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Mean error of the wait's median (min), with a queue, MX-like transfer hub, 90 minutes ahead",
+          "value": 5.3316,
+          "lower": null,
+          "upper": null,
+          "source": "slice-21/mx-like-transfer-hub/backtest.json",
+          "pointer": "/summary/wait/90/busy/mae",
+          "digits": 1,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Share of the waits in the band, with a queue, MX-like transfer hub, 60 minutes ahead",
+          "value": 0.7532,
+          "lower": null,
+          "upper": null,
+          "source": "slice-21/mx-like-transfer-hub/backtest.json",
+          "pointer": "/summary/wait/60/busy/coverage",
+          "digits": 0,
+          "signed": false,
+          "percent": true
+        },
+        {
+          "label": "Share of the waits in the band, with a queue, VCE-like normal day, 60 minutes ahead",
+          "value": 0.9798,
+          "lower": null,
+          "upper": null,
+          "source": "slice-21/vce-like-normal-day/backtest.json",
+          "pointer": "/summary/wait/60/busy/coverage",
+          "digits": 0,
+          "signed": false,
+          "percent": true
+        },
+        {
+          "label": "Share of the waits in the band before the calibration, VCE-like normal day, 30 minutes ahead",
+          "value": 0.365,
+          "lower": null,
+          "upper": null,
+          "source": "slice-21/vce-like-normal-day/backtest.json",
+          "pointer": "/uncalibrated/wait/30/busy/coverage",
+          "digits": 0,
+          "signed": false,
+          "percent": true
+        },
+        {
+          "label": "Bias of the queue's median 90 minutes ahead, VCE-like peak day (people)",
+          "value": 18.5998,
+          "lower": null,
+          "upper": null,
+          "source": "slice-21/vce-like-peak-day/backtest.json",
+          "pointer": "/summary/backlog/90/busy/bias",
+          "digits": 0,
+          "signed": false,
+          "percent": false
+        }
+      ],
+      "sources": [
+        "slice-21/vce-like-normal-day/backtest.json",
+        "slice-21/vce-like-peak-day/backtest.json",
+        "slice-21/vce-like-disrupted-day/backtest.json",
+        "slice-21/tsf-like-peak-day/backtest.json",
+        "slice-21/mx-like-transfer-hub/backtest.json"
+      ]
+    },
+    {
+      "id": "hub-fairness",
+      "title": "The passengers not prioritised do not pay for it",
+      "text": "At the hub the passengers GateFlow does not prioritise wait **-0.30** [-0.36, -0.25] minutes on average against today's practice, that is less, since the console's lanes shorten the queue; 0.6% of them wait more than 5 minutes longer.",
+      "caveat": "Without the console's lanes, the priority calls alone make them wait 0.13 [0.12, 0.14] minutes longer on average. A priority call passes people who came before, never more than 30 for one ticket (the policy's bound; 30 on the worst of the 200 days); staff calling flights out of today's queue passed up to 68.",
+      "figures": [
+        {
+          "label": "Mean extra wait of the passengers not prioritised (min), GateFlow against today's practice",
+          "value": -0.3049,
+          "lower": -0.3604,
+          "upper": -0.2535,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/nonPriorityExtraWaitMeanMin",
+          "digits": 2,
+          "signed": true,
+          "percent": false
+        },
+        {
+          "label": "Share of the passengers not prioritised who wait more than 5 minutes longer",
+          "value": 0.0062,
+          "lower": 0.005,
+          "upper": 0.0075,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/nonPriorityDelayedOver5MinShare",
+          "digits": 1,
+          "signed": false,
+          "percent": true
+        },
+        {
+          "label": "Mean extra wait of the passengers not prioritised (min)",
+          "value": 0.1298,
+          "lower": 0.1199,
+          "upper": 0.1393,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/summary/comparisons/priority-v3 vs fifo-manual/metrics/nonPriorityExtraWaitMeanMin",
+          "digits": 2,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "People who may pass one ticket, GateFlow's bound",
+          "value": 30,
+          "lower": null,
+          "upper": null,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/manifest/policies/7/selection/maxOvertakes",
+          "digits": 0,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Most people who passed one ticket on a day, GateFlow, the worst of the days",
+          "value": 30,
+          "lower": null,
+          "upper": null,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/summary/policies/priority-v3@advise/maxOvertakes/max",
+          "digits": 0,
+          "signed": false,
+          "percent": false
+        },
+        {
+          "label": "Most people who passed one ticket on a day, today's practice, the worst of the days",
+          "value": 68,
+          "lower": null,
+          "upper": null,
+          "source": "slice-22/mx-like-transfer-hub/results.json",
+          "pointer": "/summary/policies/fifo-manual@reactive/maxOvertakes/max",
+          "digits": 0,
+          "signed": false,
+          "percent": false
+        }
+      ],
+      "sources": [
+        "slice-22/mx-like-transfer-hub/results.json"
+      ]
+    }
+  ],
+  "tables": [
+    {
+      "id": "gateflow",
+      "title": "GateFlow as a whole against today's practice",
+      "intro": "GateFlow's priority calls with its console's lane recommendations (`priority-v3@advise`) against today's practice: staff calling the closing flights and a supervisor opening a lane when the queue shows more than 10 minutes (`fifo-manual@reactive`). Means per day over 200 simulated days with 95% confidence intervals, passenger by passenger on the same days.",
+      "columns": [
+        {
+          "title": "Scenario",
+          "numeric": false
+        },
+        {
+          "title": "People per day",
+          "numeric": true
+        },
+        {
+          "title": "Missed per day, today",
+          "numeric": true
+        },
+        {
+          "title": "Missed per day, GateFlow",
+          "numeric": true
+        },
+        {
+          "title": "Net flights saved per day",
+          "numeric": true
+        },
+        {
+          "title": "Extra lane-hours per day",
+          "numeric": true
+        },
+        {
+          "title": "Change in mean wait (min)",
+          "numeric": true
+        }
+      ],
+      "rows": [
+        [
+          "[VCE-like normal day](../reports/slice-22/vce-like-normal-day/report.md)",
+          {
+            "label": "People per day, VCE-like normal day",
+            "value": 16623.28,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/vce-like-normal-day/results.json",
+            "pointer": "/summary/peoplePerDay",
+            "digits": 0,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day with today's practice, VCE-like normal day",
+            "value": 10.885,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/vce-like-normal-day/results.json",
+            "pointer": "/summary/policies/fifo-manual@reactive/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day with GateFlow, VCE-like normal day",
+            "value": 10.86,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/vce-like-normal-day/results.json",
+            "pointer": "/summary/policies/priority-v3@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, VCE-like normal day",
+            "value": 0.025,
+            "lower": -0.08,
+            "upper": 0.1401,
+            "source": "slice-22/vce-like-normal-day/results.json",
+            "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Extra lane-hours per day, VCE-like normal day",
+            "value": 0,
+            "lower": 0,
+            "upper": 0,
+            "source": "slice-22/vce-like-normal-day/results.json",
+            "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/extraLaneHoursDelta",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Change in mean wait (min), VCE-like normal day",
+            "value": 0,
+            "lower": -0.0001,
+            "upper": 0.0001,
+            "source": "slice-22/vce-like-normal-day/results.json",
+            "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/waitMeanDeltaMin",
+            "digits": 2,
+            "signed": true,
+            "percent": false
+          }
+        ],
+        [
+          "[VCE-like peak day](../reports/slice-22/vce-like-peak-day/report.md)",
+          {
+            "label": "People per day, VCE-like peak day",
+            "value": 21792.15,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/vce-like-peak-day/results.json",
+            "pointer": "/summary/peoplePerDay",
+            "digits": 0,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day with today's practice, VCE-like peak day",
+            "value": 18.74,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/vce-like-peak-day/results.json",
+            "pointer": "/summary/policies/fifo-manual@reactive/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day with GateFlow, VCE-like peak day",
+            "value": 18.54,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/vce-like-peak-day/results.json",
+            "pointer": "/summary/policies/priority-v3@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, VCE-like peak day",
+            "value": 0.2,
+            "lower": -0.15,
+            "upper": 0.5752,
+            "source": "slice-22/vce-like-peak-day/results.json",
+            "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Extra lane-hours per day, VCE-like peak day",
+            "value": -0.0424,
+            "lower": -0.0747,
+            "upper": -0.0148,
+            "source": "slice-22/vce-like-peak-day/results.json",
+            "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/extraLaneHoursDelta",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Change in mean wait (min), VCE-like peak day",
+            "value": 0.0091,
+            "lower": 0.001,
+            "upper": 0.0171,
+            "source": "slice-22/vce-like-peak-day/results.json",
+            "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/waitMeanDeltaMin",
+            "digits": 2,
+            "signed": true,
+            "percent": false
+          }
+        ],
+        [
+          "[VCE-like disrupted day](../reports/slice-22/vce-like-disrupted-day/report.md)",
+          {
+            "label": "People per day, VCE-like disrupted day",
+            "value": 21792.15,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/vce-like-disrupted-day/results.json",
+            "pointer": "/summary/peoplePerDay",
+            "digits": 0,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day with today's practice, VCE-like disrupted day",
+            "value": 14.035,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/vce-like-disrupted-day/results.json",
+            "pointer": "/summary/policies/fifo-manual@reactive/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day with GateFlow, VCE-like disrupted day",
+            "value": 13.805,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/vce-like-disrupted-day/results.json",
+            "pointer": "/summary/policies/priority-v3@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, VCE-like disrupted day",
+            "value": 0.23,
+            "lower": -0.1051,
+            "upper": 0.5851,
+            "source": "slice-22/vce-like-disrupted-day/results.json",
+            "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Extra lane-hours per day, VCE-like disrupted day",
+            "value": 0.1094,
+            "lower": 0.0456,
+            "upper": 0.1798,
+            "source": "slice-22/vce-like-disrupted-day/results.json",
+            "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/extraLaneHoursDelta",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Change in mean wait (min), VCE-like disrupted day",
+            "value": -0.0318,
+            "lower": -0.0531,
+            "upper": -0.0128,
+            "source": "slice-22/vce-like-disrupted-day/results.json",
+            "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/waitMeanDeltaMin",
+            "digits": 2,
+            "signed": true,
+            "percent": false
+          }
+        ],
+        [
+          "[TSF-like peak day](../reports/slice-22/tsf-like-peak-day/report.md)",
+          {
+            "label": "People per day, TSF-like peak day",
+            "value": 5980.53,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/tsf-like-peak-day/results.json",
+            "pointer": "/summary/peoplePerDay",
+            "digits": 0,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day with today's practice, TSF-like peak day",
+            "value": 0.005,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/tsf-like-peak-day/results.json",
+            "pointer": "/summary/policies/fifo-manual@reactive/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day with GateFlow, TSF-like peak day",
+            "value": 0.06,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/tsf-like-peak-day/results.json",
+            "pointer": "/summary/policies/priority-v3@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, TSF-like peak day",
+            "value": -0.055,
+            "lower": -0.1,
+            "upper": -0.02,
+            "source": "slice-22/tsf-like-peak-day/results.json",
+            "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Extra lane-hours per day, TSF-like peak day",
+            "value": 0.4806,
+            "lower": 0.4284,
+            "upper": 0.5323,
+            "source": "slice-22/tsf-like-peak-day/results.json",
+            "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/extraLaneHoursDelta",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Change in mean wait (min), TSF-like peak day",
+            "value": -0.8587,
+            "lower": -0.8883,
+            "upper": -0.8282,
+            "source": "slice-22/tsf-like-peak-day/results.json",
+            "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/waitMeanDeltaMin",
+            "digits": 2,
+            "signed": true,
+            "percent": false
+          }
+        ],
+        [
+          "[MX-like transfer hub](../reports/slice-22/mx-like-transfer-hub/report.md)",
+          {
+            "label": "People per day, MX-like transfer hub",
+            "value": 4473,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/peoplePerDay",
+            "digits": 0,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day with today's practice, MX-like transfer hub",
+            "value": 81.475,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/policies/fifo-manual@reactive/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day with GateFlow, MX-like transfer hub",
+            "value": 63.515,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/policies/priority-v3@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, MX-like transfer hub",
+            "value": 17.96,
+            "lower": 16.0947,
+            "upper": 19.9255,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Extra lane-hours per day, MX-like transfer hub",
+            "value": 1.4667,
+            "lower": 1.3488,
+            "upper": 1.5839,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/extraLaneHoursDelta",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Change in mean wait (min), MX-like transfer hub",
+            "value": -0.3577,
+            "lower": -0.4072,
+            "upper": -0.3114,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/waitMeanDeltaMin",
+            "digits": 2,
+            "signed": true,
+            "percent": false
+          }
+        ]
+      ],
+      "notes": []
+    },
+    {
+      "id": "parts",
+      "title": "Where it comes from",
+      "intro": "The same days, one part at a time: GateFlow's priority calls alone (`priority-v3` against `fifo-manual`, both with the plan's lanes); the console's lanes alone (`fifo-manual@advise` against `fifo-manual@reactive`, both with today's calls); the priority calls once the console's lanes are open (`priority-v3@advise` against `fifo-manual@advise`).",
+      "columns": [
+        {
+          "title": "Scenario",
+          "numeric": false
+        },
+        {
+          "title": "Priority calls alone: net flights saved",
+          "numeric": true
+        },
+        {
+          "title": "Console's lanes vs supervisor: net flights saved",
+          "numeric": true
+        },
+        {
+          "title": "Console's lanes vs supervisor: extra lane-hours",
+          "numeric": true
+        },
+        {
+          "title": "Console's lanes vs supervisor: change in mean wait (min)",
+          "numeric": true
+        },
+        {
+          "title": "Priority calls on the console's lanes: net flights saved",
+          "numeric": true
+        }
+      ],
+      "rows": [
+        [
+          "[VCE-like normal day](../reports/slice-22/vce-like-normal-day/report.md)",
+          {
+            "label": "Net flights saved per day by the priority calls alone, VCE-like normal day",
+            "value": 0.025,
+            "lower": -0.085,
+            "upper": 0.14,
+            "source": "slice-22/vce-like-normal-day/results.json",
+            "pointer": "/summary/comparisons/priority-v3 vs fifo-manual/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, the console's lanes against the supervisor, VCE-like normal day",
+            "value": 0,
+            "lower": 0,
+            "upper": 0,
+            "source": "slice-22/vce-like-normal-day/results.json",
+            "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Extra lane-hours per day, the console's lanes against the supervisor, VCE-like normal day",
+            "value": 0.0065,
+            "lower": 0,
+            "upper": 0.0195,
+            "source": "slice-22/vce-like-normal-day/results.json",
+            "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/extraLaneHoursDelta",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Change in mean wait (min), the console's lanes against the supervisor, VCE-like normal day",
+            "value": -0.0001,
+            "lower": -0.0002,
+            "upper": 0,
+            "source": "slice-22/vce-like-normal-day/results.json",
+            "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/waitMeanDeltaMin",
+            "digits": 2,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day by the priority calls on the console's lanes, VCE-like normal day",
+            "value": 0.025,
+            "lower": -0.085,
+            "upper": 0.145,
+            "source": "slice-22/vce-like-normal-day/results.json",
+            "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@advise/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          }
+        ],
+        [
+          "[VCE-like peak day](../reports/slice-22/vce-like-peak-day/report.md)",
+          {
+            "label": "Net flights saved per day by the priority calls alone, VCE-like peak day",
+            "value": 0.23,
+            "lower": -0.11,
+            "upper": 0.5851,
+            "source": "slice-22/vce-like-peak-day/results.json",
+            "pointer": "/summary/comparisons/priority-v3 vs fifo-manual/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, the console's lanes against the supervisor, VCE-like peak day",
+            "value": 0,
+            "lower": -0.04,
+            "upper": 0.03,
+            "source": "slice-22/vce-like-peak-day/results.json",
+            "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Extra lane-hours per day, the console's lanes against the supervisor, VCE-like peak day",
+            "value": 0.044,
+            "lower": 0.0126,
+            "upper": 0.0799,
+            "source": "slice-22/vce-like-peak-day/results.json",
+            "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/extraLaneHoursDelta",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Change in mean wait (min), the console's lanes against the supervisor, VCE-like peak day",
+            "value": -0.0164,
+            "lower": -0.0265,
+            "upper": -0.0074,
+            "source": "slice-22/vce-like-peak-day/results.json",
+            "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/waitMeanDeltaMin",
+            "digits": 2,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day by the priority calls on the console's lanes, VCE-like peak day",
+            "value": 0.2,
+            "lower": -0.1451,
+            "upper": 0.53,
+            "source": "slice-22/vce-like-peak-day/results.json",
+            "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@advise/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          }
+        ],
+        [
+          "[VCE-like disrupted day](../reports/slice-22/vce-like-disrupted-day/report.md)",
+          {
+            "label": "Net flights saved per day by the priority calls alone, VCE-like disrupted day",
+            "value": 0.255,
+            "lower": -0.1,
+            "upper": 0.66,
+            "source": "slice-22/vce-like-disrupted-day/results.json",
+            "pointer": "/summary/comparisons/priority-v3 vs fifo-manual/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, the console's lanes against the supervisor, VCE-like disrupted day",
+            "value": 0.115,
+            "lower": 0.035,
+            "upper": 0.205,
+            "source": "slice-22/vce-like-disrupted-day/results.json",
+            "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Extra lane-hours per day, the console's lanes against the supervisor, VCE-like disrupted day",
+            "value": 0.3056,
+            "lower": 0.2209,
+            "upper": 0.3946,
+            "source": "slice-22/vce-like-disrupted-day/results.json",
+            "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/extraLaneHoursDelta",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Change in mean wait (min), the console's lanes against the supervisor, VCE-like disrupted day",
+            "value": -0.0739,
+            "lower": -0.0978,
+            "upper": -0.0527,
+            "source": "slice-22/vce-like-disrupted-day/results.json",
+            "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/waitMeanDeltaMin",
+            "digits": 2,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day by the priority calls on the console's lanes, VCE-like disrupted day",
+            "value": 0.115,
+            "lower": -0.22,
+            "upper": 0.45,
+            "source": "slice-22/vce-like-disrupted-day/results.json",
+            "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@advise/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          }
+        ],
+        [
+          "[TSF-like peak day](../reports/slice-22/tsf-like-peak-day/report.md)",
+          {
+            "label": "Net flights saved per day by the priority calls alone, TSF-like peak day",
+            "value": -2.25,
+            "lower": -3.1201,
+            "upper": -1.5699,
+            "source": "slice-22/tsf-like-peak-day/results.json",
+            "pointer": "/summary/comparisons/priority-v3 vs fifo-manual/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, the console's lanes against the supervisor, TSF-like peak day",
+            "value": 0,
+            "lower": 0,
+            "upper": 0,
+            "source": "slice-22/tsf-like-peak-day/results.json",
+            "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Extra lane-hours per day, the console's lanes against the supervisor, TSF-like peak day",
+            "value": 0.691,
+            "lower": 0.6437,
+            "upper": 0.741,
+            "source": "slice-22/tsf-like-peak-day/results.json",
+            "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/extraLaneHoursDelta",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Change in mean wait (min), the console's lanes against the supervisor, TSF-like peak day",
+            "value": -0.9295,
+            "lower": -0.9581,
+            "upper": -0.9021,
+            "source": "slice-22/tsf-like-peak-day/results.json",
+            "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/waitMeanDeltaMin",
+            "digits": 2,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day by the priority calls on the console's lanes, TSF-like peak day",
+            "value": -0.055,
+            "lower": -0.105,
+            "upper": -0.02,
+            "source": "slice-22/tsf-like-peak-day/results.json",
+            "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@advise/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          }
+        ],
+        [
+          "[MX-like transfer hub](../reports/slice-22/mx-like-transfer-hub/report.md)",
+          {
+            "label": "Net flights saved per day by the priority calls alone, MX-like transfer hub",
+            "value": 8.725,
+            "lower": 7.2146,
+            "upper": 10.3957,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/comparisons/priority-v3 vs fifo-manual/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day, the console's lanes against the supervisor, MX-like transfer hub",
+            "value": 17.695,
+            "lower": 15.9599,
+            "upper": 19.3952,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Extra lane-hours per day, the console's lanes against the supervisor, MX-like transfer hub",
+            "value": 1.7644,
+            "lower": 1.6497,
+            "upper": 1.8827,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/extraLaneHoursDelta",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Change in mean wait (min), the console's lanes against the supervisor, MX-like transfer hub",
+            "value": -0.5668,
+            "lower": -0.6073,
+            "upper": -0.5244,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/waitMeanDeltaMin",
+            "digits": 2,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day by the priority calls on the console's lanes, MX-like transfer hub",
+            "value": 0.265,
+            "lower": -0.79,
+            "upper": 1.2551,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@advise/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          }
+        ]
+      ],
+      "notes": []
+    },
+    {
+      "id": "followed",
+      "title": "Recommendations followed or not",
+      "intro": "The share of the console's recommendations the duty manager follows, at the MX-like hub and at the TSF-like base; none followed is the plan only. Today's calls with the console's lanes, against today's supervisor and against the plan only. 200 simulated days per point.",
+      "columns": [
+        {
+          "title": "Share followed",
+          "numeric": true
+        },
+        {
+          "title": "Hub: net flights saved vs supervisor",
+          "numeric": true
+        },
+        {
+          "title": "Hub: extra lane-hours per day",
+          "numeric": true
+        },
+        {
+          "title": "TSF-like: change in mean wait vs supervisor (min)",
+          "numeric": true
+        },
+        {
+          "title": "TSF-like: vs plan only (min)",
+          "numeric": true
+        }
+      ],
+      "rows": [
+        [
+          "0",
+          {
+            "label": "Net flights saved per day at the hub against the supervisor, 0 followed",
+            "value": -15.18,
+            "lower": -18.6655,
+            "upper": -12.17,
+            "source": "slice-22/sweeps/mx-like-hub-console/sweep.json",
+            "pointer": "/dimensions/0/points/0/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Extra lane-hours per day at the hub, 0 followed",
+            "value": 0,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/mx-like-hub-console/sweep.json",
+            "pointer": "/dimensions/0/points/0/policies/fifo-manual@advise/extraLaneHours",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Change in mean wait at the TSF-like base against the supervisor (min), 0 followed",
+            "value": 1.6061,
+            "lower": 1.5274,
+            "upper": 1.6824,
+            "source": "slice-22/sweeps/tsf-like-peak-console/sweep.json",
+            "pointer": "/dimensions/0/points/0/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/waitMeanDeltaMin",
+            "digits": 2,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Change in mean wait at the TSF-like base against the plan only (min), 0 followed",
+            "value": 0,
+            "lower": 0,
+            "upper": 0,
+            "source": "slice-22/sweeps/tsf-like-peak-console/sweep.json",
+            "pointer": "/dimensions/0/points/0/comparisons/fifo-manual@advise vs fifo-manual/metrics/waitMeanDeltaMin",
+            "digits": 2,
+            "signed": true,
+            "percent": false
+          }
+        ],
+        [
+          "0.5",
+          {
+            "label": "Net flights saved per day at the hub against the supervisor, 0.5 followed",
+            "value": 12.925,
+            "lower": 10.8598,
+            "upper": 15.0006,
+            "source": "slice-22/sweeps/mx-like-hub-console/sweep.json",
+            "pointer": "/dimensions/0/points/1/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Extra lane-hours per day at the hub, 0.5 followed",
+            "value": 2.2599,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/mx-like-hub-console/sweep.json",
+            "pointer": "/dimensions/0/points/1/policies/fifo-manual@advise/extraLaneHours",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Change in mean wait at the TSF-like base against the supervisor (min), 0.5 followed",
+            "value": -0.7892,
+            "lower": -0.8352,
+            "upper": -0.7346,
+            "source": "slice-22/sweeps/tsf-like-peak-console/sweep.json",
+            "pointer": "/dimensions/0/points/1/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/waitMeanDeltaMin",
+            "digits": 2,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Change in mean wait at the TSF-like base against the plan only (min), 0.5 followed",
+            "value": -2.3952,
+            "lower": -2.4965,
+            "upper": -2.3024,
+            "source": "slice-22/sweeps/tsf-like-peak-console/sweep.json",
+            "pointer": "/dimensions/0/points/1/comparisons/fifo-manual@advise vs fifo-manual/metrics/waitMeanDeltaMin",
+            "digits": 2,
+            "signed": true,
+            "percent": false
+          }
+        ],
+        [
+          "0.8 (as assumed)",
+          {
+            "label": "Net flights saved per day at the hub against the supervisor, 0.8 followed",
+            "value": 17.695,
+            "lower": 15.9146,
+            "upper": 19.4102,
+            "source": "slice-22/sweeps/mx-like-hub-console/sweep.json",
+            "pointer": "/dimensions/0/points/2/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Extra lane-hours per day at the hub, 0.8 followed",
+            "value": 2.3328,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/mx-like-hub-console/sweep.json",
+            "pointer": "/dimensions/0/points/2/policies/fifo-manual@advise/extraLaneHours",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Change in mean wait at the TSF-like base against the supervisor (min), 0.8 followed",
+            "value": -0.9295,
+            "lower": -0.9571,
+            "upper": -0.9029,
+            "source": "slice-22/sweeps/tsf-like-peak-console/sweep.json",
+            "pointer": "/dimensions/0/points/2/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/waitMeanDeltaMin",
+            "digits": 2,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Change in mean wait at the TSF-like base against the plan only (min), 0.8 followed",
+            "value": -2.5356,
+            "lower": -2.6287,
+            "upper": -2.4446,
+            "source": "slice-22/sweeps/tsf-like-peak-console/sweep.json",
+            "pointer": "/dimensions/0/points/2/comparisons/fifo-manual@advise vs fifo-manual/metrics/waitMeanDeltaMin",
+            "digits": 2,
+            "signed": true,
+            "percent": false
+          }
+        ],
+        [
+          "1",
+          {
+            "label": "Net flights saved per day at the hub against the supervisor, 1 followed",
+            "value": 19.3,
+            "lower": 17.4399,
+            "upper": 21.0657,
+            "source": "slice-22/sweeps/mx-like-hub-console/sweep.json",
+            "pointer": "/dimensions/0/points/3/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Extra lane-hours per day at the hub, 1 followed",
+            "value": 2.3273,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/sweeps/mx-like-hub-console/sweep.json",
+            "pointer": "/dimensions/0/points/3/policies/fifo-manual@advise/extraLaneHours",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Change in mean wait at the TSF-like base against the supervisor (min), 1 followed",
+            "value": -0.9448,
+            "lower": -0.9725,
+            "upper": -0.9163,
+            "source": "slice-22/sweeps/tsf-like-peak-console/sweep.json",
+            "pointer": "/dimensions/0/points/3/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/waitMeanDeltaMin",
+            "digits": 2,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Change in mean wait at the TSF-like base against the plan only (min), 1 followed",
+            "value": -2.5509,
+            "lower": -2.6486,
+            "upper": -2.4536,
+            "source": "slice-22/sweeps/tsf-like-peak-console/sweep.json",
+            "pointer": "/dimensions/0/points/3/comparisons/fifo-manual@advise vs fifo-manual/metrics/waitMeanDeltaMin",
+            "digits": 2,
+            "signed": true,
+            "percent": false
+          }
+        ]
+      ],
+      "notes": [
+        "Sources: [Recommendations followed or not, MX-like hub (S22.3)](../reports/slice-22/sweeps/mx-like-hub-console/sweep.md), [Recommendations followed or not, TSF-like base (S22.3)](../reports/slice-22/sweeps/tsf-like-peak-console/sweep.md)."
+      ]
+    },
+    {
+      "id": "harder",
+      "title": "A day harder than planned",
+      "intro": "The VCE-like peak day of S8, made harder one assumption at a time: screening slower than the roster assumed, or a roster one lane short. Today's calls with the plan only, with today's supervisor, and with GateFlow's lanes as S8 recommended them (`@predict`, S8's rule: the console's rule was not swept on such days). 200 simulated days per point.",
+      "columns": [
+        {
+          "title": "Day",
+          "numeric": false
+        },
+        {
+          "title": "Missed per day: plan only",
+          "numeric": true
+        },
+        {
+          "title": "Supervisor",
+          "numeric": true
+        },
+        {
+          "title": "GateFlow's lanes (S8)",
+          "numeric": true
+        },
+        {
+          "title": "GateFlow's lanes vs supervisor: net flights saved",
+          "numeric": true
+        },
+        {
+          "title": "Extra lane-hours: supervisor",
+          "numeric": true
+        },
+        {
+          "title": "Extra lane-hours: GateFlow's lanes",
+          "numeric": true
+        }
+      ],
+      "rows": [
+        [
+          "As planned: 24 s a person",
+          {
+            "label": "Missed flights per day, plan only, As planned: 24 s a person",
+            "value": 18.79,
+            "lower": null,
+            "upper": null,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/0/points/0/policies/fifo-manual/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, today's supervisor, As planned: 24 s a person",
+            "value": 18.74,
+            "lower": null,
+            "upper": null,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/0/points/0/policies/fifo-manual@reactive/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, GateFlow's lanes (S8), As planned: 24 s a person",
+            "value": 18.69,
+            "lower": null,
+            "upper": null,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/0/points/0/policies/fifo-manual@predict/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day against the supervisor, As planned: 24 s a person",
+            "value": 0.05,
+            "lower": 0,
+            "upper": 0.1,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/0/points/0/comparisons/fifo-manual@predict vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Extra lane-hours per day, today's supervisor, As planned: 24 s a person",
+            "value": 0.0727,
+            "lower": null,
+            "upper": null,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/0/points/0/policies/fifo-manual@reactive/extraLaneHours",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Extra lane-hours per day, GateFlow's lanes (S8), As planned: 24 s a person",
+            "value": 0.2649,
+            "lower": null,
+            "upper": null,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/0/points/0/policies/fifo-manual@predict/extraLaneHours",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          }
+        ],
+        [
+          "Screening at 25 s a person",
+          {
+            "label": "Missed flights per day, plan only, Screening at 25 s a person",
+            "value": 22.07,
+            "lower": null,
+            "upper": null,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/0/points/1/policies/fifo-manual/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, today's supervisor, Screening at 25 s a person",
+            "value": 20.21,
+            "lower": null,
+            "upper": null,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/0/points/1/policies/fifo-manual@reactive/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, GateFlow's lanes (S8), Screening at 25 s a person",
+            "value": 19.44,
+            "lower": null,
+            "upper": null,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/0/points/1/policies/fifo-manual@predict/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day against the supervisor, Screening at 25 s a person",
+            "value": 0.77,
+            "lower": 0.575,
+            "upper": 0.9751,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/0/points/1/comparisons/fifo-manual@predict vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Extra lane-hours per day, today's supervisor, Screening at 25 s a person",
+            "value": 0.9881,
+            "lower": null,
+            "upper": null,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/0/points/1/policies/fifo-manual@reactive/extraLaneHours",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Extra lane-hours per day, GateFlow's lanes (S8), Screening at 25 s a person",
+            "value": 1.4245,
+            "lower": null,
+            "upper": null,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/0/points/1/policies/fifo-manual@predict/extraLaneHours",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          }
+        ],
+        [
+          "Screening at 26 s a person",
+          {
+            "label": "Missed flights per day, plan only, Screening at 26 s a person",
+            "value": 33.09,
+            "lower": null,
+            "upper": null,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/0/points/2/policies/fifo-manual/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, today's supervisor, Screening at 26 s a person",
+            "value": 22.195,
+            "lower": null,
+            "upper": null,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/0/points/2/policies/fifo-manual@reactive/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, GateFlow's lanes (S8), Screening at 26 s a person",
+            "value": 20.86,
+            "lower": null,
+            "upper": null,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/0/points/2/policies/fifo-manual@predict/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day against the supervisor, Screening at 26 s a person",
+            "value": 1.335,
+            "lower": 1.055,
+            "upper": 1.6151,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/0/points/2/comparisons/fifo-manual@predict vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Extra lane-hours per day, today's supervisor, Screening at 26 s a person",
+            "value": 2.2082,
+            "lower": null,
+            "upper": null,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/0/points/2/policies/fifo-manual@reactive/extraLaneHours",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Extra lane-hours per day, GateFlow's lanes (S8), Screening at 26 s a person",
+            "value": 2.563,
+            "lower": null,
+            "upper": null,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/0/points/2/policies/fifo-manual@predict/extraLaneHours",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          }
+        ],
+        [
+          "Screening at 27 s a person",
+          {
+            "label": "Missed flights per day, plan only, Screening at 27 s a person",
+            "value": 108.015,
+            "lower": null,
+            "upper": null,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/0/points/3/policies/fifo-manual/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, today's supervisor, Screening at 27 s a person",
+            "value": 26.53,
+            "lower": null,
+            "upper": null,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/0/points/3/policies/fifo-manual@reactive/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, GateFlow's lanes (S8), Screening at 27 s a person",
+            "value": 23.64,
+            "lower": null,
+            "upper": null,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/0/points/3/policies/fifo-manual@predict/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day against the supervisor, Screening at 27 s a person",
+            "value": 2.89,
+            "lower": 2.48,
+            "upper": 3.33,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/0/points/3/comparisons/fifo-manual@predict vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Extra lane-hours per day, today's supervisor, Screening at 27 s a person",
+            "value": 3.3794,
+            "lower": null,
+            "upper": null,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/0/points/3/policies/fifo-manual@reactive/extraLaneHours",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Extra lane-hours per day, GateFlow's lanes (S8), Screening at 27 s a person",
+            "value": 3.952,
+            "lower": null,
+            "upper": null,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/0/points/3/policies/fifo-manual@predict/extraLaneHours",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          }
+        ],
+        [
+          "A roster one lane short (24 s a person)",
+          {
+            "label": "Missed flights per day, plan only, A roster one lane short (24 s a person)",
+            "value": 84.93,
+            "lower": null,
+            "upper": null,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/1/points/0/policies/fifo-manual/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, today's supervisor, A roster one lane short (24 s a person)",
+            "value": 24.94,
+            "lower": null,
+            "upper": null,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/1/points/0/policies/fifo-manual@reactive/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Missed flights per day, GateFlow's lanes (S8), A roster one lane short (24 s a person)",
+            "value": 21.4,
+            "lower": null,
+            "upper": null,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/1/points/0/policies/fifo-manual@predict/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Net flights saved per day against the supervisor, A roster one lane short (24 s a person)",
+            "value": 3.54,
+            "lower": 3.065,
+            "upper": 4.0101,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/1/points/0/comparisons/fifo-manual@predict vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          },
+          {
+            "label": "Extra lane-hours per day, today's supervisor, A roster one lane short (24 s a person)",
+            "value": 3.7324,
+            "lower": null,
+            "upper": null,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/1/points/0/policies/fifo-manual@reactive/extraLaneHours",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Extra lane-hours per day, GateFlow's lanes (S8), A roster one lane short (24 s a person)",
+            "value": 4.4822,
+            "lower": null,
+            "upper": null,
+            "source": "slice-8/sweeps/vce-like-peak-lanes/sweep.json",
+            "pointer": "/dimensions/1/points/0/policies/fifo-manual@predict/extraLaneHours",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          }
+        ]
+      ],
+      "notes": [
+        "Source: [A VCE-like peak day harder than planned (S8)](../reports/slice-8/sweeps/vce-like-peak-lanes/sweep.md)."
+      ]
+    },
+    {
+      "id": "forecasts",
+      "title": "The forecasts behind the recommendations",
+      "intro": "GateFlow Predict (S21), measured on 200 simulated days a scenario: a forecast every 15 minutes, compared 15 and 90 minutes later with what happened. Arrivals: the people arriving in the 5 minutes before the horizon; the WAPE is the error as a share of them, the coverage the share of the truths in the 80% band. Wait: minutes from arrival to admission, on the forecasts of a queue.",
+      "columns": [
+        {
+          "title": "Scenario",
+          "numeric": false
+        },
+        {
+          "title": "Minutes ahead",
+          "numeric": true
+        },
+        {
+          "title": "Arrivals: WAPE",
+          "numeric": true
+        },
+        {
+          "title": "Arrivals: in the band",
+          "numeric": true
+        },
+        {
+          "title": "Wait: mean error (min)",
+          "numeric": true
+        },
+        {
+          "title": "Wait: in the band",
+          "numeric": true
+        },
+        {
+          "title": "Forecasts",
+          "numeric": true
+        }
+      ],
+      "rows": [
+        [
+          "[Demo checkpoint, congested morning](../reports/slice-21/single-checkpoint-demo/backtest.md)",
+          "15",
+          {
+            "label": "Error of the arrivals (WAPE), Demo checkpoint, congested morning, 15 minutes ahead",
+            "value": 0.1929,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/single-checkpoint-demo/backtest.json",
+            "pointer": "/summary/arrivals/15/all/wape",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Share of the arrivals in the band, Demo checkpoint, congested morning, 15 minutes ahead",
+            "value": 0.7959,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/single-checkpoint-demo/backtest.json",
+            "pointer": "/summary/arrivals/15/all/coverage",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Mean error of the wait (min), with a queue, Demo checkpoint, congested morning, 15 minutes ahead",
+            "value": 1.9112,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/single-checkpoint-demo/backtest.json",
+            "pointer": "/summary/wait/15/busy/mae",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Share of the waits in the band, with a queue, Demo checkpoint, congested morning, 15 minutes ahead",
+            "value": 0.875,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/single-checkpoint-demo/backtest.json",
+            "pointer": "/summary/wait/15/busy/coverage",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Forecasts measured, Demo checkpoint, congested morning, 15 minutes ahead",
+            "value": 13950,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/single-checkpoint-demo/backtest.json",
+            "pointer": "/summary/arrivals/15/all/n",
+            "digits": 0,
+            "signed": false,
+            "percent": false
+          }
+        ],
+        [
+          "[Demo checkpoint, congested morning](../reports/slice-21/single-checkpoint-demo/backtest.md)",
+          "90",
+          {
+            "label": "Error of the arrivals (WAPE), Demo checkpoint, congested morning, 90 minutes ahead",
+            "value": 0.1891,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/single-checkpoint-demo/backtest.json",
+            "pointer": "/summary/arrivals/90/all/wape",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Share of the arrivals in the band, Demo checkpoint, congested morning, 90 minutes ahead",
+            "value": 0.7903,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/single-checkpoint-demo/backtest.json",
+            "pointer": "/summary/arrivals/90/all/coverage",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Mean error of the wait (min), with a queue, Demo checkpoint, congested morning, 90 minutes ahead",
+            "value": 3.3804,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/single-checkpoint-demo/backtest.json",
+            "pointer": "/summary/wait/90/busy/mae",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Share of the waits in the band, with a queue, Demo checkpoint, congested morning, 90 minutes ahead",
+            "value": 0.8583,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/single-checkpoint-demo/backtest.json",
+            "pointer": "/summary/wait/90/busy/coverage",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Forecasts measured, Demo checkpoint, congested morning, 90 minutes ahead",
+            "value": 12950,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/single-checkpoint-demo/backtest.json",
+            "pointer": "/summary/arrivals/90/all/n",
+            "digits": 0,
+            "signed": false,
+            "percent": false
+          }
+        ],
+        [
+          "[VCE-like normal day](../reports/slice-21/vce-like-normal-day/backtest.md)",
+          "15",
+          {
+            "label": "Error of the arrivals (WAPE), VCE-like normal day, 15 minutes ahead",
+            "value": 0.1217,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-normal-day/backtest.json",
+            "pointer": "/summary/arrivals/15/all/wape",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Share of the arrivals in the band, VCE-like normal day, 15 minutes ahead",
+            "value": 0.8129,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-normal-day/backtest.json",
+            "pointer": "/summary/arrivals/15/all/coverage",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Mean error of the wait (min), with a queue, VCE-like normal day, 15 minutes ahead",
+            "value": 1.603,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-normal-day/backtest.json",
+            "pointer": "/summary/wait/15/busy/mae",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Share of the waits in the band, with a queue, VCE-like normal day, 15 minutes ahead",
+            "value": 0.9315,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-normal-day/backtest.json",
+            "pointer": "/summary/wait/15/busy/coverage",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Forecasts measured, VCE-like normal day, 15 minutes ahead",
+            "value": 15348,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-normal-day/backtest.json",
+            "pointer": "/summary/arrivals/15/all/n",
+            "digits": 0,
+            "signed": false,
+            "percent": false
+          }
+        ],
+        [
+          "[VCE-like normal day](../reports/slice-21/vce-like-normal-day/backtest.md)",
+          "90",
+          {
+            "label": "Error of the arrivals (WAPE), VCE-like normal day, 90 minutes ahead",
+            "value": 0.1185,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-normal-day/backtest.json",
+            "pointer": "/summary/arrivals/90/all/wape",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Share of the arrivals in the band, VCE-like normal day, 90 minutes ahead",
+            "value": 0.8039,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-normal-day/backtest.json",
+            "pointer": "/summary/arrivals/90/all/coverage",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Mean error of the wait (min), with a queue, VCE-like normal day, 90 minutes ahead",
+            "value": 1.6921,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-normal-day/backtest.json",
+            "pointer": "/summary/wait/90/busy/mae",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Share of the waits in the band, with a queue, VCE-like normal day, 90 minutes ahead",
+            "value": 0.9798,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-normal-day/backtest.json",
+            "pointer": "/summary/wait/90/busy/coverage",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Forecasts measured, VCE-like normal day, 90 minutes ahead",
+            "value": 14348,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-normal-day/backtest.json",
+            "pointer": "/summary/arrivals/90/all/n",
+            "digits": 0,
+            "signed": false,
+            "percent": false
+          }
+        ],
+        [
+          "[VCE-like peak day](../reports/slice-21/vce-like-peak-day/backtest.md)",
+          "15",
+          {
+            "label": "Error of the arrivals (WAPE), VCE-like peak day, 15 minutes ahead",
+            "value": 0.1132,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-peak-day/backtest.json",
+            "pointer": "/summary/arrivals/15/all/wape",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Share of the arrivals in the band, VCE-like peak day, 15 minutes ahead",
+            "value": 0.8018,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-peak-day/backtest.json",
+            "pointer": "/summary/arrivals/15/all/coverage",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Mean error of the wait (min), with a queue, VCE-like peak day, 15 minutes ahead",
+            "value": 1.3404,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-peak-day/backtest.json",
+            "pointer": "/summary/wait/15/busy/mae",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Share of the waits in the band, with a queue, VCE-like peak day, 15 minutes ahead",
+            "value": 0.8141,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-peak-day/backtest.json",
+            "pointer": "/summary/wait/15/busy/coverage",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Forecasts measured, VCE-like peak day, 15 minutes ahead",
+            "value": 15524,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-peak-day/backtest.json",
+            "pointer": "/summary/arrivals/15/all/n",
+            "digits": 0,
+            "signed": false,
+            "percent": false
+          }
+        ],
+        [
+          "[VCE-like peak day](../reports/slice-21/vce-like-peak-day/backtest.md)",
+          "90",
+          {
+            "label": "Error of the arrivals (WAPE), VCE-like peak day, 90 minutes ahead",
+            "value": 0.1096,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-peak-day/backtest.json",
+            "pointer": "/summary/arrivals/90/all/wape",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Share of the arrivals in the band, VCE-like peak day, 90 minutes ahead",
+            "value": 0.7901,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-peak-day/backtest.json",
+            "pointer": "/summary/arrivals/90/all/coverage",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Mean error of the wait (min), with a queue, VCE-like peak day, 90 minutes ahead",
+            "value": 2.121,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-peak-day/backtest.json",
+            "pointer": "/summary/wait/90/busy/mae",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Share of the waits in the band, with a queue, VCE-like peak day, 90 minutes ahead",
+            "value": 0.8219,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-peak-day/backtest.json",
+            "pointer": "/summary/wait/90/busy/coverage",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Forecasts measured, VCE-like peak day, 90 minutes ahead",
+            "value": 14524,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-peak-day/backtest.json",
+            "pointer": "/summary/arrivals/90/all/n",
+            "digits": 0,
+            "signed": false,
+            "percent": false
+          }
+        ],
+        [
+          "[VCE-like disrupted day](../reports/slice-21/vce-like-disrupted-day/backtest.md)",
+          "15",
+          {
+            "label": "Error of the arrivals (WAPE), VCE-like disrupted day, 15 minutes ahead",
+            "value": 0.1132,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-disrupted-day/backtest.json",
+            "pointer": "/summary/arrivals/15/all/wape",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Share of the arrivals in the band, VCE-like disrupted day, 15 minutes ahead",
+            "value": 0.8018,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-disrupted-day/backtest.json",
+            "pointer": "/summary/arrivals/15/all/coverage",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Mean error of the wait (min), with a queue, VCE-like disrupted day, 15 minutes ahead",
+            "value": 1.4373,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-disrupted-day/backtest.json",
+            "pointer": "/summary/wait/15/busy/mae",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Share of the waits in the band, with a queue, VCE-like disrupted day, 15 minutes ahead",
+            "value": 0.8091,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-disrupted-day/backtest.json",
+            "pointer": "/summary/wait/15/busy/coverage",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Forecasts measured, VCE-like disrupted day, 15 minutes ahead",
+            "value": 15524,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-disrupted-day/backtest.json",
+            "pointer": "/summary/arrivals/15/all/n",
+            "digits": 0,
+            "signed": false,
+            "percent": false
+          }
+        ],
+        [
+          "[VCE-like disrupted day](../reports/slice-21/vce-like-disrupted-day/backtest.md)",
+          "90",
+          {
+            "label": "Error of the arrivals (WAPE), VCE-like disrupted day, 90 minutes ahead",
+            "value": 0.1096,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-disrupted-day/backtest.json",
+            "pointer": "/summary/arrivals/90/all/wape",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Share of the arrivals in the band, VCE-like disrupted day, 90 minutes ahead",
+            "value": 0.7901,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-disrupted-day/backtest.json",
+            "pointer": "/summary/arrivals/90/all/coverage",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Mean error of the wait (min), with a queue, VCE-like disrupted day, 90 minutes ahead",
+            "value": 2.6189,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-disrupted-day/backtest.json",
+            "pointer": "/summary/wait/90/busy/mae",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Share of the waits in the band, with a queue, VCE-like disrupted day, 90 minutes ahead",
+            "value": 0.7787,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-disrupted-day/backtest.json",
+            "pointer": "/summary/wait/90/busy/coverage",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Forecasts measured, VCE-like disrupted day, 90 minutes ahead",
+            "value": 14524,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/vce-like-disrupted-day/backtest.json",
+            "pointer": "/summary/arrivals/90/all/n",
+            "digits": 0,
+            "signed": false,
+            "percent": false
+          }
+        ],
+        [
+          "[TSF-like peak day](../reports/slice-21/tsf-like-peak-day/backtest.md)",
+          "15",
+          {
+            "label": "Error of the arrivals (WAPE), TSF-like peak day, 15 minutes ahead",
+            "value": 0.2011,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/tsf-like-peak-day/backtest.json",
+            "pointer": "/summary/arrivals/15/all/wape",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Share of the arrivals in the band, TSF-like peak day, 15 minutes ahead",
+            "value": 0.7936,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/tsf-like-peak-day/backtest.json",
+            "pointer": "/summary/arrivals/15/all/coverage",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Mean error of the wait (min), with a queue, TSF-like peak day, 15 minutes ahead",
+            "value": 2.2476,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/tsf-like-peak-day/backtest.json",
+            "pointer": "/summary/wait/15/busy/mae",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Share of the waits in the band, with a queue, TSF-like peak day, 15 minutes ahead",
+            "value": 0.8455,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/tsf-like-peak-day/backtest.json",
+            "pointer": "/summary/wait/15/busy/coverage",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Forecasts measured, TSF-like peak day, 15 minutes ahead",
+            "value": 13145,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/tsf-like-peak-day/backtest.json",
+            "pointer": "/summary/arrivals/15/all/n",
+            "digits": 0,
+            "signed": false,
+            "percent": false
+          }
+        ],
+        [
+          "[TSF-like peak day](../reports/slice-21/tsf-like-peak-day/backtest.md)",
+          "90",
+          {
+            "label": "Error of the arrivals (WAPE), TSF-like peak day, 90 minutes ahead",
+            "value": 0.1962,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/tsf-like-peak-day/backtest.json",
+            "pointer": "/summary/arrivals/90/all/wape",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Share of the arrivals in the band, TSF-like peak day, 90 minutes ahead",
+            "value": 0.7959,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/tsf-like-peak-day/backtest.json",
+            "pointer": "/summary/arrivals/90/all/coverage",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Mean error of the wait (min), with a queue, TSF-like peak day, 90 minutes ahead",
+            "value": 3.9587,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/tsf-like-peak-day/backtest.json",
+            "pointer": "/summary/wait/90/busy/mae",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Share of the waits in the band, with a queue, TSF-like peak day, 90 minutes ahead",
+            "value": 0.8358,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/tsf-like-peak-day/backtest.json",
+            "pointer": "/summary/wait/90/busy/coverage",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Forecasts measured, TSF-like peak day, 90 minutes ahead",
+            "value": 12145,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/tsf-like-peak-day/backtest.json",
+            "pointer": "/summary/arrivals/90/all/n",
+            "digits": 0,
+            "signed": false,
+            "percent": false
+          }
+        ],
+        [
+          "[MX-like transfer hub](../reports/slice-21/mx-like-transfer-hub/backtest.md)",
+          "15",
+          {
+            "label": "Error of the arrivals (WAPE), MX-like transfer hub, 15 minutes ahead",
+            "value": 0.2151,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/mx-like-transfer-hub/backtest.json",
+            "pointer": "/summary/arrivals/15/all/wape",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Share of the arrivals in the band, MX-like transfer hub, 15 minutes ahead",
+            "value": 0.7965,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/mx-like-transfer-hub/backtest.json",
+            "pointer": "/summary/arrivals/15/all/coverage",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Mean error of the wait (min), with a queue, MX-like transfer hub, 15 minutes ahead",
+            "value": 2.8552,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/mx-like-transfer-hub/backtest.json",
+            "pointer": "/summary/wait/15/busy/mae",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Share of the waits in the band, with a queue, MX-like transfer hub, 15 minutes ahead",
+            "value": 0.7824,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/mx-like-transfer-hub/backtest.json",
+            "pointer": "/summary/wait/15/busy/coverage",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Forecasts measured, MX-like transfer hub, 15 minutes ahead",
+            "value": 13514,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/mx-like-transfer-hub/backtest.json",
+            "pointer": "/summary/arrivals/15/all/n",
+            "digits": 0,
+            "signed": false,
+            "percent": false
+          }
+        ],
+        [
+          "[MX-like transfer hub](../reports/slice-21/mx-like-transfer-hub/backtest.md)",
+          "90",
+          {
+            "label": "Error of the arrivals (WAPE), MX-like transfer hub, 90 minutes ahead",
+            "value": 0.2143,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/mx-like-transfer-hub/backtest.json",
+            "pointer": "/summary/arrivals/90/all/wape",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Share of the arrivals in the band, MX-like transfer hub, 90 minutes ahead",
+            "value": 0.7948,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/mx-like-transfer-hub/backtest.json",
+            "pointer": "/summary/arrivals/90/all/coverage",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Mean error of the wait (min), with a queue, MX-like transfer hub, 90 minutes ahead",
+            "value": 5.3316,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/mx-like-transfer-hub/backtest.json",
+            "pointer": "/summary/wait/90/busy/mae",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          {
+            "label": "Share of the waits in the band, with a queue, MX-like transfer hub, 90 minutes ahead",
+            "value": 0.7727,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/mx-like-transfer-hub/backtest.json",
+            "pointer": "/summary/wait/90/busy/coverage",
+            "digits": 0,
+            "signed": false,
+            "percent": true
+          },
+          {
+            "label": "Forecasts measured, MX-like transfer hub, 90 minutes ahead",
+            "value": 12514,
+            "lower": null,
+            "upper": null,
+            "source": "slice-21/mx-like-transfer-hub/backtest.json",
+            "pointer": "/summary/arrivals/90/all/n",
+            "digits": 0,
+            "signed": false,
+            "percent": false
+          }
+        ]
+      ],
+      "notes": [
+        "The demo checkpoint is a congested morning made for the simulator, not a library scenario: the claims above leave it out."
+      ]
+    },
+    {
+      "id": "sources",
+      "title": "Sources",
+      "intro": "The reports the page reads, each produced from a clean checkout of its commit; each says how to reproduce it, and `figures.json` gives every figure's file and JSON pointer.",
+      "columns": [
+        {
+          "title": "Report",
+          "numeric": false
+        },
+        {
+          "title": "What it is",
+          "numeric": false
+        },
+        {
+          "title": "Commit",
+          "numeric": false
+        },
+        {
+          "title": "Generator",
+          "numeric": false
+        },
+        {
+          "title": "Simulated days (per point of a sweep)",
+          "numeric": true
+        }
+      ],
+      "rows": [
+        [
+          "[VCE-like normal day (S22.3)](../reports/slice-22/vce-like-normal-day/report.md)",
+          "VCE-like departures checkpoint, normal day (synthetic)",
+          "`529b232`",
+          "gateflow-sim 0.14.0",
+          "200"
+        ],
+        [
+          "[VCE-like peak day (S22.3)](../reports/slice-22/vce-like-peak-day/report.md)",
+          "VCE-like departures checkpoint, summer peak day (synthetic)",
+          "`529b232`",
+          "gateflow-sim 0.14.0",
+          "200"
+        ],
+        [
+          "[VCE-like disrupted day (S22.3)](../reports/slice-22/vce-like-disrupted-day/report.md)",
+          "VCE-like departures checkpoint, disrupted summer peak day (synthetic)",
+          "`529b232`",
+          "gateflow-sim 0.14.0",
+          "200"
+        ],
+        [
+          "[TSF-like peak day (S22.3)](../reports/slice-22/tsf-like-peak-day/report.md)",
+          "TSF-like low-cost base, summer peak day (synthetic)",
+          "`529b232`",
+          "gateflow-sim 0.14.0",
+          "200"
+        ],
+        [
+          "[MX-like transfer hub (S22.3)](../reports/slice-22/mx-like-transfer-hub/report.md)",
+          "MX-like hub, transfer security checkpoint (synthetic)",
+          "`529b232`",
+          "gateflow-sim 0.14.0",
+          "200"
+        ],
+        [
+          "[Recommendations followed or not, MX-like hub (S22.3)](../reports/slice-22/sweeps/mx-like-hub-console/sweep.md)",
+          "The console's lane recommendations on the MX-like transfer hub, followed or not",
+          "`529b232`",
+          "gateflow-sim 0.14.0",
+          "200"
+        ],
+        [
+          "[Recommendations followed or not, TSF-like base (S22.3)](../reports/slice-22/sweeps/tsf-like-peak-console/sweep.md)",
+          "The console's lane recommendations on the TSF-like peak day, followed or not",
+          "`529b232`",
+          "gateflow-sim 0.14.0",
+          "200"
+        ],
+        [
+          "[A VCE-like peak day harder than planned (S8)](../reports/slice-8/sweeps/vce-like-peak-lanes/sweep.md)",
+          "Extra lanes on the VCE-like peak day, recommended by GateFlow or opened by a supervisor",
+          "`b3c9f7e`",
+          "gateflow-sim 0.8.0",
+          "200"
+        ],
+        [
+          "[Forecasts, Demo checkpoint, congested morning (S21)](../reports/slice-21/single-checkpoint-demo/backtest.md)",
+          "Single departure checkpoint, synthetic day with a congested morning peak",
+          "`c2ce38c`",
+          "gateflow-sim 0.13.0",
+          "200"
+        ],
+        [
+          "[Forecasts, VCE-like normal day (S21)](../reports/slice-21/vce-like-normal-day/backtest.md)",
+          "VCE-like departures checkpoint, normal day (synthetic)",
+          "`c2ce38c`",
+          "gateflow-sim 0.13.0",
+          "200"
+        ],
+        [
+          "[Forecasts, VCE-like peak day (S21)](../reports/slice-21/vce-like-peak-day/backtest.md)",
+          "VCE-like departures checkpoint, summer peak day (synthetic)",
+          "`c2ce38c`",
+          "gateflow-sim 0.13.0",
+          "200"
+        ],
+        [
+          "[Forecasts, VCE-like disrupted day (S21)](../reports/slice-21/vce-like-disrupted-day/backtest.md)",
+          "VCE-like departures checkpoint, disrupted summer peak day (synthetic)",
+          "`c2ce38c`",
+          "gateflow-sim 0.13.0",
+          "200"
+        ],
+        [
+          "[Forecasts, TSF-like peak day (S21)](../reports/slice-21/tsf-like-peak-day/backtest.md)",
+          "TSF-like low-cost base, summer peak day (synthetic)",
+          "`c2ce38c`",
+          "gateflow-sim 0.13.0",
+          "200"
+        ],
+        [
+          "[Forecasts, MX-like transfer hub (S21)](../reports/slice-21/mx-like-transfer-hub/backtest.md)",
+          "MX-like hub, transfer security checkpoint (synthetic)",
+          "`c2ce38c`",
+          "gateflow-sim 0.13.0",
+          "200"
+        ]
+      ],
+      "notes": [
+        "From a clean checkout of a report's commit, the command its manifest records reproduces it (`figures.json` gives them all); for the sweep of the recommendations followed at the hub:\n\n```bash\ngateflow-sim sweep --spec sweeps/mx-like-hub-console.yaml --seeds 1-200 --bootstrap-resamples 2000\n```"
+      ]
+    }
+  ],
+  "charts": [
+    {
+      "kind": "intervals",
+      "id": "hub-net",
+      "section": "claims",
+      "title": "Net flights saved per day at the MX-like transfer hub",
+      "note": "Means over 200 simulated days with 95% confidence intervals, passenger by passenger on the same days. SIMULATED.",
+      "rows": [
+        {
+          "label": "GateFlow vs today's practice",
+          "value": {
+            "label": "Net flights saved per day, GateFlow against today's practice",
+            "value": 17.96,
+            "lower": 16.0947,
+            "upper": 19.9255,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          }
+        },
+        {
+          "label": "Console's lanes vs supervisor",
+          "value": {
+            "label": "Net flights saved per day, the console's lanes against today's supervisor (today's calls)",
+            "value": 17.695,
+            "lower": 15.9599,
+            "upper": 19.3952,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          }
+        },
+        {
+          "label": "Same, half followed",
+          "value": {
+            "label": "Net flights saved per day against today's supervisor, 50% of the recommendations followed",
+            "value": 12.925,
+            "lower": 10.8598,
+            "upper": 15.0006,
+            "source": "slice-22/sweeps/mx-like-hub-console/sweep.json",
+            "pointer": "/dimensions/0/points/1/comparisons/fifo-manual@advise vs fifo-manual@reactive/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          }
+        },
+        {
+          "label": "Priority calls alone",
+          "value": {
+            "label": "Net flights saved per day, GateFlow's calls against today's (the plan's lanes)",
+            "value": 8.725,
+            "lower": 7.2146,
+            "upper": 10.3957,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/comparisons/priority-v3 vs fifo-manual/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          }
+        },
+        {
+          "label": "Priority calls on console's lanes",
+          "value": {
+            "label": "Net flights saved per day by the priority calls once the console's lanes are open",
+            "value": 0.265,
+            "lower": -0.79,
+            "upper": 1.2551,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/comparisons/priority-v3@advise vs fifo-manual@advise/metrics/net",
+            "digits": 1,
+            "signed": true,
+            "percent": false
+          }
+        }
+      ]
+    },
+    {
+      "kind": "bars",
+      "id": "hub-missed",
+      "section": "gateflow",
+      "title": "Missed flights per day at the MX-like transfer hub",
+      "note": "Mean over 200 simulated days; the whisker spans the 5th to the 95th percentile of the days. In blue, with a part of GateFlow. SIMULATED.",
+      "rows": [
+        {
+          "label": "Today's calls, plan's lanes",
+          "value": {
+            "label": "Missed flights per day at the hub, Today's calls, plan's lanes",
+            "value": 96.655,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/policies/fifo-manual/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "low": {
+            "label": "5th percentile of the days, Today's calls, plan's lanes",
+            "value": 50,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/policies/fifo-manual/missed/p05",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "high": {
+            "label": "95th percentile of the days, Today's calls, plan's lanes",
+            "value": 145.1,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/policies/fifo-manual/missed/p95",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "emphasis": false
+        },
+        {
+          "label": "Today's practice (supervisor)",
+          "value": {
+            "label": "Missed flights per day at the hub, Today's practice (supervisor)",
+            "value": 81.475,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/policies/fifo-manual@reactive/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "low": {
+            "label": "5th percentile of the days, Today's practice (supervisor)",
+            "value": 42,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/policies/fifo-manual@reactive/missed/p05",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "high": {
+            "label": "95th percentile of the days, Today's practice (supervisor)",
+            "value": 121.05,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/policies/fifo-manual@reactive/missed/p95",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "emphasis": false
+        },
+        {
+          "label": "GateFlow's calls, plan's lanes",
+          "value": {
+            "label": "Missed flights per day at the hub, GateFlow's calls, plan's lanes",
+            "value": 87.93,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/policies/priority-v3/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "low": {
+            "label": "5th percentile of the days, GateFlow's calls, plan's lanes",
+            "value": 48,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/policies/priority-v3/missed/p05",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "high": {
+            "label": "95th percentile of the days, GateFlow's calls, plan's lanes",
+            "value": 138.15,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/policies/priority-v3/missed/p95",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "emphasis": true
+        },
+        {
+          "label": "Today's calls, console's lanes",
+          "value": {
+            "label": "Missed flights per day at the hub, Today's calls, console's lanes",
+            "value": 63.78,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/policies/fifo-manual@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "low": {
+            "label": "5th percentile of the days, Today's calls, console's lanes",
+            "value": 33,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/policies/fifo-manual@advise/missed/p05",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "high": {
+            "label": "95th percentile of the days, Today's calls, console's lanes",
+            "value": 93.05,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/policies/fifo-manual@advise/missed/p95",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "emphasis": true
+        },
+        {
+          "label": "GateFlow as a whole",
+          "value": {
+            "label": "Missed flights per day at the hub, GateFlow as a whole",
+            "value": 63.515,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/policies/priority-v3@advise/missed",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "low": {
+            "label": "5th percentile of the days, GateFlow as a whole",
+            "value": 36.9,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/policies/priority-v3@advise/missed/p05",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "high": {
+            "label": "95th percentile of the days, GateFlow as a whole",
+            "value": 94.1,
+            "lower": null,
+            "upper": null,
+            "source": "slice-22/mx-like-transfer-hub/results.json",
+            "pointer": "/summary/policies/priority-v3@advise/missed/p95",
+            "digits": 1,
+            "signed": false,
+            "percent": false
+          },
+          "emphasis": true
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "They are simulated, on synthetic airports made to look like three kinds of checkpoint (a VCE-like departures checkpoint, a TSF-like low-cost base, an MX-like transfer hub): they are not those airports' data. An airport's own figures come from its own days (M5).",
+    "Today's practice is idealised: staff call every closing flight, and the supervisor sees the exact wait every 5 minutes and never forgets. A real supervisor reacts later, so GateFlow's margin is probably understated.",
+    "The staff on call, the time to open a lane and the share of recommendations followed are assumptions; the data request asks the airport for them.",
+    "An extra lane costs only its lane-hours here: no other duty of the staff on call is modelled, and the airport prices the lane-hours.",
+    "The forecasts learn from other simulated days of the same model: a real forecast will be worse at first.",
+    "The rules simulated are GateFlow's own code: the console's lane recommendations are the rule the live console runs, reading what the live system would know, and the live system calls the simulator's numbers in the simulator's order (S18). What is simulated is the airport, not GateFlow."
+  ]
+}

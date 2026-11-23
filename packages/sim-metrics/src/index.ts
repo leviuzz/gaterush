@@ -148,3 +148,25 @@ export {
   renderCalibrationModule,
 } from './calibration';
 export type { CalibrationDocument } from './calibration';
+export {
+  PITCH_SCHEMA,
+  PITCH_SOURCES,
+  PitchError,
+  buildPitch,
+  figureInterval,
+  figureText,
+  figureValue,
+  renderPitchHtml,
+  renderPitchMarkdown,
+  stringifyPitch,
+} from './pitch';
+export type {
+  PitchCell,
+  PitchChart,
+  PitchClaim,
+  PitchDocument,
+  PitchFigure,
+  PitchOptions,
+  PitchSource,
+  PitchTable,
+} from './pitch';

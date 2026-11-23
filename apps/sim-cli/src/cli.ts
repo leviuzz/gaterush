@@ -1,4 +1,4 @@
-import { dirname, isAbsolute, join } from 'node:path';
+import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 import { LIBRARY_CALIBRATION, LIBRARY_CALIBRATION_SOURCE } from '@gateflow/forecast';
 import type { PitSets } from '@gateflow/forecast';
@@ -8,6 +8,8 @@ import {
   CALIBRATION_DAYS,
   CALIBRATION_FIRST_SEED,
   DEFAULT_BOOTSTRAP,
+  PITCH_SOURCES,
+  PitchError,
   SweepConfigError,
   applyScenarioSettings,
   arrivalClassification,
@@ -15,6 +17,7 @@ import {
   assembleSweep,
   buildBacktest,
   buildCalibration,
+  buildPitch,
   buildResults,
   buildSweepResults,
   comparisonKey,
@@ -24,10 +27,13 @@ import {
   renderBacktestReport,
   renderCalibrationModule,
   renderHtmlReport,
+  renderPitchHtml,
+  renderPitchMarkdown,
   renderReport,
   renderSweepHtml,
   renderSweepReport,
   stringifyBacktest,
+  stringifyPitch,
   stringifyResults,
   recommendedComparisons,
   stringifySweep,
@@ -96,6 +102,9 @@ Usage:
                                                 Write the design day as a flight list (CSV)
   ${CLI_NAME} lanes --scenario <file>           Print the lane plan its checkpoint's rule gives
   ${CLI_NAME} policies                          List the available policy presets and lane modes
+  ${CLI_NAME} pitch [--reports <dir>] (--out <dir> | --check <dir>)
+                                                The pitch figures from the published reports: README.md,
+                                                figures.html, figures.json
   ${CLI_NAME} --help | --version
 
 Options for "run":
@@ -144,6 +153,14 @@ Options for "sweep" (a sensitivity sweep is described in a file, see sweeps/):
   --seeds <spec>                 Seeds of every point                    (default: from the file)
   --out <dir>                    Output directory                        (default out/sweeps/<id>)
   --bootstrap-resamples, --workers, --commit, --quiet: as for "run"
+
+Options for "pitch" (every figure is read from a published report, with its interval, its source
+and its caveat; nothing is simulated again):
+  --reports <dir>                The published reports                   (default docs/reports)
+  --out <dir>                    Write the page there
+  --check <dir>                  Fail unless the page there is what the reports give
+A report that is not a clean commit's simulated report on synthetic data is refused, and so is a
+claim whose words its figures no longer support.
 
 A policy id may end with a lane mode: <policy>@reactive (a supervisor opens extra lanes when the
 queue is long, today's practice), <policy>@predict (GateFlow recommends extra lanes from a
@@ -839,6 +856,81 @@ function commandFlights(argv: string[], io: CliIo): number {
   return EXIT_OK;
 }
 
+/** The pitch figures (ADR-058): the page, written from the published reports or checked. */
+function commandPitch(argv: string[], io: CliIo): number {
+  const { values } = parseArgs({
+    args: argv,
+    options: {
+      reports: { type: 'string', default: join('docs', 'reports') },
+      out: { type: 'string' },
+      check: { type: 'string' },
+    },
+    strict: true,
+    allowPositionals: false,
+  });
+  if ((values.out === undefined) === (values.check === undefined)) {
+    throw new UsageError('give one of --out and --check');
+  }
+  const dir = values.out ?? values.check ?? '';
+  const reports = values.reports;
+  const read = (file: string): unknown => {
+    if (!PITCH_SOURCES.includes(file)) throw new Error(`the page reads no ${file}`);
+    const path = join(reports, file);
+    const content = readText(io, path, 'report');
+    try {
+      return JSON.parse(content) as unknown;
+    } catch (error) {
+      throw new UsageError(
+        `${path} is not JSON: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  };
+  let files: [string, string][];
+  let summary: string;
+  try {
+    const link = relative(dir, reports).split(sep).join('/');
+    const doc = buildPitch(read, { reports: link === '' ? '.' : link });
+    files = [
+      ['README.md', renderPitchMarkdown(doc)],
+      ['figures.html', renderPitchHtml(doc)],
+      ['figures.json', stringifyPitch(doc)],
+    ];
+    const figures =
+      doc.claims.reduce((n, c) => n + c.figures.length, 0) +
+      doc.tables.reduce((n, t) => n + t.rows.flat().filter((c) => typeof c !== 'string').length, 0);
+    summary = `${String(doc.claims.length)} claims and ${String(figures)} figures from ${String(doc.sources.length)} reports (SIMULATED)`;
+  } catch (error) {
+    if (error instanceof PitchError) {
+      io.stderr(`${error.message}\n`);
+      return EXIT_FAILURE;
+    }
+    throw error;
+  }
+  if (values.check !== undefined) {
+    const stale = files
+      .filter(([name, content]) => {
+        try {
+          return io.readFile(join(dir, name)) !== content;
+        } catch {
+          return true;
+        }
+      })
+      .map(([name]) => join(dir, name));
+    if (stale.length > 0) {
+      io.stderr(
+        `${stale.join(', ')}: not what the reports give; run "pnpm pitch" and commit the page\n`,
+      );
+      return EXIT_FAILURE;
+    }
+    io.stdout(`GateFlow pitch figures: ${summary}\nchecked    ${dir}\n`);
+    return EXIT_OK;
+  }
+  io.mkdir(dir);
+  for (const [name, content] of files) io.writeFile(join(dir, name), content);
+  io.stdout(`GateFlow pitch figures: ${summary}\nwritten    ${dir}\n`);
+  return EXIT_OK;
+}
+
 function commandPolicies(io: CliIo): number {
   io.stdout(`${JSON.stringify({ presets: POLICY_PRESETS, laneModes: LANE_MODES }, null, 2)}\n`);
   return EXIT_OK;
@@ -867,6 +959,8 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
         return commandLanes(rest, io);
       case 'policies':
         return commandPolicies(io);
+      case 'pitch':
+        return commandPitch(rest, io);
       case '--version':
       case '-v':
         io.stdout(`${CLI_VERSION}\n`);

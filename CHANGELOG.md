@@ -4,6 +4,40 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Any change that alters simulated numbers
 must be listed, together with the component versions it bumps.
 
+## [0.22.2] - 2026-11-23: The pitch figures, one page written from the published reports
+
+The simulated figures for the pitch on one page ([docs/pitch](docs/pitch/README.md)), each read
+from the report that produced it, with its 95% interval, its source and the caveat to say with it
+(ADR-058). ADR-057 (S22.3) is accepted as the founder confirmed it.
+
+### Added
+- `buildPitch` (sim-metrics): eleven claims for the pitch and the tables behind them (GateFlow as
+  a whole against today's practice, where it comes from, the recommendations followed or not, a
+  day harder than planned, the forecasts' errors), what the figures do not say and the sources,
+  from the library and the sweeps of S22.3, the sweep of S8 on days harder than planned and the
+  backtests of S21. Every figure is read at a JSON pointer of its report, never computed;
+  `figures.json` (`gateflow.pitch.figures/1`) keeps the file and the pointer of each of the 242.
+- The page refuses a report that is not a clean commit's simulated report on synthetic data, of
+  the schema it reads; a claim whose figures no longer support its words (an interval above zero,
+  a wait that halves, a change that hardly shows, a ticket never passed by more people than the
+  policy's bound) stops it.
+- `gateflow-sim pitch [--reports <dir>] (--out <dir> | --check <dir>)` writes `README.md`,
+  `figures.html` (two charts, light and dark, no network) and `figures.json`, or checks them;
+  `pnpm pitch` writes `docs/pitch`, `pnpm pitch:check` checks it, and CI runs the check.
+
+### What the page says (SIMULATED, synthetic airports)
+- At the MX-like hub GateFlow as a whole saves 18.0 [16.1, 19.9] flights a day against today's
+  practice; 17.7 [16.0, 19.4] of it is the console's lanes, and once they are open the priority
+  calls add 0.3 [-0.8, 1.3]. Without extra lanes the priority calls alone save 8.7 [7.2, 10.4].
+- At the TSF-like base nobody misses a flight with today's practice: the console halves the mean
+  wait (1.9 to 0.9 minutes), and GateFlow as a whole gives -0.06 [-0.10, -0.02] flights a day.
+- On the VCE-like days neither the console nor the priority calls change the missed flights
+  measurably; on a day harder than planned, extra lanes are the safety valve (S8's rule).
+
+### Versions
+- sim-metrics 0.15.0, command line 0.15.0. No simulated number changes; the reports are those of
+  S8, S21 and S22.3.
+
 ## [0.22.1] - 2026-11-22: Slice S22.3, the console's recommendations measured in the simulator
 
 A third lane mode, `@advise`, simulates the recommendations of GateFlow's console (S22): at each

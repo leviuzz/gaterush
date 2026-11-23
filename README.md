@@ -16,7 +16,8 @@ border procedures: it organises the flow before they start.
 > simulations through the API (S19); M4, the operations console and a preview of Predict: the
 > day's overview, checked against the log (S20), forecasts of the next 90 minutes measured
 > against the simulator (S21), and lane recommendations with the supervisor's decision and their
-> outcome (S22), measured in the simulator (S22.3).**
+> outcome (S22), measured in the simulator (S22.3); the figures for the pitch on one page, each
+> read from its report ([docs/pitch](docs/pitch/README.md)).**
 > This repository contains the simulation foundations:
 > - the priority engine;
 > - the queue state machine that the operational product will share;
@@ -355,6 +356,14 @@ The forecasts' bands are calibrated on the scenario library (S21.3): `pnpm calib
 runs `gateflow-sim calibrate` on six scenarios and writes the levels as a module of the forecasts;
 CI checks the module (`pnpm calibrate:check`) after any change to the simulator or the forecasts.
 
+The pitch figures ([docs/pitch](docs/pitch/README.md)) are written from the published reports by
+`pnpm pitch` (`gateflow-sim pitch`): about ten claims, each with its figures, their 95% intervals,
+its reports and the caveat to say with it, then the tables behind them. Every figure is read, never
+computed, and `figures.json` gives the file and JSON pointer of each. A report that is not a clean
+commit's simulated report on synthetic data is refused, and a claim whose figures no longer support
+its words stops the page. CI checks the page is what the reports give (`pnpm pitch:check`), so a
+report published again changes it in the same commit (ADR-058).
+
 The last command writes the design day of a scenario as a flight list
 (`gateflow.flights/1`). An airport can send its own flights in that format: see
 [docs/data-request](docs/data-request/README.md) for what the simulator needs, and
@@ -462,6 +471,10 @@ How to read these numbers:
   - GateFlow's target wait (10 minutes by default) trades lane-hours for flights, and is set for
     each checkpoint.
 - Reports with every assumption, data source and limitation, and pages with charts:
+  - the figures for the pitch, each with its interval, report and caveat:
+    [docs/pitch](docs/pitch/README.md);
+  - the console's lane recommendations: [docs/reports/slice-22](docs/reports/slice-22/README.md);
+  - the forecasts' errors: [docs/reports/slice-21](docs/reports/slice-21/README.md);
   - extra lanes: [docs/reports/slice-8](docs/reports/slice-8/README.md);
   - the library: [docs/reports/slice-7](docs/reports/slice-7/README.md);
   - the demo days: [docs/reports/slice-6](docs/reports/slice-6/README.md);

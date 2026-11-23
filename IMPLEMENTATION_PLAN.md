@@ -1230,6 +1230,7 @@ synthetic data until the pilot: forecasts and recommendations are a preview, for
 | **S20** | Operations overview: cards (waiting now, waits P50/P90, at risk, lanes, alerts), the live queue by number with class, age and exceptions, a fairness monitor, a data-quality panel | The live figures equal those recomputed from the log | **Done** |
 | **S21** | Arrival forecast baseline (5-minute buckets, horizons 15/30/60/90) and Monte Carlo of the simulator from the live state; backtest on the simulated truth (MAE, WAPE, calibration of the intervals) | An error report per horizon; p10/p50/p90 bands | **Done** |
 | **S22** | Lane-opening recommendations in the console, with the decision and its outcome | Cooldown and deduplication tested; every alert has a reason, a lead time, an interval and the expected benefit | **Done** |
+| *after S22* | The pitch figures: one page of the simulated figures for the pitch, each read from its published report, with its interval, its source and its caveat; written by the command line and checked by CI (ADR-058) | Every figure on the page is the report's, with its file and JSON pointer; CI fails if the page is not what the reports give | **Done** |
 | S23 (optional) | A passenger widget prototype (Connect) | Intervals with their freshness only; no promise of priority | Planned |
 
 **Gate R3** follows M4: discovery with the airport. M5 starts only when the checkpoint, the data
@@ -1570,7 +1571,8 @@ interval and the expected benefit. Evidence:
 On "Confermo vai avanti" (2026-11-22), the next step proposed with S22: what following the
 console's recommendations buys, on the simulated days of the scenario library, for the pitch's
 figures. S8 measured GateFlow's lanes with its own projection (`@predict`, ADR-039); this measures
-the rule the console runs. ADR-057.
+the rule the console runs. ADR-057. The founder confirmed every proposal on 2026-11-23
+("Confermo vai avanti"): the marks **[to confirm]** below are kept to show what was decided.
 
 - **`@advise`, the console's rule in the simulator [to confirm]:** a third lane mode beside
   `@reactive` (today's supervisor) and `@predict` (S8). Every 5 minutes of the simulated day the
@@ -1627,6 +1629,66 @@ Evidence:
   saves 12.9 [10.9, 15.0] flights a day more than the supervisor, 4 in 5 17.7, all of them 19.3;
   at the TSF-like base half gives 2.40 minutes less wait per person than the plan only, all of
   them 2.55.
+
+### After S22: the pitch figures (done)
+
+On "Confermo vai avanti" (2026-11-23), the next step proposed with S22.3: the simulated figures
+the pitch can say, on one page, each with the report it comes from, its interval and what to say
+with it. Today they are spread over the reports of S8, S21 and S22.3, and a figure copied by hand
+drifts from its report when that report is published again. ADR-058.
+
+- **One page, written by the command line [to confirm]:** `gateflow-sim pitch` reads the published
+  reports (the library and the sweeps of S22.3, the sweep of S8 on days harder than planned, the
+  backtests of S21) and writes `docs/pitch/README.md`, the same page with charts
+  (`docs/pitch/figures.html`) and every figure with where it was read (`docs/pitch/figures.json`:
+  the file and the JSON pointer of the number). The page computes nothing a report does not
+  give: it reads, selects and formats. `pnpm pitch` writes it; CI checks that it is what the
+  reports give (`pnpm pitch:check`), so a report published again changes the page in the same
+  commit or fails CI.
+- **What it holds [to confirm]:**
+  - **claims for the pitch:** about ten sentences, each with its figures, their 95% intervals (for
+    the forecasts, the number of forecasts measured), its report and the caveat to say with it;
+  - **the tables behind them,** scenario by scenario: GateFlow as a whole against today's
+    practice; where it comes from (the priority calls alone, the console's lanes against today's
+    supervisor, the priority calls once the console's lanes are open); the share of
+    recommendations followed; a day harder than planned; the forecasts' errors;
+  - **what the figures do not say,** and **the sources:** each report with its commit, its
+    generator and how to reproduce it.
+- **GateFlow's lanes are the console's [to confirm]:** the figures of GateFlow's lanes are those
+  of the console's own rule (`@advise`, S22.3). S8's rule (`@predict`) appears only for a day
+  harder than planned, which S22.3 did not sweep; the page says so, with how close the two rules
+  are on the library's days.
+- **Claims checked against their figures:** a word of a claim that the numbers must support (a
+  saving whose interval is above zero, a wait that halves, a change that hardly shows) is checked
+  as the page is written. A report published again that no longer supports it stops the page and
+  CI, instead of leaving a sentence its figures contradict.
+- **Only clean, simulated sources:** a source must be a report of a clean commit (no local
+  changes), with its SIMULATED disclaimer and synthetic data, of the schema the page reads;
+  anything else is refused.
+- **In English [to confirm],** as the reports; an Italian or Spanish page is a translation of its
+  sentences, the figures being read the same way.
+
+Evidence:
+- the page ([docs/pitch](docs/pitch/README.md)): 11 claims and 242 figures from 14 reports (the
+  five library scenarios and two sweeps of S22.3 from `529b232`, the sweep of S8 from `b3c9f7e`,
+  six backtests of S21 from `c2ce38c`), with two charts in its HTML twin, which needs no network
+  and has no sideways scroll on a phone, in the light and the dark theme;
+- sim-metrics (7 tests): every figure of the page is the number its report gives at the pointer
+  it names, resolved independently; each claim writes all its figures and names their sources;
+  figures are written as the reports write them; the committed page is what the reports give, its
+  links lead to files of the repository and its HTML is self-contained; a report of a commit with
+  local changes, without the disclaimer, not synthetic, of another schema or scenario, or without
+  a figure is refused; five claims stop when a figure no longer supports their words;
+- the command line (3 tests): the published page checks, the page written elsewhere links to the
+  reports from there, a changed page fails the check, a report of a commit with local changes is
+  refused, and the options are required; CI runs `pnpm pitch:check`;
+- what the page shows that no single report said (SIMULATED): at the MX-like hub, once the
+  console's lanes are open the priority calls add +0.3 [-0.8, 1.3] flights a day (with S8's
+  lanes +2.7): GateFlow's figure there, +18.0 [16.1, 19.9] against today's practice, is mostly the
+  lanes', and the priority calls matter where lanes are short (+8.7 [7.2, 10.4] on the plan's
+  lanes). On the VCE-like days neither part changes the missed flights measurably, and at the
+  TSF-like base GateFlow is sold on the wait (1.9 to 0.9 minutes against the supervisor), not on
+  flights (-0.06 [-0.10, -0.02] a day).
 
 ## Later milestones (summary)
 

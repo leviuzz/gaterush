@@ -1,6 +1,6 @@
 {
   "name": "gateflow",
-  "version": "0.22.1",
+  "version": "0.22.2",
   "private": true,
   "description": "GateFlow: deterministic, explainable priority queuing for airport checkpoints (monorepo).",
   "type": "module",
@@ -19,6 +19,8 @@
     "check": "pnpm run format:check && pnpm run boundaries && turbo run typecheck lint test --continue",
     "sim": "turbo run build --filter=@gateflow/sim-cli --output-logs=errors-only && node apps/sim-cli/dist/gateflow-sim.mjs",
     "calibrate:library": "pnpm sim calibrate --scenario scenarios/single-checkpoint-demo.yaml --scenario scenarios/vce-like-normal-day.yaml --scenario scenarios/vce-like-peak-day.yaml --scenario scenarios/vce-like-disrupted-day.yaml --scenario scenarios/tsf-like-peak-day.yaml --scenario scenarios/mx-like-transfer-hub.yaml --out packages/forecast/src/library-calibration.ts",
+    "pitch": "pnpm sim pitch --reports docs/reports --out docs/pitch",
+    "pitch:check": "node apps/sim-cli/dist/gateflow-sim.mjs pitch --reports docs/reports --check docs/pitch",
     "calibrate:check": "node apps/sim-cli/dist/gateflow-sim.mjs calibrate --scenario scenarios/single-checkpoint-demo.yaml --scenario scenarios/vce-like-normal-day.yaml --scenario scenarios/vce-like-peak-day.yaml --scenario scenarios/vce-like-disrupted-day.yaml --scenario scenarios/tsf-like-peak-day.yaml --scenario scenarios/mx-like-transfer-hub.yaml --check packages/forecast/src/library-calibration.ts --quiet"
   },
   "devDependencies": {

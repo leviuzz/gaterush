@@ -1,9 +1,18 @@
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { PITCH_SOURCES } from '@gateflow/sim-metrics';
 import type { BacktestDocument, ResultsDocument } from '@gateflow/sim-metrics';
 import { pairParties, parseTraceFile, summariseDay, traceContent } from '@gateflow/sim-trace';
 import { EXIT_FAILURE, EXIT_OK, EXIT_USAGE, runCli } from '../src/cli';
@@ -676,6 +685,67 @@ describe('gateflow-sim calibrate', () => {
       ['calibrate', '--scenario', DEMO, '--out', out, '--policy', 'fifo,priority-v3'],
     ]) {
       expect((await cli([...argv, '--quiet'])).code, argv.join(' ')).toBe(EXIT_USAGE);
+    }
+  });
+});
+
+describe('gateflow-sim pitch', () => {
+  const repo = fileURLToPath(new URL('../../../', import.meta.url));
+  const reports = join(repo, 'docs', 'reports');
+
+  it('checks the published page against the reports, and writes it elsewhere with its links', async () => {
+    const checked = await cli([
+      'pitch',
+      '--reports',
+      reports,
+      '--check',
+      join(repo, 'docs', 'pitch'),
+    ]);
+    expect(checked.code, checked.stderr).toBe(EXIT_OK);
+    expect(checked.stdout).toMatch(/11 claims and \d+ figures from 14 reports \(SIMULATED\)/);
+    const out = join(workDir, 'pitch');
+    const written = await cli(['pitch', '--reports', reports, '--out', out]);
+    expect(written.code, written.stderr).toBe(EXIT_OK);
+    const page = readFileSync(join(out, 'README.md'), 'utf8');
+    // Its links lead from where it is written to the reports.
+    const links = [...page.matchAll(/\]\(([^)]+)\)/g)].map((m) => m[1] ?? '');
+    expect(links.length).toBeGreaterThan(30);
+    for (const link of links) expect(existsSync(join(out, link)), link).toBe(true);
+    expect(JSON.parse(readFileSync(join(out, 'figures.json'), 'utf8'))).toMatchObject({
+      schema: 'gateflow.pitch.figures/1',
+    });
+    expect(readFileSync(join(out, 'figures.html'), 'utf8')).toContain('<svg ');
+    // A page that is not what the reports give fails the check.
+    expect((await cli(['pitch', '--reports', reports, '--check', out])).code).toBe(EXIT_OK);
+    writeFileSync(join(out, 'README.md'), page.replace('**+18.0**', '**+19.0**'));
+    const stale = await cli(['pitch', '--reports', reports, '--check', out]);
+    expect(stale.code).toBe(EXIT_FAILURE);
+    expect(stale.stderr).toContain('pnpm pitch');
+  });
+
+  it('refuses a report of a commit with local changes', async () => {
+    const copy = join(workDir, 'reports');
+    for (const file of PITCH_SOURCES) {
+      mkdirSync(dirname(join(copy, file)), { recursive: true });
+      cpSync(join(reports, file), join(copy, file));
+    }
+    const file = join(copy, 'slice-22', 'mx-like-transfer-hub', 'results.json');
+    const doc = JSON.parse(readFileSync(file, 'utf8')) as { manifest: { commit: string } };
+    doc.manifest.commit = `${doc.manifest.commit}-dirty`;
+    writeFileSync(file, JSON.stringify(doc));
+    const refused = await cli(['pitch', '--reports', copy, '--out', join(workDir, 'pitch-dirty')]);
+    expect(refused.code).toBe(EXIT_FAILURE);
+    expect(refused.stderr).toMatch(/results\.json was not produced from a clean commit/);
+    expect(existsSync(join(workDir, 'pitch-dirty'))).toBe(false);
+  });
+
+  it('needs one of --out and --check, and the reports', async () => {
+    for (const argv of [
+      ['pitch'],
+      ['pitch', '--out', join(workDir, 'p1'), '--check', join(workDir, 'p1')],
+      ['pitch', '--reports', join(workDir, 'no-reports'), '--out', join(workDir, 'p2')],
+    ]) {
+      expect((await cli(argv)).code, argv.join(' ')).toBe(EXIT_USAGE);
     }
   });
 });

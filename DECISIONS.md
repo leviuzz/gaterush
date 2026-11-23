@@ -2616,10 +2616,14 @@ founder on 2026-11-21 together with all of its recommendations.
 
 ## ADR-057: The console's recommendations measured in the simulator (`@advise`)
 
-- **Status:** Proposed (2026-11-22). Slice S22.3, on "Confermo vai avanti". The choices marked
-  **[to confirm]** are for the founder. queue-core 0.12.0, model 0.7.0, sim-metrics 0.14.0,
-  sim-trace 0.2.0, command line 0.14.0, API 0.22.1. No simulated number of an existing policy
-  changes; the new lane mode gives new ones.
+- **Status:** Accepted (2026-11-23). Slice S22.3, as the founder confirmed it ("Confermo vai
+  avanti"): the console's rule with its own numbers, S8's duty manager (a recommendation not
+  followed is declined at once and the next comes 15 minutes later: the console's postponement is
+  not modelled; the console sees the lanes open, not those on their way), the comparisons, the
+  sweeps of the share followed at the MX-like hub and the TSF-like base only, `versions.forecast`
+  without a new schema. queue-core 0.12.0, model 0.7.0, sim-metrics 0.14.0, sim-trace 0.2.0,
+  command line 0.14.0, API 0.22.1. No simulated number of an existing policy changes; the new lane
+  mode gives new ones.
 - **Context:**
   - S8 measured GateFlow's lanes with its own projection (`@predict`: one path of the backlog over
     45 minutes from a forecast of arrivals; ADR-039). The console recommends with another rule
@@ -2675,3 +2679,42 @@ founder on 2026-11-21 together with all of its recommendations.
     the target) is a sweep away, on the airport's days (M5).
   - A review costs a forecast of 200 paths (about 5 ms): a simulated day `@advise` takes about a
     second more than the plan only.
+
+## ADR-058: The pitch figures, one page written from the published reports
+
+- **Status:** Proposed (2026-11-23). After S22, on "Confermo vai avanti". The choices marked
+  **[to confirm]** in IMPLEMENTATION_PLAN.md are for the founder. sim-metrics 0.15.0, command
+  line 0.15.0. No simulated number changes.
+- **Context:**
+  - M4 ends ready for the pitch. The figures the pitch can say are spread over the reports of S8,
+    S21 and S22.3: an interval in one table, its caveat in a paragraph of another report. A figure
+    copied by hand into slides or a page drifts silently when its report is published again, and
+    loses its caveat on the way.
+- **Decision:**
+  - **A page written by the command line** (`gateflow-sim pitch`, `pnpm pitch`) from the JSON
+    documents of the published reports: claims for the pitch, each with its figures, intervals,
+    report and caveat; the tables behind them; what the figures do not say; the sources. Every
+    number is read, never computed, and `figures.json` records the file and the JSON pointer it
+    was read at; the Markdown page and its HTML twin with charts are renderings of that document.
+  - **Claims checked against their figures:** each qualitative word of a claim has a condition on
+    its figures (an interval above zero, a wait that halves), checked when the page is written.
+  - **Sources refused unless clean and simulated:** the schema the page reads, the SIMULATED
+    disclaimer, synthetic data, a commit without local changes.
+  - **CI checks the page** is what the reports give (`pnpm pitch:check`).
+- **Alternatives considered:**
+  - **A page written by hand:** quicker once, but its figures drift and nothing tells.
+  - **Slides:** the founder makes them; the page is their source, with the caveats.
+  - **New experiments for the pitch:** none is needed. The one gap, the console's rule on a day
+    harder than planned (S8 swept its own rule), is said on the page.
+- **Evidence:** the section "After S22: the pitch figures" of IMPLEMENTATION_PLAN.md and
+  [docs/pitch](docs/pitch/README.md): 11 claims and 242 figures from 14 reports; tests check every
+  figure against its report at its pointer, the refusals and five claims that stop when their
+  figures change. Put side by side, the reports say what none said alone: at the MX-like hub
+  GateFlow's +18.0 [16.1, 19.9] flights a day against today's practice is mostly the console's
+  lanes (+17.7), the priority calls adding +0.3 [-0.8, 1.3] once those lanes are open and
+  +8.7 [7.2, 10.4] without them; on the VCE-like days neither part changes the missed flights
+  measurably; at the TSF-like base the gain is the wait.
+- **Consequences:**
+  - A report published again changes the page in the same commit, or CI fails; a claim its new
+    figures no longer support fails until it is rewritten.
+  - The page is in English, as the reports; a translation changes its sentences, not its figures.
